@@ -89,7 +89,9 @@ Goの環境変数（ホストで`go run`する場合、ルートの`.env`は自�
 ```text
 frontend/src/app/
   models.ts            JSONの型
-  api.ts               HttpClientと入力検証
+  api.ts               HttpClientによるAPIアクセス
+  api-error.ts         通信失敗の表示文言
+  form-validation.ts   Unicode対応のフォーム入力検証
   board.ts/html/css     ボード・列追加・カード追加
   card-detail.*        詳細・編集・ステータス変更・削除
   modal.ts             native dialogのフォーカス管理
@@ -98,7 +100,9 @@ backend/
   cmd/server/main.go   DB接続・HTTP起動・タイムアウト・正常終了
   internal/kanban/
     model.go           型とRepositoryインターフェース
-    handler.go         HTTPの受け取り・入力検証・JSON応答
+    handler.go         各エンドポイントの処理
+    http_transport.go  JSONの受け取り・ID解析・HTTP応答
+    validation.go      タイトル・説明の入力検証
     repository.go      プレースホルダー付きSQL、更新トランザクション
     handler_test.go    DBに依存しないAPIテスト
  database/init/        初期スキーマとサンプル

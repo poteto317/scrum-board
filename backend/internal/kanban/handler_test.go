@@ -158,3 +158,21 @@ func TestCardLifecycleAndPartialUpdate(t *testing.T) {
 		t.Fatal(w.Body)
 	}
 }
+
+func TestUnicodeValidationBoundaries(t *testing.T) {
+	h := NewHandler(fresh())
+	payload := `{"columnId":1,"title":"` + strings.Repeat("🧪", 200) + `","description":"` + strings.Repeat("あ", 10000) + `"}`
+	if w := request(h, "POST", "/api/cards", payload); w.Code != 201 {
+		t.Fatalf("Unicode boundary: %d %s", w.Code, w.Body)
+	}
+	payload = `{"columnId":1,"title":"学習","description":"` + strings.Repeat(" ", 10001) + `"}`
+	if w := request(h, "POST", "/api/cards", payload); w.Code != 400 {
+		t.Fatalf("description overflow: %d", w.Code)
+	}
+	if w := request(h, "POST", "/api/columns", `{"name":"`+strings.Repeat("列", 60)+`"}`); w.Code != 201 {
+		t.Fatalf("column boundary: %d", w.Code)
+	}
+	if w := request(h, "POST", "/api/columns", `{"name":"`+strings.Repeat("列", 61)+`"}`); w.Code != 400 {
+		t.Fatalf("column overflow: %d", w.Code)
+	}
+}

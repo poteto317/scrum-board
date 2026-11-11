@@ -15,7 +15,9 @@ import {
   takeUntil,
 } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Api, errorMessage, textLimit } from './api';
+import { Api } from './api';
+import { errorMessage } from './api-error';
+import { textLimit } from './form-validation';
 import { Card, Column } from './models';
 
 @Component({

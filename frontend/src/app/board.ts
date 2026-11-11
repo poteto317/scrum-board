@@ -3,7 +3,9 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
-import { Api, errorMessage, textLimit } from './api';
+import { Api } from './api';
+import { errorMessage } from './api-error';
+import { textLimit } from './form-validation';
 import { BoardData } from './models';
 
 @Component({
