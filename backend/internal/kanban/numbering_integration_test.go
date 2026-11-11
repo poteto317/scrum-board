@@ -75,6 +75,52 @@ func TestMySQLNumberingFresh(t *testing.T) {
 		t.Fatalf("restart changed number: %+v %v", c2, err)
 	}
 }
+func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
+	db := numberingDB(t, "_fresh")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustInit(t, r)
+	// Cards left unnumbered by a rollback to the old version: ID order is the reverse of creation order.
+	for _, c := range []struct {
+		id      int64
+		minutes int
+	}{{40, 3}, {50, 1}, {51, 1}} {
+		if _, err := db.Exec(`INSERT INTO cards(id,column_id,title,description,created_at,updated_at)
+ SELECT ?,1,'unnumbered','',DATE_ADD(created_at,INTERVAL ? MINUTE),DATE_ADD(created_at,INTERVAL ? MINUTE) FROM cards WHERE id=1`, c.id, c.minutes, c.minutes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustInit(t, r)
+	for id, want := range map[int64]int64{1: 1, 50: 2, 51: 3, 40: 4} {
+		if c, err := r.GetCard(ctx, id); err != nil || c.Number != want {
+			t.Fatalf("id %d: number %+v, want %d (%v)", id, c, want, err)
+		}
+	}
+	created, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "after backfill"})
+	if err != nil || created.Number != 5 {
+		t.Fatalf("number after backfill: %+v %v", created, err)
+	}
+	// A counter behind the highest issued number must never hand out an issued number again.
+	if _, err = db.Exec("UPDATE card_number_sequence SET next_number=2 WHERE singleton=1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO cards(id,column_id,title,description,created_at,updated_at)
+ SELECT 60,1,'behind counter','',created_at,updated_at FROM cards WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	mustInit(t, r)
+	if c, err := r.GetCard(ctx, 60); err != nil || c.Number != 6 {
+		t.Fatalf("stale counter reused a number: %+v %v", c, err)
+	}
+	if _, err = db.Exec("UPDATE card_number_sequence SET next_number=1 WHERE singleton=1"); err != nil {
+		t.Fatal(err)
+	}
+	mustInit(t, r)
+	var next int64
+	if err = db.QueryRow("SELECT next_number FROM card_number_sequence WHERE singleton=1").Scan(&next); err != nil || next != 7 {
+		t.Fatalf("counter not repaired: %d %v", next, err)
+	}
+}
 func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	db := numberingDB(t, "")
 	r := MySQLRepository{DB: db}
