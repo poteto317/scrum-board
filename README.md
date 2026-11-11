@@ -102,11 +102,14 @@ backend/
     model.go           型とRepositoryインターフェース
     handler.go         各エンドポイントの処理
     http_transport.go  JSONの受け取り・ID解析・HTTP応答
-    validation.go      タイトル・説明の入力検証
+    validation.go      タイトル・説明・列名の入力検証
+    status_handler.go  タスク番号と列名による状態変更（PATCH /api/cards/by-number/{number}/status）
     repository.go      プレースホルダー付きSQL、更新トランザクション
     numbering.go       タスク番号表の作成・既存カードの採番（API起動時に実行）
     handler_test.go    DBに依存しないAPIテスト
+    status_handler_test.go         状態変更APIのDBに依存しないテスト
     numbering_integration_test.go  実MySQLの採番テスト（専用DBが無ければskip）
+    status_integration_test.go     実MySQLの状態変更テスト（同上）
  database/init/        初期スキーマとサンプル（番号表はAPI起動時にGoが作成）
  scripts/smoke.py      実MySQLに対するHTTP受け入れ確認
  compose.yaml         3サービスとデータボリューム
