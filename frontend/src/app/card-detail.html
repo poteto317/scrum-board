@@ -1,0 +1,100 @@
+<main class="detail-page">
+  <a class="back-link" routerLink="/">← ボードに戻る</a>
+  @if (loading()) {
+    <div class="state-panel" role="status">
+      <span class="spinner"></span>アイテムを読み込んでいます…
+    </div>
+  } @else if (!card()) {
+    <div class="state-panel" role="alert">
+      <p>{{ error() }}</p>
+      <button class="secondary" (click)="load()">再試行</button>
+    </div>
+  } @else {
+    <section class="detail-heading">
+      <div class="eyebrow">TASK-{{ card()!.id.toString().padStart(3, '0') }}</div>
+      <h1>アイテムの詳細</h1>
+      <p>取り組むことを明確にして、次のステップへ。</p>
+    </section>
+    <form [formGroup]="form" (ngSubmit)="save()" class="detail-layout">
+      <section class="detail-card">
+        <div class="section-label">タスクの内容</div>
+        <label for="detail-title">タイトル <span class="required">必須</span></label
+        ><input id="detail-title" formControlName="title" placeholder="何に取り組みますか？" />
+        @if (form.controls.title.touched && form.controls.title.invalid) {
+          <p class="form-error">タイトルを1〜200文字で入力してください。</p>
+        }
+        <label for="detail-description">説明 <span class="optional">任意</span></label
+        ><textarea
+          id="detail-description"
+          formControlName="description"
+          rows="10"
+          placeholder="背景、取り組む内容、完了の条件など"
+        ></textarea>
+        <p class="field-note">タスクの背景や完了条件を残しておきましょう。10000文字以内。</p>
+        @if (form.controls.description.invalid) {
+          <p class="form-error">説明は10000文字以内で入力してください。</p>
+        }
+      </section>
+      <aside>
+        <section class="detail-card properties">
+          <div class="section-label">プロパティ</div>
+          <label for="detail-status">ステータス</label
+          ><select id="detail-status" formControlName="columnId">
+            @for (column of columns(); track column.id) {
+              <option [ngValue]="column.id">{{ column.name }}</option>
+            }
+          </select>
+          <p class="field-note">ステータスを選んで保存すると、<br />ボード上の列が変わります。</p>
+          <div class="timestamps">
+            <span>作成日時</span><time>{{ card()!.createdAt | date: 'yyyy/MM/dd HH:mm' }}</time
+            ><span>更新日時</span><time>{{ card()!.updatedAt | date: 'yyyy/MM/dd HH:mm' }}</time>
+          </div>
+        </section>
+        <div class="detail-tip">
+          ひとつのタスクを、小さな一歩に。<br />完了の条件が明確だと、進めやすくなります。
+        </div>
+      </aside>
+      <div class="detail-actions">
+        @if (error()) {
+          <p class="form-error" role="alert">{{ error() }}</p>
+        }
+        @if (saved() && !form.dirty) {
+          <p class="success-message" role="status">✓ 変更を保存しました。</p>
+        }
+        <div class="action-row">
+          <button
+            class="danger-link"
+            type="button"
+            (click)="confirmDelete.set(true)"
+            [disabled]="saving()"
+          >
+            アイテムを削除</button
+          ><a class="secondary" routerLink="/">ボードに戻る</a
+          ><button class="primary" type="submit" [disabled]="saving()">
+            {{ saving() ? '処理中…' : '変更を保存' }}
+          </button>
+        </div>
+      </div>
+    </form>
+  }
+</main>
+@if (confirmDelete()) {
+  <dialog
+    appModal
+    class="modal-backdrop"
+    aria-labelledby="delete-title"
+    (cancel)="$event.preventDefault(); !saving() && confirmDelete.set(false)"
+  >
+    <section class="modal">
+      <h2 id="delete-title">アイテムを削除しますか？</h2>
+      <p class="delete-copy">「{{ card()?.title }}」を削除します。この操作は取り消せません。</p>
+      <div class="form-actions">
+        <button class="secondary" (click)="confirmDelete.set(false)" [disabled]="saving()">
+          キャンセル</button
+        ><button class="danger-button" (click)="remove()" [disabled]="saving()">
+          {{ saving() ? '削除中…' : '削除する' }}
+        </button>
+      </div>
+    </section>
+  </dialog>
+}

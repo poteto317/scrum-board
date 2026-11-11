@@ -1,0 +1,187 @@
+<main class="board-page">
+  <div class="breadcrumb">ワークスペース <span>/</span> <strong>かんばん</strong></div>
+  <section class="page-heading">
+    <div>
+      <div class="eyebrow">YOUR WORK, ONE STEP AT A TIME</div>
+      <h1>小さく始めて、<br class="mobile-break" />前へ進める<span class="heading-dot">.</span></h1>
+      <p>アイデアをタスクに。ひとつずつ、着実に。</p>
+    </div>
+    <button class="primary" (click)="openColumn()" [disabled]="loading() || !!error()">
+      <span aria-hidden="true">＋</span> 列を追加
+    </button>
+  </section>
+  <section class="board-toolbar" aria-label="ボードの概要">
+    <div class="active-tab">
+      <span class="board-icon" aria-hidden="true">▥</span> かんばんボード
+    </div>
+    <span class="toolbar-count">{{ data().cards.length }} アイテム</span
+    ><span class="board-summary"
+      >{{ done() }} 完了 <span>／</span> {{ data().columns.length }} ステータス</span
+    >
+  </section>
+  @if (loading()) {
+    <div class="state-panel" role="status">
+      <span class="spinner"></span>ボードを読み込んでいます…
+    </div>
+  } @else if (error()) {
+    <div class="state-panel" role="alert">
+      <p>{{ error() }}</p>
+      <button class="secondary" (click)="load()">再試行</button>
+    </div>
+  } @else {
+    <div
+      class="board-scroll"
+      tabindex="0"
+      role="region"
+      aria-label="かんばんボード。列が多い場合は横スクロールできます。"
+    >
+      <div class="board-columns">
+        @for (column of data().columns; track column.id; let index = $index) {
+          <section
+            class="kanban-column"
+            [class.doing]="column.name === 'Doing'"
+            [class.done]="column.name === 'Done'"
+          >
+            <header class="column-heading">
+              <span class="status-dot" aria-hidden="true"></span>
+              <h2>{{ column.name }}</h2>
+              <span class="column-count">{{ grouped().get(column.id)?.length || 0 }}</span
+              ><button
+                class="icon-button"
+                (click)="openCard(column.id)"
+                [attr.aria-label]="column.name + 'にカードを追加'"
+              >
+                ＋
+              </button>
+            </header>
+            <div class="card-list">
+              @for (card of grouped().get(column.id) || []; track card.id) {
+                <a class="task-card" [routerLink]="['/cards', card.id]"
+                  ><span class="card-topline"
+                    ><span class="card-id">TASK-{{ card.id.toString().padStart(3, '0') }}</span
+                    ><span class="card-arrow" aria-hidden="true">↗</span></span
+                  >
+                  <h3>{{ card.title }}</h3>
+                  @if (card.description) {
+                    <p class="card-description">{{ card.description }}</p>
+                  }
+                  <span class="card-footer"
+                    ><span class="card-status">{{ column.name }}</span
+                    ><span class="detail-hint"
+                      >詳細を開く <span aria-hidden="true">→</span></span
+                    ></span
+                  ></a
+                >
+              } @empty {
+                <div class="empty-column">
+                  <span class="empty-symbol" aria-hidden="true">{{
+                    column.name === 'Done' ? '✓' : '＋'
+                  }}</span>
+                  <p>まだアイテムはありません</p>
+                  <span>{{
+                    column.name === 'Done'
+                      ? '完了したタスクがここに並びます'
+                      : '最初のタスクを追加しましょう'
+                  }}</span>
+                </div>
+              }
+            </div>
+            <button class="add-card" (click)="openCard(column.id)">
+              <span aria-hidden="true">＋</span> アイテムを追加
+            </button>
+          </section>
+        }
+        <button class="add-column-tile" (click)="openColumn()">
+          <span aria-hidden="true">＋</span> 列を追加
+        </button>
+      </div>
+    </div>
+    <footer class="board-footer">
+      <span
+        ><span class="tip-icon" aria-hidden="true">i</span>
+        カードを開くと、詳細とステータスを編集できます。</span
+      ><span class="footer-note">少しずつ、よりよいチームへ。</span>
+    </footer>
+  }
+</main>
+@if (modal()) {
+  <dialog
+    appModal
+    class="modal-backdrop"
+    aria-labelledby="modal-title"
+    (click)="close()"
+    (cancel)="$event.preventDefault(); close()"
+  >
+    <section
+      class="modal"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="close()"
+      tabindex="-1"
+    >
+      <header class="modal-header">
+        <h2 id="modal-title">{{ modal() === 'column' ? '新しい列を追加' : 'アイテムを追加' }}</h2>
+        <button class="icon-button" (click)="close()" [disabled]="saving()" aria-label="閉じる">
+          ×
+        </button>
+      </header>
+      @if (modal() === 'column') {
+        <form [formGroup]="columnForm" (ngSubmit)="addColumn()">
+          <label for="column-name">列の名前 <span class="required">必須</span></label
+          ><input id="column-name" formControlName="name" placeholder="例：Review" autofocus />
+          <p class="field-note">60文字以内。同じ名前の列は追加できません。</p>
+          @if (columnForm.controls.name.touched && columnForm.invalid) {
+            <p class="form-error">列名を1〜60文字で入力してください。</p>
+          }
+          @if (formError()) {
+            <p class="form-error" role="alert">{{ formError() }}</p>
+          }
+          <div class="form-actions">
+            <button class="secondary" type="button" (click)="close()" [disabled]="saving()">
+              キャンセル</button
+            ><button class="primary" type="submit" [disabled]="saving()">
+              {{ saving() ? '追加中…' : '列を追加' }}
+            </button>
+          </div>
+        </form>
+      } @else {
+        <form [formGroup]="cardForm" (ngSubmit)="addCard()">
+          <label for="card-title">タイトル <span class="required">必須</span></label
+          ><input
+            id="card-title"
+            formControlName="title"
+            placeholder="何に取り組みますか？"
+            autofocus
+          />
+          @if (cardForm.controls.title.touched && cardForm.controls.title.invalid) {
+            <p class="form-error">タイトルを1〜200文字で入力してください。</p>
+          }
+          <label for="card-status">ステータス</label
+          ><select id="card-status" formControlName="columnId">
+            @for (column of data().columns; track column.id) {
+              <option [ngValue]="column.id">{{ column.name }}</option>
+            }</select
+          ><label for="card-description">説明 <span class="optional">任意</span></label
+          ><textarea
+            id="card-description"
+            formControlName="description"
+            rows="4"
+            placeholder="タスクの背景や、完了の条件など"
+          ></textarea>
+          @if (cardForm.controls.description.invalid) {
+            <p class="form-error">説明は10000文字以内で入力してください。</p>
+          }
+          @if (formError()) {
+            <p class="form-error" role="alert">{{ formError() }}</p>
+          }
+          <div class="form-actions">
+            <button class="secondary" type="button" (click)="close()" [disabled]="saving()">
+              キャンセル</button
+            ><button class="primary" type="submit" [disabled]="saving()">
+              {{ saving() ? '追加中…' : 'アイテムを追加' }}
+            </button>
+          </div>
+        </form>
+      }
+    </section>
+  </dialog>
+}

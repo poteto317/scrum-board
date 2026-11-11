@@ -1,0 +1,258 @@
+:root {
+  --bg: #f8f9f5;
+  --paper: #fffefa;
+  --ink: #283529;
+  --muted: #87907f;
+  --accent: #486b45;
+  --line: #e3e7dc;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Hiragino Kaku Gothic ProN',
+    'Noto Sans JP',
+    Meiryo,
+    sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-synthesis: none;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+a {
+  color: inherit;
+}
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.primary,
+.secondary,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 7px;
+  padding: 12px 17px;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.4;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+}
+.primary:hover {
+  background: #365731;
+}
+.secondary {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: #6e7a65;
+}
+.secondary:hover {
+  background: #edf0e8;
+}
+.danger-button {
+  background: #a64e44;
+  border: 1px solid #a64e44;
+  color: white;
+}
+.icon-button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: #929c89;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  font-size: 19px;
+  cursor: pointer;
+}
+.icon-button:hover {
+  background: #e6ebdf;
+  color: var(--accent);
+}
+label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 550;
+  margin: 23px 0 10px;
+}
+input,
+textarea,
+select {
+  width: 100%;
+  background: #fffefa;
+  border: 1px solid #dce2d4;
+  border-radius: 6px;
+  color: var(--ink);
+  padding: 12px;
+  font-size: 13px;
+  outline: none;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #7e9b72;
+  box-shadow: 0 0 0 3px #486b450d;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #b1b8a8;
+}
+textarea {
+  resize: vertical;
+  line-height: 1.8;
+}
+select {
+  cursor: pointer;
+}
+.required,
+.optional {
+  font-size: 9px;
+  font-weight: 400;
+  color: #99a08e;
+}
+.required {
+  color: #938366;
+}
+.field-note {
+  font-size: 10px;
+  color: #9aa18f;
+  line-height: 1.8;
+}
+.form-error {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #ac5549;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 28px;
+}
+.state-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 15px;
+  min-height: 300px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+.spinner {
+  display: block;
+  width: 23px;
+  height: 23px;
+  border: 2px solid #dbe2d2;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #1e2b2155;
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 10;
+}
+.modal {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px;
+  width: 480px;
+  max-width: 100%;
+  max-height: 90dvh;
+  overflow-y: auto;
+  box-shadow: 0 20px 80px #10241022;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal h2 {
+  font-size: 18px;
+  margin: 0;
+  font-weight: 600;
+}
+.modal form > label:first-child {
+  margin-top: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Native dialog owns the focus boundary; its panel handles content scrolling. */
+dialog.modal-backdrop {
+  border: 0;
+  margin: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  color: inherit;
+  background: transparent;
+  backdrop-filter: none;
+}
+dialog.modal-backdrop:not([open]) {
+  display: none;
+}
+dialog.modal-backdrop::backdrop {
+  background: #1e2b2155;
+  backdrop-filter: blur(3px);
+}

@@ -1,0 +1,142 @@
+.detail-page {
+  max-width: 1080px;
+  margin: auto;
+  padding: 32px 40px 60px;
+}
+.back-link {
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.back-link:hover {
+  color: var(--accent);
+}
+.detail-heading {
+  margin: 36px 0 28px;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  font-weight: 650;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+h1 {
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+.detail-heading p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 12px;
+}
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 22px;
+  align-items: start;
+}
+.detail-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 26px;
+  border-radius: 12px;
+}
+.section-label {
+  font-size: 11px;
+  font-weight: 650;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+  margin-bottom: 21px;
+}
+.detail-card label:first-of-type {
+  margin-top: 0;
+}
+.detail-card textarea {
+  min-height: 240px;
+  line-height: 1.9;
+}
+.properties {
+  padding: 24px;
+}
+.properties .field-note {
+  font-size: 10px;
+  line-height: 1.9;
+  margin-top: 12px;
+}
+.timestamps {
+  border-top: 1px solid var(--line);
+  margin-top: 23px;
+  padding-top: 17px;
+  display: grid;
+  gap: 7px;
+  font-size: 10px;
+}
+.timestamps span {
+  color: #9aa291;
+  margin-top: 5px;
+}
+.timestamps time {
+  color: #7a8472;
+  font-family: monospace;
+  font-size: 11px;
+}
+.detail-tip {
+  padding: 19px 8px;
+  font-size: 10px;
+  line-height: 2;
+  color: #98a18f;
+}
+.detail-actions {
+  grid-column: 1/-1;
+}
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.danger-link {
+  background: none;
+  border: 0;
+  color: #a35e56;
+  font-size: 11px;
+  cursor: pointer;
+  margin-right: auto;
+  padding: 10px 0;
+}
+.delete-copy {
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.success-message {
+  font-size: 12px;
+  color: var(--accent);
+}
+@media (max-width: 750px) {
+  .detail-page {
+    padding: 25px 20px;
+  }
+  .detail-layout {
+    grid-template-columns: 1fr;
+  }
+  .detail-card {
+    padding: 21px;
+  }
+  .detail-actions {
+    grid-column: auto;
+  }
+  .detail-tip {
+    display: none;
+  }
+  .action-row {
+    flex-wrap: wrap;
+  }
+  .danger-link {
+    flex: 1 1 100%;
+    text-align: left;
+  }
+}
