@@ -1,0 +1,184 @@
+package kanban
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+)
+
+type handler struct{ repo Repository }
+
+func NewHandler(repo Repository) http.Handler {
+	h := handler{repo}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, map[string]string{"status": "ok"}) })
+	mux.HandleFunc("GET /api/board", h.board)
+	mux.HandleFunc("POST /api/columns", h.createColumn)
+	mux.HandleFunc("POST /api/cards", h.createCard)
+	mux.HandleFunc("GET /api/cards/{id}", h.getCard)
+	mux.HandleFunc("PATCH /api/cards/{id}", h.updateCard)
+	mux.HandleFunc("DELETE /api/cards/{id}", h.deleteCard)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "no-store")
+		mux.ServeHTTP(w, r)
+	})
+}
+func reply(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	if data != nil {
+		_ = json.NewEncoder(w).Encode(data)
+	}
+}
+func fail(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		reply(w, 404, map[string]string{"message": "カードが見つかりません。"})
+	case errors.Is(err, ErrColumn):
+		reply(w, 400, map[string]string{"message": "選択したステータスは存在しません。"})
+	case errors.Is(err, ErrDuplicate):
+		reply(w, 409, map[string]string{"message": "同じ名前の列がすでにあります。"})
+	default:
+		slog.Error("request failed", "error", err)
+		reply(w, 500, map[string]string{"message": "処理に失敗しました。時間をおいて再試行してください。"})
+	}
+}
+func invalid(w http.ResponseWriter, message string) {
+	reply(w, 400, map[string]string{"message": message})
+}
+func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 128*1024)
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(v); err != nil {
+		invalid(w, "入力を確認してください。有効なJSONが必要です。")
+		return false
+	}
+	if err := d.Decode(new(any)); err != io.EOF {
+		invalid(w, "JSONは1つだけ送信してください。")
+		return false
+	}
+	return true
+}
+func id(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	n, e := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if e != nil || n <= 0 {
+		invalid(w, "カードIDが不正です。")
+		return 0, false
+	}
+	return n, true
+}
+func validTitle(s string) bool {
+	return utf8.ValidString(s) && strings.TrimSpace(s) != "" && utf8.RuneCountInString(s) <= 200
+}
+func validDescription(s string) bool {
+	return utf8.ValidString(s) && utf8.RuneCountInString(s) <= 10000
+}
+func (h handler) board(w http.ResponseWriter, r *http.Request) {
+	b, e := h.repo.Board(r.Context())
+	if e != nil {
+		fail(w, e)
+		return
+	}
+	reply(w, 200, b)
+}
+func (h handler) getCard(w http.ResponseWriter, r *http.Request) {
+	n, ok := id(w, r)
+	if !ok {
+		return
+	}
+	c, e := h.repo.GetCard(r.Context(), n)
+	if e != nil {
+		fail(w, e)
+		return
+	}
+	reply(w, 200, c)
+}
+func (h handler) createColumn(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" || !utf8.ValidString(in.Name) || utf8.RuneCountInString(in.Name) > 60 {
+		invalid(w, "列名は1〜60文字で入力してください。")
+		return
+	}
+	c, e := h.repo.CreateColumn(r.Context(), in.Name)
+	if e != nil {
+		fail(w, e)
+		return
+	}
+	reply(w, 201, c)
+}
+func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
+	var in CardInput
+	if !decode(w, r, &in) {
+		return
+	}
+	in.Title = strings.TrimSpace(in.Title)
+	if !validTitle(in.Title) || !validDescription(in.Description) || in.ColumnID <= 0 {
+		invalid(w, "タイトルは1〜200文字、説明は10000文字以内で入力し、ステータスを選んでください。")
+		return
+	}
+	c, e := h.repo.CreateCard(r.Context(), in)
+	if e != nil {
+		fail(w, e)
+		return
+	}
+	reply(w, 201, c)
+}
+func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
+	n, ok := id(w, r)
+	if !ok {
+		return
+	}
+	var p CardPatch
+	if !decode(w, r, &p) {
+		return
+	}
+	if p.Title == nil && p.Description == nil && p.ColumnID == nil {
+		invalid(w, "変更するプロパティが必要です。")
+		return
+	}
+	if p.Title != nil {
+		*p.Title = strings.TrimSpace(*p.Title)
+		if !validTitle(*p.Title) {
+			invalid(w, "タイトルは1〜200文字で入力してください。")
+			return
+		}
+	}
+	if p.Description != nil && !validDescription(*p.Description) {
+		invalid(w, "説明は10000文字以内で入力してください。")
+		return
+	}
+	if p.ColumnID != nil && *p.ColumnID <= 0 {
+		invalid(w, "ステータスを選んでください。")
+		return
+	}
+	c, e := h.repo.UpdateCard(r.Context(), n, p)
+	if e != nil {
+		fail(w, e)
+		return
+	}
+	reply(w, 200, c)
+}
+func (h handler) deleteCard(w http.ResponseWriter, r *http.Request) {
+	n, ok := id(w, r)
+	if !ok {
+		return
+	}
+	if e := h.repo.DeleteCard(r.Context(), n); e != nil {
+		fail(w, e)
+		return
+	}
+	w.WriteHeader(204)
+}
