@@ -104,8 +104,10 @@ backend/
     http_transport.go  JSONの受け取り・ID解析・HTTP応答
     validation.go      タイトル・説明の入力検証
     repository.go      プレースホルダー付きSQL、更新トランザクション
+    numbering.go       タスク番号表の作成・既存カードの採番（API起動時に実行）
     handler_test.go    DBに依存しないAPIテスト
- database/init/        初期スキーマとサンプル
+    numbering_integration_test.go  実MySQLの採番テスト（専用DBが無ければskip）
+ database/init/        初期スキーマとサンプル（番号表はAPI起動時にGoが作成）
  scripts/smoke.py      実MySQLに対するHTTP受け入れ確認
  compose.yaml         3サービスとデータボリューム
 ```
@@ -157,7 +159,15 @@ python3 scripts/smoke.py
 API_URL=http://127.0.0.1:4200 python3 scripts/smoke.py
 ```
 
-smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複列、不正入力、削除後の404を確認します。テストカードは削除しますが、追加列`Review`は再利用できるよう残します。初期サンプルカードを削除・移動した状態などでは、初期サンプルを前提とする検査に注意してください。
+smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複列、不正入力、削除後の404を確認します。テストカードは削除しますが、追加列`Review`は再利用できるよう残します。削除したタスク番号は再利用しないため、実行のたびに番号が1つ消費されます。普段使いのスタックでは実行せず、プロジェクト名とポートを変えた使い捨てのスタックに対して実行してください。
+
+```sh
+MYSQL_PORT=3317 API_PORT=8081 WEB_PORT=4201 docker compose -p scrumboard-smoke up -d --build
+API_URL=http://127.0.0.1:8081 python3 scripts/smoke.py
+docker compose -p scrumboard-smoke down -v
+```
+
+`-p scrumboard-smoke` のスタックは専用のデータボリュームを持つため、`down -v` は使い捨て側だけを削除します。初期サンプルカードを削除・移動した状態などでは、初期サンプルを前提とする検査に注意してください。
 
 ## 今後の拡張とMVPの範囲
 
