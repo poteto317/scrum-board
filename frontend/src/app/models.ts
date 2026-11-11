@@ -4,6 +4,7 @@ export interface Column {
   position: number;
 }
 export interface Card {
+  number: number;
   id: number;
   columnId: number;
   title: string;

@@ -58,7 +58,7 @@
               @for (card of grouped().get(column.id) || []; track card.id) {
                 <a class="task-card" [routerLink]="['/cards', card.id]"
                   ><span class="card-topline"
-                    ><span class="card-id">TASK-{{ card.id.toString().padStart(3, '0') }}</span
+                    ><span class="card-id">TASK-{{ card.number.toString().padStart(3, '0') }}</span
                     ><span class="card-arrow" aria-hidden="true">↗</span></span
                   >
                   <h3>{{ card.title }}</h3>

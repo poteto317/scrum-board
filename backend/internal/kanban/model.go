@@ -18,6 +18,7 @@ type Column struct {
 	Position int    `json:"position"`
 }
 type Card struct {
+	Number      int64     `json:"number"`
 	ID          int64     `json:"id"`
 	ColumnID    int64     `json:"columnId"`
 	Title       string    `json:"title"`

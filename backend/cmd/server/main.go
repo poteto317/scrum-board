@@ -54,7 +54,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	handler := http.TimeoutHandler(kanban.NewHandler(kanban.MySQLRepository{DB: db}), 15*time.Second, `{"message":"処理がタイムアウトしました。"}`)
+	repo := kanban.MySQLRepository{DB: db}
+	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	err = repo.InitializeNumbers(migrationCtx)
+	migrationCancel()
+	if err != nil {
+		return err
+	}
+	handler := http.TimeoutHandler(kanban.NewHandler(repo), 15*time.Second, `{"message":"処理がタイムアウトしました。"}`)
 	server := &http.Server{Addr: env("LISTEN_ADDRESS", "127.0.0.1:8080"), Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -44,7 +44,7 @@ func (m *memoryRepo) CreateCard(_ context.Context, in CardInput) (Card, error) {
 	if !m.validColumn(in.ColumnID) {
 		return Card{}, ErrColumn
 	}
-	c := Card{ID: m.next, ColumnID: in.ColumnID, Title: in.Title, Description: in.Description}
+	c := Card{Number: m.next, ID: m.next, ColumnID: in.ColumnID, Title: in.Title, Description: in.Description}
 	m.next++
 	m.cards[c.ID] = c
 	return c, nil

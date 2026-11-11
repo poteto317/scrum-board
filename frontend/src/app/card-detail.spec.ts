@@ -8,6 +8,7 @@ import { Api } from './api';
 describe('CardDetail', () => {
   const card = {
     id: 1,
+    number: 1,
     columnId: 1,
     title: '学習',
     description: '元の説明',
@@ -100,5 +101,14 @@ describe('CardDetail', () => {
     expect(f.componentInstance.card()?.id).toBe(2);
     expect(f.componentInstance.form.controls.title.value).toBe('別のカード');
     expect(f.componentInstance.saving()).toBe(false);
+  });
+  it('displays number 3 for ID 18 while saving by ID 18', () => {
+    params.next(new Map([['id', '18']]));
+    api.card.mockReturnValue(of({ ...card, id: 18, number: 3 }));
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.eyebrow').textContent).toBe('TASK-003');
+    f.componentInstance.save();
+    expect(api.updateCard).toHaveBeenCalledWith(18, expect.any(Object));
   });
 });

@@ -176,3 +176,32 @@ smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複�
 公式資料: [Angular互換表](https://angular.dev/reference/versions)、[Go標準HTTP](https://pkg.go.dev/net/http)、[MySQLドライバー](https://pkg.go.dev/github.com/go-sql-driver/mysql)、[MySQL 8.4](https://dev.mysql.com/doc/refman/8.4/en/)。
 
 APIへ直接、不正なUTF-8や片側だけのサロゲートエスケープを送った場合は、Go標準JSONデコーダーが置換文字`�`に変換します。このような破損入力の厳密な拒否は今後の改善事項です。通常の画面入力では発生しません。
+
+## タスク番号と既存DBの移行
+
+画面の `TASK-001` などはAPIの `number` を表示します。`id` は内部の識別子で、詳細URL・更新・削除に使用します。例として `id: 18, number: 3` のカードは `/cards/18` のまま `TASK-003` と表示されます。
+
+API起動時に `card_numbers` と `card_number_sequence` を冪等に作成し、未採番カードを作成日時・内部ID順で採番します。既存カードのID・本文・ステータス・日時は書き換えません。サンプルだけのDBではサンプルが1、その後の最初の作成が2になります。作成失敗は番号を消費せず、削除した番号は再利用しません。再起動・編集・ステータス移動でも一度発行した番号を維持します。
+
+既存データのある環境では、APIを止めてバックアップを取得してから更新してください。移行はAPI公開前に実行され、失敗した場合は起動を中止します。旧版と新版のAPIを混在させず、新版が採番を終えてから公開します。バックフィルと新規採番は同じカウンター行をロックし、トランザクションで番号とカードを一緒に確定します。初期SQLの再実行やデータボリュームの削除は不要です。
+
+旧版へコードを戻しても `cards` 本体とURLは維持できますが、旧画面は内部IDを番号として表示します。番号表の削除・再作成は番号の同一性を失うため行わないでください。
+
+実MySQLの採番テストは、使い捨てDB `scrumboard_numbering_test` と `scrumboard_numbering_test_fresh` が必要です。`KANBAN_TEST_DSN` が未指定ならskipし、別名のDBは拒否します。テストはこの2つのDB内のテーブルだけをリセットします。
+
+```sh
+cd backend
+KANBAN_TEST_DSN='scrum:scrum_dev@tcp(127.0.0.1:3308)/scrumboard_numbering_test?parseTime=true' go test -race -count=1 ./...
+```
+
+利用中の `scrumboard` では実行せず、専用のMySQLコンテナにテストDBと権限を用意してください。SQLの行ロックについては [MySQL公式資料](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html) を参照できます。
+
+既存DBの更新前バックアップ例（SQLファイルはGit除外の `backups/` に保存）:
+
+```sh
+mkdir -p backups
+docker compose stop api
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --default-character-set=utf8mb4 -uroot --single-transaction --databases "$MYSQL_DATABASE"' > "backups/scrumboard-$(date +%Y%m%d-%H%M%S).sql"
+```
+
+ダンプの終了コードとSQLファイルが正常であることを確認してから `docker compose up -d --build api web` で更新します。ダンプに失敗した場合は更新せず `docker compose start api` で元のAPIを再開してください。UTF-8の文字列を照合するSQLクライアントにも `--default-character-set=utf8mb4` を指定します。

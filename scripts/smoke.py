@@ -33,10 +33,13 @@ card = call('POST', '/api/cards', {'title': '  動作確認 🧪  ',
             'description': '実際のMySQLでCRUDを確認', 'columnId': 1}, 201)
 path = f"/api/cards/{card['id']}"
 try:
+    assert isinstance(card['number'], int) and card['number'] > 0
     assert card['title'] == '動作確認 🧪'
     moved = call('PATCH', path, {'columnId': column['id']})
     assert moved['title'] == card['title'] and moved['description'] == card['description']
     assert moved['columnId'] == column['id']
+    assert moved['number'] == card['number']
+    assert call('GET', path)['number'] == card['number']
     call('PATCH', path, {'columnId': 999999}, 400)
     assert call('GET', path)['columnId'] == column['id']
     call('PATCH', path, {'title': '　 '}, 400)
