@@ -121,6 +121,16 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 			t.Fatalf("migration changed original card: %+v", got)
 		}
 	}
+	// The public number, not the internal ID, selects the card; unissued numbers never fall back to an ID.
+	for number, id := range map[int64]int64{1: 1, 2: 17, 3: 18} {
+		c, err := r.GetCardByNumber(ctx, number)
+		if err != nil || c.ID != id || c.Number != number {
+			t.Fatalf("by-number %d: %+v %v", number, c, err)
+		}
+	}
+	if _, err = r.GetCardByNumber(ctx, 18); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("number 18 must not resolve to internal ID 18: %v", err)
+	}
 	mustInit(t, r)
 	if _, err = r.CreateCard(ctx, CardInput{ColumnID: 999999, Title: "invalid column"}); !errors.Is(err, ErrColumn) {
 		t.Fatalf("wrong failure %v", err)
@@ -200,10 +210,16 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	if err = r.DeleteCard(ctx, highest.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = r.GetCardByNumber(ctx, highest.Number); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted number still resolves: %v", err)
+	}
 	mustInit(t, r)
 	next, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "after deletion"})
 	if err != nil || next.Number != 25 {
 		t.Fatalf("deleted number reused: %+v %v", next, err)
+	}
+	if byNumber, err := r.GetCardByNumber(ctx, 25); err != nil || byNumber.ID != next.ID {
+		t.Fatalf("by-number 25: %+v %v", byNumber, err)
 	}
 	doing := int64(2)
 	updated, err := r.UpdateCard(ctx, 17, CardPatch{ColumnID: &doing})
