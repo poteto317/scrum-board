@@ -151,23 +151,17 @@ npm test -- --watch=false
 npm run build
 ```
 
-Dockerで全サービスを起動した状態で、プロジェクトルートから:
-
-```sh
-python3 scripts/smoke.py
-# Web側のAPI転送も確認
-API_URL=http://127.0.0.1:4200 python3 scripts/smoke.py
-```
-
-smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複列、不正入力、削除後の404を確認します。テストカードは削除しますが、追加列`Review`は再利用できるよう残します。削除したタスク番号は再利用しないため、実行のたびに番号が1つ消費されます。普段使いのスタックでは実行せず、プロジェクト名とポートを変えた使い捨てのスタックに対して実行してください。
+smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複列、不正入力、削除後の404を確認します。テストカードは削除しますが、追加列`Review`は再利用できるよう残します。削除したタスク番号は再利用しないため、実行のたびに番号が1つ消費されます。普段使いのスタック（既定のポート8080 / 4200）では実行せず、プロジェクト名とポートを変えた使い捨てのスタックに対して、プロジェクトルートから実行してください。
 
 ```sh
 MYSQL_PORT=3317 API_PORT=8081 WEB_PORT=4201 docker compose -p scrumboard-smoke up -d --build
 API_URL=http://127.0.0.1:8081 python3 scripts/smoke.py
+# Web側のAPI転送（nginx経由）も確認
+API_URL=http://127.0.0.1:4201 python3 scripts/smoke.py
 docker compose -p scrumboard-smoke down -v
 ```
 
-`-p scrumboard-smoke` のスタックは専用のデータボリュームを持つため、`down -v` は使い捨て側だけを削除します。初期サンプルカードを削除・移動した状態などでは、初期サンプルを前提とする検査に注意してください。
+`-p scrumboard-smoke` のスタックは専用のデータボリュームを持つため、`down -v` は使い捨て側だけを削除します。`-p` を付け忘れると普段使いのデータボリュームを削除するので、必ず付けてください。初期サンプルカードを削除・移動した状態などでは、初期サンプルを前提とする検査に注意してください。
 
 ## 今後の拡張とMVPの範囲
 
