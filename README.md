@@ -122,6 +122,8 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 
 ## API
 
+生成AI・CLIからは、公開タスク番号と列名で変更できる [ステータス変更APIの使い方](docs/api.md) を参照してください。
+
 | Method | Path | 内容 |
 | --- | --- | --- |
 | GET | `/api/board` | `{columns: [...], cards: [...]}` |
@@ -129,6 +131,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | POST | `/api/cards` | `{title, description, columnId}`でカード追加 |
 | GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
 | GET | `/api/cards/by-number/{number}` | タスク番号によるカード詳細 |
+| PATCH | `/api/cards/by-number/{number}/status` | `{status}`（列名）でステータスだけ変更 |
 | PATCH | `/api/cards/{id}` | `{title?, description?, columnId?}`で部分更新 |
 | DELETE | `/api/cards/{id}` | 削除（204） |
 | GET | `/api/health` | 起動確認 |

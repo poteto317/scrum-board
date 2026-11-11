@@ -46,6 +46,7 @@ type Repository interface {
 	Board(context.Context) (Board, error)
 	GetCard(context.Context, int64) (Card, error)
 	GetCardByNumber(context.Context, int64) (Card, error)
+	GetColumnByName(context.Context, string) (Column, error)
 	CreateCard(context.Context, CardInput) (Card, error)
 	UpdateCard(context.Context, int64, CardPatch) (Card, error)
 	DeleteCard(context.Context, int64) error

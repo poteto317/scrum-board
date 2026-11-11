@@ -174,3 +174,12 @@ func (r MySQLRepository) CreateColumn(ctx context.Context, name string) (Column,
 	err = r.DB.QueryRowContext(ctx, "SELECT id,name,position FROM board_columns WHERE id=?", id).Scan(&c.ID, &c.Name, &c.Position)
 	return c, err
 }
+
+func (r MySQLRepository) GetColumnByName(ctx context.Context, name string) (Column, error) {
+	var column Column
+	err := r.DB.QueryRowContext(ctx, "SELECT id,name,position FROM board_columns WHERE name=?", name).Scan(&column.ID, &column.Name, &column.Position)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Column{}, ErrColumn
+	}
+	return column, err
+}

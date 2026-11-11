@@ -3,7 +3,6 @@ package kanban
 import (
 	"net/http"
 	"strings"
-	"unicode/utf8"
 )
 
 type handler struct{ repo Repository }
@@ -18,6 +17,7 @@ func NewHandler(repo Repository) http.Handler {
 	mux.HandleFunc("GET /api/cards/{id}", h.getCard)
 	mux.HandleFunc("GET /api/cards/by-number/{number}", h.getCardByNumber)
 	mux.HandleFunc("PATCH /api/cards/{id}", h.updateCard)
+	mux.HandleFunc("PATCH /api/cards/by-number/{number}/status", h.changeStatusByNumber)
 	mux.HandleFunc("DELETE /api/cards/{id}", h.deleteCard)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -65,7 +65,7 @@ func (h handler) createColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Name = strings.TrimSpace(in.Name)
-	if in.Name == "" || !utf8.ValidString(in.Name) || utf8.RuneCountInString(in.Name) > 60 {
+	if !validColumnName(in.Name) {
 		invalid(w, "列名は1〜60文字で入力してください。")
 		return
 	}

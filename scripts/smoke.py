@@ -36,6 +36,17 @@ try:
     assert isinstance(card['number'], int) and card['number'] > 0
     assert call('GET', f"/api/cards/by-number/{card['number']}")['id'] == card['id']
     assert card['title'] == '動作確認 🧪'
+    status_path = f"/api/cards/by-number/{card['number']}/status"
+    doing = next(c for c in board['columns'] if c['name'] == 'Doing')
+    by_name = call('PATCH', status_path, {'status': 'Doing'})
+    assert by_name['id'] == card['id'] and by_name['columnId'] == doing['id']
+    assert by_name['number'] == card['number'] and by_name['description'] == card['description']
+    by_name = call('PATCH', status_path, {'status': column['name']})
+    assert by_name['columnId'] == column['id']
+    repeated = call('PATCH', status_path, {'status': column['name']})
+    assert repeated['number'] == card['number'] and repeated['columnId'] == column['id']
+    call('PATCH', status_path, {'status': 'not-an-existing-status'}, 400)
+    assert call('GET', path) == repeated
     moved = call('PATCH', path, {'columnId': column['id']})
     assert moved['title'] == card['title'] and moved['description'] == card['description']
     assert moved['columnId'] == column['id']
@@ -53,5 +64,6 @@ try:
 finally:
     call('DELETE', path, expected=204)
 call('GET', path, expected=404)
+call('PATCH', status_path, {'status': 'Done'}, expected=404)
 call('GET', f"/api/cards/by-number/{card['number']}", expected=404)
 print('PASS: deletion and 404; sample appears exactly once')

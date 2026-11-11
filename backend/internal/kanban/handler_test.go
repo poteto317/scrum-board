@@ -211,3 +211,12 @@ func TestGetCardByNumber(t *testing.T) {
 		}
 	}
 }
+
+func (m *memoryRepo) GetColumnByName(_ context.Context, name string) (Column, error) {
+	for _, c := range m.columns {
+		if strings.EqualFold(c.Name, name) {
+			return c, nil
+		}
+	}
+	return Column{}, ErrColumn
+}

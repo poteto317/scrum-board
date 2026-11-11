@@ -2,56 +2,14 @@ package kanban
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"os"
 	"reflect"
 	"sort"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/go-sql-driver/mysql"
 )
 
-// Only explicitly named disposable databases may be reset by this suite.
-func numberingDB(t *testing.T, suffix string) *sql.DB {
-	t.Helper()
-	dsn := os.Getenv("KANBAN_TEST_DSN")
-	if dsn == "" {
-		t.Skip("KANBAN_TEST_DSN is not set: real MySQL numbering tests skipped")
-	}
-	cfg, err := mysql.ParseDSN(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.DBName != "scrumboard_numbering_test" {
-		t.Fatal("KANBAN_TEST_DSN must target disposable scrumboard_numbering_test")
-	}
-	cfg.DBName += suffix
-	cfg.ParseTime = true
-	cfg.MultiStatements = true
-	cfg.Loc = time.UTC
-	db, err := sql.Open("mysql", cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	db.SetMaxOpenConns(12)
-	for _, table := range []string{"card_numbers", "card_number_sequence", "cards", "board_columns"} {
-		if _, err = db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
-			t.Fatal(err)
-		}
-	}
-	schema, err := os.ReadFile("../../../database/init/001_schema.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.Exec(string(schema)); err != nil {
-		t.Fatal(err)
-	}
-	return db
-}
 func mustInit(t *testing.T, r MySQLRepository) {
 	t.Helper()
 	if err := r.InitializeNumbers(context.Background()); err != nil {
@@ -59,7 +17,7 @@ func mustInit(t *testing.T, r MySQLRepository) {
 	}
 }
 func TestMySQLNumberingFresh(t *testing.T) {
-	db := numberingDB(t, "_fresh")
+	db := mysqlTestDB(t, "_fresh")
 	r := MySQLRepository{DB: db}
 	mustInit(t, r)
 	c, err := r.CreateCard(context.Background(), CardInput{ColumnID: 1, Title: "first user task"})
@@ -76,7 +34,7 @@ func TestMySQLNumberingFresh(t *testing.T) {
 	}
 }
 func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
-	db := numberingDB(t, "_fresh")
+	db := mysqlTestDB(t, "_fresh")
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	mustInit(t, r)
@@ -122,7 +80,7 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 	}
 }
 func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
-	db := numberingDB(t, "")
+	db := mysqlTestDB(t, "")
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	for _, id := range []int64{17, 18} {
