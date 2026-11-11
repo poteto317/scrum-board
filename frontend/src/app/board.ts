@@ -69,9 +69,16 @@ export class Board implements OnInit {
     }
     this.saving.set(true);
     this.formError.set('');
+    const name = this.columnForm.controls.name.value.trim();
+    this.columnForm.disable({ emitEvent: false });
     this.api
-      .createColumn(this.columnForm.controls.name.value.trim())
-      .pipe(finalize(() => this.saving.set(false)))
+      .createColumn(name)
+      .pipe(
+        finalize(() => {
+          this.saving.set(false);
+          this.columnForm.enable({ emitEvent: false });
+        }),
+      )
       .subscribe({
         next: (column) => {
           this.data.update((d) => ({ ...d, columns: [...d.columns, column] }));
@@ -88,9 +95,15 @@ export class Board implements OnInit {
     this.saving.set(true);
     this.formError.set('');
     const value = this.cardForm.getRawValue();
+    this.cardForm.disable({ emitEvent: false });
     this.api
       .createCard({ ...value, title: value.title.trim() })
-      .pipe(finalize(() => this.saving.set(false)))
+      .pipe(
+        finalize(() => {
+          this.saving.set(false);
+          this.cardForm.enable({ emitEvent: false });
+        }),
+      )
       .subscribe({
         next: (card) => {
           this.data.update((d) => ({ ...d, cards: [...d.cards, card] }));

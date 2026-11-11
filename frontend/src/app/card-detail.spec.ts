@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CardDetail } from './card-detail';
 import { Api } from './api';
@@ -14,6 +14,7 @@ describe('CardDetail', () => {
     createdAt: '',
     updatedAt: '',
   };
+  let params: BehaviorSubject<Map<string, string>>;
   let api: {
     board: ReturnType<typeof vi.fn>;
     card: ReturnType<typeof vi.fn>;
@@ -21,6 +22,7 @@ describe('CardDetail', () => {
     deleteCard: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
+    params = new BehaviorSubject(new Map([['id', '1']]));
     api = {
       board: vi.fn(() =>
         of({
@@ -31,7 +33,7 @@ describe('CardDetail', () => {
           cards: [card],
         }),
       ),
-      card: vi.fn(() => of(card)),
+      card: vi.fn((id: number) => of({ ...card, id, title: id === 1 ? '学習' : '別のカード' })),
       updateCard: vi.fn(() => throwError(() => ({ error: { message: '保存できません' } }))),
       deleteCard: vi.fn(),
     };
@@ -39,7 +41,13 @@ describe('CardDetail', () => {
       imports: [CardDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', '1']]) } } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: params.asObservable(),
+            snapshot: { paramMap: new Map([['id', '1']]) },
+          },
+        },
         { provide: Router, useValue: { navigate: vi.fn() } },
       ],
     });
@@ -66,5 +74,31 @@ describe('CardDetail', () => {
     expect(c.form.controls.columnId.value).toBe(2);
     expect(c.error()).toBe('保存できません');
     expect(c.saving()).toBe(false);
+  });
+  it('reloads a reused detail component when the route ID changes', () => {
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    params.next(new Map([['id', '2']]));
+    expect(api.card).toHaveBeenLastCalledWith(2);
+    expect(f.componentInstance.card()?.id).toBe(2);
+    expect(f.componentInstance.form.controls.title.value).toBe('別のカード');
+    f.componentInstance.save();
+    expect(api.updateCard).toHaveBeenLastCalledWith(
+      2,
+      expect.objectContaining({ title: '別のカード' }),
+    );
+  });
+  it('cancels stale save responses when moving directly to another card', () => {
+    const pending = new Subject<typeof card>();
+    api.updateCard.mockReturnValue(pending);
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    f.componentInstance.save();
+    params.next(new Map([['id', '2']]));
+    pending.next({ ...card, title: '古い応答' });
+    pending.complete();
+    expect(f.componentInstance.card()?.id).toBe(2);
+    expect(f.componentInstance.form.controls.title.value).toBe('別のカード');
+    expect(f.componentInstance.saving()).toBe(false);
   });
 });

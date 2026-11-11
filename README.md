@@ -170,3 +170,5 @@ smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複�
 依存監査ではAngular CLI配下の開発ツールにmoderateの指摘が残っています（glob/minimatch系）。互換性のないCLIへの強制ダウングレードは行っていません。配信用コンテナにはNode.js/CLIを含めず、ビルド済み静的ファイルだけを配置します。
 
 公式資料: [Angular互換表](https://angular.dev/reference/versions)、[Go標準HTTP](https://pkg.go.dev/net/http)、[MySQLドライバー](https://pkg.go.dev/github.com/go-sql-driver/mysql)、[MySQL 8.4](https://dev.mysql.com/doc/refman/8.4/en/)。
+
+APIへ直接、不正なUTF-8や片側だけのサロゲートエスケープを送った場合は、Go標準JSONデコーダーが置換文字`�`に変換します。このような破損入力の厳密な拒否は今後の改善事項です。通常の画面入力では発生しません。
