@@ -18,12 +18,12 @@ describe('CardDetail', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     board: ReturnType<typeof vi.fn>;
-    card: ReturnType<typeof vi.fn>;
+    cardByNumber: ReturnType<typeof vi.fn>;
     updateCard: ReturnType<typeof vi.fn>;
     deleteCard: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
-    params = new BehaviorSubject(new Map([['id', '1']]));
+    params = new BehaviorSubject(new Map([['number', '1']]));
     api = {
       board: vi.fn(() =>
         of({
@@ -34,7 +34,14 @@ describe('CardDetail', () => {
           cards: [card],
         }),
       ),
-      card: vi.fn((id: number) => of({ ...card, id, title: id === 1 ? '学習' : '別のカード' })),
+      cardByNumber: vi.fn((number: number) =>
+        of({
+          ...card,
+          number,
+          id: number === 1 ? 1 : 17,
+          title: number === 1 ? '学習' : '別のカード',
+        }),
+      ),
       updateCard: vi.fn(() => throwError(() => ({ error: { message: '保存できません' } }))),
       deleteCard: vi.fn(),
     };
@@ -46,7 +53,7 @@ describe('CardDetail', () => {
           provide: ActivatedRoute,
           useValue: {
             paramMap: params.asObservable(),
-            snapshot: { paramMap: new Map([['id', '1']]) },
+            snapshot: { paramMap: new Map([['number', '1']]) },
           },
         },
         { provide: Router, useValue: { navigate: vi.fn() } },
@@ -79,13 +86,13 @@ describe('CardDetail', () => {
   it('reloads a reused detail component when the route ID changes', () => {
     const f = TestBed.createComponent(CardDetail);
     f.detectChanges();
-    params.next(new Map([['id', '2']]));
-    expect(api.card).toHaveBeenLastCalledWith(2);
-    expect(f.componentInstance.card()?.id).toBe(2);
+    params.next(new Map([['number', '2']]));
+    expect(api.cardByNumber).toHaveBeenLastCalledWith(2);
+    expect(f.componentInstance.card()?.id).toBe(17);
     expect(f.componentInstance.form.controls.title.value).toBe('別のカード');
     f.componentInstance.save();
     expect(api.updateCard).toHaveBeenLastCalledWith(
-      2,
+      17,
       expect.objectContaining({ title: '別のカード' }),
     );
   });
@@ -95,20 +102,30 @@ describe('CardDetail', () => {
     const f = TestBed.createComponent(CardDetail);
     f.detectChanges();
     f.componentInstance.save();
-    params.next(new Map([['id', '2']]));
+    params.next(new Map([['number', '2']]));
     pending.next({ ...card, title: '古い応答' });
     pending.complete();
-    expect(f.componentInstance.card()?.id).toBe(2);
+    expect(f.componentInstance.card()?.id).toBe(17);
     expect(f.componentInstance.form.controls.title.value).toBe('別のカード');
     expect(f.componentInstance.saving()).toBe(false);
   });
-  it('displays number 3 for ID 18 while saving by ID 18', () => {
-    params.next(new Map([['id', '18']]));
-    api.card.mockReturnValue(of({ ...card, id: 18, number: 3 }));
+  it('loads URL number 3 and saves by the returned internal ID 18', () => {
+    params.next(new Map([['number', '3']]));
+    api.cardByNumber.mockReturnValue(of({ ...card, id: 18, number: 3 }));
     const f = TestBed.createComponent(CardDetail);
     f.detectChanges();
+    expect(api.cardByNumber).toHaveBeenCalledWith(3);
     expect(f.nativeElement.querySelector('.eyebrow').textContent).toBe('TASK-003');
     f.componentInstance.save();
     expect(api.updateCard).toHaveBeenCalledWith(18, expect.any(Object));
+  });
+  it('deletes by internal ID 18 from URL number 3', () => {
+    params.next(new Map([['number', '3']]));
+    api.cardByNumber.mockReturnValue(of({ ...card, id: 18, number: 3 }));
+    api.deleteCard.mockReturnValue(of(undefined));
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    f.componentInstance.remove();
+    expect(api.deleteCard).toHaveBeenCalledWith(18);
   });
 });

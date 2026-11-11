@@ -84,6 +84,9 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 func (r MySQLRepository) GetCard(ctx context.Context, id int64) (Card, error) {
 	return scanCard(r.DB.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
 }
+func (r MySQLRepository) GetCardByNumber(ctx context.Context, number int64) (Card, error) {
+	return scanCard(r.DB.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE n.task_number=?", number))
+}
 func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {

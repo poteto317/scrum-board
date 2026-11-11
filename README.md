@@ -125,7 +125,8 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | GET | `/api/board` | `{columns: [...], cards: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
 | POST | `/api/cards` | `{title, description, columnId}`でカード追加 |
-| GET | `/api/cards/{id}` | カード詳細 |
+| GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
+| GET | `/api/cards/by-number/{number}` | タスク番号によるカード詳細 |
 | PATCH | `/api/cards/{id}` | `{title?, description?, columnId?}`で部分更新 |
 | DELETE | `/api/cards/{id}` | 削除（204） |
 | GET | `/api/health` | 起動確認 |
@@ -179,13 +180,13 @@ APIへ直接、不正なUTF-8や片側だけのサロゲートエスケープを
 
 ## タスク番号と既存DBの移行
 
-画面の `TASK-001` などはAPIの `number` を表示します。`id` は内部の識別子で、詳細URL・更新・削除に使用します。例として `id: 18, number: 3` のカードは `/cards/18` のまま `TASK-003` と表示されます。
+画面の `TASK-001` などはAPIの `number` を表示します。`number` は詳細URLにも使い、`id` は内部の識別子として更新・削除に使用します。例として `id: 18, number: 3` のカードは `/cards/3` で `TASK-003` と表示されます。画面は `GET /api/cards/by-number/3` で取得した内部IDを使って保存・削除します。
 
 API起動時に `card_numbers` と `card_number_sequence` を冪等に作成し、未採番カードを作成日時・内部ID順で採番します。既存カードのID・本文・ステータス・日時は書き換えません。サンプルだけのDBではサンプルが1、その後の最初の作成が2になります。作成失敗は番号を消費せず、削除した番号は再利用しません。再起動・編集・ステータス移動でも一度発行した番号を維持します。
 
 既存データのある環境では、APIを止めてバックアップを取得してから更新してください。移行はAPI公開前に実行され、失敗した場合は起動を中止します。旧版と新版のAPIを混在させず、新版が採番を終えてから公開します。バックフィルと新規採番は同じカウンター行をロックし、トランザクションで番号とカードを一緒に確定します。初期SQLの再実行やデータボリュームの削除は不要です。
 
-旧版へコードを戻しても `cards` 本体とURLは維持できますが、旧画面は内部IDを番号として表示します。番号表の削除・再作成は番号の同一性を失うため行わないでください。
+旧版へコードを戻しても `cards` 本体は維持できますが、旧画面のURLと番号表示は内部ID方式へ戻ります。番号表の削除・再作成は番号の同一性を失うため行わないでください。
 
 実MySQLの採番テストは、使い捨てDB `scrumboard_numbering_test` と `scrumboard_numbering_test_fresh` が必要です。`KANBAN_TEST_DSN` が未指定ならskipし、別名のDBは拒否します。テストはこの2つのDB内のテーブルだけをリセットします。
 
@@ -205,3 +206,5 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 ```
 
 ダンプの終了コードとSQLファイルが正常であることを確認してから `docker compose up -d --build api web` で更新します。ダンプに失敗した場合は更新せず `docker compose start api` で元のAPIを再開してください。UTF-8の文字列を照合するSQLクライアントにも `--default-character-set=utf8mb4` を指定します。
+
+画面URLは表示番号として解釈します。旧画面URLを内部IDとして推測するフォールバックは行いません。例えば `/cards/18` はタスク番号18のカードを表し、内部ID18のカードを意味しません。

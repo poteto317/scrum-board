@@ -55,3 +55,12 @@ func id(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	}
 	return n, true
 }
+
+func taskNumber(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	n, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
+	if err != nil || n <= 0 {
+		invalid(w, "タスク番号が不正です。")
+		return 0, false
+	}
+	return n, true
+}

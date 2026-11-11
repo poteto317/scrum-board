@@ -8,8 +8,8 @@ export class Api {
   board() {
     return this.http.get<BoardData>('/api/board');
   }
-  card(id: number) {
-    return this.http.get<Card>(`/api/cards/${id}`);
+  cardByNumber(number: number) {
+    return this.http.get<Card>(`/api/cards/by-number/${number}`);
   }
   createColumn(name: string) {
     return this.http.post<Column>('/api/columns', { name });

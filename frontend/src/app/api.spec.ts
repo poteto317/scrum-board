@@ -28,4 +28,10 @@ describe('Api', () => {
     http.expectOne('/api/cards/7').flush({ message: '失敗' }, { status: 500, statusText: 'Error' });
     expect(status).toBe(500);
   });
+  it('resolves a public number through the number-specific endpoint', () => {
+    api.cardByNumber(3).subscribe((card) => expect(card.id).toBe(18));
+    const req = http.expectOne('/api/cards/by-number/3');
+    expect(req.request.method).toBe('GET');
+    req.flush({ id: 18, number: 3, columnId: 1, title: 'Task', description: '' });
+  });
 });

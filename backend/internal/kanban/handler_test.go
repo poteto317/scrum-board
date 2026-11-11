@@ -176,3 +176,38 @@ func TestUnicodeValidationBoundaries(t *testing.T) {
 		t.Fatalf("column overflow: %d", w.Code)
 	}
 }
+
+func (m *memoryRepo) GetCardByNumber(_ context.Context, number int64) (Card, error) {
+	for _, card := range m.cards {
+		if card.Number == number {
+			return card, nil
+		}
+	}
+	return Card{}, ErrNotFound
+}
+func TestGetCardByNumber(t *testing.T) {
+	repo := fresh()
+	repo.cards[18] = Card{ID: 18, Number: 3, ColumnID: 1, Title: "number three"}
+	repo.cards[3] = Card{ID: 3, Number: 18, ColumnID: 1, Title: "number eighteen"}
+	h := NewHandler(repo)
+	for _, tc := range []struct {
+		path       string
+		id, number int64
+	}{{"/api/cards/by-number/3", 18, 3}, {"/api/cards/by-number/18", 3, 18}, {"/api/cards/18", 18, 3}} {
+		w := request(h, "GET", tc.path, "")
+		var card Card
+		_ = json.Unmarshal(w.Body.Bytes(), &card)
+		if w.Code != 200 || card.ID != tc.id || card.Number != tc.number {
+			t.Fatalf("%s: %d %+v", tc.path, w.Code, card)
+		}
+	}
+	for _, tc := range []struct {
+		number string
+		status int
+	}{{"999", 404}, {"0", 400}, {"-1", 400}, {"abc", 400}, {"9223372036854775808", 400}} {
+		w := request(h, "GET", "/api/cards/by-number/"+tc.number, "")
+		if w.Code != tc.status {
+			t.Fatalf("%s: %d", tc.number, w.Code)
+		}
+	}
+}

@@ -58,7 +58,7 @@ export class CardDetail implements OnInit {
           this.error.set('');
           return forkJoin({
             board: this.api.board(),
-            card: this.api.card(Number(params.get('id'))),
+            card: this.api.cardByNumber(Number(params.get('number'))),
           }).pipe(
             catchError((error) => {
               this.error.set(errorMessage(error));

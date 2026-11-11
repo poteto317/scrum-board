@@ -16,6 +16,7 @@ func NewHandler(repo Repository) http.Handler {
 	mux.HandleFunc("POST /api/columns", h.createColumn)
 	mux.HandleFunc("POST /api/cards", h.createCard)
 	mux.HandleFunc("GET /api/cards/{id}", h.getCard)
+	mux.HandleFunc("GET /api/cards/by-number/{number}", h.getCardByNumber)
 	mux.HandleFunc("PATCH /api/cards/{id}", h.updateCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", h.deleteCard)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +44,18 @@ func (h handler) getCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, 200, c)
+}
+func (h handler) getCardByNumber(w http.ResponseWriter, r *http.Request) {
+	n, ok := taskNumber(w, r)
+	if !ok {
+		return
+	}
+	card, err := h.repo.GetCardByNumber(r.Context(), n)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, 200, card)
 }
 func (h handler) createColumn(w http.ResponseWriter, r *http.Request) {
 	var in struct {

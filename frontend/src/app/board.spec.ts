@@ -36,7 +36,7 @@ describe('Board create requests', () => {
 });
 
 describe('Board task numbers', () => {
-  it('shows the task number while linking to the stable internal ID', async () => {
+  it('links to the same public number shown on the card', async () => {
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [
@@ -68,6 +68,6 @@ describe('Board task numbers', () => {
     await f.whenStable();
     const link: HTMLAnchorElement = f.nativeElement.querySelector('.task-card');
     expect(link.textContent).toContain('TASK-002');
-    expect(link.getAttribute('href')).toBe('/cards/17');
+    expect(link.getAttribute('href')).toBe('/cards/2');
   });
 });

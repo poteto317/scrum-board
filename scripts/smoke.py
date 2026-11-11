@@ -34,6 +34,7 @@ card = call('POST', '/api/cards', {'title': '  動作確認 🧪  ',
 path = f"/api/cards/{card['id']}"
 try:
     assert isinstance(card['number'], int) and card['number'] > 0
+    assert call('GET', f"/api/cards/by-number/{card['number']}")['id'] == card['id']
     assert card['title'] == '動作確認 🧪'
     moved = call('PATCH', path, {'columnId': column['id']})
     assert moved['title'] == card['title'] and moved['description'] == card['description']
@@ -52,4 +53,5 @@ try:
 finally:
     call('DELETE', path, expected=204)
 call('GET', path, expected=404)
+call('GET', f"/api/cards/by-number/{card['number']}", expected=404)
 print('PASS: deletion and 404; sample appears exactly once')
