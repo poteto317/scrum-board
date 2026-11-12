@@ -67,7 +67,7 @@ number・id・title・description・columnIdなどを混ぜて送ると400にな
 | `GET /api/cards/by-number/{number}` | 公開タスク番号 |
 | `PATCH /api/cards/by-number/{number}/status` | 公開タスク番号とステータス名 |
 | `GET /api/cards/{id}` | 内部ID |
-| `PATCH /api/cards/{id}` | 内部IDとtitle/description/columnIdの部分更新 |
+| `PATCH /api/cards/{id}` | 内部IDとtitle/description/columnId/prUrlの部分更新 |
 
 番号とIDを推測で読み替えません。例のカードに `PATCH /api/cards/7` を送ると、内部ID7を対象にしてしまいます。生成AIから画面のタスクを変更するときはby-numberを使ってください。
 

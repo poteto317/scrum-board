@@ -131,11 +131,11 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | --- | --- | --- |
 | GET | `/api/board` | `{columns: [...], cards: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
-| POST | `/api/cards` | `{title, description, columnId}`でカード追加 |
+| POST | `/api/cards` | `{title, description, columnId, prUrl?}`でカード追加 |
 | GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
 | GET | `/api/cards/by-number/{number}` | タスク番号によるカード詳細 |
 | PATCH | `/api/cards/by-number/{number}/status` | `{status}`（列名）でステータスだけ変更 |
-| PATCH | `/api/cards/{id}` | `{title?, description?, columnId?}`で部分更新 |
+| PATCH | `/api/cards/{id}` | `{title?, description?, columnId?, prUrl?}`で部分更新 |
 | DELETE | `/api/cards/{id}` | 削除（204） |
 | GET | `/api/health` | 起動確認 |
 
