@@ -106,6 +106,22 @@ describe('CardAutosave', () => {
     expect(edit.form.controls.description.value).toBe('失敗した本文');
     edit.flush();
     finish(1);
+    expect(edit.error()).toBe('');
+    expect(edit.hasChanges()).toBe(false);
+  });
+  it('clears the failure and in-flight state when switching to another card', () => {
+    edit.form.controls.description.setValue('失敗した本文');
+    edit.flush();
+    requests[0].response.error({ error: { message: '通信失敗' } });
+    expect(edit.error()).toBe('通信失敗');
+    edit.reset({ ...initial, id: 99, number: 40, title: '別カード' });
+    expect(edit.error()).toBe('');
+    expect(edit.hasChanges()).toBe(false);
+    edit.form.controls.title.setValue('送信中のタイトル');
+    edit.flush();
+    expect(edit.saving()).toBe(true);
+    edit.reset({ ...initial, id: 100, number: 41, title: 'さらに別のカード' });
+    expect(edit.saving()).toBe(false);
     expect(edit.hasChanges()).toBe(false);
   });
   it('saves valid independent properties while retaining invalid text', () => {
