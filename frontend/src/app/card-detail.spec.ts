@@ -238,7 +238,9 @@ describe('CardDetail IME response handling', () => {
     input.value = '変換途中の日本語';
     input.dispatchEvent(new Event('input'));
     expect(f.componentInstance.form.controls[field].value).toBe(sent);
-    pending.next({ ...card, [field]: sent });
+    // The response differs from what the user sees, so only the composing guard keeps the DOM value.
+    const serverValue = field === 'prUrl' ? 'https://github.com/a/b/pull/2' : '別の人の編集';
+    pending.next({ ...card, [field]: serverValue });
     pending.complete();
     expect(input.value).toBe('変換途中の日本語');
     input.dispatchEvent(new Event('compositionend'));
