@@ -1,8 +1,8 @@
 import { Modal } from './modal';
-import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, HostListener, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { ReactiveFormsModule } from '@angular/forms';
 import {
   catchError,
   combineLatest,
@@ -17,13 +17,13 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
-import { prUrlValidator } from './pr-url';
-import { textLimit } from './form-validation';
-import { Card, Column } from './models';
+import { Column } from './models';
+import { CardAutosave } from './card-autosave';
 
 @Component({
   selector: 'app-card-detail',
   imports: [ReactiveFormsModule, RouterLink, DatePipe, Modal],
+  providers: [CardAutosave],
   templateUrl: './card-detail.html',
   styleUrl: './card-detail.css',
 })
@@ -34,28 +34,23 @@ export class CardDetail implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly reload$ = new Subject<void>();
   private readonly changed$ = new Subject<void>();
-  readonly card = signal<Card | null>(null);
+  readonly autosave = inject(CardAutosave);
+  readonly card = this.autosave.card;
+  readonly form = this.autosave.form;
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
-  readonly saving = signal(false);
+  readonly deleting = signal(false);
   readonly error = signal('');
   readonly confirmDelete = signal(false);
-  readonly saved = signal(false);
-  readonly form = new FormGroup({
-    title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
-    description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
-    prUrl: new FormControl('', { nonNullable: true, validators: [prUrlValidator] }),
-    columnId: new FormControl(0, { nonNullable: true }),
-  });
+  private deleted = false;
   ngOnInit() {
     combineLatest([this.route.paramMap, this.reload$.pipe(startWith(undefined))])
       .pipe(
         switchMap(([params]) => {
-          // Route reuse must also cancel pending writes before a new card is shown.
           this.changed$.next();
-          this.card.set(null);
+          this.autosave.reset(null);
+          this.deleted = false;
           this.confirmDelete.set(false);
-          this.saved.set(false);
           this.loading.set(true);
           this.error.set('');
           return forkJoin({
@@ -73,70 +68,48 @@ export class CardDetail implements OnInit {
       )
       .subscribe(({ board, card }) => {
         this.columns.set(board.columns);
-        this.card.set(card);
-        this.form.reset({
-          title: card.title,
-          description: card.description,
-          columnId: card.columnId,
-          prUrl: card.prUrl,
-        });
+        this.autosave.reset(card);
       });
   }
   load() {
     this.reload$.next();
   }
-  save() {
-    this.form.markAllAsTouched();
-    if (this.form.invalid || this.saving() || !this.card()) return;
-    this.saving.set(true);
-    this.saved.set(false);
-    this.error.set('');
-    const value = this.form.getRawValue();
-    this.form.disable({ emitEvent: false });
-    this.api
-      .updateCard(this.card()!.id, {
-        ...value,
-        title: value.title.trim(),
-        prUrl: value.prUrl.trim(),
-      })
-      .pipe(
-        takeUntil(this.changed$),
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => {
-          this.saving.set(false);
-          this.form.enable({ emitEvent: false });
-        }),
-      )
-      .subscribe({
-        next: (card) => {
-          this.card.set(card);
-          this.form.reset({
-            title: card.title,
-            description: card.description,
-            columnId: card.columnId,
-            prUrl: card.prUrl,
-          });
-          this.saved.set(true);
-        },
-        error: (e) => this.error.set(errorMessage(e)),
-      });
+  async canLeave(): Promise<boolean> {
+    if (this.deleted || !this.autosave.hasChanges()) return true;
+    if (await this.autosave.settle()) return true;
+    return window.confirm('未保存の変更があります。変更を破棄して移動しますか？');
+  }
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent) {
+    if (!this.deleted && this.autosave.hasChanges()) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
   }
   remove() {
-    if (this.saving() || !this.card()) return;
-    this.saving.set(true);
+    if (this.deleting() || this.autosave.saving() || !this.card()) return;
+    this.autosave.cancel();
+    this.form.disable({ emitEvent: false });
+    this.deleting.set(true);
     this.error.set('');
     this.api
       .deleteCard(this.card()!.id)
       .pipe(
         takeUntil(this.changed$),
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.saving.set(false)),
+        finalize(() => {
+          this.deleting.set(false);
+          this.form.enable({ emitEvent: false });
+        }),
       )
       .subscribe({
-        next: () => this.router.navigate(['/']),
-        error: (e) => {
+        next: () => {
+          this.deleted = true;
+          this.router.navigate(['/']);
+        },
+        error: (error) => {
           this.confirmDelete.set(false);
-          this.error.set(errorMessage(e));
+          this.error.set(errorMessage(error));
         },
       });
   }

@@ -221,7 +221,7 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 
 ### カードとGitHub PRの紐付け
 
-カード詳細のプロパティにGitHub PRのURLを入力し「変更を保存」を押すと、そのPRへのリンクを残せます。1カードにつき1 URLで、空欄にして保存すると解除できます。APIからも `prUrl` の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。
+カード詳細のプロパティにGitHub PRのURLを入力すると自動保存され、そのPRへのリンクを残せます。1カードにつき1 URLで、空欄にすると紐付けを解除します。APIからも `prUrl` の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。
 
 URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します。既存のカード・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
 
@@ -233,3 +233,9 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --d
 docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot' < backups/<更新前のダンプ>.sql
 docker compose start api
 ```
+
+### 詳細の自動保存
+
+カード詳細には保存ボタンがありません。タイトル・説明・GitHub PR URLは入力が600ms止まると自動保存し、入力し続けても最大2秒ごとに保存します。入力欄を離れたときとステータス変更は即時保存します。日本語変換中の本文は確定まで送信しません。
+
+保存中も編集を続けられ、変更した有効な項目だけを順番にPATCHします。不正入力はそのまま残し、他の有効な項目は保存します。通信失敗では入力を保持し「再試行」を表示します。アプリ内の移動では保存完了を待ち、不正入力や失敗が残れば破棄確認します。リロード・タブ終了でも未保存時はブラウザーの標準確認を使います。未保存の入力をオフラインで永続化する機能は含みません。

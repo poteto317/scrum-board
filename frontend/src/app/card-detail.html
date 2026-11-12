@@ -15,11 +15,18 @@
       <h1>アイテムの詳細</h1>
       <p>取り組むことを明確にして、次のステップへ。</p>
     </section>
-    <form [formGroup]="form" (ngSubmit)="save()" class="detail-layout">
+    <form [formGroup]="form" (submit)="$event.preventDefault()" class="detail-layout">
       <section class="detail-card">
         <div class="section-label">タスクの内容</div>
         <label for="detail-title">タイトル <span class="required">必須</span></label
-        ><input id="detail-title" formControlName="title" placeholder="何に取り組みますか？" />
+        ><input
+          id="detail-title"
+          formControlName="title"
+          placeholder="何に取り組みますか？"
+          (blur)="autosave.flush()"
+          (compositionstart)="autosave.composition('title', true)"
+          (compositionend)="autosave.composition('title', false)"
+        />
         @if (form.controls.title.touched && form.controls.title.invalid) {
           <p class="form-error">タイトルを1〜200文字で入力してください。</p>
         }
@@ -27,6 +34,9 @@
         ><textarea
           id="detail-description"
           formControlName="description"
+          (blur)="autosave.flush()"
+          (compositionstart)="autosave.composition('description', true)"
+          (compositionend)="autosave.composition('description', false)"
           rows="10"
           placeholder="背景、取り組む内容、完了の条件など"
         ></textarea>
@@ -39,22 +49,25 @@
         <section class="detail-card properties">
           <div class="section-label">プロパティ</div>
           <label for="detail-status">ステータス</label
-          ><select id="detail-status" formControlName="columnId">
+          ><select id="detail-status" formControlName="columnId" (change)="autosave.flush()">
             @for (column of columns(); track column.id) {
               <option [ngValue]="column.id">{{ column.name }}</option>
             }
           </select>
-          <p class="field-note">ステータスを選んで保存すると、<br />ボード上の列が変わります。</p>
+          <p class="field-note">ステータスを選ぶと自動保存され、<br />ボード上の列が変わります。</p>
           <label for="detail-pr-url">GitHub PR <span class="optional">任意</span></label>
           <input
             id="detail-pr-url"
             type="url"
             formControlName="prUrl"
+            (blur)="autosave.flush()"
+            (compositionstart)="autosave.composition('prUrl', true)"
+            (compositionend)="autosave.composition('prUrl', false)"
             placeholder="https://github.com/owner/repo/pull/1"
             aria-describedby="pr-url-note pr-url-error"
           />
           <p id="pr-url-note" class="field-note">
-            対応するPRのURLを保存できます。空欄で保存すると紐付けを解除します。
+            対応するPRのURLを自動保存します。空欄にすると紐付けを解除します。
           </p>
           <p id="pr-url-error" class="form-error">
             @if (form.controls.prUrl.invalid && form.controls.prUrl.touched) {
@@ -79,21 +92,32 @@
         @if (error()) {
           <p class="form-error" role="alert">{{ error() }}</p>
         }
-        @if (saved() && !form.dirty) {
-          <p class="success-message" role="status">✓ 変更を保存しました。</p>
+        <div class="save-state" role="status" aria-live="polite">
+          @if (autosave.saving()) {
+            保存中…
+          } @else if (autosave.error()) {
+            未保存の変更があります。
+          } @else if (autosave.hasChanges()) {
+            {{ form.invalid ? '未保存の変更があります。入力を確認してください。' : '保存待ち…' }}
+          } @else if (autosave.changed()) {
+            ✓ 保存済み
+          } @else {
+            変更は自動保存されます。
+          }
+        </div>
+        @if (autosave.error()) {
+          <p class="form-error" role="alert">{{ autosave.error() }}</p>
+          <button type="button" class="secondary" (click)="autosave.flush()">再試行</button>
         }
         <div class="action-row">
           <button
             class="danger-link"
             type="button"
             (click)="confirmDelete.set(true)"
-            [disabled]="saving()"
+            [disabled]="deleting() || autosave.saving()"
           >
             アイテムを削除</button
-          ><a class="secondary" routerLink="/">ボードに戻る</a
-          ><button class="primary" type="submit" [disabled]="saving()">
-            {{ saving() ? '処理中…' : '変更を保存' }}
-          </button>
+          ><a class="secondary" routerLink="/">ボードに戻る</a>
         </div>
       </div>
     </form>
@@ -104,16 +128,26 @@
     appModal
     class="modal-backdrop"
     aria-labelledby="delete-title"
-    (cancel)="$event.preventDefault(); !saving() && confirmDelete.set(false)"
+    (cancel)="
+      $event.preventDefault(); !deleting() && !autosave.saving() && confirmDelete.set(false)
+    "
   >
     <section class="modal">
       <h2 id="delete-title">アイテムを削除しますか？</h2>
       <p class="delete-copy">「{{ card()?.title }}」を削除します。この操作は取り消せません。</p>
       <div class="form-actions">
-        <button class="secondary" (click)="confirmDelete.set(false)" [disabled]="saving()">
+        <button
+          class="secondary"
+          (click)="confirmDelete.set(false)"
+          [disabled]="deleting() || autosave.saving()"
+        >
           キャンセル</button
-        ><button class="danger-button" (click)="remove()" [disabled]="saving()">
-          {{ saving() ? '削除中…' : '削除する' }}
+        ><button
+          class="danger-button"
+          (click)="remove()"
+          [disabled]="deleting() || autosave.saving()"
+        >
+          {{ deleting() ? '削除中…' : '削除する' }}
         </button>
       </div>
     </section>
