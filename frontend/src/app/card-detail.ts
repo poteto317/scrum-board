@@ -17,6 +17,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
+import { prUrlValidator } from './pr-url';
 import { textLimit } from './form-validation';
 import { Card, Column } from './models';
 
@@ -43,6 +44,7 @@ export class CardDetail implements OnInit {
   readonly form = new FormGroup({
     title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
+    prUrl: new FormControl('', { nonNullable: true, validators: [prUrlValidator] }),
     columnId: new FormControl(0, { nonNullable: true }),
   });
   ngOnInit() {
@@ -76,6 +78,7 @@ export class CardDetail implements OnInit {
           title: card.title,
           description: card.description,
           columnId: card.columnId,
+          prUrl: card.prUrl,
         });
       });
   }
@@ -91,7 +94,11 @@ export class CardDetail implements OnInit {
     const value = this.form.getRawValue();
     this.form.disable({ emitEvent: false });
     this.api
-      .updateCard(this.card()!.id, { ...value, title: value.title.trim() })
+      .updateCard(this.card()!.id, {
+        ...value,
+        title: value.title.trim(),
+        prUrl: value.prUrl.trim(),
+      })
       .pipe(
         takeUntil(this.changed$),
         takeUntilDestroyed(this.destroyRef),
@@ -107,6 +114,7 @@ export class CardDetail implements OnInit {
             title: card.title,
             description: card.description,
             columnId: card.columnId,
+            prUrl: card.prUrl,
           });
           this.saved.set(true);
         },

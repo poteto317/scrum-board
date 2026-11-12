@@ -36,6 +36,12 @@ try:
     assert isinstance(card['number'], int) and card['number'] > 0
     assert call('GET', f"/api/cards/by-number/{card['number']}")['id'] == card['id']
     assert card['title'] == '動作確認 🧪'
+    pr_url = 'https://github.com/poteto317/scrum-board/pull/2'
+    linked = call('PATCH', path, {'prUrl': '  ' + pr_url + '  '})
+    assert linked['prUrl'] == pr_url
+    assert next(c for c in call('GET', '/api/board')['cards'] if c['id'] == card['id'])['prUrl'] == pr_url
+    call('PATCH', path, {'prUrl': 'https://github.com.evil/a/b/pull/1', 'title': 'must not change'}, 400)
+    assert call('GET', path) == linked
     status_path = f"/api/cards/by-number/{card['number']}/status"
     doing = next(c for c in board['columns'] if c['name'] == 'Doing')
     by_name = call('PATCH', status_path, {'status': 'Doing'})
@@ -44,6 +50,7 @@ try:
     by_name = call('PATCH', status_path, {'status': column['name']})
     assert by_name['columnId'] == column['id']
     repeated = call('PATCH', status_path, {'status': column['name']})
+    assert repeated['prUrl'] == pr_url
     assert repeated['number'] == card['number'] and repeated['columnId'] == column['id']
     call('PATCH', status_path, {'status': 'not-an-existing-status'}, 400)
     assert call('GET', path) == repeated
@@ -60,7 +67,8 @@ try:
     call('POST', '/api/columns', {'name': ' '}, 400)
     unchanged = call('PATCH', path, {'columnId': column['id']})
     assert unchanged['columnId'] == column['id']
-    print('PASS: real MySQL CRUD, Unicode, partial update, status, duplicates, validation')
+    assert call('PATCH', path, {'prUrl': ''})['prUrl'] == ''
+    print('PASS: PR link save/preserve/clear/invalid input; real MySQL CRUD, Unicode, partial update, status, duplicates, validation')
 finally:
     call('DELETE', path, expected=204)
 call('GET', path, expected=404)

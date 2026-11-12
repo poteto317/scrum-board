@@ -45,6 +45,27 @@
             }
           </select>
           <p class="field-note">ステータスを選んで保存すると、<br />ボード上の列が変わります。</p>
+          <label for="detail-pr-url">GitHub PR <span class="optional">任意</span></label>
+          <input
+            id="detail-pr-url"
+            type="url"
+            formControlName="prUrl"
+            placeholder="https://github.com/owner/repo/pull/1"
+            aria-describedby="pr-url-note pr-url-error"
+          />
+          <p id="pr-url-note" class="field-note">
+            対応するPRのURLを保存できます。空欄で保存すると紐付けを解除します。
+          </p>
+          <p id="pr-url-error" class="form-error">
+            @if (form.controls.prUrl.invalid && form.controls.prUrl.touched) {
+              GitHub PRのURLを入力してください。例: https://github.com/owner/repo/pull/1
+            }
+          </p>
+          @if (card()!.prUrl) {
+            <a class="pr-link" [href]="card()!.prUrl" target="_blank" rel="noopener noreferrer"
+              >PRを開く ↗</a
+            >
+          }
           <div class="timestamps">
             <span>作成日時</span><time>{{ card()!.createdAt | date: 'yyyy/MM/dd HH:mm' }}</time
             ><span>更新日時</span><time>{{ card()!.updatedAt | date: 'yyyy/MM/dd HH:mm' }}</time>

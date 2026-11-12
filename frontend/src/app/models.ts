@@ -9,6 +9,7 @@ export interface Card {
   columnId: number;
   title: string;
   description: string;
+  prUrl: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -16,4 +17,5 @@ export interface BoardData {
   columns: Column[];
   cards: Card[];
 }
-export type CardInput = Pick<Card, 'title' | 'description' | 'columnId'>;
+export type CardInput = Pick<Card, 'title' | 'description' | 'columnId'> &
+  Partial<Pick<Card, 'prUrl'>>;

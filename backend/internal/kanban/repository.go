@@ -31,12 +31,12 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Card, error) {
 	var c Card
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.CreatedAt, &c.UpdatedAt)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.CreatedAt, &c.UpdatedAt, &c.PRURL)
 	return c, dbError(err)
 }
 
-const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.created_at, c.updated_at"
-const numberedCards = " FROM cards c JOIN card_numbers n ON n.card_id=c.id"
+const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.created_at, c.updated_at, COALESCE(p.pr_url,'')"
+const numberedCards = " FROM cards c JOIN card_numbers n ON n.card_id=c.id LEFT JOIN card_pr_links p ON p.card_id=c.id"
 
 func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	b := Board{Columns: []Column{}, Cards: []Card{}}
@@ -111,6 +111,11 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if _, err = tx.ExecContext(ctx, "UPDATE card_number_sequence SET next_number=? WHERE singleton=1", number+1); err != nil {
 		return Card{}, err
 	}
+	if in.PRURL != "" {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO card_pr_links(card_id,pr_url) VALUES(?,?)", id, in.PRURL); err != nil {
+			return Card{}, err
+		}
+	}
 	card, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
 	if err != nil {
 		return Card{}, err
@@ -123,7 +128,13 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 		return Card{}, err
 	}
 	defer tx.Rollback()
-	c, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=? FOR UPDATE", id))
+	// Lock only the owning card. Locking an absent LEFT JOIN row takes a gap lock
+	// and can deadlock independent cards during their first PR-link INSERT.
+	var lockedID int64
+	if err = tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
+		return Card{}, dbError(err)
+	}
+	c, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
 	if err != nil {
 		return c, err
 	}
@@ -139,6 +150,11 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	_, err = tx.ExecContext(ctx, "UPDATE cards SET title=?,description=?,column_id=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, time.Now().UTC(), id)
 	if err != nil {
 		return Card{}, dbError(err)
+	}
+	if p.PRURL != nil {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO card_pr_links(card_id,pr_url) VALUES(?,?) ON DUPLICATE KEY UPDATE pr_url=?", id, *p.PRURL, *p.PRURL); err != nil {
+			return Card{}, err
+		}
 	}
 	c, err = scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
 	if err != nil {

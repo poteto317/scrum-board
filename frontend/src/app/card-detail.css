@@ -140,3 +140,18 @@ h1 {
     text-align: left;
   }
 }
+
+.properties input {
+  min-width: 0;
+  width: 100%;
+  font-size: 12px;
+}
+.properties .form-error {
+  overflow-wrap: anywhere;
+}
+.pr-link {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 12px;
+  margin-top: 6px;
+}

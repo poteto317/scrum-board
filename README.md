@@ -218,3 +218,9 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 ダンプの終了コードとSQLファイルが正常であることを確認してから `docker compose up -d --build api web` で更新します。ダンプに失敗した場合は更新せず `docker compose start api` で元のAPIを再開してください。UTF-8の文字列を照合するSQLクライアントにも `--default-character-set=utf8mb4` を指定します。
 
 画面URLは表示番号として解釈します。旧画面URLを内部IDとして推測するフォールバックは行いません。例えば `/cards/18` はタスク番号18のカードを表し、内部ID18のカードを意味しません。
+
+### カードとGitHub PRの紐付け
+
+カード詳細のプロパティにGitHub PRのURLを入力し「変更を保存」を押すと、そのPRへのリンクを残せます。1カードにつき1 URLで、空欄にして保存すると解除できます。APIからも `prUrl` の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。
+
+URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します。既存のカード・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。

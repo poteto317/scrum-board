@@ -72,3 +72,20 @@ number・id・title・description・columnIdなどを混ぜて送ると400にな
 番号とIDを推測で読み替えません。例のカードに `PATCH /api/cards/7` を送ると、内部ID7を対象にしてしまいます。生成AIから画面のタスクを変更するときはby-numberを使ってください。
 
 このアプリはローカル学習用の認証なし構成です。MCPや外部公開用の認証は別機能で、今回のAPI追加には含みません。同時更新は従来どおり最後の保存が優先されます。
+
+## GitHub PRの紐付け
+
+カードのJSONには `prUrl`（未登録は空文字）が含まれます。詳細画面の「GitHub PR」欄でも登録でき、保存済みのPRは別タブで開けます。1カードにつき1 URLです。
+
+内部IDは番号から取得した応答の `id` を使います。例えばタスク番号3の内部IDが18なら次のように更新します。
+
+```sh
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"prUrl":"https://github.com/owner/repo/pull/2"}' \
+  http://127.0.0.1:4200/api/cards/18
+```
+
+`prUrl` だけのPATCHはタイトル・説明・ステータス・番号を保持します。省略またはnullは変更せず、空文字 `""` で解除します。作成APIの任意プロパティとしても使えます。前後の空白は取り除きます。
+
+受け付ける形式は `https://github.com/{owner}/{repo}/pull/{正の整数}`、ASCIIで2048文字以内です。owner/repoは英数字・`_`・`-`・`.`（`.`／`..` 単独は不可）。末尾スラッシュ、先頭0の番号、query、fragment、credentials、port、他ホスト、制御文字、バックスラッシュは400になります。PRの実在や閲覧権限の確認、GitHubとの同期は行いません。

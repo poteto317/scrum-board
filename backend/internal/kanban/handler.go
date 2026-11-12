@@ -81,6 +81,12 @@ func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
+	var valid bool
+	in.PRURL, valid = normalizePRURL(in.PRURL)
+	if !valid {
+		invalid(w, "GitHub PRのURLを入力してください。例: https://github.com/owner/repo/pull/1")
+		return
+	}
 	in.Title = strings.TrimSpace(in.Title)
 	if !validTitle(in.Title) || !validDescription(in.Description) || in.ColumnID <= 0 {
 		invalid(w, "タイトルは1〜200文字、説明は10000文字以内で入力し、ステータスを選んでください。")
@@ -102,9 +108,17 @@ func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &p) {
 		return
 	}
-	if p.Title == nil && p.Description == nil && p.ColumnID == nil {
+	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURL == nil {
 		invalid(w, "変更するプロパティが必要です。")
 		return
+	}
+	if p.PRURL != nil {
+		value, valid := normalizePRURL(*p.PRURL)
+		if !valid {
+			invalid(w, "GitHub PRのURLを入力してください。例: https://github.com/owner/repo/pull/1")
+			return
+		}
+		p.PRURL = &value
 	}
 	if p.Title != nil {
 		*p.Title = strings.TrimSpace(*p.Title)

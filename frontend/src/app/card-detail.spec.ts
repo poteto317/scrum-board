@@ -12,6 +12,7 @@ describe('CardDetail', () => {
     columnId: 1,
     title: '学習',
     description: '元の説明',
+    prUrl: '',
     createdAt: '',
     updatedAt: '',
   };
@@ -77,6 +78,7 @@ describe('CardDetail', () => {
       title: '編集したタイトル',
       description: '編集中',
       columnId: 2,
+      prUrl: '',
     });
     expect(c.form.controls.title.value).toBe('編集したタイトル');
     expect(c.form.controls.columnId.value).toBe(2);
@@ -127,5 +129,47 @@ describe('CardDetail', () => {
     f.detectChanges();
     f.componentInstance.remove();
     expect(api.deleteCard).toHaveBeenCalledWith(18);
+  });
+  it('loads, edits, saves and clears the PR link using the internal ID', () => {
+    const url = 'https://github.com/poteto317/scrum-board/pull/2';
+    api.cardByNumber.mockReturnValue(of({ ...card, id: 18, number: 3, prUrl: url }));
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    const input = f.nativeElement.querySelector('#detail-pr-url') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.value).toBe(url);
+    const link = () => f.nativeElement.querySelector('.pr-link') as HTMLAnchorElement | null;
+    expect(link()?.getAttribute('href')).toBe(url);
+    expect(link()?.target).toBe('_blank');
+    expect(link()?.rel).toBe('noopener noreferrer');
+    input.value = 'https://github.com/poteto317/scrum-board/pull/3';
+    input.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    expect(link()?.getAttribute('href')).toBe(url);
+    f.componentInstance.save();
+    expect(api.updateCard).toHaveBeenLastCalledWith(
+      18,
+      expect.objectContaining({ prUrl: input.value }),
+    );
+    expect(input.value).toContain('/pull/3'); // Failed save retains the edit.
+    api.updateCard.mockReturnValue(of({ ...card, id: 18, number: 3, prUrl: '' }));
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+    f.componentInstance.save();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenLastCalledWith(18, expect.objectContaining({ prUrl: '' }));
+    expect(link()).toBeNull();
+  });
+  it('does not submit an invalid PR URL', () => {
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    const input = f.nativeElement.querySelector('#detail-pr-url') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    input.value = 'https://github.com.evil/a/b/pull/1';
+    input.dispatchEvent(new Event('input'));
+    f.componentInstance.save();
+    f.detectChanges();
+    expect(api.updateCard).not.toHaveBeenCalled();
+    expect(f.nativeElement.textContent).toContain('GitHub PRのURLを入力してください');
   });
 });
