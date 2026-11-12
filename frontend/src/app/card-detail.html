@@ -63,7 +63,7 @@
           </p>
           @if (card()!.prUrl) {
             <a class="pr-link" [href]="card()!.prUrl" target="_blank" rel="noopener noreferrer"
-              >PRを開く ↗</a
+              >GitHub PR ↗<span class="pr-link-url">{{ card()!.prUrl }}</span></a
             >
           }
           <div class="timestamps">

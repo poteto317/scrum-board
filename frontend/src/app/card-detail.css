@@ -155,3 +155,10 @@ h1 {
   font-size: 12px;
   margin-top: 6px;
 }
+
+.pr-link-url {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
