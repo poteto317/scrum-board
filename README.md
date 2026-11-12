@@ -224,3 +224,12 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 カード詳細のプロパティにGitHub PRのURLを入力し「変更を保存」を押すと、そのPRへのリンクを残せます。1カードにつき1 URLで、空欄にして保存すると解除できます。APIからも `prUrl` の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。
 
 URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します。既存のカード・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
+
+更新前のバックアップから復元する場合は、ダンプに含まれない補助表が取り残されないよう、復元の前にAPIを止めて補助表を削除してください。取り残された行は、復元で戻ったカードやその後に作ったカードと内部IDが重なり、別のカードにPR URLや番号が付くおそれがあります。更新後に保存したPR URLは失われ、番号は次のAPI起動時に作成日時・内部ID順で採番し直されます。
+
+```sh
+docker compose stop api
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE" -e "SET FOREIGN_KEY_CHECKS=0; DROP TABLE IF EXISTS card_pr_links, card_numbers, card_number_sequence;"'
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot' < backups/<更新前のダンプ>.sql
+docker compose start api
+```
