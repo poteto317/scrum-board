@@ -133,8 +133,10 @@ export class CardAutosave {
               (edits[field] === this.edits[field] && this.value(field) === confirmed[field]))
           ) {
             // Keep edits made while the request was pending, including a return to the original value.
+            // Only adopt the response when it differs from what the user sees (trimmed text is not a change).
             const control = this.form.controls[field] as FormControl<string | number>;
-            control.setValue(card[field], { emitEvent: false });
+            if (this.value(field) !== card[field])
+              control.setValue(card[field], { emitEvent: false });
           }
         }
         this.card.set(card);

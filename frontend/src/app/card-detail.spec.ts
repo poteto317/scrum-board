@@ -91,6 +91,52 @@ describe('CardDetail autosave', () => {
     expect(f.nativeElement.textContent).toContain('通信失敗');
     expect(f.nativeElement.textContent).toContain('再試行');
   });
+  const typed: Record<'title' | 'description' | 'prUrl', [string, string, unknown]> = {
+    title: ['#detail-title', '新しいタイトル', { title: '新しいタイトル' }],
+    description: ['#detail-description', '新しい本文', { description: '新しい本文' }],
+    prUrl: [
+      '#detail-pr-url',
+      'https://github.com/poteto317/scrum-board/pull/9',
+      { prUrl: 'https://github.com/poteto317/scrum-board/pull/9' },
+    ],
+  };
+  it.each(['title', 'description', 'prUrl'] as const)(
+    'holds %s while composing and saves it after compositionend',
+    (field) => {
+      const [selector, value, patch] = typed[field];
+      const f = create();
+      const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
+      input.dispatchEvent(new Event('compositionstart'));
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+      vi.advanceTimersByTime(2500);
+      expect(api.updateCard).not.toHaveBeenCalled();
+      input.dispatchEvent(new Event('compositionend'));
+      vi.advanceTimersByTime(600);
+      expect(api.updateCard).toHaveBeenCalledTimes(1);
+      expect(api.updateCard).toHaveBeenCalledWith(18, patch);
+    },
+  );
+  it.each(['title', 'description', 'prUrl'] as const)('saves %s immediately on blur', (field) => {
+    const [selector, value, patch] = typed[field];
+    const f = create();
+    const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    expect(api.updateCard).not.toHaveBeenCalled();
+    input.dispatchEvent(new Event('blur'));
+    expect(api.updateCard).toHaveBeenCalledTimes(1);
+    expect(api.updateCard).toHaveBeenCalledWith(18, patch);
+  });
+  it('cancels the pending save when the screen is destroyed', () => {
+    const f = create();
+    const input = f.nativeElement.querySelector('#detail-title') as HTMLInputElement;
+    input.value = '破棄される編集';
+    input.dispatchEvent(new Event('input'));
+    f.destroy();
+    vi.advanceTimersByTime(2500);
+    expect(api.updateCard).not.toHaveBeenCalled();
+  });
   it('keeps an invalid PR URL unsent and uses only the saved PR as a link', () => {
     const url = 'https://github.com/poteto317/scrum-board/pull/2';
     api.cardByNumber.mockReturnValue(of({ ...card, prUrl: url }));

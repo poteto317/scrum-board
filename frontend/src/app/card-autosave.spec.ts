@@ -54,6 +54,15 @@ describe('CardAutosave', () => {
     finish(0);
     expect(edit.hasChanges()).toBe(false);
   });
+  it('keeps a trailing space that the server trims instead of rewriting the field', () => {
+    edit.form.controls.title.setValue('hello ');
+    vi.advanceTimersByTime(600);
+    expect(api.updateCard).toHaveBeenCalledWith(27, { title: 'hello' });
+    finish(0);
+    // The user may keep typing after the pause; the saved response must not eat the space.
+    expect(edit.form.controls.title.value).toBe('hello ');
+    expect(edit.hasChanges()).toBe(false);
+  });
   it('caps continuous typing at two seconds', () => {
     for (let i = 0; i < 5; i++) {
       edit.form.controls.title.setValue(`入力${i}`);
