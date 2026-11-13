@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"reflect"
@@ -426,5 +427,144 @@ func TestMySQLImportWaitsForCardBeforeNumberOnDelete(t *testing.T) {
 	}
 	if err = <-result; !errors.Is(err, ErrNotFound) {
 		t.Fatal("expected removed card, not deadlock", err)
+	}
+}
+
+func newHistoryCard(t *testing.T, r MySQLRepository) Card {
+	t.Helper()
+	mustInit(t, r)
+	if err := r.InitializeHistory(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	c, err := r.CreateCard(context.Background(), CardInput{Title: "history subject", Description: "body", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	title, desc, url, col := "new title", "new body", "https://github.com/a/b/pull/9", int64(2)
+	if _, err := r.UpdateCard(ctx, c.ID, CardPatch{Title: &title, Description: &desc, PRURL: &url, ColumnID: &col}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := r.History(ctx, c.Number, 0)
+	if err != nil || len(page.Events) != 2 {
+		t.Fatal(page, err)
+	}
+	want := []HistoryChange{
+		{Field: "title", Before: "history subject", After: "new title"},
+		{Field: "description", Before: "body", After: "new body"},
+		{Field: "status", Before: "Todo", After: "Doing"},
+		{Field: "prUrl", Before: "", After: url},
+	}
+	if !reflect.DeepEqual(page.Events[0].Changes, want) || page.Events[0].Kind != "updated" {
+		t.Fatalf("changes: %+v", page.Events[0])
+	}
+	created := page.Events[1]
+	if created.Kind != "created" || len(created.Changes) != 4 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
+		t.Fatalf("created event: %+v", created)
+	}
+}
+
+func TestMySQLImportRejectsEachIdentityMismatchWithoutWriting(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	base := HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: "identity", OccurredAt: c.CreatedAt, Note: "source"}
+	for name, mutate := range map[string]func(*HistoricalRecord){
+		"number":    func(v *HistoricalRecord) { v.Number++ },
+		"createdAt": func(v *HistoricalRecord) { v.CreatedAt = v.CreatedAt.Add(time.Second) },
+	} {
+		v := base
+		mutate(&v)
+		if err := r.ImportHistory(ctx, []HistoricalRecord{v}); err == nil {
+			t.Fatalf("%s mismatch accepted", name)
+		}
+	}
+	page, _ := r.History(ctx, c.Number, 0)
+	if len(page.Events) != 1 {
+		t.Fatalf("mismatched import wrote events: %+v", page)
+	}
+}
+
+func TestMySQLImportKeyConflictChecksEveryStoredField(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	base := HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: "same", OccurredAt: c.CreatedAt, Note: "original", EvidenceURL: "https://github.com/a/b/pull/1", Changes: []HistoryChange{{Field: "status", Before: "Todo", After: "Done"}}}
+	if err := r.ImportHistory(ctx, []HistoricalRecord{base}); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*HistoricalRecord){
+		"occurredAt": func(v *HistoricalRecord) { v.OccurredAt = v.OccurredAt.Add(time.Second) },
+		"evidence":   func(v *HistoricalRecord) { v.EvidenceURL = "https://github.com/a/b/pull/2" },
+		"note":       func(v *HistoricalRecord) { v.Note = "other" },
+		"changes": func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "status", Before: "Todo", After: "Doing"}}
+		},
+	} {
+		v := base
+		mutate(&v)
+		if err := r.ImportHistory(ctx, []HistoricalRecord{v}); err == nil {
+			t.Fatalf("conflicting %s was silently accepted", name)
+		}
+	}
+	// A key owned by a non-restored event (the baseline) is never an idempotent re-run, even when every other field matches.
+	first, err := r.GetCard(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var baseline HistoricalRecord
+	var payload []byte
+	baseline.Number, baseline.CardID, baseline.CreatedAt, baseline.Key = first.Number, first.ID, first.CreatedAt, "baseline-v1"
+	if err = r.DB.QueryRow("SELECT occurred_at,changes,note,evidence_url FROM card_history WHERE card_id=1 AND event_key='baseline-v1'").Scan(&baseline.OccurredAt, &payload, &baseline.Note, &baseline.EvidenceURL); err != nil {
+		t.Fatal("seed card must have a baseline event:", err)
+	}
+	if err = json.Unmarshal(payload, &baseline.Changes); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.ImportHistory(ctx, []HistoricalRecord{baseline}); err == nil {
+		t.Fatal("import reused a baseline key")
+	}
+	if err := r.ImportHistory(ctx, []HistoricalRecord{base}); err != nil {
+		t.Fatalf("identical re-run rejected: %v", err)
+	}
+}
+
+func TestMySQLHistoryPageBoundaries(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	records := func(n int, at time.Time, prefix string) []HistoricalRecord {
+		out := []HistoricalRecord{}
+		for i := 0; i < n; i++ {
+			out = append(out, HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: fmt.Sprintf("%s-%d", prefix, i), OccurredAt: at, Note: "source"})
+		}
+		return out
+	}
+	tied := c.CreatedAt.Add(-time.Hour)
+	// created + 49 restored = exactly 50 events: one full page, no next cursor.
+	if err := r.ImportHistory(ctx, records(49, tied, "tied")); err != nil {
+		t.Fatal(err)
+	}
+	page, err := r.History(ctx, c.Number, 0)
+	if err != nil || len(page.Events) != 50 || page.NextBefore != 0 {
+		t.Fatalf("exactly one page: len=%d next=%d err=%v", len(page.Events), page.NextBefore, err)
+	}
+	// An older event inserted last has the largest id but sorts last: the cursor must still reach it.
+	if err = r.ImportHistory(ctx, records(1, c.CreatedAt.Add(-2*time.Hour), "older")); err != nil {
+		t.Fatal(err)
+	}
+	page, err = r.History(ctx, c.Number, 0)
+	if err != nil || len(page.Events) != 50 || page.NextBefore == 0 {
+		t.Fatalf("first page of 51: len=%d next=%d err=%v", len(page.Events), page.NextBefore, err)
+	}
+	tail, err := r.History(ctx, c.Number, page.NextBefore)
+	if err != nil || len(tail.Events) != 1 || tail.NextBefore != 0 || tail.Events[0].OccurredAt.After(tied) {
+		t.Fatalf("tail must hold the older event: %+v %v", tail, err)
 	}
 }

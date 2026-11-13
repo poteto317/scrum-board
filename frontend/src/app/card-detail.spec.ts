@@ -69,6 +69,8 @@ describe('CardDetail autosave', () => {
     );
     const f = create();
     expect(api.history).toHaveBeenCalledTimes(1);
+    // The history is addressed by the public task number, never by the internal id.
+    expect(api.history).toHaveBeenLastCalledWith(card.number, 0);
     f.componentInstance.form.controls.description.setValue('history refresh');
     f.componentInstance.autosave.flush();
     f.detectChanges();

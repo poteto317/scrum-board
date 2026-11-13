@@ -190,3 +190,69 @@ it('replaces the list when the refreshed first page does not reach the loaded ev
   expect(f.componentInstance.events().map((e) => e.id)).toEqual([90, 89, 88]);
   expect(f.componentInstance.nextBefore()).toBe(88);
 });
+const unsafe = (value: string) => ({ ...event, evidenceUrl: value });
+it.each([
+  ['javascript:alert(1)'],
+  [' https://github.com/a/b/pull/2'],
+  ['https://github.com/a/b/pull/2 '],
+  ['https://evil.example/a/b/pull/2'],
+  [''],
+])('does not render an evidence link for %j', (value) => {
+  const f = setup({ history: vi.fn(() => of({ events: [unsafe(value)], nextBefore: 0 })) });
+  expect(f.nativeElement.querySelector('a')).toBeNull();
+});
+it('renders a safe evidence link that opens in a new tab without opener', () => {
+  const f = setup({ history: vi.fn(() => of({ events: [event], nextBefore: 0 })) });
+  const a = f.nativeElement.querySelector('a');
+  expect(a.getAttribute('target')).toBe('_blank');
+  expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+});
+it('labels each kind and shows the note, restore time and before/after values', () => {
+  const base = {
+    ...event,
+    evidenceUrl: '',
+    changes: [{ field: 'title', before: 'Old', after: 'New' }],
+  };
+  const text = (kind: string, extra = {}) => {
+    const f = setup({
+      history: vi.fn(() => of({ events: [{ ...base, kind, ...extra }], nextBefore: 0 })),
+    });
+    const content = f.nativeElement.textContent as string;
+    TestBed.resetTestingModule();
+    return content;
+  };
+  const restored = text('restored');
+  expect(restored).toContain('復元した記録');
+  expect(restored).toContain('観測時点の復元');
+  expect(restored).toContain('復元登録:');
+  expect(restored).toContain('変更前');
+  expect(restored).toContain('変更後');
+  const updated = text('updated', { note: '' });
+  expect(updated).toContain('変更前');
+  expect(updated).toContain('変更後');
+  expect(updated).not.toContain('復元登録');
+  const baseline = text('baseline', { note: '導入時のメモ' });
+  expect(baseline).toContain('履歴機能導入時の状態');
+  expect(baseline).toContain('導入時のメモ');
+  expect(baseline).toContain('導入時の値');
+  expect(baseline).not.toContain('変更前');
+  const created = text('created', { note: '' });
+  expect(created).toContain('作成');
+  expect(created).not.toContain('変更前');
+  expect(created).toContain('変更後');
+});
+it('shows an empty placeholder for blank values and the empty state', () => {
+  const blank = setup({
+    history: vi.fn(() =>
+      of({
+        events: [{ ...event, changes: [{ field: 'prUrl', before: '', after: '' }] }],
+        nextBefore: 0,
+      }),
+    ),
+  });
+  // Both the before and the after value fall back to the placeholder.
+  expect(blank.nativeElement.textContent.split('（空欄）')).toHaveLength(3);
+  TestBed.resetTestingModule();
+  const none = setup({ history: vi.fn(() => of({ events: [], nextBefore: 0 })) });
+  expect(none.nativeElement.textContent).toContain('履歴はまだありません');
+});
