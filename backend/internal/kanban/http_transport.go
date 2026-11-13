@@ -23,8 +23,12 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, 404, map[string]string{"message": "カードが見つかりません。"})
 	case errors.Is(err, ErrColumn):
 		reply(w, 400, map[string]string{"message": "選択したステータスは存在しません。"})
+	case errors.Is(err, ErrColumnOrder):
+		reply(w, 400, map[string]string{"message": "列の並び順を確認してください。"})
 	case errors.Is(err, ErrDuplicate):
 		reply(w, 409, map[string]string{"message": "同じ名前の列がすでにあります。"})
+	case errors.Is(err, ErrColumnMismatch):
+		reply(w, 409, map[string]string{"message": "列の構成が変更されています。最新のボードを読み込んでからやり直してください。"})
 	default:
 		slog.Error("request failed", "error", err)
 		reply(w, 500, map[string]string{"message": "処理に失敗しました。時間をおいて再試行してください。"})

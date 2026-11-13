@@ -1,10 +1,12 @@
 package kanban
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -19,7 +21,14 @@ func fresh() *memoryRepo {
 	return &memoryRepo{columns: []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}}, cards: map[int64]Card{}, next: 1}
 }
 func (m *memoryRepo) Board(context.Context) (Board, error) {
-	b := Board{Columns: m.columns, Cards: []Card{}}
+	cols := slices.Clone(m.columns)
+	slices.SortFunc(cols, func(a, b Column) int {
+		if c := cmp.Compare(a.Position, b.Position); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	b := Board{Columns: cols, Cards: []Card{}}
 	for _, c := range m.cards {
 		b.Cards = append(b.Cards, c)
 	}
@@ -80,14 +89,46 @@ func (m *memoryRepo) DeleteCard(ctx context.Context, id int64) error {
 	return nil
 }
 func (m *memoryRepo) CreateColumn(_ context.Context, name string) (Column, error) {
+	maxPos := -1
+	var maxID int64
 	for _, c := range m.columns {
 		if strings.EqualFold(c.Name, name) {
 			return Column{}, ErrDuplicate
 		}
+		if c.Position > maxPos {
+			maxPos = c.Position
+		}
+		if c.ID > maxID {
+			maxID = c.ID
+		}
 	}
-	c := Column{ID: int64(len(m.columns) + 1), Name: name, Position: len(m.columns)}
+	c := Column{ID: maxID + 1, Name: name, Position: maxPos + 1}
 	m.columns = append(m.columns, c)
 	return c, nil
+}
+
+func (m *memoryRepo) ReorderColumns(_ context.Context, columnIDs []int64) ([]Column, error) {
+	if err := validateColumnOrder(columnIDs); err != nil {
+		return nil, err
+	}
+	if len(columnIDs) != len(m.columns) {
+		return nil, ErrColumnMismatch
+	}
+	byID := make(map[int64]Column, len(m.columns))
+	for _, c := range m.columns {
+		byID[c.ID] = c
+	}
+	next := make([]Column, len(columnIDs))
+	for i, colID := range columnIDs {
+		col, ok := byID[colID]
+		if !ok {
+			return nil, ErrColumnMismatch
+		}
+		col.Position = i
+		next[i] = col
+	}
+	m.columns = next
+	return slices.Clone(next), nil
 }
 func request(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()

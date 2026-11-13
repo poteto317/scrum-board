@@ -97,9 +97,10 @@ h1 {
   align-items: flex-start;
   gap: 20px;
   min-width: max-content;
-  padding-bottom: 4px;
+  padding: 0 6px 4px;
 }
 .kanban-column {
+  position: relative;
   width: 360px;
   flex: 0 0 360px;
   background: #f0f2ed;
@@ -107,11 +108,62 @@ h1 {
   border-radius: 12px;
   padding: 14px 12px 10px;
 }
-.column-heading {
+.kanban-column.dragging {
+  opacity: 0.45;
+  border: 1px dashed var(--accent);
+}
+.kanban-column.drop-before::before,
+.kanban-column.drop-after::after {
+  content: '';
+  position: absolute;
+  inset: 4px auto;
+  width: 4px;
+  border-radius: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.kanban-column.drop-before::before {
+  left: -12px;
+}
+.kanban-column.drop-before:first-child::before {
+  left: -6px;
+}
+.kanban-column.drop-after::after {
+  right: -12px;
+}
+.column-heading,
+.column-drag-zone {
   display: flex;
   align-items: center;
   gap: 9px;
+}
+.column-heading {
   padding: 0 4px 13px;
+}
+.column-drag-zone {
+  flex: 1;
+  min-width: 0;
+}
+.column-drag-handle {
+  cursor: grab;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #9ba698;
+  padding: 2px 3px;
+  margin-left: -4px;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: -1px;
+  flex-shrink: 0;
+}
+.column-drag-handle:hover {
+  background: #e6e9e1;
+  color: var(--ink);
+}
+.column-drag-handle[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.45;
 }
 .column-heading h2 {
   font-size: 17px;

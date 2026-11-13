@@ -258,3 +258,42 @@ dialog.modal-backdrop::backdrop {
   background: #1e2b2155;
   backdrop-filter: blur(3px);
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.reorder-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid #dfb6b0;
+  border-radius: 8px;
+  background: #fdf4f2;
+  color: #8b3b32;
+  font-size: 12px;
+}
+.reorder-alert p {
+  margin: 0;
+}
+.reorder-alert-actions {
+  display: flex;
+  gap: 8px;
+}
+[draggable='true'] {
+  cursor: grab;
+  user-select: none;
+}
+[draggable='true']:active {
+  cursor: grabbing;
+}

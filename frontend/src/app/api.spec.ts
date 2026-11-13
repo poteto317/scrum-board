@@ -34,6 +34,31 @@ describe('Api', () => {
     expect(req.request.method).toBe('GET');
     req.flush({ id: 18, number: 3, columnId: 1, title: 'Task', description: '' });
   });
+  it('sends PUT /api/columns/order with columnIds and returns reordered columns', () => {
+    let result: unknown;
+    api.reorderColumns([1, 2, 9, 3]).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/columns/order');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ columnIds: [1, 2, 9, 3] });
+    const payload = {
+      columns: [
+        { id: 1, name: 'Todo', position: 0 },
+        { id: 2, name: 'Doing', position: 1 },
+        { id: 9, name: 'Review', position: 2 },
+        { id: 3, name: 'Done', position: 3 },
+      ],
+    };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
+  it('propagates column reorder conflict errors', () => {
+    let status = 0;
+    api.reorderColumns([1, 2, 3]).subscribe({ error: (e) => (status = e.status) });
+    http
+      .expectOne('/api/columns/order')
+      .flush({ message: '競合' }, { status: 409, statusText: 'Conflict' });
+    expect(status).toBe(409);
+  });
 });
 
 it('requests history by public number and an optional event cursor', () => {

@@ -180,3 +180,20 @@ curl --fail-with-body --request POST \
 2. 上の「使い方」のcurlを実行し、201で、整った題名・説明のTodoカードができること（SDKが送る `Authorization: Bearer` による認証が受け入れられること、`output_config` の構造化出力が受け入れられることを含む）。
 3. 説明だけ・タイトルだけの下書き、2000文字に近い長い下書きでも期待どおりか。長い下書きが502になる場合は上限を調整する。
 4. 鍵を間違えたとき502になり、ログに鍵が出ないこと（`docker compose -p 名前 logs api`）。
+
+# 列の並び替え
+
+`PUT /api/columns/order` でボード上の全列の表示順を更新します。リクエストボディには現在のボードに存在するすべての列IDを新しい順で配列指定します。
+
+```sh
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"columnIds":[1,2,9,3]}' \
+  http://127.0.0.1:4200/api/columns/order
+```
+
+- 成功時はHTTP 200で `{"columns":[...]}`（各列の新しい `position` 付きの配列）を返します。`GET /api/board` の `columns` もこの順（`position` 昇順・同値は `id` 昇順）になります。
+- 新規列の作成（`POST /api/columns`）は現在の最大 `position + 1` を付与するため、並び替え後も常に末尾に追加されます。
+- HTTP 400: `columnIds` 未指定・`null`・空配列、0以下のID、重複ID、不正JSON、未知のフィールド。
+- HTTP 409: DBに存在する列の集合と一致しない場合（不足または存在しない列IDの指定）。
+- HTTP 500: DB更新に失敗した場合（トランザクションはロールバックされます）。

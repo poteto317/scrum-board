@@ -19,6 +19,9 @@ export class Api {
   createColumn(name: string) {
     return this.http.post<Column>('/api/columns', { name });
   }
+  reorderColumns(columnIds: number[]) {
+    return this.http.put<{ columns: Column[] }>('/api/columns/order', { columnIds });
+  }
   createCard(input: CardInput) {
     return this.http.post<Card>('/api/cards', input);
   }

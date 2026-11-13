@@ -26,25 +26,69 @@
       <button class="secondary" (click)="load()">再試行</button>
     </div>
   } @else {
+    <div class="sr-only" aria-live="polite">{{ reorderAnnouncement() }}</div>
+    @if (reorderError()) {
+      <div class="reorder-alert" role="alert">
+        <p>{{ reorderError() }}</p>
+        <div class="reorder-alert-actions">
+          <button type="button" class="secondary reorder-reload" (click)="load()">
+            最新を読み込む
+          </button>
+          @if (!reorderConflict()) {
+            <button type="button" class="secondary reorder-dismiss" (click)="dismissReorderError()">
+              閉じる
+            </button>
+          }
+        </div>
+      </div>
+    }
     <div
+      #boardScroll
       class="board-scroll"
       tabindex="0"
       role="region"
       aria-label="かんばんボード。列が多い場合は横スクロールできます。"
+      (dragover)="onColumnsDragOver($event)"
+      (dragleave)="onColumnsDragLeave($event)"
+      (drop)="onColumnsDrop($event)"
     >
-      <div class="board-columns">
+      <div #columnsContainer class="board-columns">
         @for (column of data().columns; track column.id; let index = $index) {
           <section
+            #colSection
             class="kanban-column"
+            [attr.data-column-id]="column.id"
             [class.doing]="column.name === 'Doing'"
             [class.done]="column.name === 'Done'"
+            [class.dragging]="draggingColumnId() === column.id"
+            [class.drop-before]="dropSlot() === index"
+            [class.drop-after]="
+              dropSlot() === data().columns.length && index === data().columns.length - 1
+            "
           >
             <header class="column-heading">
-              <span class="status-dot" aria-hidden="true"></span>
-              <h2>{{ column.name }}</h2>
-              <span class="column-count">{{ grouped().get(column.id)?.length || 0 }}</span
-              ><button
+              <div
+                class="column-drag-zone"
+                [attr.draggable]="canReorder() ? 'true' : null"
+                (dragstart)="onColumnDragStart($event, column, colSection)"
+                (dragend)="onColumnDragEnd()"
+              >
+                <button
+                  type="button"
+                  class="column-drag-handle"
+                  [attr.aria-disabled]="!canReorder()"
+                  [attr.aria-label]="column.name + '列を移動（ドラッグまたは左右矢印キー）'"
+                  (keydown)="onHandleKeydown($event, index)"
+                >
+                  <span aria-hidden="true">⋮⋮</span>
+                </button>
+                <span class="status-dot" aria-hidden="true"></span>
+                <h2>{{ column.name }}</h2>
+                <span class="column-count">{{ grouped().get(column.id)?.length || 0 }}</span>
+              </div>
+              <button
                 class="icon-button"
+                draggable="false"
                 (click)="openCard(column.id)"
                 [attr.aria-label]="column.name + 'にカードを追加'"
               >
@@ -88,7 +132,7 @@
             </button>
           </section>
         }
-        <button class="add-column-tile" (click)="openColumn()">
+        <button class="add-column-tile" (click)="openColumn()" [disabled]="reordering()">
           <span aria-hidden="true">＋</span> 列を追加
         </button>
       </div>
@@ -96,7 +140,7 @@
     <footer class="board-footer">
       <span
         ><span class="tip-icon" aria-hidden="true">i</span>
-        カードを開くと、詳細とステータスを編集できます。</span
+        列の見出しをドラッグ、またはハンドルで左右キーを押すと列を並び替えられます。</span
       ><span class="footer-note">少しずつ、よりよいチームへ。</span>
     </footer>
   }

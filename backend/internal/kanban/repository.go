@@ -46,24 +46,11 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 		return b, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT id,name,position FROM board_columns ORDER BY position,id")
+	b.Columns, err = listOrderedColumns(ctx, tx)
 	if err != nil {
 		return b, err
 	}
-	for rows.Next() {
-		var c Column
-		if err = rows.Scan(&c.ID, &c.Name, &c.Position); err != nil {
-			rows.Close()
-			return b, err
-		}
-		b.Columns = append(b.Columns, c)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return b, err
-	}
-	rows, err = tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.created_at,c.id")
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.created_at,c.id")
 	if err != nil {
 		return b, err
 	}
@@ -184,8 +171,23 @@ func (r MySQLRepository) DeleteCard(ctx context.Context, id int64) error {
 	return nil
 }
 func (r MySQLRepository) CreateColumn(ctx context.Context, name string) (Column, error) {
-	// AUTO_INCREMENT also provides stable append order without a MAX(position) race.
-	res, err := r.DB.ExecContext(ctx, "INSERT INTO board_columns(name) VALUES(?)", name)
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Column{}, err
+	}
+	defer tx.Rollback()
+	existing, err := lockColumnRows(ctx, tx)
+	if err != nil {
+		return Column{}, err
+	}
+	maxPos := -1
+	for _, col := range existing {
+		if col.Position > maxPos {
+			maxPos = col.Position
+		}
+	}
+	nextPos := maxPos + 1
+	res, err := tx.ExecContext(ctx, "INSERT INTO board_columns(name,position) VALUES(?,?)", name, nextPos)
 	if err != nil {
 		return Column{}, dbError(err)
 	}
@@ -194,8 +196,10 @@ func (r MySQLRepository) CreateColumn(ctx context.Context, name string) (Column,
 		return Column{}, err
 	}
 	var c Column
-	err = r.DB.QueryRowContext(ctx, "SELECT id,name,position FROM board_columns WHERE id=?", id).Scan(&c.ID, &c.Name, &c.Position)
-	return c, err
+	if err = tx.QueryRowContext(ctx, "SELECT id,name,position FROM board_columns WHERE id=?", id).Scan(&c.ID, &c.Name, &c.Position); err != nil {
+		return Column{}, err
+	}
+	return c, tx.Commit()
 }
 
 func (r MySQLRepository) GetColumnByName(ctx context.Context, name string) (Column, error) {

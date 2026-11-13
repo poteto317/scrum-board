@@ -7,9 +7,11 @@ import (
 )
 
 var (
-	ErrNotFound  = errors.New("not found")
-	ErrColumn    = errors.New("unknown column")
-	ErrDuplicate = errors.New("duplicate column")
+	ErrNotFound       = errors.New("not found")
+	ErrColumn         = errors.New("unknown column")
+	ErrDuplicate      = errors.New("duplicate column")
+	ErrColumnOrder    = errors.New("invalid column order")
+	ErrColumnMismatch = errors.New("column set mismatch")
 )
 
 type Column struct {
@@ -55,4 +57,5 @@ type Repository interface {
 	UpdateCard(context.Context, int64, CardPatch) (Card, error)
 	DeleteCard(context.Context, int64) error
 	CreateColumn(context.Context, string) (Column, error)
+	ReorderColumns(context.Context, []int64) ([]Column, error)
 }
