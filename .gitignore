@@ -4,5 +4,6 @@ dist/
 .env
 .DS_Store
 .superpowers/
+.claude/
 backend/server
 /backups/
