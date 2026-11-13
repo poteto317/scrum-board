@@ -25,6 +25,8 @@ docker compose up -d --build
 
 **パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）はローカル Docker 専用の既定値です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。
 
+**認証について:** APIに認証はありません。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
+
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board
 - MySQL: `127.0.0.1:3307` / DB `scrumboard` / user `scrum`

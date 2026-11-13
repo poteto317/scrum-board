@@ -1,3 +1,5 @@
+# ローカル学習用。DBパスワード既定値（scrum_dev / root_dev_only）は開発専用で、
+# 共有・公開ホストでは必ず変更すること。ポートは 127.0.0.1 のみ。APIに認証はない。
 name: scrum-board
 services:
   db:
