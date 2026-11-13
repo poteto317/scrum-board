@@ -173,3 +173,20 @@ it('keeps the list when a revision refresh fails and retries', () => {
   expect(f.componentInstance.events().map((e) => e.id)).toEqual([2, 1]);
   expect(f.componentInstance.error()).toBe(false);
 });
+it('replaces the list when the refreshed first page does not reach the loaded events', () => {
+  const page = (ids: number[], nextBefore: number): HistoryPage => ({
+    events: ids.map((id) => ({ ...event, id })),
+    nextBefore,
+  });
+  const api = {
+    history: vi
+      .fn()
+      .mockReturnValueOnce(of(page([3, 2, 1], 0)))
+      .mockReturnValueOnce(of(page([90, 89, 88], 88))),
+  };
+  const f = setup(api);
+  f.componentRef.setInput('revision', 'saved');
+  f.detectChanges();
+  expect(f.componentInstance.events().map((e) => e.id)).toEqual([90, 89, 88]);
+  expect(f.componentInstance.nextBefore()).toBe(88);
+});

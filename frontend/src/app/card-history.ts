@@ -84,7 +84,14 @@ export class CardHistory implements OnChanges {
         }
         // Refresh the first page, keeping older events already loaded (history is append-only).
         const fresh = new Set(page.events.map((e) => e.id));
-        const older = this.events().filter((e) => !fresh.has(e.id));
+        const loaded = this.events();
+        const older = loaded.filter((e) => !fresh.has(e.id));
+        // No overlap and more pages remain: events in between were added elsewhere, so a merge would hide them.
+        if (older.length === loaded.length && loaded.length && page.nextBefore) {
+          this.events.set(page.events);
+          this.nextBefore.set(page.nextBefore);
+          return;
+        }
         this.events.set([...page.events, ...older]);
         if (!older.length) this.nextBefore.set(page.nextBefore);
       },
