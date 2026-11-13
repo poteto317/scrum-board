@@ -83,3 +83,93 @@ it('retains prior events on pagination errors and retries', () => {
   f.componentInstance.retry();
   expect(api.history).toHaveBeenLastCalledWith(3, 1);
 });
+function setup(api: { history: ReturnType<typeof vi.fn> }, number = 3) {
+  TestBed.configureTestingModule({
+    imports: [CardHistory],
+    providers: [{ provide: Api, useValue: api }],
+  });
+  const f = TestBed.createComponent(CardHistory);
+  f.componentRef.setInput('number', number);
+  f.detectChanges();
+  return f;
+}
+const articles = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelectorAll('article');
+it('keeps the loaded list while a revision refresh is pending and keeps the DOM', () => {
+  const pending = new Subject<HistoryPage>();
+  const api = {
+    history: vi
+      .fn()
+      .mockReturnValueOnce(of({ events: [{ ...event, id: 2 }, event], nextBefore: 0 }))
+      .mockReturnValueOnce(pending),
+  };
+  const f = setup(api);
+  const before = Array.from(articles(f));
+  const details = f.nativeElement.querySelector('details') as HTMLDetailsElement;
+  details.open = false;
+  f.componentRef.setInput('revision', 'saved');
+  f.detectChanges();
+  expect(f.componentInstance.events()).toHaveLength(2);
+  expect(articles(f)).toHaveLength(2);
+  pending.next({ events: [{ ...event, id: 3 }, { ...event, id: 2 }, event], nextBefore: 0 });
+  pending.complete();
+  f.detectChanges();
+  expect(articles(f)).toHaveLength(3);
+  expect(articles(f)[1]).toBe(before[0]);
+  expect(articles(f)[2]).toBe(before[1]);
+  expect((articles(f)[1].querySelector('details') as HTMLDetailsElement).open).toBe(false);
+});
+it('keeps pages loaded with "more" when the revision refresh succeeds', () => {
+  const api = {
+    history: vi
+      .fn()
+      .mockReturnValueOnce(of({ events: [{ ...event, id: 5 }], nextBefore: 5 }))
+      .mockReturnValueOnce(of({ events: [{ ...event, id: 4 }], nextBefore: 0 }))
+      .mockReturnValueOnce(
+        of({
+          events: [
+            { ...event, id: 6 },
+            { ...event, id: 5 },
+          ],
+          nextBefore: 5,
+        }),
+      ),
+  };
+  const f = setup(api);
+  f.componentInstance.more();
+  f.componentRef.setInput('revision', 'saved');
+  f.detectChanges();
+  expect(f.componentInstance.events().map((e) => e.id)).toEqual([6, 5, 4]);
+  expect(f.componentInstance.nextBefore()).toBe(0);
+});
+it('clears the list at once when the card changes', () => {
+  const pending = new Subject<HistoryPage>();
+  const api = {
+    history: vi
+      .fn()
+      .mockReturnValueOnce(of({ events: [event], nextBefore: 1 }))
+      .mockReturnValueOnce(pending),
+  };
+  const f = setup(api);
+  f.componentRef.setInput('number', 7);
+  f.detectChanges();
+  expect(f.componentInstance.events()).toEqual([]);
+  expect(f.componentInstance.nextBefore()).toBe(0);
+  expect(articles(f)).toHaveLength(0);
+});
+it('keeps the list when a revision refresh fails and retries', () => {
+  const api = {
+    history: vi
+      .fn()
+      .mockReturnValueOnce(of({ events: [event], nextBefore: 0 }))
+      .mockReturnValueOnce(throwError(() => ({ status: 500 })))
+      .mockReturnValue(of({ events: [{ ...event, id: 2 }, event], nextBefore: 0 })),
+  };
+  const f = setup(api);
+  f.componentRef.setInput('revision', 'saved');
+  f.detectChanges();
+  expect(f.componentInstance.events()).toHaveLength(1);
+  expect(f.componentInstance.error()).toBe(true);
+  f.componentInstance.retry();
+  expect(f.componentInstance.events().map((e) => e.id)).toEqual([2, 1]);
+  expect(f.componentInstance.error()).toBe(false);
+});

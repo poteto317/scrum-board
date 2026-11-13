@@ -1,4 +1,12 @@
-import { Component, DestroyRef, Input, OnChanges, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  Input,
+  OnChanges,
+  SimpleChanges,
+  inject,
+  signal,
+} from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { Api } from './api';
@@ -41,10 +49,13 @@ export class CardHistory implements OnChanges {
       this.request?.unsubscribe();
     });
   }
-  ngOnChanges() {
+  ngOnChanges(changes: SimpleChanges) {
     this.request?.unsubscribe();
-    this.events.set([]);
-    this.nextBefore.set(0);
+    // A revision-only change (autosave) refreshes in place; only another card drops the list.
+    if (changes['number']) {
+      this.events.set([]);
+      this.nextBefore.set(0);
+    }
     this.load(0);
   }
   more() {
@@ -66,8 +77,16 @@ export class CardHistory implements OnChanges {
     this.request = this.api.history(this.number, before).subscribe({
       next: (page) => {
         if (generation !== this.generation) return;
-        this.events.set(before ? [...this.events(), ...page.events] : page.events);
-        this.nextBefore.set(page.nextBefore);
+        if (before) {
+          this.events.set([...this.events(), ...page.events]);
+          this.nextBefore.set(page.nextBefore);
+          return;
+        }
+        // Refresh the first page, keeping older events already loaded (history is append-only).
+        const fresh = new Set(page.events.map((e) => e.id));
+        const older = this.events().filter((e) => !fresh.has(e.id));
+        this.events.set([...page.events, ...older]);
+        if (!older.length) this.nextBefore.set(page.nextBefore);
       },
       error: () => {
         if (generation === this.generation) {
