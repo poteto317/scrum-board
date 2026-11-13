@@ -26,8 +26,12 @@ type HistoricalRecord struct {
 
 var importKey = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,128}$`)
 
-func validHistoricalRecord(v HistoricalRecord) bool {
-	if v.Number <= 0 || v.CardID <= 0 || v.CreatedAt.IsZero() || v.OccurredAt.IsZero() || v.OccurredAt.Year() < 1000 || v.OccurredAt.Year() > 9999 || !importKey.MatchString(v.Key) || len(v.Changes) > 4 || len(v.Note) == 0 || utf8.RuneCountInString(v.Note) > 4000 || !validPRURL(v.EvidenceURL) {
+// importClockSkew absorbs clock differences between the host that observed a record and this one.
+// occurredAt may precede the card's createdAt (for example a PR merged before the card existed), so only the future is bounded.
+const importClockSkew = 5 * time.Minute
+
+func validHistoricalRecord(v HistoricalRecord, now time.Time) bool {
+	if v.Number <= 0 || v.CardID <= 0 || v.CreatedAt.IsZero() || v.OccurredAt.IsZero() || v.OccurredAt.Year() < 1000 || v.OccurredAt.Year() > 9999 || v.OccurredAt.Truncate(time.Microsecond).After(now.Add(importClockSkew)) || !importKey.MatchString(v.Key) || len(v.Changes) > 4 || len(v.Note) == 0 || utf8.RuneCountInString(v.Note) > 4000 || !validPRURL(v.EvidenceURL) {
 		return false
 	}
 	seen := map[string]bool{}
@@ -53,8 +57,9 @@ func validHistoricalRecord(v HistoricalRecord) bool {
 	return true
 }
 func (r MySQLRepository) ImportHistory(ctx context.Context, records []HistoricalRecord) error {
+	now := time.Now().UTC()
 	for _, v := range records {
-		if !validHistoricalRecord(v) {
+		if !validHistoricalRecord(v, now) {
 			return fmt.Errorf("invalid historical record")
 		}
 	}

@@ -227,6 +227,29 @@ func TestMySQLImportNanosecondIdempotency(t *testing.T) {
 	}
 }
 
+func TestMySQLImportRejectsFutureOccurredAtWithoutWriting(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustInit(t, r)
+	c, err := r.GetCard(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := r.History(ctx, c.Number, 0)
+	ok := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: c.CreatedAt, Key: "valid-in-bad-batch", OccurredAt: c.CreatedAt, Note: "valid source"}
+	typo := ok
+	typo.Key = "typo-year"
+	typo.OccurredAt = time.Date(2062, 11, 12, 0, 0, 0, 0, time.UTC)
+	if err = r.ImportHistory(ctx, []HistoricalRecord{ok, typo}); err == nil {
+		t.Fatal("future occurredAt accepted")
+	}
+	after, _ := r.History(ctx, c.Number, 0)
+	if len(after.Events) != len(before.Events) {
+		t.Fatalf("batch with a future record wrote events: %d -> %d", len(before.Events), len(after.Events))
+	}
+}
+
 func TestMySQLConcurrentImportRejectsConflict(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	r := MySQLRepository{DB: db}
