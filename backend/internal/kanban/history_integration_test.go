@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 func TestMySQLHistory(t *testing.T) {
@@ -247,6 +250,29 @@ func TestMySQLImportRejectsFutureOccurredAtWithoutWriting(t *testing.T) {
 	after, _ := r.History(ctx, c.Number, 0)
 	if len(after.Events) != len(before.Events) {
 		t.Fatalf("batch with a future record wrote events: %d -> %d", len(before.Events), len(after.Events))
+	}
+}
+
+func TestMySQLImportWorksWithInterpolatedParams(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	mustInit(t, MySQLRepository{DB: db})
+	c, err := MySQLRepository{DB: db}.GetCard(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := mysql.ParseDSN(os.Getenv("KANBAN_TEST_DSN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ParseTime, cfg.Loc, cfg.InterpolateParams = true, time.UTC, true
+	plain, err := sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { plain.Close() })
+	v := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: c.CreatedAt, Key: "interpolated", OccurredAt: c.CreatedAt, Changes: []HistoryChange{{Field: "status", Before: "Todo", After: "Done"}}, Note: "client-side parameter interpolation"}
+	if err = (MySQLRepository{DB: plain}).ImportHistory(context.Background(), []HistoricalRecord{v}); err != nil {
+		t.Fatal(err)
 	}
 }
 
