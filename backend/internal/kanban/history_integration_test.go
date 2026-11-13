@@ -41,6 +41,20 @@ func TestMySQLHistory(t *testing.T) {
 	if err != nil || len(page.Events) != 1 || page.Events[0].Kind != "baseline" {
 		t.Fatalf("baseline: %+v %v", page, err)
 	}
+	baseline := page.Events[0]
+	var status string
+	if err = db.QueryRow("SELECT name FROM board_columns WHERE id=?", after.ColumnID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	wantBaseline := []HistoryChange{
+		{Field: "title", After: after.Title},
+		{Field: "description", After: after.Description},
+		{Field: "status", After: status},
+		{Field: "prUrl", After: after.PRURL},
+	}
+	if !reflect.DeepEqual(baseline.Changes, wantBaseline) || baseline.Note == "" || baseline.OccurredAt.Year() < 2020 || baseline.EvidenceURL != "" {
+		t.Fatalf("baseline content: %+v want %+v", baseline, wantBaseline)
+	}
 	c, err := r.CreateCard(ctx, CardInput{Title: "new", Description: "body", ColumnID: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +89,8 @@ func TestMySQLHistory(t *testing.T) {
 	if _, err = db.Exec("RENAME TABLE card_history TO hidden_history"); err != nil {
 		t.Fatal(err)
 	}
+	// Never leave the renamed table behind: it keeps a foreign key to cards and would break every later reset.
+	t.Cleanup(func() { _, _ = db.Exec("RENAME TABLE hidden_history TO card_history") })
 	var nextBefore int64
 	if err = db.QueryRow("SELECT next_number FROM card_number_sequence WHERE singleton=1").Scan(&nextBefore); err != nil {
 		t.Fatal(err)
@@ -566,5 +582,31 @@ func TestMySQLHistoryPageBoundaries(t *testing.T) {
 	tail, err := r.History(ctx, c.Number, page.NextBefore)
 	if err != nil || len(tail.Events) != 1 || tail.NextBefore != 0 || tail.Events[0].OccurredAt.After(tied) {
 		t.Fatalf("tail must hold the older event: %+v %v", tail, err)
+	}
+}
+
+func TestMySQLConcurrentImportsInOppositeOrderDoNotDeadlock(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	a := newHistoryCard(t, r)
+	b, err := r.CreateCard(ctx, CardInput{Title: "second", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := func(c Card, key string) HistoricalRecord {
+		return HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: key, OccurredAt: c.CreatedAt, Note: "source"}
+	}
+	for round := 0; round < 20; round++ {
+		key := fmt.Sprintf("round-%d", round)
+		results := make(chan error, 2)
+		start := make(chan struct{})
+		go func() { <-start; results <- r.ImportHistory(ctx, []HistoricalRecord{record(a, key), record(b, key)}) }()
+		go func() { <-start; results <- r.ImportHistory(ctx, []HistoricalRecord{record(b, key), record(a, key)}) }()
+		close(start)
+		for range 2 {
+			if err = <-results; err != nil {
+				t.Fatalf("round %d: %v", round, err)
+			}
+		}
 	}
 }

@@ -16,6 +16,33 @@ import (
 	"scrumboard/internal/kanban"
 )
 
+const (
+	maxManifestBytes   = 2 * 1024 * 1024
+	maxManifestRecords = 10000
+)
+
+// loadManifest reads exactly one bounded JSON array, rejecting unknown keys and trailing data.
+func loadManifest(r io.Reader) ([]kanban.HistoricalRecord, error) {
+	content, err := io.ReadAll(io.LimitReader(r, maxManifestBytes+1))
+	if err != nil || len(content) > maxManifestBytes {
+		return nil, fmt.Errorf("manifest must be at most 2 MiB")
+	}
+	var records []kanban.HistoricalRecord
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(&records); err != nil {
+		return nil, fmt.Errorf("invalid manifest JSON")
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		return nil, fmt.Errorf("trailing manifest data")
+	}
+	if len(records) == 0 || len(records) > maxManifestRecords {
+		return nil, fmt.Errorf("manifest must contain 1..10000 records")
+	}
+	return records, nil
+}
+
 func run() error {
 	path := flag.String("file", "", "reviewed JSON manifest")
 	flag.Parse()
@@ -27,23 +54,9 @@ func run() error {
 		return fmt.Errorf("cannot open manifest")
 	}
 	defer data.Close()
-	content, err := io.ReadAll(io.LimitReader(data, 2*1024*1024+1))
-	if err != nil || len(content) > 2*1024*1024 {
-		return fmt.Errorf("manifest must be at most 2 MiB")
-	}
-	// Decode exactly one array, rejecting unknown keys and trailing data.
-	var records []kanban.HistoricalRecord
-	decoder := json.NewDecoder(bytes.NewReader(content))
-	decoder.DisallowUnknownFields()
-	if err = decoder.Decode(&records); err != nil {
-		return fmt.Errorf("invalid manifest JSON")
-	}
-	var extra any
-	if decoder.Decode(&extra) != io.EOF {
-		return fmt.Errorf("trailing manifest data")
-	}
-	if len(records) == 0 || len(records) > 10000 {
-		return fmt.Errorf("manifest must contain 1..10000 records")
+	records, err := loadManifest(data)
+	if err != nil {
+		return err
 	}
 	cfg, err := mysql.ParseDSN(os.Getenv("KANBAN_IMPORT_DSN"))
 	if err != nil {
