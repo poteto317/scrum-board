@@ -135,8 +135,10 @@ func TestWithAKeyTheRefinedEndpointReachesTheModelFromTheEnvironment(t *testing.
 		env  map[string]string
 		want string
 	}{
-		"default model":  {map[string]string{"ANTHROPIC_API_KEY": secretKey}, "claude-haiku-5-5"},
-		"model override": {map[string]string{"ANTHROPIC_API_KEY": secretKey, "ANTHROPIC_MODEL": "claude-sonnet-5-5"}, "claude-sonnet-5-5"},
+		"default model":                     {map[string]string{"ANTHROPIC_API_KEY": secretKey}, "claude-haiku-5-5"},
+		"model override":                    {map[string]string{"ANTHROPIC_API_KEY": secretKey, "ANTHROPIC_MODEL": "claude-sonnet-5-5"}, "claude-sonnet-5-5"},
+		"model with surrounding whitespace": {map[string]string{"ANTHROPIC_API_KEY": secretKey, "ANTHROPIC_MODEL": " \tclaude-sonnet-5-5 \n"}, "claude-sonnet-5-5"},
+		"blank model falls back to default": {map[string]string{"ANTHROPIC_API_KEY": secretKey, "ANTHROPIC_MODEL": " \n\t "}, "claude-haiku-5-5"},
 	} {
 		repo := &smallRepo{}
 		w := postRefined(buildHandler(repo, getenvFrom(tc.env), option.WithBaseURL(srv.URL)), `{"title":"下書き"}`)

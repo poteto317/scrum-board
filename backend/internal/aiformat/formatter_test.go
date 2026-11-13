@@ -31,10 +31,9 @@ func isolate(t *testing.T) {
 	}
 }
 
-func messageJSON(stopReason string, texts ...string) string {
-	blocks := []map[string]any{}
-	for _, text := range texts {
-		blocks = append(blocks, map[string]any{"type": "text", "text": text})
+func messageBlocksJSON(stopReason string, blocks ...map[string]any) string {
+	if blocks == nil {
+		blocks = []map[string]any{}
 	}
 	body, _ := json.Marshal(map[string]any{
 		"id": "msg_test", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
@@ -42,6 +41,14 @@ func messageJSON(stopReason string, texts ...string) string {
 		"usage": map[string]any{"input_tokens": 10, "output_tokens": 10},
 	})
 	return string(body)
+}
+
+func messageJSON(stopReason string, texts ...string) string {
+	blocks := make([]map[string]any, 0, len(texts))
+	for _, text := range texts {
+		blocks = append(blocks, map[string]any{"type": "text", "text": text})
+	}
+	return messageBlocksJSON(stopReason, blocks...)
 }
 
 func answer(title, description string) string {
@@ -161,10 +168,22 @@ func TestFormatSendsTheExpectedRequest(t *testing.T) {
 }
 
 func TestFormatReadsAllTextBlocksAsOneJSONDocument(t *testing.T) {
-	f := newFake(t, reply(200, messageJSON("end_turn", `{"title":"題`, `名","description":"説明"}`)))
-	got, err := format(f.formatter(), kanban.Draft{Title: "x"})
-	if err != nil || got.Title != "題名" || got.Description != "説明" {
-		t.Fatalf("got %+v %v", got, err)
+	cases := map[string]string{
+		"multiple text blocks": messageJSON("end_turn", `{"title":"題`, `名","description":"説明"}`),
+		"skips non-text blocks before and between text blocks": messageBlocksJSON(
+			"end_turn",
+			map[string]any{"type": "thinking", "thinking": "下書きを整える手順を考える", "signature": "sig_test"},
+			map[string]any{"type": "text", "text": `{"title":"題`},
+			map[string]any{"type": "thinking", "thinking": "補足", "signature": "sig_test2"},
+			map[string]any{"type": "text", "text": `名","description":"説明"}`},
+		),
+	}
+	for name, body := range cases {
+		f := newFake(t, reply(200, body))
+		got, err := format(f.formatter(), kanban.Draft{Title: "x"})
+		if err != nil || got.Title != "題名" || got.Description != "説明" {
+			t.Fatalf("%s: got %+v %v", name, got, err)
+		}
 	}
 }
 
