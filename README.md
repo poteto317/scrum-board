@@ -10,6 +10,7 @@
 - 詳細画面でステータスを選択して移動
 - カードは列内に縦積み、列が増えたらボード内で横スクロール
 - MySQLへの永続化
+- APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのカードを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[使い方](docs/api.md#aiで整えてカードを起票する)）
 
 Todoに「ドラッグ＆ドロップでカードの移動・並べ替えを実装する」を初期登録します。ドラッグ＆ドロップ自体は今後の実装です。
 
@@ -81,6 +82,8 @@ Goの環境変数（ホストで`go run`する場合、ルートの`.env`は自�
 | `DB_PASSWORD` | `scrum_dev` |
 | `DB_NAME` | `scrumboard` |
 | `LISTEN_ADDRESS` | `127.0.0.1:8080` |
+| `ANTHROPIC_API_KEY` | 空（未設定ならAI起票APIだけが503） |
+| `ANTHROPIC_MODEL` | 空（`claude-haiku-5-5`。`effort`に対応したモデルのみ） |
 
 変更した値は`DB_PASSWORD=... DB_ADDRESS=127.0.0.1:3307 go run ./cmd/server`のように渡してください。APIのポートを変えた場合は`frontend/proxy.conf.json`も合わせます。
 
@@ -98,6 +101,8 @@ frontend/src/app/
   app.routes.ts        画面のルーティング
 backend/
   cmd/server/main.go   DB接続・HTTP起動・タイムアウト・正常終了
+  cmd/server/wiring.go APIキーの有無によるAI機能の組み込み
+  internal/aiformat/   Claude API（公式Go SDK）で下書きを整える
   internal/kanban/
     model.go           型とRepositoryインターフェース
     handler.go         各エンドポイントの処理
@@ -106,6 +111,7 @@ backend/
     status_handler.go  タスク番号と列名による状態変更（PATCH /api/cards/by-number/{number}/status）
     repository.go      プレースホルダー付きSQL、更新トランザクション
     history*.go        変更履歴の追記・移行・ページング・復元
+    refined*.go        AIで整えてTodoに起票するAPI（POST /api/cards/refined）とテスト
     numbering.go       タスク番号表の作成・既存カードの採番（API起動時に実行）
     handler_test.go    DBに依存しないAPIテスト
     status_handler_test.go         状態変更APIのDBに依存しないテスト
@@ -122,7 +128,7 @@ backend/
 4. `handler.go`→`Repository`→`repository.go`でGo側の処理を追う。
 5. SQLの外部キー・一意制約とGoのエラー応答の関係を見る。
 
-Angularのstandalone components、Router、HttpClient、Reactive Forms、Signalsを使用。Goは標準`net/http`と`database/sql`、MySQL接続には`go-sql-driver/mysql`を使用しています。ORMや大規模な状態管理ライブラリは導入せず、学習で処理を追える構成にしています。
+Angularのstandalone components、Router、HttpClient、Reactive Forms、Signalsを使用。Goは標準`net/http`と`database/sql`、MySQL接続には`go-sql-driver/mysql`を使用しています。AI起票だけは公式のAnthropic Go SDK（`anthropic-sdk-go/v2`）を使います。SDKを使うのは`internal/aiformat`と、組み立てを行う`cmd/server/wiring.go`（テストで接続先を差し替えるオプションの型だけ）で、`internal/kanban`は依存しません。ORMや大規模な状態管理ライブラリは導入せず、学習で処理を追える構成にしています。
 
 ## API
 
@@ -133,6 +139,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | GET | `/api/board` | `{columns: [...], cards: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
 | POST | `/api/cards` | `{title, description, columnId, prUrl?}`でカード追加 |
+| POST | `/api/cards/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてカードを起票する)） |
 | GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
 | GET | `/api/cards/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
 | GET | `/api/cards/by-number/{number}` | タスク番号によるカード詳細 |
