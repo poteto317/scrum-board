@@ -5,16 +5,32 @@ import (
 	"strings"
 )
 
-type handler struct{ repo Repository }
+type handler struct {
+	repo      Repository
+	formatter CardFormatter
+	slots     chan struct{}
+}
 
-func NewHandler(repo Repository) http.Handler {
-	h := handler{repo}
+// Option customizes NewHandler without changing the call sites that only need the repository.
+type Option func(*handler)
+
+// WithCardFormatter enables POST /api/cards/refined. A nil formatter keeps the endpoint answering 503.
+func WithCardFormatter(f CardFormatter) Option {
+	return func(h *handler) { h.formatter = f }
+}
+
+func NewHandler(repo Repository, opts ...Option) http.Handler {
+	h := handler{repo: repo, slots: make(chan struct{}, maxConcurrentFormats)}
+	for _, opt := range opts {
+		opt(&h)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/board", h.board)
 	mux.HandleFunc("GET /api/cards/by-number/{number}/history", h.history)
 	mux.HandleFunc("POST /api/columns", h.createColumn)
 	mux.HandleFunc("POST /api/cards", h.createCard)
+	mux.HandleFunc("POST /api/cards/refined", h.createRefinedCard)
 	mux.HandleFunc("GET /api/cards/{id}", h.getCard)
 	mux.HandleFunc("GET /api/cards/by-number/{number}", h.getCardByNumber)
 	mux.HandleFunc("PATCH /api/cards/{id}", h.updateCard)

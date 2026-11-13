@@ -67,7 +67,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	handler := http.TimeoutHandler(kanban.NewHandler(repo), 15*time.Second, `{"message":"処理がタイムアウトしました。"}`)
+	handler := buildHandler(repo, os.Getenv)
 	server := &http.Server{Addr: env("LISTEN_ADDRESS", "127.0.0.1:8080"), Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
