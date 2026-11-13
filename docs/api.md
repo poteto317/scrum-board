@@ -119,6 +119,6 @@ KANBAN_IMPORT_DSN='scrum:scrum_dev@tcp(127.0.0.1:3307)/scrumboard?parseTime=true
   go run ./cmd/import-history --file /absolute/path/reviewed-history.json
 ```
 
-DBの接続設定は利用環境に合わせ、バックアップを取得してから実行してください。対象が履歴初期化済みであることを確認します。JSONは最大2MiB/10000件で、changesはtitle/description/status/prUrlの最大4項目です。復元登録日時はDBが記録し、kindはrestored固定です。マニフェストやSQLダンプはGitへ追加しないでください。CLIは実在しない操作者、分からない変更前の値、正確な操作時刻を推測する道具ではありません。
+DBの接続設定は利用環境に合わせ、バックアップを取得してから実行してください。対象が履歴初期化済みであることを確認します。JSONは最大2MiB/10000件で、changesはtitle/description/status/prUrlの最大4項目です。各記録の必須項目はnumber・cardId・createdAt・key・occurredAt・noteで、空にできるのはchangesとevidenceUrlだけです（noteは1〜4000文字）。keyは英数字と`_.:-`の1〜128文字、changesの値はtitle 200・description 10000・status 60・prUrl 2048文字以内で同じfieldを重複できません。未知のキーは拒否します。失敗時のメッセージは原因の項目を示さないため、このとおりに確認してください。復元登録日時はDBが記録し、kindはrestored固定です。マニフェストやSQLダンプはGitへ追加しないでください。CLIは実在しない操作者、分からない変更前の値、正確な操作時刻を推測する道具ではありません。
 
 occurredAtはMySQLのDATETIME(6)に合わせてマイクロ秒未満を切り捨てて保存・比較します。occurredAtは取り込み時刻より5分を超える未来の値を拒否し、1件でも不正なら全体を書き込みません（誤記すると一覧の最上位に残り、追記専用のため直せないためです）。カードのcreatedAtより前の値は、作成前にマージされたPRなどがあるため拒否しません。createdAtは対象カードの応答値をそのまま指定してください。同時バッチでもカードID順のロックとREAD COMMITTEDのキー確認で、異なる内容の同一キーを黙って無視しません。
