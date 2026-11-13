@@ -331,10 +331,16 @@ h1 {
   font-size: 13px;
   letter-spacing: 0.5px;
 }
-@media (min-width: 1495px) {
+@media (min-width: 1885px) {
   .kanban-column {
     width: 390px;
     flex-basis: 390px;
+  }
+}
+@media (min-width: 1645px) and (max-width: 1884px) {
+  .kanban-column {
+    width: 330px;
+    flex-basis: 330px;
   }
 }
 @media (min-width: 701px) and (max-width: 1399px) {
