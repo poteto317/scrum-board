@@ -331,7 +331,7 @@ h1 {
   font-size: 13px;
   letter-spacing: 0.5px;
 }
-@media (min-width: 1400px) {
+@media (min-width: 1480px) {
   .kanban-column {
     width: 390px;
     flex-basis: 390px;
