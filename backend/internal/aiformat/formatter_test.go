@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	secretKey   = "SENTINEL-KEY-sk-ant-123"
+	secretKey   = "SENTINEL-NOT-A-REAL-API-KEY"
 	secretDraft = "SENTINEL-DRAFT-body"
 	secretReply = "SENTINEL-UPSTREAM-body"
 )
