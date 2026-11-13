@@ -47,6 +47,7 @@ type CardPatch struct {
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.
 type Repository interface {
 	Board(context.Context) (Board, error)
+	History(context.Context, int64, int64) (HistoryPage, error)
 	GetCard(context.Context, int64) (Card, error)
 	GetCardByNumber(context.Context, int64) (Card, error)
 	GetColumnByName(context.Context, string) (Column, error)

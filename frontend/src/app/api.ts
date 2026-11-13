@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BoardData, Card, CardInput, Column } from './models';
+import { BoardData, Card, CardInput, Column, HistoryPage } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class Api {
@@ -10,6 +10,11 @@ export class Api {
   }
   cardByNumber(number: number) {
     return this.http.get<Card>(`/api/cards/by-number/${number}`);
+  }
+  history(number: number, before = 0) {
+    return this.http.get<HistoryPage>(`/api/cards/by-number/${number}/history`, {
+      params: before ? { before: String(before) } : {},
+    });
   }
   createColumn(name: string) {
     return this.http.post<Column>('/api/columns', { name });

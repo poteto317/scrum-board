@@ -1,0 +1,65 @@
+:host {
+  display: block;
+  margin-top: 32px;
+}
+.history {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+}
+h2 {
+  font-size: 16px;
+  margin: 0 0 20px;
+}
+.history-event {
+  border-top: 1px solid var(--line);
+  padding: 18px 0;
+  font-size: 12px;
+}
+.event-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+time,
+.recorded {
+  color: var(--muted);
+  font-size: 11px;
+}
+.note {
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.change {
+  margin: 12px 0;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.value {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--background, #f7f9f4);
+  border-radius: 6px;
+  min-width: 0;
+}
+.value span {
+  color: var(--muted);
+  font-size: 10px;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.8;
+  margin: 6px 0 0;
+  max-height: 240px;
+  overflow: auto;
+}
+a {
+  color: var(--accent);
+}

@@ -105,6 +105,7 @@ backend/
     validation.go      タイトル・説明・列名の入力検証
     status_handler.go  タスク番号と列名による状態変更（PATCH /api/cards/by-number/{number}/status）
     repository.go      プレースホルダー付きSQL、更新トランザクション
+    history*.go        変更履歴の追記・移行・ページング・復元
     numbering.go       タスク番号表の作成・既存カードの採番（API起動時に実行）
     handler_test.go    DBに依存しないAPIテスト
     status_handler_test.go         状態変更APIのDBに依存しないテスト
@@ -133,6 +134,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | POST | `/api/columns` | `{name}`で列を追加 |
 | POST | `/api/cards` | `{title, description, columnId, prUrl?}`でカード追加 |
 | GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
+| GET | `/api/cards/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
 | GET | `/api/cards/by-number/{number}` | タスク番号によるカード詳細 |
 | PATCH | `/api/cards/by-number/{number}/status` | `{status}`（列名）でステータスだけ変更 |
 | PATCH | `/api/cards/{id}` | `{title?, description?, columnId?, prUrl?}`で部分更新 |
@@ -229,7 +231,7 @@ URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表
 
 ```sh
 docker compose stop api
-docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE" -e "SET FOREIGN_KEY_CHECKS=0; DROP TABLE IF EXISTS card_pr_links, card_numbers, card_number_sequence;"'
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE" -e "SET FOREIGN_KEY_CHECKS=0; DROP TABLE IF EXISTS card_history, card_pr_links, card_numbers, card_number_sequence;"'
 docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot' < backups/<更新前のダンプ>.sql
 docker compose start api
 ```
@@ -239,3 +241,13 @@ docker compose start api
 カード詳細には保存ボタンがありません。タイトル・説明・GitHub PR URLは入力が600ms止まると自動保存し、入力し続けても最大2秒ごとに保存します。入力欄を離れたときとステータス変更は即時保存します。日本語変換中の本文は確定まで送信しません。
 
 保存中も編集を続けられ、変更した有効な項目だけを順番にPATCHします。不正入力はそのまま残し、他の有効な項目は保存します。通信失敗では入力を保持し「再試行」を表示します。アプリ内の移動では保存完了を待ち、不正入力や失敗が残れば破棄確認します。リロード・タブ終了でも未保存時はブラウザーの標準確認を使います。未保存の入力をオフラインで永続化する機能は含みません。
+
+### 変更履歴
+
+詳細画面の「変更履歴」から、作成とタイトル・説明・ステータス・PR URLの変更前後を確認できます。自動保存とAPI更新のどちらも同じトランザクションで履歴を残し、値が変わらない再送では増えません。50件ずつ追加表示します。カードを削除すると、そのカードの履歴も削除されます。
+
+起動時の `backend/internal/kanban/history_migration.go` が補助表 `card_history` を準備し、履歴のない既存カードには「履歴機能導入時の状態」を一度だけ保存します。過去の初期値を推定するものではありません。過去記録の復元は `backend/cmd/import-history` と `history_import.go`、画面は `frontend/src/app/card-history.*` を参照してください。
+
+復元記録は「復元した記録」と注記・根拠PRで通常の変更と区別します。バックアップ間の差分は観測時刻であり、正確な操作時刻や途中の全変更を保証しません。作成日時しか分からない場合は初期本文を捏造しません。復元方法とJSON形式は[APIガイド](docs/api.md#過去履歴の取り込み)を参照してください。
+
+バックアップを戻すと履歴もその時点へ戻ります。上記の復元手順で補助表を削除する場合、更新後に記録した履歴も失われます。通常の更新でボリュームやテーブルを初期化する必要はありません。

@@ -89,3 +89,36 @@ curl --fail-with-body --request PATCH \
 `prUrl` だけのPATCHはタイトル・説明・ステータス・番号を保持します。省略またはnullは変更せず、空文字 `""` で解除します。作成APIの任意プロパティとしても使えます。前後の空白は取り除きます。
 
 受け付ける形式は `https://github.com/{owner}/{repo}/pull/{正の整数}`、ASCIIで2048文字以内です。owner/repoは英数字・`_`・`-`・`.`（`.`／`..` 単独は不可）。末尾スラッシュ、先頭0の番号、query、fragment、credentials、port、他ホスト、制御文字、バックスラッシュは400になります。PRの実在や閲覧権限の確認、GitHubとの同期は行いません。
+
+## 変更履歴
+
+`GET /api/cards/by-number/{number}/history` は `{events: [...], nextBefore: 0}` を返します。eventsにはid、kind、occurredAt、recordedAt、changes（field/before/after）、note、evidenceUrlがあります。kindはcreated/updated/baseline/restoredです。statusの値は列名です。
+
+日時降順・同時刻はID降順で最大50件。nextBeforeが0以外なら `?before={nextBefore}` で続けます。別カードのカーソルや未存在カードは404、不正カーソルは400です。更新成功後は先頭から再取得してください。履歴取得の失敗はカード編集を妨げません。
+
+## 過去履歴の取り込み
+
+通常のHTTPから過去記録を追加するAPIはありません。APIの初期化後に、確認済みマニフェストをCLIで追加します。カード本体のID・number・createdAtが一致しない場合や、不正フィールド・日時・根拠URLは拒否します。全体をtxで処理し、同じカードの同じkeyは同一内容なら再実行しても増えず、異なる内容なら拒否します。
+
+```json
+[{
+  "number": 3,
+  "cardId": 18,
+  "createdAt": "2026-11-11T11:42:21.869108Z",
+  "key": "pr-merged-2",
+  "occurredAt": "2026-11-12T00:00:00Z",
+  "changes": [],
+  "note": "形式例です。実際の日時は根拠資料で確認して置き換えてください。",
+  "evidenceUrl": "https://github.com/owner/repo/pull/2"
+}]
+```
+
+```sh
+cd backend
+KANBAN_IMPORT_DSN='scrum:scrum_dev@tcp(127.0.0.1:3307)/scrumboard?parseTime=true' \
+  go run ./cmd/import-history --file /absolute/path/reviewed-history.json
+```
+
+DBの接続設定は利用環境に合わせ、バックアップを取得してから実行してください。対象が履歴初期化済みであることを確認します。JSONは最大2MiB/10000件で、changesはtitle/description/status/prUrlの最大4項目です。復元登録日時はDBが記録し、kindはrestored固定です。マニフェストやSQLダンプはGitへ追加しないでください。CLIは実在しない操作者、分からない変更前の値、正確な操作時刻を推測する道具ではありません。
+
+occurredAtはMySQLのDATETIME(6)に合わせてマイクロ秒未満を切り捨てて保存・比較します。createdAtは対象カードの応答値をそのまま指定してください。同時バッチでもカードID順のロックとREAD COMMITTEDのキー確認で、異なる内容の同一キーを黙って無視しません。

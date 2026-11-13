@@ -60,6 +60,9 @@ func run() error {
 	if err == nil {
 		err = repo.InitializeNumbers(migrationCtx)
 	}
+	if err == nil {
+		err = repo.InitializeHistory(migrationCtx)
+	}
 	migrationCancel()
 	if err != nil {
 		return err

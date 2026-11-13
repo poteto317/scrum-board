@@ -1,0 +1,49 @@
+<section class="history" aria-label="変更履歴">
+  <h2>変更履歴</h2>
+  @for (event of events(); track event.id) {
+    <article class="history-event">
+      <div class="event-heading">
+        <strong>{{ kinds[event.kind] || event.kind }}</strong
+        ><time>{{ event.occurredAt | date: 'yyyy/MM/dd HH:mm:ss' }}</time>
+      </div>
+      @if (event.note) {
+        <p class="note">{{ event.note }}</p>
+      }
+      @if (event.kind === 'restored') {
+        <p class="recorded">復元登録: {{ event.recordedAt | date: 'yyyy/MM/dd HH:mm:ss' }}</p>
+      }
+      @for (change of event.changes; track change.field) {
+        <details class="change" [open]="change.field === 'status' || change.field === 'prUrl'">
+          <summary>{{ labels[change.field] || change.field }}</summary>
+          @if (event.kind !== 'baseline' && event.kind !== 'created') {
+            <div class="value before">
+              <span>変更前</span>
+              <pre>{{ change.before || '（空欄）' }}</pre>
+            </div>
+          }
+          <div class="value">
+            <span>{{ event.kind === 'baseline' ? '導入時の値' : '変更後' }}</span>
+            <pre>{{ change.after || '（空欄）' }}</pre>
+          </div>
+        </details>
+      }
+      @if (safeEvidence(event.evidenceUrl)) {
+        <a [href]="event.evidenceUrl" target="_blank" rel="noopener noreferrer">根拠のPRを開く ↗</a>
+      }
+    </article>
+  }
+  @if (loading()) {
+    <p role="status">履歴を読み込んでいます…</p>
+  }
+  @if (error()) {
+    <p role="alert">履歴を読み込めませんでした。</p>
+    <button type="button" class="secondary" (click)="retry()">再試行</button>
+  } @else if (!loading() && !events().length) {
+    <p>履歴はまだありません。</p>
+  }
+  @if (nextBefore() && !error()) {
+    <button type="button" class="secondary" [disabled]="loading()" (click)="more()">
+      さらに表示
+    </button>
+  }
+</section>

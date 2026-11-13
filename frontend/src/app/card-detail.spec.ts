@@ -18,6 +18,7 @@ const card: Card = {
 describe('CardDetail autosave', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
+    history: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     cardByNumber: ReturnType<typeof vi.fn>;
     updateCard: ReturnType<typeof vi.fn>;
@@ -29,6 +30,7 @@ describe('CardDetail autosave', () => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     router = { navigate: vi.fn() };
     api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       board: vi.fn(() =>
         of({
           columns: [
@@ -61,6 +63,12 @@ describe('CardDetail autosave', () => {
     f.detectChanges();
     return f;
   };
+  it('refreshes history after a successful autosave without resetting the draft',()=>{
+    api.updateCard.mockImplementation((_id,patch)=>of({...card,...patch,updatedAt:'2026-11-13T00:00:00Z'}));
+    const f=create();expect(api.history).toHaveBeenCalledTimes(1);
+    f.componentInstance.form.controls.description.setValue('history refresh');f.componentInstance.autosave.flush();f.detectChanges();
+    expect(api.history).toHaveBeenCalledTimes(2);expect(f.componentInstance.form.controls.description.value).toBe('history refresh');
+  });
   it('has no manual save button and never saves just by loading', () => {
     const f = create();
     expect(f.nativeElement.querySelector('button[type="submit"]')).toBeNull();
@@ -209,42 +217,46 @@ describe('CardDetail autosave', () => {
 });
 
 describe('CardDetail IME response handling', () => {
-  it.each(['title', 'description', 'prUrl'] as const)('preserves buffered IME input in %s when an earlier save responds', (field) => {
-    const pending = new Subject<Card>();
-    TestBed.configureTestingModule({
-      imports: [CardDetail],
-      providers: [
-        {
-          provide: Api,
-          useValue: {
-            board: () => of({ columns: [], cards: [] }),
-            cardByNumber: () => of(card),
-            updateCard: () => pending,
+  it.each(['title', 'description', 'prUrl'] as const)(
+    'preserves buffered IME input in %s when an earlier save responds',
+    (field) => {
+      const pending = new Subject<Card>();
+      TestBed.configureTestingModule({
+        imports: [CardDetail],
+        providers: [
+          {
+            provide: Api,
+            useValue: {
+              history: () => of({ events: [], nextBefore: 0 }),
+              board: () => of({ columns: [], cards: [] }),
+              cardByNumber: () => of(card),
+              updateCard: () => pending,
+            },
           },
-        },
-        { provide: ActivatedRoute, useValue: { paramMap: of(new Map([['number', '3']])) } },
-        { provide: Router, useValue: { navigate: vi.fn() } },
-      ],
-    });
-    const f = TestBed.createComponent(CardDetail);
-    f.detectChanges();
-    const selector = field === 'prUrl' ? '#detail-pr-url' : `#detail-${field}`;
-    const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
-    const sent = field === 'prUrl' ? 'https://github.com/a/b/pull/1' : '送信するタイトル';
-    input.value = sent;
-    input.dispatchEvent(new Event('input'));
-    input.dispatchEvent(new Event('blur'));
-    input.dispatchEvent(new Event('compositionstart'));
-    input.value = '変換途中の日本語';
-    input.dispatchEvent(new Event('input'));
-    expect(f.componentInstance.form.controls[field].value).toBe(sent);
-    // The response differs from what the user sees, so only the composing guard keeps the DOM value.
-    const serverValue = field === 'prUrl' ? 'https://github.com/a/b/pull/2' : '別の人の編集';
-    pending.next({ ...card, [field]: serverValue });
-    pending.complete();
-    expect(input.value).toBe('変換途中の日本語');
-    input.dispatchEvent(new Event('compositionend'));
-    expect(f.componentInstance.form.controls[field].value).toBe('変換途中の日本語');
-    f.destroy();
-  });
+          { provide: ActivatedRoute, useValue: { paramMap: of(new Map([['number', '3']])) } },
+          { provide: Router, useValue: { navigate: vi.fn() } },
+        ],
+      });
+      const f = TestBed.createComponent(CardDetail);
+      f.detectChanges();
+      const selector = field === 'prUrl' ? '#detail-pr-url' : `#detail-${field}`;
+      const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
+      const sent = field === 'prUrl' ? 'https://github.com/a/b/pull/1' : '送信するタイトル';
+      input.value = sent;
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('blur'));
+      input.dispatchEvent(new Event('compositionstart'));
+      input.value = '変換途中の日本語';
+      input.dispatchEvent(new Event('input'));
+      expect(f.componentInstance.form.controls[field].value).toBe(sent);
+      // The response differs from what the user sees, so only the composing guard keeps the DOM value.
+      const serverValue = field === 'prUrl' ? 'https://github.com/a/b/pull/2' : '別の人の編集';
+      pending.next({ ...card, [field]: serverValue });
+      pending.complete();
+      expect(input.value).toBe('変換途中の日本語');
+      input.dispatchEvent(new Event('compositionend'));
+      expect(f.componentInstance.form.controls[field].value).toBe('変換途中の日本語');
+      f.destroy();
+    },
+  );
 });

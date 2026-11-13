@@ -120,6 +120,9 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if err != nil {
 		return Card{}, err
 	}
+	if err = appendHistory(ctx, tx, nil, card, "created"); err != nil {
+		return Card{}, err
+	}
 	return card, tx.Commit()
 }
 func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) (Card, error) {
@@ -138,6 +141,7 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	if err != nil {
 		return c, err
 	}
+	before := c
 	if p.Title != nil {
 		c.Title = *p.Title
 	}
@@ -159,6 +163,9 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	c, err = scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
 	if err != nil {
 		return c, err
+	}
+	if err = appendHistory(ctx, tx, &before, c, "updated"); err != nil {
+		return Card{}, err
 	}
 	return c, tx.Commit()
 }

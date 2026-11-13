@@ -1,3 +1,4 @@
+import { CardHistory } from './card-history';
 import { Modal } from './modal';
 import { Component, DestroyRef, HostListener, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
@@ -22,7 +23,7 @@ import { CardAutosave } from './card-autosave';
 
 @Component({
   selector: 'app-card-detail',
-  imports: [ReactiveFormsModule, RouterLink, DatePipe, Modal],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, Modal, CardHistory],
   providers: [CardAutosave],
   templateUrl: './card-detail.html',
   styleUrl: './card-detail.css',

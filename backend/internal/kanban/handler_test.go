@@ -223,3 +223,8 @@ func (m *memoryRepo) GetColumnByName(_ context.Context, name string) (Column, er
 	}
 	return Column{}, ErrColumn
 }
+
+func (m *memoryRepo) History(ctx context.Context, number, before int64) (HistoryPage, error) {
+	_, err := m.GetCardByNumber(ctx, number)
+	return HistoryPage{Events: []HistoryEvent{}}, err
+}

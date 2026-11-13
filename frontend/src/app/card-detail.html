@@ -121,6 +121,7 @@
         </div>
       </div>
     </form>
+    <app-card-history [number]="card()!.number" [revision]="card()!.updatedAt" />
   }
 </main>
 @if (confirmDelete()) {

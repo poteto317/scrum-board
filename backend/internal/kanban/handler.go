@@ -12,6 +12,7 @@ func NewHandler(repo Repository) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/board", h.board)
+	mux.HandleFunc("GET /api/cards/by-number/{number}/history", h.history)
 	mux.HandleFunc("POST /api/columns", h.createColumn)
 	mux.HandleFunc("POST /api/cards", h.createCard)
 	mux.HandleFunc("GET /api/cards/{id}", h.getCard)
