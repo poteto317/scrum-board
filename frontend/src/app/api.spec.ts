@@ -36,8 +36,13 @@ describe('Api', () => {
   });
 });
 
-it('requests history by public number and an optional event cursor',()=>{
- TestBed.configureTestingModule({providers:[provideHttpClient(),provideHttpClientTesting()]});
- const api=TestBed.inject(Api),http=TestBed.inject(HttpTestingController);
- api.history(13,42).subscribe();const req=http.expectOne('/api/cards/by-number/13/history?before=42');expect(req.request.method).toBe('GET');req.flush({events:[],nextBefore:0});http.verify();
+it('requests history by public number and an optional event cursor', () => {
+  TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+  const api = TestBed.inject(Api),
+    http = TestBed.inject(HttpTestingController);
+  api.history(13, 42).subscribe();
+  const req = http.expectOne('/api/cards/by-number/13/history?before=42');
+  expect(req.request.method).toBe('GET');
+  req.flush({ events: [], nextBefore: 0 });
+  http.verify();
 });

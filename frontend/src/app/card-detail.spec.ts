@@ -63,11 +63,17 @@ describe('CardDetail autosave', () => {
     f.detectChanges();
     return f;
   };
-  it('refreshes history after a successful autosave without resetting the draft',()=>{
-    api.updateCard.mockImplementation((_id,patch)=>of({...card,...patch,updatedAt:'2026-11-13T00:00:00Z'}));
-    const f=create();expect(api.history).toHaveBeenCalledTimes(1);
-    f.componentInstance.form.controls.description.setValue('history refresh');f.componentInstance.autosave.flush();f.detectChanges();
-    expect(api.history).toHaveBeenCalledTimes(2);expect(f.componentInstance.form.controls.description.value).toBe('history refresh');
+  it('refreshes history after a successful autosave without resetting the draft', () => {
+    api.updateCard.mockImplementation((_id, patch) =>
+      of({ ...card, ...patch, updatedAt: '2026-11-13T00:00:00Z' }),
+    );
+    const f = create();
+    expect(api.history).toHaveBeenCalledTimes(1);
+    f.componentInstance.form.controls.description.setValue('history refresh');
+    f.componentInstance.autosave.flush();
+    f.detectChanges();
+    expect(api.history).toHaveBeenCalledTimes(2);
+    expect(f.componentInstance.form.controls.description.value).toBe('history refresh');
   });
   it('has no manual save button and never saves just by loading', () => {
     const f = create();
