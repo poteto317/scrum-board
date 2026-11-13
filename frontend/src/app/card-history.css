@@ -9,13 +9,16 @@
   padding: 24px;
 }
 h2 {
-  font-size: 16px;
+  font-size: 22px;
   margin: 0 0 20px;
+}
+.history > p {
+  font-size: 17px;
 }
 .history-event {
   border-top: 1px solid var(--line);
   padding: 18px 0;
-  font-size: 12px;
+  font-size: 17px;
 }
 .event-heading {
   display: flex;
@@ -26,7 +29,7 @@ h2 {
 time,
 .recorded {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 15px;
 }
 .note {
   line-height: 1.8;
@@ -49,7 +52,7 @@ summary {
 }
 .value span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 pre {
   white-space: pre-wrap;

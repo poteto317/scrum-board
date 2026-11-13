@@ -1,5 +1,5 @@
 .app-header {
-  height: 76px;
+  height: 84px;
   display: flex;
   align-items: center;
   padding: 0 40px;
@@ -10,42 +10,42 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   text-decoration: none;
   color: var(--ink);
-  font-size: 24px;
+  font-size: 34px;
   font-weight: 750;
   letter-spacing: -1px;
 }
 .brand-dot {
   color: var(--accent);
-  margin-left: -9px;
+  margin-left: -11px;
 }
 .brand-mark {
   display: flex;
   gap: 3px;
   align-items: flex-start;
-  height: 23px;
+  height: 30px;
 }
 .brand-mark i {
-  width: 5px;
+  width: 6px;
   background: var(--accent);
-  height: 23px;
+  height: 30px;
   border-radius: 2px;
 }
 .brand-mark i:nth-child(2) {
-  height: 16px;
+  height: 21px;
 }
 .brand-mark i:nth-child(3) {
-  height: 10px;
+  height: 13px;
 }
 .header-divider {
-  height: 22px;
+  height: 26px;
   width: 1px;
   background: var(--line);
 }
 .workspace-name {
-  font-size: 12px;
+  font-size: 17px;
   color: var(--muted);
 }
 .header-end {
@@ -53,30 +53,31 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 15px;
   color: var(--muted);
 }
 .local-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--accent);
 }
 .avatar {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #e9ede7;
   color: var(--ink);
   margin-left: 16px;
+  font-size: 20px;
   font-weight: 700;
 }
-@media (max-width: 650px) {
+@media (max-width: 800px) {
   .app-header {
     padding: 0 20px;
-    height: 66px;
+    height: 74px;
   }
   .workspace-name,
   .header-divider,

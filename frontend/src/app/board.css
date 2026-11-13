@@ -5,7 +5,7 @@
 }
 .breadcrumb {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 15px;
   display: flex;
   gap: 12px;
 }
@@ -25,13 +25,13 @@
 }
 .eyebrow {
   color: var(--accent);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 750;
   letter-spacing: 2.3px;
   margin-bottom: 12px;
 }
 h1 {
-  font-size: 32px;
+  font-size: 45px;
   letter-spacing: -1px;
   line-height: 1.4;
   font-weight: 650;
@@ -41,7 +41,7 @@ h1 {
   color: var(--accent);
 }
 .page-heading p {
-  font-size: 12px;
+  font-size: 17px;
   color: var(--muted);
   margin: 12px 0 0;
 }
@@ -53,7 +53,8 @@ h1 {
   align-items: center;
   border-bottom: 1px solid var(--line);
   gap: 14px;
-  height: 53px;
+  min-height: 62px;
+  height: auto;
 }
 .active-tab {
   align-self: stretch;
@@ -61,24 +62,24 @@ h1 {
   align-items: center;
   gap: 8px;
   border-bottom: 2px solid var(--accent);
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 650;
-  padding: 0 4px;
+  padding: 12px 4px;
 }
 .board-icon {
-  font-size: 20px;
+  font-size: 28px;
   color: var(--accent);
 }
 .toolbar-count {
-  font-size: 10px;
+  font-size: 14px;
   background: #e9ece7;
   color: #687265;
   border-radius: 5px;
-  padding: 4px 7px;
+  padding: 4px 9px;
 }
 .board-summary {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 14px;
   color: var(--muted);
 }
 .board-summary span {
@@ -99,8 +100,8 @@ h1 {
   padding-bottom: 4px;
 }
 .kanban-column {
-  width: 310px;
-  flex: 0 0 310px;
+  width: 360px;
+  flex: 0 0 360px;
   background: #f0f2ed;
   border: 1px solid #e9ece5;
   border-radius: 12px;
@@ -113,15 +114,15 @@ h1 {
   padding: 0 4px 13px;
 }
 .column-heading h2 {
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 650;
   margin: 0;
   overflow-wrap: anywhere;
   min-width: 0;
 }
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   flex-shrink: 0;
   border: 2px solid #9ba698;
   border-radius: 50%;
@@ -136,12 +137,12 @@ h1 {
 }
 .column-count {
   color: #8b9488;
-  font-size: 10px;
+  font-size: 14px;
   background: #e6e9e1;
   border-radius: 4px;
-  min-width: 19px;
+  min-width: 24px;
   text-align: center;
-  padding: 3px;
+  padding: 3px 6px;
 }
 .column-heading .icon-button {
   margin-left: auto;
@@ -179,21 +180,21 @@ h1 {
 }
 .card-id {
   font-family: monospace;
-  font-size: 9px;
+  font-size: 13px;
   letter-spacing: 0.5px;
 }
 .card-arrow {
-  font-size: 14px;
+  font-size: 20px;
 }
 .task-card h3 {
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 550;
-  line-height: 1.8;
+  line-height: 1.65;
   margin: 12px 0 8px;
 }
 .card-description {
-  font-size: 11px;
-  line-height: 1.9;
+  font-size: 15px;
+  line-height: 1.75;
   color: var(--muted);
   margin: 0 0 18px;
   display: -webkit-box;
@@ -212,10 +213,10 @@ h1 {
   margin-top: 18px;
 }
 .card-status {
-  font-size: 9px;
+  font-size: 13px;
   max-width: 55%;
   overflow-wrap: anywhere;
-  padding: 4px 7px;
+  padding: 4px 8px;
   background: #edf0e9;
   border-radius: 4px;
   color: #727c6c;
@@ -229,8 +230,9 @@ h1 {
   background: #e9f0e9;
 }
 .detail-hint {
-  font-size: 9px;
+  font-size: 13px;
   color: #91998c;
+  white-space: nowrap;
 }
 .detail-hint span {
   padding-left: 4px;
@@ -242,7 +244,7 @@ h1 {
   gap: 6px;
   text-align: left;
   color: #7f897b;
-  font-size: 11px;
+  font-size: 15px;
   border: 0;
   background: none;
   padding: 13px 5px 4px;
@@ -252,10 +254,12 @@ h1 {
   color: var(--accent);
 }
 .add-card > span {
-  font-size: 17px;
+  font-size: 24px;
 }
 .empty-column {
-  height: 178px;
+  min-height: 210px;
+  height: auto;
+  padding: 20px 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -265,23 +269,23 @@ h1 {
 .empty-symbol {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: 1px dashed #ccd3c5;
   border-radius: 9px;
   color: #a3ae9c;
-  font-size: 19px;
+  font-size: 27px;
 }
 .empty-column p {
-  font-size: 11px;
+  font-size: 15px;
   margin: 15px 0 6px;
 }
 .empty-column > span:last-child {
-  font-size: 9px;
+  font-size: 13px;
   color: #a6ad9f;
 }
 .add-column-tile {
-  flex: 0 0 126px;
+  flex: 0 0 165px;
   border: 1px dashed #d9dfd2;
   border-radius: 10px;
   color: #8e9986;
@@ -291,7 +295,7 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 15px;
   cursor: pointer;
 }
 .add-column-tile:hover {
@@ -304,7 +308,7 @@ h1 {
   justify-content: space-between;
   border-top: 1px solid var(--line);
   padding: 18px 0 24px;
-  font-size: 10px;
+  font-size: 14px;
   color: #91998b;
   gap: 15px;
 }
@@ -317,20 +321,20 @@ h1 {
   display: grid;
   place-items: center;
   border: 1px solid #aeb7a5;
-  width: 13px;
-  height: 13px;
+  width: 19px;
+  height: 19px;
   flex-shrink: 0;
   border-radius: 50%;
-  font-size: 9px;
+  font-size: 13px;
 }
 .footer-note {
-  font-size: 9px;
+  font-size: 13px;
   letter-spacing: 0.5px;
 }
 @media (min-width: 1400px) {
   .kanban-column {
-    width: 340px;
-    flex-basis: 340px;
+    width: 390px;
+    flex-basis: 390px;
   }
 }
 @media (max-width: 700px) {
@@ -341,13 +345,13 @@ h1 {
     margin: 28px 0;
   }
   .page-heading h1 {
-    font-size: 25px;
+    font-size: 35px;
   }
   .mobile-break {
     display: block;
   }
   .eyebrow {
-    font-size: 8px;
+    font-size: 11px;
     letter-spacing: 1px;
   }
   .board-summary,
@@ -355,8 +359,8 @@ h1 {
     display: none;
   }
   .kanban-column {
-    width: 285px;
-    flex-basis: 285px;
+    width: 310px;
+    flex-basis: 310px;
   }
   .board-scroll {
     min-height: 400px;
