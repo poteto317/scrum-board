@@ -23,10 +23,12 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+**パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）はローカル Docker 専用の既定値です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。
+
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board
 - MySQL: `127.0.0.1:3307` / DB `scrumboard` / user `scrum`
-- 開発用パスワード: `.env` の `DB_PASSWORD`（初期値 `scrum_dev`）
+- 開発用パスワード: `.env` の `DB_PASSWORD`（上記のローカル専用初期値）
 
 画面、API、MySQLをすべてコンテナで起動します。APIの起動はMySQLのhealthcheck成功を待ちます。画面からのAPI通信はNginxがGoへ転送するため、ブラウザーのCORS設定は不要です。
 
@@ -79,7 +81,7 @@ Goの環境変数（ホストで`go run`する場合、ルートの`.env`は自�
 | --- | --- |
 | `DB_ADDRESS` | `127.0.0.1:3307` |
 | `DB_USER` | `scrum` |
-| `DB_PASSWORD` | `scrum_dev` |
+| `DB_PASSWORD` | `scrum_dev`（ローカル専用。公開環境では変更必須） |
 | `DB_NAME` | `scrumboard` |
 | `LISTEN_ADDRESS` | `127.0.0.1:8080` |
 | `ANTHROPIC_API_KEY` | 空（未設定ならAI起票APIだけが503） |
