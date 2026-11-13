@@ -297,3 +297,47 @@ dialog.modal-backdrop::backdrop {
 [draggable='true']:active {
   cursor: grabbing;
 }
+.kanban-column.dragging {
+  opacity: 0.45;
+  border: 1px dashed var(--accent);
+}
+.kanban-column.drop-before::before,
+.kanban-column.drop-after::after {
+  content: '';
+  position: absolute;
+  inset: 4px auto;
+  width: 4px;
+  border-radius: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.kanban-column.drop-before::before {
+  left: -12px;
+}
+.kanban-column.drop-before:first-child::before {
+  left: -6px;
+}
+.kanban-column.drop-after::after {
+  right: -12px;
+}
+.column-drag-handle {
+  cursor: grab;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #9ba698;
+  padding: 2px 3px;
+  margin-left: -4px;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: -1px;
+  flex-shrink: 0;
+}
+.column-drag-handle:hover {
+  background: #e6e9e1;
+  color: var(--ink);
+}
+.column-drag-handle[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.45;
+}
