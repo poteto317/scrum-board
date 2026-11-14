@@ -459,6 +459,11 @@ h1 {
   border-radius: 8px;
   box-shadow: 0 8px 20px #25332122;
 }
+/* Open upward on board cards so .board-scroll (overflow-x:auto → overflow-y:auto) does not clip the menu. */
+.task-card .copy-command-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
 .copy-command-menu button {
   display: block;
   width: 100%;

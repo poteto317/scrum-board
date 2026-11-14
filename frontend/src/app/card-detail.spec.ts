@@ -675,7 +675,7 @@ describe('CardDetail copy command menu and management', () => {
     const { f, api } = create({ createCommandTemplate: vi.fn(() => of(created)) }, []);
     const dialog = openDialog(f);
     setControl(dialog.querySelector('#command-name') as HTMLInputElement, created.name);
-    setControl(dialog.querySelector('#command-template') as HTMLTextAreaElement, created.template);
+    setControl(dialog.querySelector('#command-template') as HTMLInputElement, created.template);
     buttonByText(dialog, '追加')!.click();
     f.detectChanges();
     expect(api.createCommandTemplate).toHaveBeenCalledWith({
@@ -695,7 +695,7 @@ describe('CardDetail copy command menu and management', () => {
     });
     const dialog = openDialog(f);
     setControl(dialog.querySelector('#command-name') as HTMLInputElement, 'too long');
-    setControl(dialog.querySelector('#command-template') as HTMLTextAreaElement, 'echo');
+    setControl(dialog.querySelector('#command-template') as HTMLInputElement, 'echo');
     buttonByText(dialog, '追加')!.click();
     f.detectChanges();
     expect(api.createCommandTemplate).toHaveBeenCalled();
@@ -709,7 +709,7 @@ describe('CardDetail copy command menu and management', () => {
     });
     const dialog = openDialog(f);
     setControl(dialog.querySelector('#command-name') as HTMLInputElement, 'gh');
-    setControl(dialog.querySelector('#command-template') as HTMLTextAreaElement, 'echo {{url}}');
+    setControl(dialog.querySelector('#command-template') as HTMLInputElement, 'echo {{url}}');
     buttonByText(dialog, '追加')!.click();
     f.detectChanges();
     expect(dialog.textContent).toContain('通信に失敗しました。接続を確認して再試行してください。');
@@ -726,7 +726,7 @@ describe('CardDetail copy command menu and management', () => {
     f.detectChanges();
     setControl(dialog.querySelector('.command-edit-name') as HTMLInputElement, updated.name);
     setControl(
-      dialog.querySelector('.command-edit-template') as HTMLTextAreaElement,
+      dialog.querySelector('.command-edit-template') as HTMLInputElement,
       updated.template,
     );
     (dialog.querySelector('.command-edit-form') as HTMLFormElement).requestSubmit();
