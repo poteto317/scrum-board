@@ -76,7 +76,8 @@ export class CardAutosave {
     };
     for (const key of sideFields) {
       if (updated[key] === undefined) continue;
-      this.sideDirty.add(key);
+      // Only shield against an in-flight form flush; otherwise the next flush must adopt server.
+      if (this.saving()) this.sideDirty.add(key);
       if (key === 'prUrls') next.prUrls = [...(updated.prUrls ?? [])];
       else next[key] = (updated[key] as string) ?? '';
     }

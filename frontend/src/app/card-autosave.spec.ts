@@ -232,6 +232,23 @@ describe('side field preservation', () => {
     expect(edit.card()?.assignee).toBe('Claude');
     TestBed.resetTestingModule();
   });
+  it('does not keep a pre-flush assignee over a later server update on the next flush', () => {
+    const first = new Subject<Card>();
+    const second = new Subject<Card>();
+    const api = {
+      updateCard: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second),
+    };
+    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(CardAutosave);
+    edit.reset(initial);
+    edit.applyAssigneeSave({ assignee: 'Cursor', updatedAt: 't0' });
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    first.next({ ...initial, title: '編集', assignee: 'Claude' });
+    first.complete();
+    expect(edit.card()?.assignee).toBe('Claude');
+    TestBed.resetTestingModule();
+  });
   it('keeps a set-then-cleared assignee over a stale in-flight form response', () => {
     const response = new Subject<Card>();
     const api = {
