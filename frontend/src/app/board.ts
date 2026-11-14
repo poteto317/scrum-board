@@ -24,6 +24,7 @@ import {
 } from './column-order';
 import { textLimit } from './form-validation';
 import { BoardData, Column } from './models';
+import { CopyLinkFeedback } from './copy-link-feedback';
 
 @Component({
   selector: 'app-board',
@@ -46,6 +47,8 @@ export class Board implements OnInit {
   readonly reorderError = signal('');
   readonly reorderConflict = signal(false);
   readonly reorderAnnouncement = signal('');
+  private readonly linkCopy = new CopyLinkFeedback(this.destroyRef);
+  readonly copyLinkAnnouncement = this.linkCopy.message;
   readonly draggingColumnId = signal<number | null>(null);
   readonly dropSlot = signal<number | null>(null);
   readonly modal = signal<'column' | 'card' | null>(null);
@@ -79,6 +82,10 @@ export class Board implements OnInit {
 
   ngOnInit() {
     this.load();
+  }
+
+  copyCardLink(number: number) {
+    return this.linkCopy.copyCardNumber(number);
   }
 
   load() {

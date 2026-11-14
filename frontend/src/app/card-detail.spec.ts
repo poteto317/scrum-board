@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CardDetail } from './card-detail';
 import { Api } from './api';
 import { Card } from './models';
+import { cardDetailUrl } from './card-link';
 const card: Card = {
   id: 18,
   number: 3,
@@ -222,6 +223,109 @@ describe('CardDetail autosave', () => {
     expect(api.updateCard).not.toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
     expect(await f.componentInstance.canLeave()).toBe(true);
+  });
+});
+
+describe('CardDetail copy card link', () => {
+  let params: BehaviorSubject<Map<string, string>>;
+  const originalClipboard = navigator.clipboard;
+  let api: {
+    history: ReturnType<typeof vi.fn>;
+    board: ReturnType<typeof vi.fn>;
+    cardByNumber: ReturnType<typeof vi.fn>;
+    updateCard: ReturnType<typeof vi.fn>;
+    deleteCard: ReturnType<typeof vi.fn>;
+  };
+  beforeEach(() => {
+    params = new BehaviorSubject(new Map([['number', '3']]));
+    api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      board: vi.fn(() =>
+        of({
+          columns: [{ id: 1, name: 'Todo', position: 0 }],
+          cards: [],
+        }),
+      ),
+      cardByNumber: vi.fn(() => of(card)),
+      updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
+      deleteCard: vi.fn(() => of(undefined)),
+    };
+    TestBed.configureTestingModule({
+      imports: [CardDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+      ],
+    });
+  });
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: originalClipboard,
+    });
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+  const create = () => {
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    return f;
+  };
+  it('shows a copy button and keeps save-state aria-live separate from copy feedback', () => {
+    const f = create();
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link');
+    expect(copyBtn).not.toBeNull();
+    expect(copyBtn.getAttribute('aria-label')).toBe('リンクをコピー');
+    const saveState = f.nativeElement.querySelector('.save-state');
+    expect(saveState.getAttribute('aria-live')).toBe('polite');
+    expect(f.nativeElement.querySelector('.copy-link-feedback')).toBeNull();
+    expect(saveState).not.toBe(f.nativeElement.querySelector('.copy-link-feedback'));
+  });
+  it('copies the public card detail URL on success and shows visible feedback', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const f = create();
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement;
+    copyBtn.click();
+    await vi.waitUntil(() => f.componentInstance.copyLinkFeedback() !== '');
+    f.detectChanges();
+    const expected = cardDetailUrl(window.location.origin, card.number);
+    expect(writeText).toHaveBeenCalledWith(expected);
+    const feedback = f.nativeElement.querySelector('.copy-link-feedback');
+    expect(feedback).not.toBeNull();
+    expect(feedback.getAttribute('role')).toBe('status');
+    expect(feedback.getAttribute('aria-live')).toBe('polite');
+    expect(feedback.textContent).toContain('リンクをコピーしました');
+  });
+  it('shows failure feedback when clipboard writeText rejects', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    });
+    const f = create();
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement;
+    copyBtn.click();
+    await vi.waitUntil(() => f.componentInstance.copyLinkFeedback() !== '');
+    f.detectChanges();
+    const feedback = f.nativeElement.querySelector('.copy-link-feedback');
+    expect(feedback.textContent).toContain('リンクをコピーできませんでした');
+  });
+  it('does nothing when card is not loaded', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const f = create();
+    f.componentInstance.autosave.reset(null);
+    await f.componentInstance.copyCardLink();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(f.componentInstance.copyLinkFeedback()).toBe('');
   });
 });
 
