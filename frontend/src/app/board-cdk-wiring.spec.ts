@@ -109,7 +109,7 @@ describe('Board template CDK wiring', () => {
 
   // CDK's own edge scrolling is switched off, so (cdkDragMoved) is the only thing that scrolls while a card is
   // dragged. Driving a real mouse drag checks the template binding itself, not just onCardDragMoved.
-  it('scrolls the board while a real mouse drag is held at its edge, reading the pointer as (x, y)', async () => {
+  it('scrolls the board and the page while a real mouse drag is held at an edge', async () => {
     const board: BoardData = {
       columns: [{ id: 1, name: 'Todo', position: 0 }],
       cards: [card(1, 1, 0)],
@@ -124,22 +124,19 @@ describe('Board template CDK wiring', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
+    const page = { scrollTop: 0, scrollHeight: 5000 };
+    Object.defineProperty(document, 'scrollingElement', {
+      configurable: true,
+      get: () => page,
+    });
+    onTestFinished(() => {
+      Reflect.deleteProperty(document, 'scrollingElement');
+    });
     const scroller = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
-    const list = f.nativeElement.querySelector('.card-list') as HTMLElement;
     const rect = (left: number, top: number, right: number, bottom: number) =>
       ({ left, top, right, bottom, width: right - left, height: bottom - top }) as DOMRect;
     vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 600));
-    vi.spyOn(list, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 400, 600));
-    const original = document.elementFromPoint;
-    const elementFromPoint = vi.fn((x: number, y: number) =>
-      x === 990 && y === 590 ? list : null,
-    );
-    document.elementFromPoint = elementFromPoint;
-    onTestFinished(() => {
-      document.elementFromPoint = original;
-    });
     scroller.scrollLeft = 0;
-    list.scrollTop = 0;
     const moved = vi.spyOn(f.componentInstance, 'onCardDragMoved');
 
     const handle = f.nativeElement.querySelector('.card-drag-handle') as HTMLElement;
@@ -159,17 +156,25 @@ describe('Board template CDK wiring', () => {
       new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 320, clientY: 320 }),
     );
     expect(moved).not.toHaveBeenCalled();
-    // x and y differ, and only the point (990, 590) is over the list: swapped arguments find nothing.
+    // Near both the board's right edge and the viewport's bottom edge.
     document.dispatchEvent(
-      new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 990, clientY: 590 }),
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 990,
+        clientY: window.innerHeight - 5,
+      }),
     );
 
     expect(moved).toHaveBeenCalled();
-    expect(elementFromPoint).toHaveBeenCalledWith(990, 590);
     expect(scroller.scrollLeft).toBeGreaterThan(0);
-    expect(list.scrollTop).toBeGreaterThan(0);
+    expect(page.scrollTop).toBeGreaterThan(0);
     document.dispatchEvent(
-      new MouseEvent('mouseup', { bubbles: true, clientX: 990, clientY: 590 }),
+      new MouseEvent('mouseup', {
+        bubbles: true,
+        clientX: 990,
+        clientY: window.innerHeight - 5,
+      }),
     );
   });
 });
