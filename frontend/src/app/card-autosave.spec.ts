@@ -200,7 +200,7 @@ describe('uncertain write failure', () => {
 });
 
 describe('side field preservation', () => {
-  it('keeps a newer local assignee when a form flush response returns', () => {
+  it('keeps a local assignee changed during an in-flight form flush', () => {
     const response = new Subject<Card>();
     const api = {
       updateCard: vi.fn(() => response),
@@ -215,6 +215,21 @@ describe('side field preservation', () => {
     response.complete();
     expect(edit.card()?.assignee).toBe('Cursor');
     expect(edit.card()?.title).toBe('編集');
+    TestBed.resetTestingModule();
+  });
+  it('adopts a server assignee when the local side field was untouched during flush', () => {
+    const response = new Subject<Card>();
+    const api = {
+      updateCard: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(CardAutosave);
+    edit.reset(initial);
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    response.next({ ...initial, title: '編集', assignee: 'Claude' });
+    response.complete();
+    expect(edit.card()?.assignee).toBe('Claude');
     TestBed.resetTestingModule();
   });
 });
