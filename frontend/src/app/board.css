@@ -409,11 +409,13 @@ h1 {
 }
 
 .task-card .card-quick-actions {
+  /* Icon-sized controls only — a text "コマンド" button forced 118px body padding and crushed titles. */
   position: absolute;
   top: 6px;
   right: 6px;
   z-index: 2;
   display: flex;
+  flex-direction: row-reverse;
   align-items: flex-start;
   gap: 2px;
 }
@@ -421,25 +423,20 @@ h1 {
   position: static;
 }
 .task-card .task-card-body {
-  padding-right: 118px;
+  /* Two icon buttons (~32px) + gap + inset, instead of the previous 118px text-button gutter. */
+  padding-right: 72px;
 }
 .copy-command {
   position: relative;
 }
-.copy-command-button {
-  border: 1px solid var(--line);
-  background: var(--paper);
-  color: var(--ink);
-  border-radius: 5px;
-  font-size: 12px;
-  line-height: 1;
-  padding: 7px 8px;
-  cursor: pointer;
-  white-space: nowrap;
+.task-card .copy-command-button {
+  color: var(--muted);
 }
-.copy-command-button:hover {
-  border-color: #a2b5a2;
+.task-card .copy-command-button:hover {
   color: var(--accent);
+}
+.task-card .copy-command-icon {
+  display: block;
 }
 .task-card.command-menu-open {
   /* Hover translateY on a later card paints above this one; lift the open menu's card. */
