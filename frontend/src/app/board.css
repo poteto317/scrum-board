@@ -5,7 +5,7 @@
 }
 .breadcrumb {
   color: var(--muted);
-  font-size: 15px;
+  font-size: 12px;
   display: flex;
   gap: 12px;
 }
@@ -25,13 +25,13 @@
 }
 .eyebrow {
   color: var(--accent);
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 750;
   letter-spacing: 2.3px;
   margin-bottom: 12px;
 }
 h1 {
-  font-size: 45px;
+  font-size: 36px;
   letter-spacing: -1px;
   line-height: 1.4;
   font-weight: 650;
@@ -41,7 +41,7 @@ h1 {
   color: var(--accent);
 }
 .page-heading p {
-  font-size: 17px;
+  font-size: 14px;
   color: var(--muted);
   margin: 12px 0 0;
 }
@@ -53,7 +53,7 @@ h1 {
   align-items: center;
   border-bottom: 1px solid var(--line);
   gap: 14px;
-  min-height: 62px;
+  min-height: 50px;
   height: auto;
 }
 .active-tab {
@@ -62,24 +62,24 @@ h1 {
   align-items: center;
   gap: 8px;
   border-bottom: 2px solid var(--accent);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 650;
-  padding: 12px 4px;
+  padding: 10px 4px;
 }
 .board-icon {
-  font-size: 28px;
+  font-size: 22px;
   color: var(--accent);
 }
 .toolbar-count {
-  font-size: 14px;
+  font-size: 11px;
   background: #e9ece7;
   color: #687265;
   border-radius: 5px;
-  padding: 4px 9px;
+  padding: 3px 7px;
 }
 .board-summary {
   margin-left: auto;
-  font-size: 14px;
+  font-size: 11px;
   color: var(--muted);
 }
 .board-summary span {
@@ -101,8 +101,8 @@ h1 {
 }
 .kanban-column {
   position: relative;
-  width: 360px;
-  flex: 0 0 360px;
+  width: 288px;
+  flex: 0 0 288px;
   background: #f0f2ed;
   border: 1px solid #e9ece5;
   border-radius: 12px;
@@ -122,15 +122,15 @@ h1 {
   min-width: 0;
 }
 .column-heading h2 {
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 650;
   margin: 0;
   overflow-wrap: anywhere;
   min-width: 0;
 }
 .status-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   flex-shrink: 0;
   border: 2px solid #9ba698;
   border-radius: 50%;
@@ -145,12 +145,12 @@ h1 {
 }
 .column-count {
   color: #8b9488;
-  font-size: 14px;
+  font-size: 11px;
   background: #e6e9e1;
   border-radius: 4px;
-  min-width: 24px;
+  min-width: 19px;
   text-align: center;
-  padding: 3px 6px;
+  padding: 2px 5px;
 }
 .column-heading .icon-button {
   margin-left: auto;
@@ -188,20 +188,20 @@ h1 {
 }
 .card-id {
   font-family: monospace;
-  font-size: 13px;
+  font-size: 10px;
   letter-spacing: 0.5px;
 }
 .card-arrow {
-  font-size: 20px;
+  font-size: 16px;
 }
 .task-card h3 {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 550;
   line-height: 1.65;
   margin: 12px 0 8px;
 }
 .card-description {
-  font-size: 15px;
+  font-size: 12px;
   line-height: 1.75;
   color: var(--muted);
   margin: 0 0 18px;
@@ -221,10 +221,10 @@ h1 {
   margin-top: 18px;
 }
 .card-status {
-  font-size: 13px;
+  font-size: 10px;
   max-width: 55%;
   overflow-wrap: anywhere;
-  padding: 4px 8px;
+  padding: 3px 6px;
   background: #edf0e9;
   border-radius: 4px;
   color: #727c6c;
@@ -238,7 +238,7 @@ h1 {
   background: #e9f0e9;
 }
 .detail-hint {
-  font-size: 13px;
+  font-size: 10px;
   color: #91998c;
   white-space: nowrap;
 }
@@ -252,7 +252,7 @@ h1 {
   gap: 6px;
   text-align: left;
   color: #7f897b;
-  font-size: 15px;
+  font-size: 12px;
   border: 0;
   background: none;
   padding: 13px 5px 4px;
@@ -262,12 +262,12 @@ h1 {
   color: var(--accent);
 }
 .add-card > span {
-  font-size: 24px;
+  font-size: 19px;
 }
 .empty-column {
-  min-height: 210px;
+  min-height: 168px;
   height: auto;
-  padding: 20px 12px;
+  padding: 16px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -277,23 +277,23 @@ h1 {
 .empty-symbol {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 35px;
+  height: 35px;
   border: 1px dashed #ccd3c5;
   border-radius: 9px;
   color: #a3ae9c;
-  font-size: 27px;
+  font-size: 22px;
 }
 .empty-column p {
-  font-size: 15px;
+  font-size: 12px;
   margin: 15px 0 6px;
 }
 .empty-column > span:last-child {
-  font-size: 13px;
+  font-size: 10px;
   color: #a6ad9f;
 }
 .add-column-tile {
-  flex: 0 0 165px;
+  flex: 0 0 132px;
   border: 1px dashed #d9dfd2;
   border-radius: 10px;
   color: #8e9986;
@@ -303,7 +303,7 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 15px;
+  font-size: 12px;
   cursor: pointer;
 }
 .add-column-tile:hover {
@@ -316,7 +316,7 @@ h1 {
   justify-content: space-between;
   border-top: 1px solid var(--line);
   padding: 18px 0 24px;
-  font-size: 14px;
+  font-size: 11px;
   color: #91998b;
   gap: 15px;
 }
@@ -329,38 +329,38 @@ h1 {
   display: grid;
   place-items: center;
   border: 1px solid #aeb7a5;
-  width: 19px;
-  height: 19px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
   border-radius: 50%;
-  font-size: 13px;
+  font-size: 10px;
 }
 .footer-note {
-  font-size: 13px;
+  font-size: 10px;
   letter-spacing: 0.5px;
 }
-@media (min-width: 1905px) {
+@media (min-width: 1572px) {
   .kanban-column {
-    width: 390px;
-    flex-basis: 390px;
+    width: 312px;
+    flex-basis: 312px;
   }
 }
-@media (min-width: 1645px) and (max-width: 1904px) {
+@media (min-width: 1360px) and (max-width: 1571px) {
   .kanban-column {
-    width: 330px;
-    flex-basis: 330px;
+    width: 264px;
+    flex-basis: 264px;
   }
 }
-@media (min-width: 701px) and (max-width: 1399px) {
+@media (min-width: 701px) and (max-width: 1147px) {
   .kanban-column {
-    width: 320px;
-    flex-basis: 320px;
+    width: 256px;
+    flex-basis: 256px;
   }
 }
-@media (min-width: 701px) and (max-width: 1279px) {
+@media (min-width: 701px) and (max-width: 1023px) {
   .kanban-column {
-    width: 296px;
-    flex-basis: 296px;
+    width: 237px;
+    flex-basis: 237px;
   }
 }
 @media (max-width: 700px) {
@@ -371,13 +371,13 @@ h1 {
     margin: 28px 0;
   }
   .page-heading h1 {
-    font-size: 35px;
+    font-size: 28px;
   }
   .mobile-break {
     display: block;
   }
   .eyebrow {
-    font-size: 11px;
+    font-size: 9px;
     letter-spacing: 1px;
   }
   .board-summary,
@@ -385,8 +385,8 @@ h1 {
     display: none;
   }
   .kanban-column {
-    width: 310px;
-    flex-basis: 310px;
+    width: 248px;
+    flex-basis: 248px;
   }
   .board-scroll {
     min-height: 400px;

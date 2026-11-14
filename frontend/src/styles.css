@@ -22,7 +22,7 @@
 }
 body {
   margin: 0;
-  font-size: 17px;
+  font-size: 14px;
 }
 button,
 input,
@@ -63,8 +63,8 @@ a:focus-visible,
   justify-content: center;
   gap: 7px;
   border-radius: 7px;
-  padding: 12px 18px;
-  font-size: 17px;
+  padding: 10px 14px;
+  font-size: 14px;
   font-weight: 550;
   line-height: 1.4;
   text-decoration: none;
@@ -99,10 +99,10 @@ a:focus-visible,
   border-radius: 5px;
   background: none;
   color: #929c89;
-  width: 36px;
-  height: 36px;
+  width: 29px;
+  height: 29px;
   flex-shrink: 0;
-  font-size: 27px;
+  font-size: 22px;
   cursor: pointer;
 }
 .icon-button:hover {
@@ -113,7 +113,7 @@ label {
   display: flex;
   gap: 8px;
   align-items: center;
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 550;
   margin: 23px 0 10px;
 }
@@ -126,7 +126,8 @@ select {
   border-radius: 6px;
   color: var(--ink);
   padding: 12px;
-  font-size: 18px;
+  /* iOS Safari は概ね16px未満でフォーカス時ズームするため、フォームだけ16pxを維持 */
+  font-size: 16px;
   outline: none;
 }
 input:focus,
@@ -148,7 +149,7 @@ select {
 }
 .required,
 .optional {
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 400;
   color: #99a08e;
 }
@@ -156,12 +157,12 @@ select {
   color: #938366;
 }
 .field-note {
-  font-size: 14px;
+  font-size: 11px;
   color: #9aa18f;
   line-height: 1.8;
 }
 .form-error {
-  font-size: 17px;
+  font-size: 14px;
   line-height: 1.8;
   color: #ac5549;
 }
@@ -180,13 +181,13 @@ select {
   gap: 15px;
   min-height: 300px;
   color: var(--muted);
-  font-size: 18px;
+  font-size: 14px;
   text-align: center;
 }
 .spinner {
   display: block;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border: 2px solid #dbe2d2;
   border-top-color: var(--accent);
   border-radius: 50%;
@@ -213,7 +214,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 28px;
-  width: 540px;
+  width: 432px;
   max-width: 100%;
   max-height: 90dvh;
   overflow-y: auto;
@@ -225,7 +226,7 @@ select {
   align-items: center;
 }
 .modal h2 {
-  font-size: 25px;
+  font-size: 20px;
   margin: 0;
   font-weight: 600;
 }
@@ -281,7 +282,7 @@ dialog.modal-backdrop::backdrop {
   border-radius: 8px;
   background: #fdf4f2;
   color: #8b3b32;
-  font-size: 12px;
+  font-size: 10px;
 }
 .reorder-alert p {
   margin: 0;
@@ -328,10 +329,14 @@ dialog.modal-backdrop::backdrop {
   color: #9ba698;
   padding: 2px 3px;
   margin-left: -4px;
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1;
   letter-spacing: -1px;
   flex-shrink: 0;
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-grid;
+  place-items: center;
 }
 .column-drag-handle:hover {
   background: #e6e9e1;

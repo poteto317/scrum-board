@@ -1,10 +1,10 @@
 .detail-page {
-  max-width: 1200px;
+  max-width: 960px;
   margin: auto;
   padding: 32px 40px 60px;
 }
 .back-link {
-  font-size: 17px;
+  font-size: 14px;
   color: var(--muted);
   text-decoration: none;
 }
@@ -15,26 +15,26 @@
   margin: 36px 0 28px;
 }
 .eyebrow {
-  font-size: 14px;
+  font-size: 11px;
   letter-spacing: 1.4px;
   font-weight: 650;
   color: var(--accent);
   margin-bottom: 10px;
 }
 h1 {
-  font-size: 39px;
+  font-size: 31px;
   font-weight: 650;
   letter-spacing: -0.5px;
   margin: 0;
 }
 .detail-heading p {
-  font-size: 17px;
+  font-size: 14px;
   color: var(--muted);
   margin-top: 12px;
 }
 .detail-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) 264px;
   gap: 22px;
   align-items: start;
 }
@@ -45,7 +45,7 @@ h1 {
   border-radius: 12px;
 }
 .section-label {
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 650;
   border-bottom: 1px solid var(--line);
   padding-bottom: 18px;
@@ -62,7 +62,7 @@ h1 {
   padding: 24px;
 }
 .properties .field-note {
-  font-size: 14px;
+  font-size: 11px;
   line-height: 1.9;
   margin-top: 12px;
 }
@@ -72,7 +72,7 @@ h1 {
   padding-top: 17px;
   display: grid;
   gap: 7px;
-  font-size: 14px;
+  font-size: 11px;
 }
 .timestamps span {
   color: #9aa291;
@@ -81,11 +81,11 @@ h1 {
 .timestamps time {
   color: #7a8472;
   font-family: monospace;
-  font-size: 15px;
+  font-size: 12px;
 }
 .detail-tip {
   padding: 19px 8px;
-  font-size: 14px;
+  font-size: 11px;
   line-height: 2;
   color: #98a18f;
 }
@@ -101,19 +101,19 @@ h1 {
   background: none;
   border: 0;
   color: #a35e56;
-  font-size: 15px;
+  font-size: 12px;
   cursor: pointer;
   margin-right: auto;
   padding: 10px 0;
 }
 .delete-copy {
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1.9;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
 .success-message {
-  font-size: 17px;
+  font-size: 14px;
   color: var(--accent);
 }
 @media (max-width: 750px) {
@@ -144,7 +144,7 @@ h1 {
 .properties input {
   min-width: 0;
   width: 100%;
-  font-size: 17px;
+  font-size: 16px;
 }
 .properties .form-error {
   overflow-wrap: anywhere;
@@ -152,7 +152,7 @@ h1 {
 .pr-link {
   display: inline-block;
   color: var(--accent);
-  font-size: 17px;
+  font-size: 14px;
   margin-top: 6px;
 }
 
@@ -165,6 +165,6 @@ h1 {
 
 .save-state {
   color: var(--muted);
-  font-size: 17px;
+  font-size: 14px;
   margin-bottom: 12px;
 }
