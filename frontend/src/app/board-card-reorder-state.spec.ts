@@ -345,7 +345,16 @@ describe('Board card reorder state', () => {
     vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 4);
     expect(scroller.scrollLeft).toBe(middle);
 
+    // Letting go stops it at once, before CDK reports the end (the preview is still settling into place).
+    component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
+    component.onCardDragReleased();
+    expect(vi.getTimerCount()).toBe(0);
+    const released = scroller.scrollLeft;
+    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 3);
+    expect(scroller.scrollLeft).toBe(released);
+
     // At the edge again, then the drag ends: nothing scrolls afterwards.
+    component.onCardDragStarted();
     component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
     vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 2);
     expect(vi.getTimerCount()).toBe(1);

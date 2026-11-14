@@ -238,6 +238,11 @@ export class Board implements OnInit {
     }, CARD_AUTO_SCROLL_INTERVAL_MS);
   }
 
+  /** The pointer was let go: CDK reports the end only after the preview has settled (up to ~300ms), too late to keep scrolling. */
+  onCardDragReleased() {
+    this.stopAutoScrollTimer();
+  }
+
   onCardDragEnded() {
     this.stopAutoScrollTimer();
     this.dragPointer = null;

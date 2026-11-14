@@ -123,6 +123,7 @@
                   [cdkDragDisabled]="!canReorderCards()"
                   (cdkDragStarted)="onCardDragStarted()"
                   (cdkDragMoved)="onCardDragMoved($event)"
+                  (cdkDragReleased)="onCardDragReleased()"
                   (cdkDragEnded)="onCardDragEnded()"
                 >
                   <button
