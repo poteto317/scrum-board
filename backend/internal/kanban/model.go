@@ -32,6 +32,7 @@ type Card struct {
 	Position        int       `json:"position"`
 	BacklogPosition int       `json:"backlogPosition"`
 	PRURLs          []string  `json:"prUrls"`
+	Assignee        string    `json:"assignee"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
@@ -49,12 +50,14 @@ type CardInput struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	PRURLs      []string `json:"prUrls"`
+	Assignee    string   `json:"assignee"`
 }
 type CardPatch struct {
 	ColumnID    *int64    `json:"columnId"`
 	Title       *string   `json:"title"`
 	Description *string   `json:"description"`
 	PRURLs      *[]string `json:"prUrls"`
+	Assignee    *string   `json:"assignee"`
 }
 
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.

@@ -32,6 +32,9 @@ call('POST', '/api/columns', {'name': name}, 409)
 card = call('POST', '/api/cards', {'title': '  動作確認 🧪  ',
             'description': '実際のMySQLでCRUDを確認', 'columnId': 1}, 201)
 path = f"/api/cards/{card['id']}"
+status_path = f"/api/cards/by-number/{card['number']}/status"
+assignee_path = f"/api/cards/by-number/{card['number']}/assignee"
+history_path = f"/api/cards/by-number/{card['number']}/history"
 try:
     assert isinstance(card['number'], int) and card['number'] > 0
     assert call('GET', f"/api/cards/by-number/{card['number']}")['id'] == card['id']
@@ -43,11 +46,9 @@ try:
     assert next(c for c in call('GET', '/api/board')['cards'] if c['id'] == card['id'])['prUrls'] == [pr_url, pr_url2]
     call('PATCH', path, {'prUrls': ['https://github.com.evil/a/b/pull/1'], 'title': 'must not change'}, 400)
     assert call('GET', path) == linked
-    history_path = f"/api/cards/by-number/{card['number']}/history"
     events = call('GET', history_path)['events']
     assert any(e['kind'] == 'created' for e in events)
     assert any(any(c['field'] == 'prUrls' and pr_url in c['after'] for c in e['changes']) for e in events)
-    status_path = f"/api/cards/by-number/{card['number']}/status"
     doing = next(c for c in board['columns'] if c['name'] == 'Doing')
     by_name = call('PATCH', status_path, {'status': 'Doing'})
     assert by_name['id'] == card['id'] and by_name['columnId'] == doing['id']
@@ -62,6 +63,16 @@ try:
     assert call('GET', history_path) == history_before
     call('PATCH', status_path, {'status': 'not-an-existing-status'}, 400)
     assert call('GET', path) == repeated
+    assigned = call('PATCH', assignee_path, {'assignee': 'cursor'})
+    assert assigned['assignee'] == 'Cursor' and assigned['id'] == card['id']
+    assert assigned['number'] == card['number'] and assigned['prUrls'] == [pr_url, pr_url2]
+    events = call('GET', history_path)['events']
+    assert any(any(c['field'] == 'assignee' and c['after'] == 'Cursor' for c in e['changes']) for e in events)
+    cleared = call('PATCH', assignee_path, {'assignee': ''})
+    assert cleared['assignee'] == ''
+    call('PATCH', assignee_path, {'assignee': 'x' * 61}, 400)
+    call('PATCH', assignee_path, {'assignee': 'a\nb'}, 400)
+    assert call('GET', path)['assignee'] == ''
     moved = call('PATCH', path, {'columnId': column['id']})
     assert moved['title'] == card['title'] and moved['description'] == card['description']
     assert moved['columnId'] == column['id']
@@ -76,11 +87,12 @@ try:
     unchanged = call('PATCH', path, {'columnId': column['id']})
     assert unchanged['columnId'] == column['id']
     assert call('PATCH', path, {'prUrls': []})['prUrls'] == []
-    print('PASS: PR links save/preserve/clear/invalid input; real MySQL CRUD, Unicode, partial update, status, duplicates, validation')
+    print('PASS: PR links save/preserve/clear/invalid input; real MySQL CRUD, Unicode, partial update, status, assignee, duplicates, validation')
 finally:
     call('DELETE', path, expected=204)
 call('GET', history_path, expected=404)
 call('GET', path, expected=404)
 call('PATCH', status_path, {'status': 'Done'}, expected=404)
+call('PATCH', assignee_path, {'assignee': 'Cursor'}, expected=404)
 call('GET', f"/api/cards/by-number/{card['number']}", expected=404)
 print('PASS: deletion and 404; sample appears exactly once')

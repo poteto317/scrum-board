@@ -13,6 +13,7 @@ const initial: Card = {
   position: 0,
   backlogPosition: 0,
   prUrls: [],
+  assignee: '',
   createdAt: '',
   updatedAt: '',
 };
@@ -194,6 +195,26 @@ describe('uncertain write failure', () => {
     responses[1].next(initial);
     responses[1].complete();
     expect(edit.hasChanges()).toBe(false);
+    TestBed.resetTestingModule();
+  });
+});
+
+describe('side field preservation', () => {
+  it('keeps a newer local assignee when a form flush response returns', () => {
+    const response = new Subject<Card>();
+    const api = {
+      updateCard: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(CardAutosave);
+    edit.reset(initial);
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    edit.applyAssigneeSave({ assignee: 'Cursor', updatedAt: '2026-11-14T12:00:00Z' });
+    response.next({ ...initial, title: '編集', assignee: '' });
+    response.complete();
+    expect(edit.card()?.assignee).toBe('Cursor');
+    expect(edit.card()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
 });

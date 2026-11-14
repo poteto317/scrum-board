@@ -9,6 +9,9 @@ import { errorMessage } from './api-error';
 
 const fields = ['title', 'description', 'columnId'] as const;
 type Field = (typeof fields)[number];
+/** Card fields updated outside the autosave form; prefer local on form flush. */
+const sideFields = ['prUrls', 'assignee'] as const;
+type SideField = (typeof sideFields)[number];
 
 // Provided by CardDetail: drafts and timers never survive a detail screen.
 @Injectable()
@@ -61,15 +64,26 @@ export class CardAutosave {
         { emitEvent: false },
       );
   }
-  /** Merge PR save response without touching form drafts (used by CardPrLinks). */
-  applyPrSave(updated: Pick<Card, 'prUrls' | 'updatedAt'>) {
+  /** Merge immediate side-field saves without touching form drafts. */
+  applySideSave(updated: Partial<Pick<Card, SideField | 'updatedAt'>>) {
     const card = this.card();
     if (!card) return;
-    this.card.set({
+    const next: Card = {
       ...card,
-      prUrls: [...(updated.prUrls ?? [])],
       updatedAt: updated.updatedAt || card.updatedAt,
-    });
+    };
+    for (const key of sideFields) {
+      if (updated[key] === undefined) continue;
+      if (key === 'prUrls') next.prUrls = [...(updated.prUrls ?? [])];
+      else next[key] = (updated[key] as string) ?? '';
+    }
+    this.card.set(next);
+  }
+  applyPrSave(updated: Pick<Card, 'prUrls' | 'updatedAt'>) {
+    this.applySideSave(updated);
+  }
+  applyAssigneeSave(updated: Pick<Card, 'assignee' | 'updatedAt'>) {
+    this.applySideSave(updated);
   }
   private value(field: Field) {
     const raw = this.form.controls[field].value;
@@ -146,13 +160,16 @@ export class CardAutosave {
               control.setValue(card[field], { emitEvent: false });
           }
         }
-        // Title/description/column patches must not clobber a newer prUrls list
-        // saved concurrently via CardPrLinks while this request was in flight.
+        // Form patches must not clobber side fields saved concurrently while in flight.
         const local = this.card();
-        this.card.set({
-          ...card,
-          prUrls: [...(local?.prUrls ?? card.prUrls ?? [])],
-        });
+        const merged: Card = { ...card, prUrls: [...(card.prUrls ?? [])] };
+        if (local) {
+          for (const key of sideFields) {
+            if (key === 'prUrls') merged.prUrls = [...(local.prUrls ?? [])];
+            else merged[key] = local[key];
+          }
+        }
+        this.card.set(merged);
       },
       error: (error) => {
         if (generation !== this.generation) return;

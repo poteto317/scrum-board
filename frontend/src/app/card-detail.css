@@ -174,6 +174,64 @@ h1 {
 .properties .form-error {
   overflow-wrap: anywhere;
 }
+.assignee-field {
+  margin: 18px 0 8px;
+}
+.assignee-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+  margin-bottom: 8px;
+}
+.assignee-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.assignee-chip {
+  border: 1px solid var(--line);
+  background: #f3f5ef;
+  color: #5a6456;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.assignee-chip.selected,
+.assignee-chip[data-assignee='cursor'].selected {
+  background: #dce8f5;
+  border-color: #7a9bb8;
+  color: #2f4f6a;
+}
+.assignee-chip[data-assignee='claude'].selected {
+  background: #efe4d6;
+  border-color: #b8926a;
+  color: #5a3d22;
+}
+.assignee-chip[data-assignee='codex'].selected {
+  background: #e2ebe3;
+  border-color: #6f9478;
+  color: #2f4f38;
+}
+.assignee-chip[data-assignee='antigravity'].selected {
+  background: #e8e2f0;
+  border-color: #8f7aa8;
+  color: #43345a;
+}
+.assignee-custom {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.assignee-custom input {
+  flex: 1;
+  min-width: 0;
+}
+.assignee-clear {
+  margin-top: 8px;
+}
 .pr-add {
   display: flex;
   gap: 8px;

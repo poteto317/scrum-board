@@ -67,6 +67,10 @@ func run() error {
 		err = repo.InitializeNumbers(migrationCtx)
 	}
 	if err == nil {
+		// Assignee column must exist before history baseline scans cardFields.
+		err = repo.InitializeAssignee(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeHistory(migrationCtx)
 	}
 	migrationCancel()

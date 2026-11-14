@@ -101,7 +101,7 @@ func (m *memoryRepo) CreateCard(_ context.Context, in CardInput) (Card, error) {
 	c := Card{
 		Number: m.next, ID: m.next, ColumnID: in.ColumnID,
 		Title: in.Title, Description: in.Description, PRURLs: urls,
-		Position: m.nextPosition(in.ColumnID), BacklogPosition: maxBacklog + 1,
+		Position: m.nextPosition(in.ColumnID), Assignee: in.Assignee, BacklogPosition: maxBacklog + 1,
 	}
 	m.next++
 	m.cards[c.ID] = c
@@ -136,6 +136,9 @@ func (m *memoryRepo) UpdateCard(ctx context.Context, id int64, p CardPatch) (Car
 		if c.PRURLs == nil {
 			c.PRURLs = []string{}
 		}
+	}
+	if p.Assignee != nil {
+		c.Assignee = *p.Assignee
 	}
 	m.cards[id] = c
 	return c, nil

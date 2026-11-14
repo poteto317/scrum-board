@@ -134,12 +134,14 @@ backend/
     http_transport.go  JSONの受け取り・ID解析・HTTP応答
     validation.go      タイトル・説明・列名の入力検証
     status_handler.go  タスク番号と列名による状態変更（PATCH /api/cards/by-number/{number}/status）
+    assignee*.go       対応者ラベルの正規化・専用PATCH・起動時マイグレーション
     repository.go      プレースホルダー付きSQL、更新トランザクション
     history*.go        変更履歴の追記・移行・ページング・復元
     refined*.go        AIで整えてTodoに起票するAPI（POST /api/cards/refined）とテスト
     numbering.go       タスク番号表の作成・既存カードの採番（API起動時に実行）
     handler_test.go    DBに依存しないAPIテスト
     status_handler_test.go         状態変更APIのDBに依存しないテスト
+    assignee_handler_test.go       対応者APIのDBに依存しないテスト
     numbering_integration_test.go  実MySQLの採番テスト（専用DBが無ければskip）
     status_integration_test.go     実MySQLの状態変更テスト（同上）
  database/init/        初期スキーマとサンプル（番号表はAPI起動時にGoが作成）
@@ -163,14 +165,15 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | --- | --- | --- |
 | GET | `/api/board` | `{columns: [...], cards: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
-| POST | `/api/cards` | `{title, description, columnId, prUrls?}`でカード追加 |
+| POST | `/api/cards` | `{title, description, columnId, prUrls?, assignee?}`でカード追加 |
 | PUT | `/api/cards/order` | `{columns:[{columnId, cardIds}]}`でカードの列内並べ替え・列間移動（[詳細](docs/api.md#カードの並び替え列間移動)） |
 | POST | `/api/cards/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてカードを起票する)） |
 | GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
 | GET | `/api/cards/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
 | GET | `/api/cards/by-number/{number}` | タスク番号によるカード詳細 |
 | PATCH | `/api/cards/by-number/{number}/status` | `{status}`（列名）でステータスだけ変更 |
-| PATCH | `/api/cards/{id}` | `{title?, description?, columnId?, prUrls?}`で部分更新 |
+| PATCH | `/api/cards/by-number/{number}/assignee` | `{assignee}`（対応者ラベル）だけ変更 |
+| PATCH | `/api/cards/{id}` | `{title?, description?, columnId?, prUrls?, assignee?}`で部分更新 |
 | DELETE | `/api/cards/{id}` | 削除（204） |
 | GET | `/api/health` | 起動確認 |
 

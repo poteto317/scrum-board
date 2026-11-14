@@ -51,6 +51,7 @@ func TestMySQLHistory(t *testing.T) {
 		{Field: "description", After: after.Description},
 		{Field: "status", After: status},
 		{Field: "prUrls", After: prURLsJSON(after.PRURLs)},
+		{Field: "assignee", After: after.Assignee},
 	}
 	if !reflect.DeepEqual(baseline.Changes, wantBaseline) || baseline.Note == "" || baseline.OccurredAt.Year() < 2020 || baseline.EvidenceURL != "" {
 		t.Fatalf("baseline content: %+v want %+v", baseline, wantBaseline)
@@ -483,7 +484,7 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 		t.Fatalf("changes: %+v", page.Events[0])
 	}
 	created := page.Events[1]
-	if created.Kind != "created" || len(created.Changes) != 4 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
+	if created.Kind != "created" || len(created.Changes) != 5 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
 		t.Fatalf("created event: %+v", created)
 	}
 }

@@ -19,6 +19,7 @@ import { CDK_DRAG_CONFIG, CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk
 import { filter, finalize } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
+import { assigneeKind } from './assignee';
 import {
   affectedColumnIds,
   applyCardDrop,
@@ -56,6 +57,7 @@ import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
   ],
 })
 export class Board implements OnInit {
+  readonly assigneeKind = assigneeKind;
   private readonly api = inject(Api);
   private readonly router = inject(Router);
   private readonly location = inject(Location);

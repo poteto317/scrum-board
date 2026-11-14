@@ -84,6 +84,59 @@
             }
           </select>
           <p class="field-note">ステータスを選ぶと自動保存され、<br />ボード上の列が変わります。</p>
+          <div class="assignee-field">
+            <span class="assignee-label" id="detail-assignee-label">対応</span>
+            <div
+              class="assignee-chips"
+              role="group"
+              aria-labelledby="detail-assignee-label"
+            >
+              @for (name of presets; track name) {
+                <button
+                  type="button"
+                  class="assignee-chip"
+                  [attr.data-assignee]="assigneeKind(name)"
+                  [class.selected]="card()!.assignee === name"
+                  [disabled]="assignee.saving() || !card()"
+                  (click)="assignee.selectPreset(name)"
+                >
+                  {{ name }}
+                </button>
+              }
+            </div>
+            <div class="assignee-custom">
+              <input
+                id="detail-assignee"
+                type="text"
+                [formControl]="assignee.draft"
+                maxlength="60"
+                placeholder="自由テキスト"
+                aria-labelledby="detail-assignee-label"
+                (keydown.enter)="$event.preventDefault(); assignee.applyDraft()"
+              />
+              <button
+                type="button"
+                class="secondary"
+                [disabled]="assignee.saving() || !card()"
+                (click)="assignee.applyDraft()"
+              >
+                適用
+              </button>
+            </div>
+            @if (card()!.assignee) {
+              <button
+                type="button"
+                class="secondary assignee-clear"
+                [disabled]="assignee.saving()"
+                (click)="assignee.clear()"
+              >
+                クリア
+              </button>
+              <p class="field-note">現在: {{ card()!.assignee }}</p>
+            } @else {
+              <p class="field-note">未設定。プリセットか自由テキストで設定できます。</p>
+            }
+          </div>
           <label for="detail-pr-url">GitHub PR <span class="optional">任意</span></label>
           <div class="pr-add">
             <input
@@ -163,7 +216,7 @@
             class="danger-link"
             type="button"
             (click)="confirmDelete.set(true)"
-            [disabled]="deleting() || autosave.saving()"
+            [disabled]="savingBusy()"
           >
             アイテムを削除</button
           ><a class="secondary" routerLink="/">ボードに戻る</a>
@@ -179,7 +232,7 @@
     class="modal-backdrop"
     aria-labelledby="delete-title"
     (cancel)="
-      $event.preventDefault(); !deleting() && !autosave.saving() && confirmDelete.set(false)
+      $event.preventDefault(); !savingBusy() && confirmDelete.set(false)
     "
   >
     <section class="modal">
@@ -189,13 +242,13 @@
         <button
           class="secondary"
           (click)="confirmDelete.set(false)"
-          [disabled]="deleting() || autosave.saving()"
+          [disabled]="savingBusy()"
         >
           キャンセル</button
         ><button
           class="danger-button"
           (click)="remove()"
-          [disabled]="deleting() || autosave.saving()"
+          [disabled]="savingBusy()"
         >
           {{ deleting() ? '削除中…' : '削除する' }}
         </button>

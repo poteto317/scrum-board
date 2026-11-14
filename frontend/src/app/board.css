@@ -262,14 +262,45 @@ h1 {
   padding-top: 12px;
   margin-top: 18px;
 }
+.card-footer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 70%;
+}
 .card-status {
   font-size: 10px;
-  max-width: 55%;
   overflow-wrap: anywhere;
   padding: 3px 6px;
   background: #edf0e9;
   border-radius: 4px;
   color: #727c6c;
+}
+.card-assignee {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #eceef0;
+  color: #5a6168;
+}
+.card-assignee[data-assignee='cursor'] {
+  background: #dce8f5;
+  color: #2f4f6a;
+}
+.card-assignee[data-assignee='claude'] {
+  background: #efe4d6;
+  color: #5a3d22;
+}
+.card-assignee[data-assignee='codex'] {
+  background: #e2ebe3;
+  color: #2f4f38;
+}
+.card-assignee[data-assignee='antigravity'] {
+  background: #e8e2f0;
+  color: #43345a;
 }
 .doing .card-status {
   color: #93712e;
