@@ -300,3 +300,105 @@ func TestDeleteCardMySQL(t *testing.T) {
 		t.Fatalf("history/number cascade: %d %v", rest, err)
 	}
 }
+
+// Deterministic form of the lock-order rule: while another transaction holds the all-columns lock, every card writer
+// must queue on it before it touches a card. Whether a bad interleaving crosses is a matter of timing (the stress
+// test above finds it only some of the time); whether a writer takes the column lock first is not.
+func TestCardWritersQueueOnTheAllColumnsLockMySQL(t *testing.T) {
+	ctx := context.Background()
+	three := int64(3)
+	writers := map[string]func(r MySQLRepository, a, b Card) error{
+		"CreateCard": func(r MySQLRepository, _, _ Card) error {
+			_, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "new"})
+			return err
+		},
+		"UpdateCard moving a card": func(r MySQLRepository, _, b Card) error {
+			_, err := r.UpdateCard(ctx, b.ID, CardPatch{ColumnID: &three})
+			return err
+		},
+		"DeleteCard": func(r MySQLRepository, _, b Card) error { return r.DeleteCard(ctx, b.ID) },
+		"ReorderCards": func(r MySQLRepository, _, _ Card) error {
+			_, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: reverseIDs(t, r, 1)}})
+			return err
+		},
+		"ImportHistory": func(r MySQLRepository, a, _ Card) error {
+			return r.ImportHistory(ctx, []HistoricalRecord{{Number: a.Number, CardID: a.ID, CreatedAt: a.CreatedAt, Key: "k", OccurredAt: a.CreatedAt, Note: "verified import"}})
+		},
+	}
+	for name, write := range writers {
+		t.Run(name, func(t *testing.T) {
+			// Every case starts from a freshly reset database so one writer's effect cannot break another's.
+			r, a, b := newOrderedBoard(t)
+			if err := r.InitializeHistory(ctx); err != nil {
+				t.Fatal(err)
+			}
+			holder, err := r.DB.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer holder.Rollback()
+			if _, err = lockColumnRows(ctx, holder); err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() { done <- write(r, a, b) }()
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				select {
+				case err := <-done:
+					t.Fatalf("%s finished (err=%v) while the all-columns lock was held: it does not queue on the lock first", name, err)
+				default:
+				}
+				var status string
+				var waits int
+				if err = r.DB.QueryRow("SHOW GLOBAL STATUS LIKE 'Innodb_row_lock_current_waits'").Scan(&status, &waits); err != nil {
+					t.Fatal(err)
+				}
+				if waits >= 1 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("%s never waited on a row lock", name)
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			// Queued on the column lock means holding no card yet: every card row can still be locked by someone else.
+			// (A writer that locked cards first and only then hit the column lock, for example through the foreign
+			// key check, is exactly the order that crosses other writers.)
+			probe, err := r.DB.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = probe.ExecContext(ctx, "SELECT id FROM cards FOR UPDATE NOWAIT"); err != nil {
+				probe.Rollback()
+				t.Fatalf("%s holds a card lock while it waits for the all-columns lock: %v", name, err)
+			}
+			probe.Rollback()
+			// Still queued: releasing the lock lets it finish.
+			select {
+			case err := <-done:
+				t.Fatalf("%s finished (err=%v) before the all-columns lock was released", name, err)
+			default:
+			}
+			holder.Rollback()
+			if err = <-done; err != nil {
+				t.Fatalf("%s after the lock was released: %v", name, err)
+			}
+		})
+	}
+}
+
+// reverseIDs returns the ids of one column in the reverse of its current order.
+func reverseIDs(t *testing.T, r MySQLRepository, column int64) []int64 {
+	t.Helper()
+	board, err := r.Board(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cards := cardsInColumn(board.Cards, column)
+	ids := make([]int64, 0, len(cards))
+	for i := len(cards) - 1; i >= 0; i-- {
+		ids = append(ids, cards[i].ID)
+	}
+	return ids
+}
