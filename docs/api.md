@@ -258,3 +258,66 @@ curl --fail-with-body --request PUT \
 - HTTP 400: `cardIds` 未指定・`null`・空配列、0以下のID、重複ID、不正JSON、未知のフィールド。
 - HTTP 409: DBに存在するカードの集合と一致しない場合（不足または存在しないカードIDの指定）。
 - HTTP 500: DB更新に失敗した場合（トランザクションはロールバックされます）。
+
+# コマンドテンプレート
+
+ボードとカード詳細から、登録済みのコマンド文字列をワンクリックでクリップボードへ入れるためのテンプレートです。カード JSON とボード JSON には含めません。一覧は次の GET だけで取ります。
+
+サーバーは `name` と `template` を UTF-8 文字列として保存するだけです。シェル、`eval`、`Function` には渡しません。`{{url}}` の置換もしません。置換はクライアントがコピー直前に行う文字列置換だけです。対象はリテラル `{{url}}`（大文字小文字を区別）で、カード詳細の絶対 URL（`origin + /cards/{number}`）に置き換えます。他の `{{…}}` はそのまま残します。
+
+## 一覧
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/command-templates
+```
+
+成功時は HTTP 200 で `{"templates":[...]}` です。各要素は `id`、`name`、`template`、`position` です。並びは `position` 昇順、同値は `id` 昇順です。0 件のときは `{"templates":[]}` です。
+
+## 作成
+
+```sh
+curl --fail-with-body --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"name":"gh","template":"gh pr view {{url}}"}' \
+  http://127.0.0.1:4200/api/command-templates
+```
+
+- 成功時は HTTP 201 と作成行（`id`、`name`、`template`、`position`）です。
+- `position` は現在の末尾（最大 `position + 1`。0 件のときは 0）です。
+- 本文の `{{url}}` は置換せず、送った文字列のまま保存します。
+
+## 更新
+
+`name` と `template` の少なくとも一方を送ります。省略した方は変わりません。
+
+```sh
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"name":"gh pr"}' \
+  http://127.0.0.1:4200/api/command-templates/1
+```
+
+成功時は HTTP 200 と更新後の行です。
+
+## 削除
+
+```sh
+curl --fail-with-body --request DELETE \
+  http://127.0.0.1:4200/api/command-templates/1
+```
+
+成功時は HTTP 204 で本文はありません。
+
+## 制約
+
+- `name` と `template` は JSON 文字列だけです。`null`、数値、配列、オブジェクトは 400 です。未知フィールド、不正な JSON、JSON を 2 つ続けた送信も 400（`入力を確認してください。有効なJSONが必要です。` または `JSONは1つだけ送信してください。`）です。
+- `name` は前後の空白を除去します。除去後に空、または 60 Unicode 文字を超えると 400 です。メッセージは `名前は1〜60文字で、制御文字を含めず入力してください。` です。
+- `template` は前後空白を保持します。空、または 2000 Unicode 文字を超えると 400 です。メッセージは `テンプレートは1〜2000文字で、制御文字を含めず入力してください。` です。LF/TAB等の制御文字は400です。
+- `unicode.IsControl` に当たる rune（NUL、CR、LF、TAB など）を含む値は 400 です。
+- 全体で最大 50 件です。51 件目の作成は 400 で `{"message":"コマンドテンプレートは50件までです。"}` です。
+- PATCH で `name` も `template` も無い（`{}`）ときは 400 で `name か template を指定してください。` です。どちらかが `null` の PATCH も 400 です。送った方だけを検証し、もう一方は保持します。
+- 存在しない id の PATCH と DELETE は 404 で `テンプレートが見つかりません。` です。id が 0 以下、または整数でないときは 400 で `テンプレートIDが不正です。` です。
+- 保存はプレースホルダクエリだけです。テンプレート本文を SQL へ連結しません。エラー応答とログにテンプレート全文は出しません。
+- HTTP 500 は `処理に失敗しました。時間をおいて再試行してください。` です。
+
+Go へ直接アクセスする場合はポート 8080 でも同じパスです。Docker の公開ポートを変えた場合は URL も合わせてください。

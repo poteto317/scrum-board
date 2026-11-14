@@ -23,13 +23,17 @@ import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
 import { CardAssignee } from './card-assignee';
 import { CardAutosave } from './card-autosave';
 import { CardPrLinks } from './card-pr-links';
+import { COMMAND_MENU_EMPTY } from './command-template';
+import { CommandTemplatesSession } from './command-templates-session';
+import { CopyCommandFeedback } from './copy-command-feedback';
 import { CopyLinkFeedback } from './copy-link-feedback';
+import { LatestCopyFeedback } from './latest-copy-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 
 @Component({
   selector: 'app-card-detail',
   imports: [ReactiveFormsModule, RouterLink, DatePipe, Modal, CardHistory],
-  providers: [CardAutosave, CardPrLinks, CardAssignee],
+  providers: [CardAutosave, CardPrLinks, CardAssignee, CommandTemplatesSession],
   templateUrl: './card-detail.html',
   styleUrl: './card-detail.css',
 })
@@ -44,6 +48,7 @@ export class CardDetail implements OnInit {
   readonly autosave = inject(CardAutosave);
   readonly prLinks = inject(CardPrLinks);
   readonly assignee = inject(CardAssignee);
+  readonly commands = inject(CommandTemplatesSession);
   readonly presets = ASSIGNEE_PRESETS;
   readonly assigneeKind = assigneeKind;
   readonly card = this.autosave.card;
@@ -54,8 +59,16 @@ export class CardDetail implements OnInit {
   readonly error = signal('');
   readonly confirmDelete = signal(false);
   private readonly routeNumber = signal(0);
-  private readonly linkCopy = new CopyLinkFeedback(this.destroyRef);
+  private readonly copyStatus = new LatestCopyFeedback(this.destroyRef);
+  private readonly linkCopy = new CopyLinkFeedback(this.destroyRef, this.copyStatus);
+  private readonly commandCopy = new CopyCommandFeedback(this.destroyRef, this.copyStatus);
   readonly copyLinkFeedback = this.linkCopy.message;
+  readonly copyCommandFeedback = this.commandCopy.message;
+  readonly copyFeedback = this.copyStatus.message;
+  readonly commandMenuEmpty = COMMAND_MENU_EMPTY;
+  readonly commandUrlHelp = '{{url}} はこのカードのリンクに置き換わります。';
+  readonly commandMenuOpen = signal(false);
+  readonly managingCommands = signal(false);
   private deleted = false;
 
   constructor() {
@@ -80,6 +93,7 @@ export class CardDetail implements OnInit {
   }
 
   ngOnInit() {
+    this.commands.load();
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       this.routeNumber.set(Number(params.get('number')));
     });
@@ -149,12 +163,16 @@ export class CardDetail implements OnInit {
   }
   /** Saving in flight (excludes delete confirmation UI). */
   savingBusy() {
-    return this.autosave.saving() || this.prLinks.saving() || this.assignee.saving() || this.deleting();
+    return (
+      this.autosave.saving() || this.prLinks.saving() || this.assignee.saving() || this.deleting()
+    );
   }
   async canLeave(): Promise<boolean> {
     if (this.deleted) return true;
     if (this.prLinks.saving() || this.assignee.saving()) {
-      return window.confirm('保存中です。移動すると保存が中断される可能性があります。移動しますか？');
+      return window.confirm(
+        '保存中です。移動すると保存が中断される可能性があります。移動しますか？',
+      );
     }
     if (!this.autosave.hasChanges()) return true;
     if (await this.autosave.settle()) return true;
@@ -203,5 +221,45 @@ export class CardDetail implements OnInit {
           this.error.set(errorMessage(error));
         },
       });
+  }
+
+  toggleCommandMenu(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.commandMenuOpen.update((open) => !open);
+  }
+
+  copyCommand(templateText: string, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const current = this.card();
+    if (!current) return;
+    this.commandMenuOpen.set(false);
+    return this.commandCopy.copyResolved(templateText, current.number);
+  }
+
+  openCommandManager() {
+    this.commandMenuOpen.set(false);
+    this.commands.adminMessage.set('');
+    this.commands.cancelEdit();
+    this.managingCommands.set(true);
+  }
+
+  closeCommandManager() {
+    if (this.commands.saving()) return;
+    this.managingCommands.set(false);
+    this.commands.cancelEdit();
+  }
+
+  @HostListener('document:click', ['$event'])
+  closeCommandMenuFromPointer(event: Event) {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.copy-command')) return;
+    this.commandMenuOpen.set(false);
+  }
+
+  @HostListener('document:keydown.escape')
+  closeCommandMenuFromKeyboard() {
+    this.commandMenuOpen.set(false);
   }
 }

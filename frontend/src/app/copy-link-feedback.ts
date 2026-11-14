@@ -1,5 +1,6 @@
 import { DestroyRef, signal } from '@angular/core';
 import { cardDetailUrl, copyText } from './card-link';
+import { LatestCopyFeedback } from './latest-copy-feedback';
 
 export const COPY_LINK_SUCCESS = 'リンクをコピーしました';
 export const COPY_LINK_FAILURE = 'リンクをコピーできませんでした';
@@ -14,7 +15,10 @@ export class CopyLinkFeedback {
   private clearTimer?: ReturnType<typeof setTimeout>;
   private destroyed = false;
 
-  constructor(destroyRef: DestroyRef) {
+  constructor(
+    destroyRef: DestroyRef,
+    private readonly latest?: LatestCopyFeedback,
+  ) {
     destroyRef.onDestroy(() => {
       this.destroyed = true;
       if (this.clearTimer) clearTimeout(this.clearTimer);
@@ -24,7 +28,9 @@ export class CopyLinkFeedback {
   async copyCardNumber(number: number, origin = window.location.origin): Promise<void> {
     const ok = await copyText(cardDetailUrl(origin, number));
     if (this.destroyed) return;
-    this._message.set(ok ? COPY_LINK_SUCCESS : COPY_LINK_FAILURE);
+    const message = ok ? COPY_LINK_SUCCESS : COPY_LINK_FAILURE;
+    this._message.set(message);
+    this.latest?.publish(message);
     if (this.clearTimer) clearTimeout(this.clearTimer);
     this.clearTimer = setTimeout(() => {
       if (this.destroyed) return;

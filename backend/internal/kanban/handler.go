@@ -42,6 +42,10 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("PATCH /api/cards/by-number/{number}/status", h.changeStatusByNumber)
 	mux.HandleFunc("PATCH /api/cards/by-number/{number}/assignee", h.changeAssigneeByNumber)
 	mux.HandleFunc("DELETE /api/cards/{id}", h.deleteCard)
+	mux.HandleFunc("GET /api/command-templates", h.listCommandTemplates)
+	mux.HandleFunc("POST /api/command-templates", h.createCommandTemplate)
+	mux.HandleFunc("PATCH /api/command-templates/{id}", h.updateCommandTemplate)
+	mux.HandleFunc("DELETE /api/command-templates/{id}", h.deleteCommandTemplate)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
