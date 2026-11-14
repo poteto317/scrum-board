@@ -9,7 +9,7 @@
 - フロントエンドの `board.html` で `<article class="task-card" cdkDrag>` の先頭子要素として `<button type="button" class="card-drag-handle" cdkDragHandle>` を追加し、`.copy-card-link`（`<button>`）・`.task-card-body`（`<a>`）と兄弟関係で並べる（`L-494`, `L-761`, `L-785`）。
 - `@angular/cdk/drag-drop` の `CdkDragHandle` により、ポインターイベントの `target` が `.card-drag-handle`（または内側の `<span>⋮⋮</span>`）のときのみドラッグを開始し、`.task-card`・`.task-card-body`・`.copy-card-link` からのドラッグ開始を抑止する。
 - 上下矢印キー（`onCardKeydown`）・操作説明（`aria-describedby="card-drag-help"`）・移動後のフォーカス復元（`focusCardAfterRender`）を `.card-drag-handle` に集約する（`L-154`, `L-157`, `L-762`, `L-785`）。
-- `angular.json` の `anyComponentStyle` 予算（warning 6kB / error 8kB）を守るため、ドラッグハンドルの共通スタイルを `frontend/src/styles.css`（`.column-drag-handle, .card-drag-handle`）に配置し、`board.css` で `.task-card` を `display: flex; align-items: stretch;`、`.card-drag-handle` を `align-self: center; margin-left: 6px;` とすることでカード左端の上下中央に常時配置する（`L-412`, `L-498`, `L-784`）。
+- `angular.json` の `anyComponentStyle` 予算（warning 6kB / error 8kB）を守るため、ドラッグハンドルの共通スタイルと `.task-card`（`display: flex; align-items: stretch;`）・`.card-drag-handle`（`align-self: center; margin-left: 6px;`）を `frontend/src/styles.css` に配置し、カード左端の上下中央に常時配置する（`L-412`, `L-498`, `L-784`）。
 - **注意:** `feature` スキル実行中は `git commit` を行わない（後続の `commit-ja` でまとめてコミットする）。
 
 **Tech Stack:** Angular 21 (`@angular/cdk/drag-drop`), TypeScript 5.9, Vitest
@@ -34,7 +34,7 @@
 ```html
     <p id="card-drag-help" class="sr-only">
       @if (canReorderCards()) {
-        左端のハンドルをドラッグして別の位置やステータスへ移動できます。ハンドルで上下矢印キーを押すと列内を移動できます。
+        左端のハンドルをドラッグして別の位置やステータスへ移動できます。ハンドルで上下矢印キーを押すと列内を移動できます。キーボードだけで別ステータスへ移す場合は、カードを開いてステータスを変更してください。
       } @else {
         保存中などのため、いまはカードを移動できません。
       }
@@ -134,7 +134,7 @@
     <footer class="board-footer">
       <span
         ><span class="tip-icon" aria-hidden="true">i</span>
-        列の見出しやカード左端のハンドルをドラッグ（または矢印キー）すると並び替えられます。</span
+        列の見出しはドラッグまたは左右矢印キー、カード左端のハンドルはドラッグまたは上下矢印キーで並び替えられます。</span
       ><span class="footer-note">少しずつ、よりよいチームへ。</span>
     </footer>
 ```
