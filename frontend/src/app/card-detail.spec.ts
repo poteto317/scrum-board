@@ -11,6 +11,7 @@ const card: Card = {
   columnId: 1,
   title: '学習',
   description: '元の説明',
+  backlogPosition: 0,
   prUrl: '',
   createdAt: '',
   updatedAt: '',

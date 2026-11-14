@@ -27,6 +27,8 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/board", h.board)
+	mux.HandleFunc("GET /api/backlog", h.backlog)
+	mux.HandleFunc("PUT /api/backlog/order", h.reorderBacklog)
 	mux.HandleFunc("GET /api/cards/by-number/{number}/history", h.history)
 	mux.HandleFunc("POST /api/columns", h.createColumn)
 	mux.HandleFunc("PUT /api/columns/order", h.reorderColumns)
@@ -43,6 +45,34 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 		mux.ServeHTTP(w, r)
 	})
 }
+func (h handler) backlog(w http.ResponseWriter, r *http.Request) {
+	cards, e := h.repo.Backlog(r.Context())
+	if e != nil {
+		fail(w, e)
+		return
+	}
+	reply(w, 200, map[string][]Card{"cards": cards})
+}
+
+func (h handler) reorderBacklog(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		CardIDs []int64 `json:"cardIds"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if err := validateBacklogOrder(in.CardIDs); err != nil {
+		fail(w, err)
+		return
+	}
+	cards, err := h.repo.ReorderBacklog(r.Context(), in.CardIDs)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, 200, map[string][]Card{"cards": cards})
+}
+
 func (h handler) board(w http.ResponseWriter, r *http.Request) {
 	b, e := h.repo.Board(r.Context())
 	if e != nil {

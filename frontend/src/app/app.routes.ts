@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import type { CardDetail } from './card-detail';
 export const routes: Routes = [
   { path: '', loadComponent: () => import('./board').then((m) => m.Board) },
+  { path: 'backlog', loadComponent: () => import('./backlog').then((m) => m.Backlog) },
   {
     path: 'cards/:number',
     loadComponent: () => import('./card-detail').then((m) => m.CardDetail),

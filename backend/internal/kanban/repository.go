@@ -31,11 +31,11 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Card, error) {
 	var c Card
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.CreatedAt, &c.UpdatedAt, &c.PRURL)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.BacklogPosition, &c.CreatedAt, &c.UpdatedAt, &c.PRURL)
 	return c, dbError(err)
 }
 
-const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.created_at, c.updated_at, COALESCE(p.pr_url,'')"
+const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.backlog_position, c.created_at, c.updated_at, COALESCE(p.pr_url,'')"
 const numberedCards = " FROM cards c JOIN card_numbers n ON n.card_id=c.id LEFT JOIN card_pr_links p ON p.card_id=c.id"
 
 func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
@@ -84,7 +84,11 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if err != nil {
 		return Card{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO cards(column_id,title,description) VALUES(?,?,?)", in.ColumnID, in.Title, in.Description)
+	nextBacklog, err := nextBacklogPosition(ctx, tx)
+	if err != nil {
+		return Card{}, err
+	}
+	result, err := tx.ExecContext(ctx, "INSERT INTO cards(column_id,title,description,backlog_position) VALUES(?,?,?,?)", in.ColumnID, in.Title, in.Description, nextBacklog)
 	if err != nil {
 		return Card{}, dbError(err)
 	}
