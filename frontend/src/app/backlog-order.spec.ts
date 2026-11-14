@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  computeAutoScrollDelta,
-  computeDropSlot,
-  moveCard,
-  targetIndex,
-} from './backlog-order';
+import { computeAutoScrollDelta, computeDropSlot, moveCard, targetIndex } from './backlog-order';
 import { Card } from './models';
 
 const cards: Card[] = [

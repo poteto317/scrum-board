@@ -8,7 +8,12 @@
       <h1>優先順位リスト<span class="heading-dot">.</span></h1>
       <p>全ステータスのカードを上から優先度順に並べます。</p>
     </div>
-    <button class="primary" type="button" (click)="openCard()" [disabled]="loading() || reordering()">
+    <button
+      class="primary"
+      type="button"
+      (click)="openCard()"
+      [disabled]="loading() || reordering() || saving() || !!error() || columns().length === 0"
+    >
       アイテムを追加
     </button>
   </div>
@@ -44,7 +49,9 @@
       (drop)="onListDrop($event)"
     >
       @if (cards().length === 0) {
-        <div class="state-panel empty">まだアイテムがありません。「アイテムを追加」から始めましょう。</div>
+        <div class="state-panel empty">
+          まだアイテムがありません。「アイテムを追加」から始めましょう。
+        </div>
       } @else {
         <ul class="backlog-list" #listContainer role="list">
           @for (card of cards(); track card.id; let i = $index) {
@@ -77,7 +84,10 @@
                 <span class="backlog-number">TASK-{{ card.number }}</span>
                 <span class="backlog-title">{{ card.title }}</span>
                 <span class="backlog-status">{{ statusName(card.columnId) }}</span>
-                <a class="backlog-detail-link" [routerLink]="['/cards', card.number]" draggable="false"
+                <a
+                  class="backlog-detail-link"
+                  [routerLink]="['/cards', card.number]"
+                  draggable="false"
                   >詳細</a
                 >
               </div>

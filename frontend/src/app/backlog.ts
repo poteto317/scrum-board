@@ -16,12 +16,7 @@ import { RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
-import {
-  computeAutoScrollDelta,
-  computeDropSlot,
-  moveCard,
-  targetIndex,
-} from './backlog-order';
+import { computeAutoScrollDelta, computeDropSlot, moveCard, targetIndex } from './backlog-order';
 import { textLimit } from './form-validation';
 import { Card, Column } from './models';
 
@@ -95,7 +90,15 @@ export class Backlog implements OnInit {
   }
 
   openCard() {
-    if (this.reordering()) return;
+    if (
+      this.loading() ||
+      this.reordering() ||
+      this.saving() ||
+      this.error() ||
+      this.columns().length === 0
+    ) {
+      return;
+    }
     const todoId = this.columns().find((c) => c.name === 'Todo')?.id ?? this.columns()[0]?.id ?? 0;
     this.cardForm.reset({ title: '', description: '', columnId: todoId });
     this.formError.set('');
@@ -259,9 +262,7 @@ export class Backlog implements OnInit {
       .subscribe({
         next: (res) => {
           this.cards.set(res.cards);
-          this.reorderAnnouncement.set(
-            `TASK-${moved.number} を${toIndex + 1}番目に移動しました`,
-          );
+          this.reorderAnnouncement.set(`TASK-${moved.number} を${toIndex + 1}番目に移動しました`);
           restoreFocus();
         },
         error: (e) => {

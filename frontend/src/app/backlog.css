@@ -126,7 +126,6 @@ h1 {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  cursor: grab;
 }
 .backlog-drag-zone[draggable='true']:active {
   cursor: grabbing;
@@ -148,6 +147,10 @@ h1 {
 .backlog-drag-handle:hover {
   background: #eef1ea;
   color: var(--ink);
+}
+.backlog-drag-handle[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.45;
 }
 .backlog-rank {
   font-size: 12px;
