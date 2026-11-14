@@ -78,6 +78,7 @@ describe('Board task numbers', () => {
     expect(link.getAttribute('aria-label')).toBeNull();
     const helpId = link.getAttribute('aria-describedby') as string;
     expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ドラッグ');
+    expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ステータス');
   });
 });
 

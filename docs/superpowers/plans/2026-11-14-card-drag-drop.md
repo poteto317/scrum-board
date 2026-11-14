@@ -122,12 +122,12 @@
 **Interfaces:**
 - Produces:
   - `Api.reorderCards(columns: { columnId: number; cardIds: number[] }[])`
-  - `applyCardDrop(...)`, `buildCardOrderPayload(...)`, `dragExceededThreshold(dx, dy, threshold=8)` 等の純粋関数（`card-order.ts`）
-  - Board: `cdkDropList` 接続、閾値クリック、楽観更新、既存 `reorderError` 共用または同等バナー
+  - `applyCardDrop(...)`, `buildCardOrderPayload(...)`, `dropListIdForColumn` / `columnIdFromDropListId` / `affectedColumnIds` 等の純粋関数と定数 `CARD_DRAG_THRESHOLD_PX = 8`（`card-order.ts`）。クリックとドラッグの判別は CDK の `dragStartThreshold` に任せ、自前の閾値判定関数は持たない
+  - Board: `cdkDropList` 接続、カードは `<a href>`（クリック遷移）、楽観更新、既存 `reorderError` 共用または同等バナー
 
 - [ ] **Step 1:** `npm install @angular/cdk@^21.2.0`（frontend ディレクトリ）
 
-- [ ] **Step 2: RED** — `card-order.spec.ts`: 閾値判定、ドロップ後の cards 配列更新（同一列・列間）、no-op、ペイロード組み立て（影響列のみ）、インデックス範囲外ガード（`L-541`）
+- [ ] **Step 2: RED** — `card-order.spec.ts`: ドロップ先リスト ID の組み立て・解析、ドロップ後の cards 配列更新（同一列・列間）、no-op、ペイロード組み立て（影響列のみ）、インデックス範囲外ガード（`L-541`）
 
 - [ ] **Step 3: GREEN** — `card-order.ts` 実装
 
@@ -138,15 +138,15 @@
 - [ ] **Step 6:** `board` UI:
   - imports に `DragDropModule` または `CdkDropList` / `CdkDrag` 単体 import（Angular 21 の standalone に合わせる）
   - 各列 `.card-list` を `cdkDropList` + `cdkDropListData` + 全列 `cdkDropListConnectedTo`
-  - カード: ルートを `div.task-card` + `cdkDrag` + `(click)` で閾値未超過時のみ `Router.navigate(['/cards', number])` に統一（`<a>` のデフォルト遷移と衝突させない）。`tabindex="0"`、`ArrowUp`/`ArrowDown` で同一列移動
+  - カード: ルートは `<a class="task-card" [attr.href]>` + `cdkDrag`（`routerLink` は付けない。`<a>` はもともとフォーカス可能なので `tabindex` も不要）。`(click)` は修飾キー付き・primary 以外をブラウザー既定に任せ、それ以外は `preventDefault()` + `Router.navigate(['/cards', number])`。ドラッグか click かは CDK の `dragStartThreshold`（`CARD_DRAG_THRESHOLD_PX`）に任せる。`ArrowUp`/`ArrowDown`（修飾キーなし）で同一列移動
   - 空列: `@empty` のプレースホルダを残しつつドロップ可能な最小高さを確保（空でも `cdkDropList` が有効）
   - `cdkDropListDropped` → 純粋関数で next cards → 楽観更新 → `reorderCards` → 成功で全 cards 置換 / 失敗でロールバック＋バナー（列 DnD と同じ `reordering` / `reorderError` / `reorderConflict` を共用して二重送信抑止）
-  - 保存中はカード DnD・列 DnD・列追加を抑止。キーボード移動コントロールは `[disabled]` ではなく `aria-disabled`、結果は既存 `aria-live`（`reorderAnnouncement`）へ
+  - 保存中はカード DnD・列 DnD・列追加を抑止。カードのリンクには `aria-disabled` を付けず（遷移はできる）、並べ替え不可の間は `aria-describedby` の説明文を切り替える。キーボード移動の結果は既存 `aria-live`（`reorderAnnouncement`）へ
   - 端での横スクロール追従（`L-680`）をカードドラッグ中も有効化。列内が縦に長い場合は列の `.card-list`（または列スクロール親）の縦自動スクロールも有効にする（CDK `autoScrollStep` / scrollable parents）
 
 - [ ] **Step 7: RED/GREEN** — `board.spec.ts`:
   - 同一列・列間ドロップ、no-op で API 非送信
-  - 8px 未満クリック相当で navigate、超過で非遷移
+  - 通常クリックで navigate、修飾キー付き・primary 以外のクリックはブラウザー既定（アプリは navigate しない）
   - 500/409 ロールバックとバナー
   - 空列ドロップ
   - 列ヘッダー DnD がカード操作で誤発火しないこと（回帰）
