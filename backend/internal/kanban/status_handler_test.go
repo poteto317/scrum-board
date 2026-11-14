@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -12,8 +13,8 @@ import (
 func statusRepo() *memoryRepo {
 	r := fresh()
 	r.columns = append(r.columns, Column{ID: 4, Name: "レビュー待ち"}, Column{ID: 5, Name: strings.Repeat("あ", 60)})
-	r.cards[22] = Card{ID: 22, Number: 7, ColumnID: 1, Title: "keep title", Description: "keep description", CreatedAt: time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)}
-	r.cards[7] = Card{ID: 7, Number: 22, ColumnID: 1, Title: "other card"}
+	r.cards[22] = Card{ID: 22, Number: 7, ColumnID: 1, Title: "keep title", Description: "keep description", PRURLs: []string{}, CreatedAt: time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)}
+	r.cards[7] = Card{ID: 7, Number: 22, ColumnID: 1, Title: "other card", PRURLs: []string{}}
 	return r
 }
 func TestStatusChangeByNumber(t *testing.T) {
@@ -37,7 +38,7 @@ func TestStatusChangeByNumber(t *testing.T) {
 		if c.ID != 22 || c.Number != 7 || c.ColumnID != tc.columnID || c.Title != original.Title || c.Description != original.Description || c.CreatedAt != original.CreatedAt {
 			t.Fatalf("wrong update %+v", c)
 		}
-		if r.cards[7] != other || len(r.cards) != 2 || r.next != 1 {
+		if !reflect.DeepEqual(r.cards[7], other) || len(r.cards) != 2 || r.next != 1 {
 			t.Fatal("unrelated card or sequence changed")
 		}
 	}
@@ -62,7 +63,7 @@ func TestStatusInvalidInputDoesNotUpdate(t *testing.T) {
 			if w.Code != tc.status {
 				t.Fatalf("%d %s", w.Code, w.Body)
 			}
-			if r.cards[22] != before {
+			if !reflect.DeepEqual(r.cards[22], before) {
 				t.Fatal("invalid request modified card")
 			}
 		})
@@ -110,7 +111,7 @@ func TestStatusStorageFailures(t *testing.T) {
 			if w.Code != 500 || strings.Contains(w.Body.String(), internal.Error()) {
 				t.Fatalf("unsafe failure %d %s", w.Code, w.Body)
 			}
-			if r.cards[22] != before {
+			if !reflect.DeepEqual(r.cards[22], before) {
 				t.Fatal("failed request modified card")
 			}
 		})

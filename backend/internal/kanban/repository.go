@@ -31,12 +31,30 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Card, error) {
 	var c Card
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.BacklogPosition, &c.CreatedAt, &c.UpdatedAt, &c.PRURL)
-	return c, dbError(err)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.BacklogPosition, &c.CreatedAt, &c.UpdatedAt)
+	if err != nil {
+		return c, dbError(err)
+	}
+	c.PRURLs = []string{}
+	return c, nil
 }
 
-const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.backlog_position, c.created_at, c.updated_at, COALESCE(p.pr_url,'')"
-const numberedCards = " FROM cards c JOIN card_numbers n ON n.card_id=c.id LEFT JOIN card_pr_links p ON p.card_id=c.id"
+const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.backlog_position, c.created_at, c.updated_at"
+const numberedCards = " FROM cards c JOIN card_numbers n ON n.card_id=c.id"
+
+func loadCard(ctx context.Context, q interface {
+	queryable
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, query string, args ...any) (Card, error) {
+	c, err := scanCard(q.QueryRowContext(ctx, query, args...))
+	if err != nil {
+		return c, err
+	}
+	if err = attachPRURL(ctx, q, &c); err != nil {
+		return c, err
+	}
+	return c, nil
+}
 
 func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	b := Board{Columns: []Column{}, Cards: []Card{}}
@@ -66,13 +84,16 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 		return b, err
 	}
 	rows.Close()
+	if err = attachPRURLs(ctx, tx, b.Cards); err != nil {
+		return b, err
+	}
 	return b, tx.Commit()
 }
 func (r MySQLRepository) GetCard(ctx context.Context, id int64) (Card, error) {
-	return scanCard(r.DB.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 }
 func (r MySQLRepository) GetCardByNumber(ctx context.Context, number int64) (Card, error) {
-	return scanCard(r.DB.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE n.task_number=?", number))
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.task_number=?", number)
 }
 func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -102,12 +123,10 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if _, err = tx.ExecContext(ctx, "UPDATE card_number_sequence SET next_number=? WHERE singleton=1", number+1); err != nil {
 		return Card{}, err
 	}
-	if in.PRURL != "" {
-		if _, err = tx.ExecContext(ctx, "INSERT INTO card_pr_links(card_id,pr_url) VALUES(?,?)", id, in.PRURL); err != nil {
-			return Card{}, err
-		}
+	if err = replacePRURLs(ctx, tx, id, in.PRURLs); err != nil {
+		return Card{}, err
 	}
-	card, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
+	card, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 	if err != nil {
 		return Card{}, err
 	}
@@ -128,7 +147,7 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	if err = tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
 		return Card{}, dbError(err)
 	}
-	c, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
+	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 	if err != nil {
 		return c, err
 	}
@@ -146,12 +165,12 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	if err != nil {
 		return Card{}, dbError(err)
 	}
-	if p.PRURL != nil {
-		if _, err = tx.ExecContext(ctx, "INSERT INTO card_pr_links(card_id,pr_url) VALUES(?,?) ON DUPLICATE KEY UPDATE pr_url=?", id, *p.PRURL, *p.PRURL); err != nil {
+	if p.PRURLs != nil {
+		if err = replacePRURLs(ctx, tx, id, *p.PRURLs); err != nil {
 			return Card{}, err
 		}
 	}
-	c, err = scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
+	c, err = loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 	if err != nil {
 		return c, err
 	}

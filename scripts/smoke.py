@@ -37,15 +37,16 @@ try:
     assert call('GET', f"/api/cards/by-number/{card['number']}")['id'] == card['id']
     assert card['title'] == '動作確認 🧪'
     pr_url = 'https://github.com/poteto317/scrum-board/pull/2'
-    linked = call('PATCH', path, {'prUrl': '  ' + pr_url + '  '})
-    assert linked['prUrl'] == pr_url
-    assert next(c for c in call('GET', '/api/board')['cards'] if c['id'] == card['id'])['prUrl'] == pr_url
-    call('PATCH', path, {'prUrl': 'https://github.com.evil/a/b/pull/1', 'title': 'must not change'}, 400)
+    pr_url2 = 'https://github.com/poteto317/scrum-board/pull/3'
+    linked = call('PATCH', path, {'prUrls': ['  ' + pr_url + '  ', pr_url2]})
+    assert linked['prUrls'] == [pr_url, pr_url2]
+    assert next(c for c in call('GET', '/api/board')['cards'] if c['id'] == card['id'])['prUrls'] == [pr_url, pr_url2]
+    call('PATCH', path, {'prUrls': ['https://github.com.evil/a/b/pull/1'], 'title': 'must not change'}, 400)
     assert call('GET', path) == linked
     history_path = f"/api/cards/by-number/{card['number']}/history"
     events = call('GET', history_path)['events']
     assert any(e['kind'] == 'created' for e in events)
-    assert any(any(c['field'] == 'prUrl' and c['after'] == pr_url for c in e['changes']) for e in events)
+    assert any(any(c['field'] == 'prUrls' and pr_url in c['after'] for c in e['changes']) for e in events)
     status_path = f"/api/cards/by-number/{card['number']}/status"
     doing = next(c for c in board['columns'] if c['name'] == 'Doing')
     by_name = call('PATCH', status_path, {'status': 'Doing'})
@@ -54,7 +55,7 @@ try:
     by_name = call('PATCH', status_path, {'status': column['name']})
     assert by_name['columnId'] == column['id']
     repeated = call('PATCH', status_path, {'status': column['name']})
-    assert repeated['prUrl'] == pr_url
+    assert repeated['prUrls'] == [pr_url, pr_url2]
     assert repeated['number'] == card['number'] and repeated['columnId'] == column['id']
     history_before = call('GET', history_path)
     repeated = call('PATCH', status_path, {'status': column['name']})
@@ -74,8 +75,8 @@ try:
     call('POST', '/api/columns', {'name': ' '}, 400)
     unchanged = call('PATCH', path, {'columnId': column['id']})
     assert unchanged['columnId'] == column['id']
-    assert call('PATCH', path, {'prUrl': ''})['prUrl'] == ''
-    print('PASS: PR link save/preserve/clear/invalid input; real MySQL CRUD, Unicode, partial update, status, duplicates, validation')
+    assert call('PATCH', path, {'prUrls': []})['prUrls'] == []
+    print('PASS: PR links save/preserve/clear/invalid input; real MySQL CRUD, Unicode, partial update, status, duplicates, validation')
 finally:
     call('DELETE', path, expected=204)
 call('GET', history_path, expected=404)

@@ -67,7 +67,7 @@ number・id・title・description・columnIdなどを混ぜて送ると400にな
 | `GET /api/cards/by-number/{number}` | 公開タスク番号 |
 | `PATCH /api/cards/by-number/{number}/status` | 公開タスク番号とステータス名 |
 | `GET /api/cards/{id}` | 内部ID |
-| `PATCH /api/cards/{id}` | 内部IDとtitle/description/columnId/prUrlの部分更新 |
+| `PATCH /api/cards/{id}` | 内部IDとtitle/description/columnId/prUrlsの部分更新 |
 
 番号とIDを推測で読み替えません。例のカードに `PATCH /api/cards/7` を送ると、内部ID7を対象にしてしまいます。生成AIから画面のタスクを変更するときはby-numberを使ってください。
 
@@ -75,20 +75,20 @@ number・id・title・description・columnIdなどを混ぜて送ると400にな
 
 ## GitHub PRの紐付け
 
-カードのJSONには `prUrl`（未登録は空文字）が含まれます。詳細画面の「GitHub PR」欄でも登録でき、保存済みのPRは別タブで開けます。1カードにつき1 URLです。
+カードのJSONには `prUrls`（文字列配列。未登録は `[]`）が含まれます。詳細画面の「GitHub PR」欄で追加・削除でき、保存済みのPRは登録順で別タブに開けます。件数の上限は設けません。同一カード内の重複URLと空要素は400です。並べ替えUIは別機能です。
 
 内部IDは番号から取得した応答の `id` を使います。例えばタスク番号3の内部IDが18なら次のように更新します。
 
 ```sh
 curl --fail-with-body --request PATCH \
   --header 'Content-Type: application/json' \
-  --data '{"prUrl":"https://github.com/owner/repo/pull/2"}' \
+  --data '{"prUrls":["https://github.com/owner/repo/pull/2","https://github.com/owner/repo/pull/3"]}' \
   http://127.0.0.1:4200/api/cards/18
 ```
 
-`prUrl` だけのPATCHはタイトル・説明・ステータス・番号を保持します。省略またはnullは変更せず、空文字 `""` で解除します。作成APIの任意プロパティとしても使えます。前後の空白は取り除きます。
+`prUrls` だけのPATCHはタイトル・説明・ステータス・番号を保持します。省略またはnullは変更せず、空配列 `[]` で全解除します。配列を送ると全体置換です。作成APIの任意プロパティとしても使えます。各要素の前後空白は取り除きます。旧キー `prUrl` は未知フィールドとして400です。
 
-受け付ける形式は `https://github.com/{owner}/{repo}/pull/{正の整数}`、ASCIIで2048文字以内です。owner/repoは英数字・`_`・`-`・`.`（`.`／`..` 単独は不可）。末尾スラッシュ、先頭0の番号、query、fragment、credentials、port、他ホスト、制御文字、バックスラッシュは400になります。PRの実在や閲覧権限の確認、GitHubとの同期は行いません。
+受け付ける各URLの形式は `https://github.com/{owner}/{repo}/pull/{正の整数}`、ASCIIで2048文字以内です。owner/repoは英数字・`_`・`-`・`.`（`.`／`..` 単独は不可）。末尾スラッシュ、先頭0の番号、query、fragment、credentials、port、他ホスト、制御文字、バックスラッシュは400になります。PRの実在や閲覧権限の確認、GitHubとの同期は行いません。
 
 ## 変更履歴
 
@@ -119,7 +119,7 @@ KANBAN_IMPORT_DSN='scrum:scrum_dev@tcp(127.0.0.1:3307)/scrumboard?parseTime=true
   go run ./cmd/import-history --file /absolute/path/reviewed-history.json
 ```
 
-DBの接続設定は利用環境に合わせ、バックアップを取得してから実行してください。対象が履歴初期化済みであることを確認します。JSONは最大2MiB/10000件で、changesはtitle/description/status/prUrlの最大4項目です。各記録の必須項目はnumber・cardId・createdAt・key・occurredAt・noteで、空にできるのはchangesとevidenceUrlだけです（noteは1〜4000文字）。keyは英数字と`_.:-`の1〜128文字、changesの値はtitle 200・description 10000・status 60・prUrl 2048文字以内で同じfieldを重複できません。未知のキーは拒否します。失敗時のメッセージは原因の項目を示さないため、このとおりに確認してください。復元登録日時はDBが記録し、kindはrestored固定です。マニフェストやSQLダンプはGitへ追加しないでください。CLIは実在しない操作者、分からない変更前の値、正確な操作時刻を推測する道具ではありません。
+DBの接続設定は利用環境に合わせ、バックアップを取得してから実行してください。対象が履歴初期化済みであることを確認します。JSONは最大2MiB/10000件で、changesはtitle/description/status/prUrlsの最大4項目です。各記録の必須項目はnumber・cardId・createdAt・key・occurredAt・noteで、空にできるのはchangesとevidenceUrlだけです（noteは1〜4000文字）。keyは英数字と`_.:-`の1〜128文字、changesの値はtitle 200・description 10000・status 60・prUrlsは65536バイト以内のJSON配列（各要素は非空のGitHub PR URL）で同じfieldを重複できません。旧フィールド名`prUrl`や未知のキーは拒否します。失敗時のメッセージは原因の項目を示さないため、このとおりに確認してください。復元登録日時はDBが記録し、kindはrestored固定です。マニフェストやSQLダンプはGitへ追加しないでください。CLIは実在しない操作者、分からない変更前の値、正確な操作時刻を推測する道具ではありません。
 
 occurredAtはMySQLのDATETIME(6)に合わせてマイクロ秒未満を切り捨てて保存・比較します。occurredAtは取り込み時刻より5分を超える未来の値を拒否し、1件でも不正なら全体を書き込みません（誤記すると一覧の最上位に残り、追記専用のため直せないためです）。カードのcreatedAtより前の値は、作成前にマージされたPRなどがあるため拒否しません。createdAtは対象カードの応答値をそのまま指定してください。同時バッチでもカードID順のロックとREAD COMMITTEDのキー確認で、異なる内容の同一キーを黙って無視しません。
 
@@ -149,7 +149,7 @@ curl --fail-with-body --request POST \
 ```
 
 - `Content-Type: application/json` が必須です（違うと415）。
-- `title`・`description` はどちらも省略できますが、前後の空白を除いた結果の少なくとも一方は空でないことが必要です。`title` は200文字以内、`description` は2000文字以内（Unicodeの文字数）。未知のフィールド（`columnId` や `prUrl` など）は400です。ステータスは常にTodoで、PR URLは空です。
+- `title`・`description` はどちらも省略できますが、前後の空白を除いた結果の少なくとも一方は空でないことが必要です。`title` は200文字以内、`description` は2000文字以内（Unicodeの文字数）。未知のフィールド（`columnId` や `prUrls` など）は400です。ステータスは常にTodoで、`prUrls` は空配列です。
 - `title` が空なら、AIが `description` から短い題名を作ります。`description` が空なら、保存される説明も空です（AIが説明を書いてきても採用しません）。
 - 成功すると201と、作成されたカード（`POST /api/cards` と同じ形）を返します。履歴には `created` が記録されます。
 - 整えた結果は、タイトル1〜200文字・説明10000文字以内の検証を通ったものだけを保存します。切り詰めません。説明のある下書きからAIが空の説明を返した場合は、内容の欠落として502にします。

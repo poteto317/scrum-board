@@ -149,7 +149,7 @@ func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var valid bool
-	in.PRURL, valid = normalizePRURL(in.PRURL)
+	in.PRURLs, valid = normalizePRURLs(in.PRURLs)
 	if !valid {
 		invalid(w, "GitHub PRのURLを入力してください。例: https://github.com/owner/repo/pull/1")
 		return
@@ -175,17 +175,17 @@ func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &p) {
 		return
 	}
-	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURL == nil {
+	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}
-	if p.PRURL != nil {
-		value, valid := normalizePRURL(*p.PRURL)
+	if p.PRURLs != nil {
+		value, valid := normalizePRURLs(*p.PRURLs)
 		if !valid {
 			invalid(w, "GitHub PRのURLを入力してください。例: https://github.com/owner/repo/pull/1")
 			return
 		}
-		p.PRURL = &value
+		p.PRURLs = &value
 	}
 	if p.Title != nil {
 		*p.Title = strings.TrimSpace(*p.Title)

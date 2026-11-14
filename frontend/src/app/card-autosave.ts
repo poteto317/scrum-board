@@ -5,10 +5,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { Card, CardInput } from './models';
 import { textLimit } from './form-validation';
-import { prUrlValidator } from './pr-url';
 import { errorMessage } from './api-error';
 
-const fields = ['title', 'description', 'columnId', 'prUrl'] as const;
+const fields = ['title', 'description', 'columnId'] as const;
 type Field = (typeof fields)[number];
 
 // Provided by CardDetail: drafts and timers never survive a detail screen.
@@ -24,7 +23,6 @@ export class CardAutosave {
     title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
     columnId: new FormControl(0, { nonNullable: true, validators: [Validators.min(1)] }),
-    prUrl: new FormControl('', { nonNullable: true, validators: [prUrlValidator] }),
   });
   private timer?: ReturnType<typeof setTimeout>;
   private maxTimer?: ReturnType<typeof setTimeout>;
@@ -32,7 +30,7 @@ export class CardAutosave {
   private generation = 0;
   private composing = new Set<Field>();
   private retryFields = new Set<Field>();
-  private edits: Record<Field, number> = { title: 0, description: 0, columnId: 0, prUrl: 0 };
+  private edits: Record<Field, number> = { title: 0, description: 0, columnId: 0 };
   private waiters: ((saved: boolean) => void)[] = [];
 
   constructor() {
@@ -59,14 +57,23 @@ export class CardAutosave {
           title: card.title,
           description: card.description,
           columnId: card.columnId,
-          prUrl: card.prUrl,
         },
         { emitEvent: false },
       );
   }
+  /** Merge PR save response without touching form drafts (used by CardPrLinks). */
+  applyPrSave(updated: Pick<Card, 'prUrls' | 'updatedAt'>) {
+    const card = this.card();
+    if (!card) return;
+    this.card.set({
+      ...card,
+      prUrls: [...(updated.prUrls ?? [])],
+      updatedAt: updated.updatedAt || card.updatedAt,
+    });
+  }
   private value(field: Field) {
     const raw = this.form.controls[field].value;
-    return field === 'title' || field === 'prUrl' ? String(raw).trim() : raw;
+    return field === 'title' ? String(raw).trim() : raw;
   }
   hasChanges(): boolean {
     // Even a reverted draft must wait for an earlier in-flight write to settle.
@@ -139,7 +146,13 @@ export class CardAutosave {
               control.setValue(card[field], { emitEvent: false });
           }
         }
-        this.card.set(card);
+        // Title/description/column patches must not clobber a newer prUrls list
+        // saved concurrently via CardPrLinks while this request was in flight.
+        const local = this.card();
+        this.card.set({
+          ...card,
+          prUrls: [...(local?.prUrls ?? card.prUrls ?? [])],
+        });
       },
       error: (error) => {
         if (generation !== this.generation) return;

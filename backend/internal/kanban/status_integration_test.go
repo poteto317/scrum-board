@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strconv"
 	"testing"
 )
@@ -71,11 +72,11 @@ func TestMySQLStatusChange(t *testing.T) {
 		}
 	}
 	after, err := r.GetCard(ctx, original.ID)
-	if err != nil || after != before {
+	if err != nil || !reflect.DeepEqual(after, before) {
 		t.Fatalf("failed status request modified card: %+v %v", after, err)
 	}
 	untouched, err := r.GetCard(ctx, 1)
-	if err != nil || untouched != other {
+	if err != nil || !reflect.DeepEqual(untouched, other) {
 		t.Fatal("unrelated card changed", err)
 	}
 	var next int64

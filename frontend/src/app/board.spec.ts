@@ -148,7 +148,7 @@ function sampleBoard(columns: Column[]): BoardData {
         title: 'Card 1',
         description: '',
         backlogPosition: 0,
-        prUrl: '',
+        prUrls: [],
         createdAt: '',
         updatedAt: '',
       },

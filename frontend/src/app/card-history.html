@@ -13,17 +13,56 @@
         <p class="recorded">復元登録: {{ event.recordedAt | date: 'yyyy/MM/dd HH:mm:ss' }}</p>
       }
       @for (change of event.changes; track change.field) {
-        <details class="change" [open]="change.field === 'status' || change.field === 'prUrl'">
+        <details
+          class="change"
+          [open]="change.field === 'status' || change.field === 'prUrl' || change.field === 'prUrls'"
+        >
           <summary>{{ labels[change.field] || change.field }}</summary>
           @if (event.kind !== 'baseline' && event.kind !== 'created') {
             <div class="value before">
               <span>変更前</span>
-              <pre>{{ change.before || '（空欄）' }}</pre>
+              @if (change.field === 'prUrls' && prUrlList(change.before); as urls) {
+                @if (urls.length) {
+                  <ul class="pr-history">
+                    @for (url of urls; track url) {
+                      <li>
+                        @if (safePr(url)) {
+                          <a [href]="url" target="_blank" rel="noopener noreferrer">{{ url }}</a>
+                        } @else {
+                          <pre>{{ url || '（空欄）' }}</pre>
+                        }
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <pre>（空欄）</pre>
+                }
+              } @else {
+                <pre>{{ change.before || '（空欄）' }}</pre>
+              }
             </div>
           }
           <div class="value">
             <span>{{ event.kind === 'baseline' ? '導入時の値' : '変更後' }}</span>
-            <pre>{{ change.after || '（空欄）' }}</pre>
+            @if (change.field === 'prUrls' && prUrlList(change.after); as urls) {
+              @if (urls.length) {
+                <ul class="pr-history">
+                  @for (url of urls; track url) {
+                    <li>
+                      @if (safePr(url)) {
+                        <a [href]="url" target="_blank" rel="noopener noreferrer">{{ url }}</a>
+                      } @else {
+                        <pre>{{ url || '（空欄）' }}</pre>
+                      }
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <pre>（空欄）</pre>
+              }
+            } @else {
+              <pre>{{ change.after || '（空欄）' }}</pre>
+            }
           </div>
         </details>
       }
