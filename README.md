@@ -7,13 +7,13 @@
 - Todo / Doing / Doneから始める単一ボード
 - 任意のステータス列を末尾へ追加（同名不可・1〜60文字）
 - カードの追加、詳細表示、編集、削除
-- 詳細画面でステータスを選択して移動
+- 詳細画面でステータスを選択して移動（移動先列の末尾へ）
+- ボード上でカードをドラッグ＆ドロップし、列内の並べ替えと別ステータスへの移動（短いクリックは詳細へ遷移。カード右上のボタンでリンクをコピー）
 - カードは列内に縦積み、列が増えたらボード内で横スクロール
+- ボードは5秒ごとに最新の状態へ自動で更新（カードや列のドラッグ中・保存中・追加モーダル表示中は更新しません）
 - プロダクトバックログ（全ステータスの優先順位リスト。ドラッグ／キーボードで並び替え、バックログからも新規追加）
 - MySQLへの永続化
 - APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのカードを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[使い方](docs/api.md#aiで整えてカードを起票する)）
-
-Todoに「ドラッグ＆ドロップでカードの移動・並べ替えを実装する」を初期登録します。ドラッグ＆ドロップ自体は今後の実装です。
 
 ## 最短で起動（Docker）
 
@@ -164,6 +164,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | GET | `/api/board` | `{columns: [...], cards: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
 | POST | `/api/cards` | `{title, description, columnId, prUrls?}`でカード追加 |
+| PUT | `/api/cards/order` | `{columns:[{columnId, cardIds}]}`でカードの列内並べ替え・列間移動（[詳細](docs/api.md#カードの並び替え列間移動)） |
 | POST | `/api/cards/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてカードを起票する)） |
 | GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
 | GET | `/api/cards/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
@@ -175,7 +176,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 
 タイトルは1〜200文字、説明は10000文字以内。タイトル・列名の前後の空白は削除します。絵文字を含むUnicode文字数で検証します。空のPATCH、未知のプロパティ、不正なJSONも拒否します。エラー形式は`{"message":"..."}`。不正入力400、未存在404、重複列409、内部エラー500です。
 
-列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のカードは作成日時・ID順です。ステータス移動でもこの順序を維持します。
+列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のカードは`position`・ID順で、`GET /api/board`もこの順です。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます。ドラッグ&ドロップは`PUT /api/cards/order`で保存し、`cards.position`はAPI起動時に自動で追加されます。
 
 ## 検証
 
@@ -211,7 +212,6 @@ docker compose -p scrumboard-smoke down -v
 
 拡張の例:
 
-- 並べ替え用の`position`をカードに追加し、Angular CDKのDrag and DropとAPIを接続
 - ボードIDとスプリントIDを追加
 - 更新競合の検出と認証を追加
 - DBマイグレーションツールを導入

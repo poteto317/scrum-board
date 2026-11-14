@@ -55,6 +55,7 @@ Notion の右上にある「リンクをコピー」に近い体験で、カー�
 </article>
 ```
 
+- カードのドラッグ＆ドロップ（`2026-11-14-card-drag-drop-design.md` §4.4）が入ったあとは、`<article>` が `cdkDrag` になり、本文リンクは `routerLink` ではなく `[attr.href]` + `(click)`（修飾キーはブラウザー既定、通常のクリックは `Router.navigate`）になる。コピーボタンとこの構造は変わらない
 - 見た目は現状のカード相当を維持（ホバー、余白、影）。コピーボタンはカード内右上に重ねるか topline に置く
 - ボード全体で 1 つの `aria-live` 領域を共有してよい（連打時は最新メッセージで上書き）
 - `Board` コンポーネントに `copyCardLink(number)` を追加

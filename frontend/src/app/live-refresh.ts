@@ -13,7 +13,9 @@ export type LiveRefreshOptions<T> = {
 };
 
 /** Schedulers that keep the poll interval outside Angular so whenStable is not blocked. */
-export function zoneAwareTimers(zone: NgZone): Pick<LiveRefreshOptions<unknown>, 'setInterval' | 'clearInterval'> {
+export function zoneAwareTimers(
+  zone: NgZone,
+): Pick<LiveRefreshOptions<unknown>, 'setInterval' | 'clearInterval'> {
   return {
     setInterval: (handler, ms) =>
       zone.runOutsideAngular(() => setInterval(() => zone.run(handler), ms)),

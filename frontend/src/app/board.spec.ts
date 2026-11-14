@@ -47,6 +47,7 @@ const singleCardBoard = () =>
         columnId: 1,
         title: 'Task',
         description: '',
+        position: 0,
         backlogPosition: 0,
         createdAt: '',
         updatedAt: '',
@@ -63,12 +64,20 @@ describe('Board task numbers', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    const card = f.nativeElement.querySelector('.task-card');
+    const card: HTMLElement = f.nativeElement.querySelector('.task-card');
     expect(card.tagName.toLowerCase()).toBe('article');
     expect(f.nativeElement.querySelector('.card-arrow')).toBeNull();
-    const link: HTMLAnchorElement = f.nativeElement.querySelector('.task-card-body');
+    const link: HTMLAnchorElement = card.querySelector('.task-card-body') as HTMLAnchorElement;
     expect(link.textContent).toContain('TASK-002');
+    // A real link keeps "open in new tab", "copy link" and the status-bar URL working.
+    expect(link.tagName).toBe('A');
     expect(link.getAttribute('href')).toBe('/cards/2');
+    expect(link.getAttribute('role')).toBeNull();
+    // The accessible name stays the card's own text; the drag help is a description.
+    expect(link.getAttribute('aria-label')).toBeNull();
+    const helpId = link.getAttribute('aria-describedby') as string;
+    expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ドラッグ');
+    expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ステータス');
     const copyBtn = f.nativeElement.querySelector('.copy-card-link');
     expect(copyBtn).not.toBeNull();
     expect(copyBtn.getAttribute('aria-label')).toBe('TASK-002 のリンクをコピー');
@@ -147,6 +156,7 @@ function sampleBoard(columns: Column[]): BoardData {
         columnId: columns[0].id,
         title: 'Card 1',
         description: '',
+        position: 0,
         backlogPosition: 0,
         prUrls: [],
         createdAt: '',
@@ -548,7 +558,8 @@ describe('Board column reordering', () => {
     expect(textDrag.defaultPrevented).toBe(true);
     expect(f.componentInstance.draggingColumnId()).toBeNull();
 
-    // Open card modal while reorder request is in-flight -> settling must not steal focus
+    // A column save is in flight when a modal appears -> settling must not steal focus from the modal.
+    // (The add-card button is disabled while saving, so the modal state is set directly to build this case.)
     const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
       showModal?: () => void;
       close?: () => void;
@@ -569,9 +580,8 @@ describe('Board column reordering', () => {
       handles[3].dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true }),
       );
-      f.detectChanges();
-
-      f.componentInstance.openCard(1);
+      expect(reorderColumns).toHaveBeenCalledTimes(1); // the save really is in flight
+      f.componentInstance.modal.set('card');
       f.detectChanges();
       const titleInput = f.nativeElement.querySelector('#card-title') as HTMLInputElement;
       titleInput.focus();
@@ -588,6 +598,559 @@ describe('Board column reordering', () => {
       proto.showModal = origShowModal;
       proto.close = origClose;
     }
+  });
+});
+
+describe('Board card reordering', () => {
+  function twoCardBoard(): BoardData {
+    return {
+      columns: makeColumns().slice(0, 2),
+      cards: [
+        {
+          id: 1,
+          number: 1,
+          columnId: 1,
+          title: 'A',
+          description: '',
+          position: 0,
+          backlogPosition: 0,
+          prUrls: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+        {
+          id: 2,
+          number: 2,
+          columnId: 1,
+          title: 'B',
+          description: '',
+          position: 1,
+          backlogPosition: 1,
+          prUrls: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+        {
+          id: 3,
+          number: 3,
+          columnId: 2,
+          title: 'C',
+          description: '',
+          position: 0,
+          backlogPosition: 0,
+          prUrls: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+    };
+  }
+
+  it('reorders within a column via drop and persists', async () => {
+    const reorderCards = vi.fn(() =>
+      of({
+        cards: [
+          { ...twoCardBoard().cards[1], position: 0 },
+          { ...twoCardBoard().cards[0], position: 1 },
+          twoCardBoard().cards[2],
+        ],
+      }),
+    );
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-1' },
+        previousIndex: 0,
+        currentIndex: 1,
+        item: { data: twoCardBoard().cards[0] },
+      } as never,
+      1,
+    );
+    expect(reorderCards).toHaveBeenCalledWith([{ columnId: 1, cardIds: [2, 1] }]);
+  });
+
+  it('skips API for no-op drops and rolls back on failure', async () => {
+    const err = Object.assign(new Error('conflict'), { status: 409 });
+    const reorderCards = vi.fn(() => throwError(() => err));
+    const initial = twoCardBoard();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(initial),
+            reorderCards,
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-1' },
+        previousIndex: 0,
+        currentIndex: 0,
+        item: { data: initial.cards[0] },
+      } as never,
+      1,
+    );
+    expect(reorderCards).not.toHaveBeenCalled();
+
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-2' },
+        previousIndex: 0,
+        currentIndex: 0,
+        item: { data: initial.cards[0] },
+      } as never,
+      2,
+    );
+    expect(reorderCards).toHaveBeenCalled();
+    expect(f.componentInstance.reorderConflict()).toBe(true);
+    expect(f.componentInstance.data().cards.map((c) => c.columnId)).toEqual(
+      initial.cards.map((c) => c.columnId),
+    );
+  });
+
+  it('moves within a column with ArrowDown (focus is covered in board-card-reorder-state.spec.ts)', async () => {
+    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardKeydown(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }),
+      1,
+      0,
+    );
+    expect(reorderCards).toHaveBeenCalledWith([{ columnId: 1, cardIds: [2, 1] }]);
+  });
+
+  it('drops into an empty column', async () => {
+    const boardData: BoardData = {
+      columns: makeColumns().slice(0, 2),
+      cards: [
+        {
+          id: 1,
+          number: 1,
+          columnId: 1,
+          title: 'A',
+          description: '',
+          position: 0,
+          backlogPosition: 0,
+          prUrls: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+    };
+    const reorderCards = vi.fn(() =>
+      of({ cards: [{ ...boardData.cards[0], columnId: 2, position: 0 }] }),
+    );
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(boardData), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-2' },
+        previousIndex: 0,
+        currentIndex: 0,
+        item: { data: boardData.cards[0] },
+      } as never,
+      2,
+    );
+    expect(reorderCards).toHaveBeenCalledWith([
+      { columnId: 1, cardIds: [] },
+      { columnId: 2, cardIds: [1] },
+    ]);
+  });
+
+  it('opens detail on a plain click', async () => {
+    const navigate = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards: vi.fn(),
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const board = f.componentInstance;
+    (board as unknown as { router: { navigate: typeof navigate } }).router = {
+      navigate,
+    } as never;
+    board.onCardClick(new MouseEvent('click', { cancelable: true }), twoCardBoard().cards[0]);
+    expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
+  });
+
+  it('announces the new position so consecutive moves read differently', async () => {
+    // The server answers with the order it was given, as the real API does.
+    const reorderCards = vi.fn((columns: { columnId: number; cardIds: number[] }[]) => {
+      const byId = new Map(twoCardBoard().cards.map((c) => [c.id, c]));
+      return of({
+        cards: columns.flatMap((col) =>
+          col.cardIds.map((id, position) => ({
+            ...byId.get(id)!,
+            columnId: col.columnId,
+            position,
+            backlogPosition: position,
+          })),
+        ),
+      });
+    });
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards,
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const board = f.componentInstance;
+    const press = (key: string, index: number) =>
+      board.onCardKeydown(new KeyboardEvent('keydown', { key, cancelable: true }), 1, index);
+    press('ArrowDown', 0);
+    const first = board.reorderAnnouncement();
+    expect(first).toContain('2番目');
+    press('ArrowUp', 1);
+    const second = board.reorderAnnouncement();
+    expect(second).toContain('1番目');
+    expect(second).not.toBe(first);
+  });
+
+  it('announces the destination column and position after a cross-column drop', async () => {
+    const boardData = twoCardBoard();
+    const reorderCards = vi.fn(() =>
+      of({
+        cards: boardData.cards.map((c) => (c.id === 1 ? { ...c, columnId: 2, position: 0 } : c)),
+      }),
+    );
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(boardData),
+            reorderCards,
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-2' },
+        previousIndex: 0,
+        currentIndex: 0,
+        item: { data: boardData.cards[0] },
+      } as never,
+      2,
+    );
+    const name = boardData.columns.find((c) => c.id === 2)?.name;
+    expect(f.componentInstance.reorderAnnouncement()).toBe(
+      `${boardData.cards[0].title}を${name}の1番目へ移動しました`,
+    );
+  });
+
+  it('leaves modified and non-primary clicks to the browser', async () => {
+    const navigate = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards: vi.fn(),
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const board = f.componentInstance;
+    (board as unknown as { router: { navigate: typeof navigate } }).router = {
+      navigate,
+    } as never;
+    const card = twoCardBoard().cards[0];
+    for (const init of [
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+      { altKey: true },
+      { button: 1 },
+    ]) {
+      const ev = new MouseEvent('click', { cancelable: true, ...init });
+      board.onCardClick(ev, card);
+      expect(ev.defaultPrevented).toBe(false);
+    }
+    expect(navigate).not.toHaveBeenCalled();
+
+    const plain = new MouseEvent('click', { cancelable: true });
+    board.onCardClick(plain, card);
+    expect(plain.defaultPrevented).toBe(true);
+    expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
+  });
+
+  it('keeps browser and assistive shortcuts that use modifier keys', async () => {
+    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    for (const init of [
+      { altKey: true },
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+    ]) {
+      const ev = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true, ...init });
+      f.componentInstance.onCardKeydown(ev, 1, 0);
+      expect(ev.defaultPrevented).toBe(false);
+    }
+    expect(reorderCards).not.toHaveBeenCalled();
+
+    const plain = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true });
+    f.componentInstance.onCardKeydown(plain, 1, 0);
+    expect(plain.defaultPrevented).toBe(true);
+    expect(reorderCards).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores keys other than the up and down arrows, and arrows that have nowhere to go', async () => {
+    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const press = (key: string, columnId: number, index: number) => {
+      const ev = new KeyboardEvent('keydown', { key, cancelable: true });
+      f.componentInstance.onCardKeydown(ev, columnId, index);
+      return ev;
+    };
+
+    // Enter and Tab belong to the link and the browser; the others are not card moves either.
+    for (const key of ['Enter', 'Tab', ' ', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape']) {
+      for (const index of [0, 1]) {
+        expect(press(key, 1, index).defaultPrevented, `${key} on card ${index}`).toBe(false);
+      }
+    }
+    // The first card cannot go up and the last cannot go down: the key stays the browser's (page scroll).
+    expect(press('ArrowUp', 1, 0).defaultPrevented).toBe(false);
+    expect(press('ArrowDown', 1, 1).defaultPrevented).toBe(false);
+    // A column of one card has no neighbours at all.
+    expect(press('ArrowUp', 2, 0).defaultPrevented).toBe(false);
+    expect(press('ArrowDown', 2, 0).defaultPrevented).toBe(false);
+    expect(reorderCards).not.toHaveBeenCalled();
+
+    // The same keys on a card that can move are taken and saved.
+    expect(press('ArrowUp', 1, 1).defaultPrevented).toBe(true);
+    expect(reorderCards).toHaveBeenCalledTimes(1);
+  });
+
+  it('describes card dragging differently while reordering is unavailable', async () => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards: () => new Subject(),
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const help = () =>
+      f.nativeElement.querySelector(
+        '#' + f.nativeElement.querySelector('.task-card-body').getAttribute('aria-describedby'),
+      )?.textContent as string;
+    expect(help()).toContain('上下矢印');
+    f.componentInstance.onCardKeydown(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }),
+      1,
+      0,
+    );
+    f.detectChanges();
+    expect(f.componentInstance.canReorderCards()).toBe(false);
+    expect(help()).toContain('保存中');
+  });
+});
+
+// Fixtures elsewhere give every card number === id, which cannot tell the two apart. Here they differ and
+// even cross over: card 1 is TASK-002, card 2 is TASK-003 and card 3 is TASK-001.
+describe('Board card identity', () => {
+  const crossed = (): BoardData => {
+    const base = {
+      description: '',
+      backlogPosition: 0,
+      prUrls: [],
+      createdAt: '',
+      updatedAt: '',
+    };
+    return {
+      columns: makeColumns().slice(0, 2),
+      cards: [
+        { ...base, id: 1, number: 2, columnId: 1, title: 'A', position: 0 },
+        { ...base, id: 2, number: 3, columnId: 1, title: 'B', position: 1 },
+        { ...base, id: 3, number: 1, columnId: 2, title: 'C', position: 0 },
+      ],
+    };
+  };
+
+  async function render(reorderCards: ReturnType<typeof vi.fn> = vi.fn()) {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        { provide: Api, useValue: { board: () => of(crossed()), reorderCards } },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const links = (): HTMLAnchorElement[] =>
+      Array.from(f.nativeElement.querySelectorAll('.task-card-body'));
+    return { f, links };
+  }
+
+  it('opens the card by its public number when its link is clicked, and links to that number', async () => {
+    const { f, links } = await render();
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    expect(links().map((a) => a.getAttribute('href'))).toEqual([
+      '/cards/2',
+      '/cards/3',
+      '/cards/1',
+    ]);
+    expect(links().map((a) => a.textContent)).toEqual([
+      expect.stringContaining('TASK-002'),
+      expect.stringContaining('TASK-003'),
+      expect.stringContaining('TASK-001'),
+    ]);
+
+    const [a, b, c] = links();
+    for (const link of [a, b, c]) {
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      link.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+    }
+    expect(navigate.mock.calls.map(([commands]) => commands)).toEqual([
+      ['/cards', 2],
+      ['/cards', 3],
+      ['/cards', 1],
+    ]);
+    f.destroy();
+  });
+
+  it('puts focus back on the moved card by its row id, not by its public number', async () => {
+    const answer = [
+      { ...crossed().cards[0], position: 1 },
+      { ...crossed().cards[1], position: 0 },
+      crossed().cards[2],
+    ];
+    const { f, links } = await render(vi.fn(() => of({ cards: answer })));
+
+    // Card A (id 1, TASK-002) moves down. Number 2 is card B's id, so a lookup by number lands on B.
+    links()[0].dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+    );
+    f.detectChanges();
+    await f.whenStable();
+    const active = document.activeElement as HTMLElement;
+    expect(active.classList.contains('task-card-body')).toBe(true);
+    expect(active.closest('[data-card-id]')?.getAttribute('data-card-id')).toBe('1');
+    expect(active.textContent).toContain('TASK-002');
+    expect(active.getAttribute('href')).toBe('/cards/2');
+    f.destroy();
   });
 });
 
@@ -621,6 +1184,7 @@ describe('Board live refresh', () => {
           columnId: 1,
           title: 'From poll',
           description: '',
+          position: 1,
           backlogPosition: 1,
           prUrls: [],
           createdAt: '',

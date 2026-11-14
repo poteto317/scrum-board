@@ -1,10 +1,6 @@
 import { DestroyRef } from '@angular/core';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  COPY_LINK_FAILURE,
-  COPY_LINK_SUCCESS,
-  CopyLinkFeedback,
-} from './copy-link-feedback';
+import { COPY_LINK_FAILURE, COPY_LINK_SUCCESS, CopyLinkFeedback } from './copy-link-feedback';
 
 describe('CopyLinkFeedback', () => {
   let onDestroy: (() => void) | undefined;
@@ -39,9 +35,7 @@ describe('CopyLinkFeedback', () => {
     });
     await feedback.copyCardNumber(27, 'http://127.0.0.1:4200');
     expect(feedback.message()).toBe(COPY_LINK_SUCCESS);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      'http://127.0.0.1:4200/cards/27',
-    );
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://127.0.0.1:4200/cards/27');
     await vi.advanceTimersByTimeAsync(2000);
     expect(feedback.message()).toBe('');
   });

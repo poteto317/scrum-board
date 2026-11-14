@@ -15,7 +15,9 @@
       @for (change of event.changes; track change.field) {
         <details
           class="change"
-          [open]="change.field === 'status' || change.field === 'prUrl' || change.field === 'prUrls'"
+          [open]="
+            change.field === 'status' || change.field === 'prUrl' || change.field === 'prUrls'
+          "
         >
           <summary>{{ labels[change.field] || change.field }}</summary>
           @if (event.kind !== 'baseline' && event.kind !== 'created') {

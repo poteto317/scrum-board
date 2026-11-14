@@ -27,6 +27,13 @@
     </div>
   } @else {
     <div class="sr-only" aria-live="polite">{{ reorderAnnouncement() }}</div>
+    <p id="card-drag-help" class="sr-only">
+      @if (canReorderCards()) {
+        上下矢印キーで列内を移動できます。別のステータスへは、カードを開いてステータスを変更してください。ドラッグでも移動できます。
+      } @else {
+        保存中などのため、いまはカードを移動できません。
+      }
+    </p>
     <div class="sr-only copy-link-live" aria-live="polite">{{ copyLinkAnnouncement() }}</div>
     @if (reorderError()) {
       <div class="reorder-alert" role="alert">
@@ -91,14 +98,34 @@
                 class="icon-button"
                 draggable="false"
                 (click)="openCard(column.id)"
+                [disabled]="reordering()"
                 [attr.aria-label]="column.name + 'にカードを追加'"
               >
                 ＋
               </button>
             </header>
-            <div class="card-list">
-              @for (card of grouped().get(column.id) || []; track card.id) {
-                <article class="task-card">
+            <div
+              class="card-list"
+              cdkDropList
+              [id]="dropListId(column.id)"
+              [cdkDropListData]="grouped().get(column.id) || []"
+              [cdkDropListConnectedTo]="connectedLists(column.id)"
+              [cdkDropListDisabled]="!canReorderCards()"
+              [cdkDropListAutoScrollDisabled]="true"
+              (cdkDropListDropped)="onCardDrop($event, column.id)"
+            >
+              @for (card of grouped().get(column.id) || []; track card.id; let cardIndex = $index) {
+                <article
+                  class="task-card"
+                  cdkDrag
+                  [attr.data-card-id]="card.id"
+                  [cdkDragData]="card"
+                  [cdkDragDisabled]="!canReorderCards()"
+                  (cdkDragStarted)="onCardDragStarted(card)"
+                  (cdkDragMoved)="onCardDragMoved($event)"
+                  (cdkDragReleased)="onCardDragReleased()"
+                  (cdkDragEnded)="onCardDragEnded()"
+                >
                   <button
                     type="button"
                     class="copy-card-link icon-button"
@@ -123,7 +150,12 @@
                       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                     </svg>
                   </button>
-                  <a class="task-card-body" [routerLink]="['/cards', card.number]"
+                  <a
+                    class="task-card-body"
+                    [attr.href]="cardHref(card)"
+                    aria-describedby="card-drag-help"
+                    (click)="onCardClick($event, card)"
+                    (keydown)="onCardKeydown($event, column.id, cardIndex)"
                     ><span class="card-topline"
                       ><span class="card-id"
                         >TASK-{{ card.number.toString().padStart(3, '0') }}</span
@@ -155,7 +187,7 @@
                 </div>
               }
             </div>
-            <button class="add-card" (click)="openCard(column.id)">
+            <button class="add-card" (click)="openCard(column.id)" [disabled]="reordering()">
               <span aria-hidden="true">＋</span> アイテムを追加
             </button>
           </section>

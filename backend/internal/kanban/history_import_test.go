@@ -61,14 +61,14 @@ func TestHistoricalRecordLimits(t *testing.T) {
 		mutate func(*HistoricalRecord)
 		want   bool
 	}{
-		"number zero":            {func(v *HistoricalRecord) { v.Number = 0 }, false},
-		"number negative":        {func(v *HistoricalRecord) { v.Number = -1 }, false},
-		"year 999":               {func(v *HistoricalRecord) { v.OccurredAt = time.Date(999, 1, 1, 0, 0, 0, 0, time.UTC) }, false},
-		"year 1000":              {func(v *HistoricalRecord) { v.OccurredAt = time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC) }, true},
-		"key 128 chars":          {func(v *HistoricalRecord) { v.Key = strings.Repeat("k", 128) }, true},
-		"key 129 chars":          {func(v *HistoricalRecord) { v.Key = strings.Repeat("k", 129) }, false},
-		"note 4000 chars":        {func(v *HistoricalRecord) { v.Note = long(4000) }, true},
-		"note 4001 chars":        {func(v *HistoricalRecord) { v.Note = long(4001) }, false},
+		"number zero":     {func(v *HistoricalRecord) { v.Number = 0 }, false},
+		"number negative": {func(v *HistoricalRecord) { v.Number = -1 }, false},
+		"year 999":        {func(v *HistoricalRecord) { v.OccurredAt = time.Date(999, 1, 1, 0, 0, 0, 0, time.UTC) }, false},
+		"year 1000":       {func(v *HistoricalRecord) { v.OccurredAt = time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC) }, true},
+		"key 128 chars":   {func(v *HistoricalRecord) { v.Key = strings.Repeat("k", 128) }, true},
+		"key 129 chars":   {func(v *HistoricalRecord) { v.Key = strings.Repeat("k", 129) }, false},
+		"note 4000 chars": {func(v *HistoricalRecord) { v.Note = long(4000) }, true},
+		"note 4001 chars": {func(v *HistoricalRecord) { v.Note = long(4001) }, false},
 		"four changes": {func(v *HistoricalRecord) {
 			v.Changes = []HistoryChange{
 				{Field: "title"}, {Field: "description"}, {Field: "status"},

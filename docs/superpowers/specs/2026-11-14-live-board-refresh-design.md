@@ -26,7 +26,8 @@
 | バックエンド | 変更なし（新規エンドポイント・ETag・SSE なし） | YAGNI。既存 Cache-Control: no-store の GET を再利用 |
 | ローディング UI | 背景ポーリングでは `loading` を true にしない | 点滅を防ぐ |
 | エラー UI | 背景ポーリング失敗は黙ってスキップ（前回成功データを維持）。初回／手動 `load()` のエラー表示は現状どおり | 一時的ネット断で赤いバナーを出さない |
-| 適用ガード（ボード／バックログ） | `reordering()`・作成モーダル表示中・`saving()` 中は適用しない（リクエスト自体もスキップ可） | ドラッグ中の楽観更新や作成フォームを上書きしない |
+| 適用ガード（ボード／バックログ） | `reordering()`・作成モーダル表示中・`saving()` 中は適用しない（リクエスト自体もスキップ可）。ボードは、列のドラッグ中（`draggingColumnId`）とカードのドラッグ中（`draggingCardId`。`cdkDragStarted` から `cdkDragEnded` まで）も同様 | ドラッグ中の楽観更新や作成フォームを上書きしない。カードの `previousIndex` / `currentIndex` はドラッグ開始時のリストに対する値なので、ドラッグ中にデータが差し替わるとドロップで別のカードが動く（`2026-11-14-card-drag-drop-design.md` §4.4 の 9） |
+| 古い応答（ボード） | ボードは、取得を始めたときの `data` のままのときだけ応答を適用する（`pollBoard`） | 取得中に並び替えの保存・作成・再読込が `data` を書き換えると、その応答は書き換えより古く、適用すると画面が巻き戻る。`enabled` の再確認だけでは、保存が応答より先に終わっていると防げない |
 | 適用ガード（詳細） | `autosave.hasChanges()`・`autosave.saving()`・`prLinks.saving()`・`confirmDelete`・`deleting()` のいずれかならポーリング結果を**丸ごと捨てる**。ガード外では列は常に更新し、カード本文は `hasChanges()` が無いときだけ載せ替える | 未保存編集の消失を防ぐ（L-008 の逆・L-040）。削除中のちらつきも避ける |
 | 世代 | リクエスト発行時に世代カウンタを進め、subscribe 時に世代が一致しなければ捨てる | 遅い応答が新しい状態を上書きしない（L-040） |
 | 差分適用 | 取得ペイロードを `JSON.stringify` で前回適用分と比較し、同一なら `set` しない（画面 state の形に合わせたオブジェクトを比較） | 不要な再描画・フォーカス喪失を減らす |
@@ -52,7 +53,8 @@
 - `ngOnInit` の初回 `load()` は現状どおり（loading 付き）
 - `startLiveRefresh` は `ngOnInit` で開始する。開始時の即時 tick は行わず、最初の取得は `intervalMs` 後（または visible 復帰時）。`enabled` に `!loading()` を含め、手動 `load()` 中は tick をスキップする。タイマーは `NgZone.runOutsideAngular` 経由で張り、`whenStable` を塞がない
 - `fetch` は `api.board()`、`apply` はガード通過かつ前回と異なれば `data.set`
-- `enabled`: `!loading() && !reordering() && !saving() && modal() === null`
+- `enabled`: `!loading() && !reordering() && !saving() && modal() === null && draggingColumnId() === null && draggingCardId() === null`（列のドラッグ中・カードのドラッグ中を含む。カードのドラッグとの関係は `2026-11-14-card-drag-drop-design.md` §4.4 の 9）
+- `fetch` は `pollBoard()`: `api.board()` の応答を、リクエスト時点の `data` と同じ参照のときだけ通す（取得中にローカルの更新があれば捨てる）
 - `DestroyRef` で stop
 
 ### バックログ

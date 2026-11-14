@@ -3,12 +3,8 @@ import { cardDetailUrl, copyText } from './card-link';
 
 describe('cardDetailUrl', () => {
   it('builds an absolute card detail URL from origin and public number', () => {
-    expect(cardDetailUrl('http://127.0.0.1:4200', 27)).toBe(
-      'http://127.0.0.1:4200/cards/27',
-    );
-    expect(cardDetailUrl('http://127.0.0.1:4200/', 3)).toBe(
-      'http://127.0.0.1:4200/cards/3',
-    );
+    expect(cardDetailUrl('http://127.0.0.1:4200', 27)).toBe('http://127.0.0.1:4200/cards/27');
+    expect(cardDetailUrl('http://127.0.0.1:4200/', 3)).toBe('http://127.0.0.1:4200/cards/3');
   });
 });
 

@@ -27,6 +27,11 @@ func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([
 		return nil, err
 	}
 	defer tx.Rollback()
+	// Every card writer takes the all-columns lock before touching cards (see lockColumnRows), so ReorderBacklog
+	// must too: otherwise its primary-key-order card locks invert against ReorderCards' index-order locks (deadlock).
+	if _, err = lockColumnRows(ctx, tx); err != nil {
+		return nil, err
+	}
 	existing, err := lockAllCards(ctx, tx)
 	if err != nil {
 		return nil, err

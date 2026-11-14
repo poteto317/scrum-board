@@ -142,7 +142,9 @@ export class CardDetail implements OnInit {
   async canLeave(): Promise<boolean> {
     if (this.deleted) return true;
     if (this.prLinks.saving()) {
-      return window.confirm('PRの保存中です。移動すると保存が中断される可能性があります。移動しますか？');
+      return window.confirm(
+        'PRの保存中です。移動すると保存が中断される可能性があります。移動しますか？',
+      );
     }
     if (!this.autosave.hasChanges()) return true;
     if (await this.autosave.settle()) return true;

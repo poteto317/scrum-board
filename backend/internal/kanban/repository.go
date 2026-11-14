@@ -31,7 +31,7 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Card, error) {
 	var c Card
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.BacklogPosition, &c.CreatedAt, &c.UpdatedAt)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.BacklogPosition, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
 	}
@@ -39,7 +39,10 @@ func scanCard(s scanner) (Card, error) {
 	return c, nil
 }
 
-const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.backlog_position, c.created_at, c.updated_at"
+// numberedCards は card_pr_links を結合しない。PR リンクは 1 カード複数行なので、
+// 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
+// FOR UPDATE で使っても結合先の行までロックしない。
+const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.position, c.backlog_position, c.created_at, c.updated_at"
 const numberedCards = " FROM cards c JOIN card_numbers n ON n.card_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -68,7 +71,7 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	if err != nil {
 		return b, err
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.created_at,c.id")
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.position,c.id")
 	if err != nil {
 		return b, err
 	}
@@ -105,11 +108,18 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if err != nil {
 		return Card{}, err
 	}
+	if err = lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
+		return Card{}, err
+	}
+	nextPos, err := nextCardPosition(ctx, tx, in.ColumnID)
+	if err != nil {
+		return Card{}, err
+	}
 	nextBacklog, err := nextBacklogPosition(ctx, tx)
 	if err != nil {
 		return Card{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO cards(column_id,title,description,backlog_position) VALUES(?,?,?,?)", in.ColumnID, in.Title, in.Description, nextBacklog)
+	result, err := tx.ExecContext(ctx, "INSERT INTO cards(column_id,title,description,position,backlog_position) VALUES(?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, nextBacklog)
 	if err != nil {
 		return Card{}, dbError(err)
 	}
@@ -141,8 +151,21 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 		return Card{}, err
 	}
 	defer tx.Rollback()
-	// Lock only the owning card. Locking an absent LEFT JOIN row takes a gap lock
-	// and can deadlock independent cards during their first PR-link INSERT.
+	// A column move takes the same all-columns lock as ReorderCards/CreateCard before touching any card (DeleteCard does too), so
+	// InnoDB never sees two writers wait on each other's card and column rows. A PR-link rewrite takes it too:
+	// replacePRURLs DELETEs a range that is empty for a card's first save and then INSERTs into it, and two such
+	// transactions on different cards each hold the gap lock the other's INSERT waits for (deadlock, 1213).
+	// A title/description-only edit does not touch card_pr_links, so it still locks just the owning card below.
+	switch {
+	case p.ColumnID != nil:
+		if err = lockExistingColumn(ctx, tx, *p.ColumnID); err != nil {
+			return Card{}, err
+		}
+	case p.PRURLs != nil:
+		if _, err = lockColumnRows(ctx, tx); err != nil {
+			return Card{}, err
+		}
+	}
 	var lockedID int64
 	if err = tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
 		return Card{}, dbError(err)
@@ -158,15 +181,28 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	if p.Description != nil {
 		c.Description = *p.Description
 	}
-	if p.ColumnID != nil {
+	moved := false
+	sourceColumnID := c.ColumnID
+	if p.ColumnID != nil && *p.ColumnID != c.ColumnID {
+		nextPos, err := nextCardPosition(ctx, tx, *p.ColumnID)
+		if err != nil {
+			return Card{}, err
+		}
 		c.ColumnID = *p.ColumnID
+		c.Position = nextPos
+		moved = true
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE cards SET title=?,description=?,column_id=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, time.Now().UTC(), id)
+	_, err = tx.ExecContext(ctx, "UPDATE cards SET title=?,description=?,column_id=?,position=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, time.Now().UTC(), id)
 	if err != nil {
 		return Card{}, dbError(err)
 	}
 	if p.PRURLs != nil {
 		if err = replacePRURLs(ctx, tx, id, *p.PRURLs); err != nil {
+			return Card{}, err
+		}
+	}
+	if moved {
+		if err = compactColumnPositions(ctx, tx, sourceColumnID); err != nil {
 			return Card{}, err
 		}
 	}
@@ -180,7 +216,17 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	return c, tx.Commit()
 }
 func (r MySQLRepository) DeleteCard(ctx context.Context, id int64) error {
-	res, err := r.DB.ExecContext(ctx, "DELETE FROM cards WHERE id=?", id)
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// DELETE locks the primary key and then cards_column_position, the opposite of the secondary-then-primary
+	// order of the column scans in lockCardsInColumns/nextCardPosition, so it joins the all-columns lock too.
+	if _, err = lockColumnRows(ctx, tx); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, "DELETE FROM cards WHERE id=?", id)
 	if err != nil {
 		return err
 	}
@@ -191,7 +237,7 @@ func (r MySQLRepository) DeleteCard(ctx context.Context, id int64) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit()
 }
 func (r MySQLRepository) CreateColumn(ctx context.Context, name string) (Column, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)

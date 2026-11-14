@@ -4,9 +4,9 @@ import "testing"
 
 func TestSameCardIDSet(t *testing.T) {
 	cases := []struct {
-		name               string
+		name                string
 		existing, requested []int64
-		want               bool
+		want                bool
 	}{
 		{"match", []int64{1, 2, 3}, []int64{3, 1, 2}, true},
 		{"length mismatch", []int64{1, 2}, []int64{1, 2, 3}, false},

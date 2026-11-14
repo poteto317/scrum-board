@@ -32,6 +32,12 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 	for _, c := range m.cards {
 		b.Cards = append(b.Cards, c)
 	}
+	slices.SortFunc(b.Cards, func(a, b Card) int {
+		if c := cmp.Compare(a.Position, b.Position); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return b, nil
 }
 func (m *memoryRepo) GetCard(_ context.Context, id int64) (Card, error) {
@@ -49,14 +55,43 @@ func (m *memoryRepo) validColumn(id int64) bool {
 	}
 	return false
 }
+func (m *memoryRepo) nextPosition(columnID int64) int {
+	maxPos := -1
+	for _, c := range m.cards {
+		if c.ColumnID == columnID && c.Position > maxPos {
+			maxPos = c.Position
+		}
+	}
+	return maxPos + 1
+}
+func (m *memoryRepo) compactColumn(columnID int64) {
+	var ids []int64
+	for _, c := range m.cards {
+		if c.ColumnID == columnID {
+			ids = append(ids, c.ID)
+		}
+	}
+	slices.SortFunc(ids, func(a, b int64) int {
+		ca, cb := m.cards[a], m.cards[b]
+		if c := cmp.Compare(ca.Position, cb.Position); c != 0 {
+			return c
+		}
+		return cmp.Compare(a, b)
+	})
+	for pos, id := range ids {
+		c := m.cards[id]
+		c.Position = pos
+		m.cards[id] = c
+	}
+}
 func (m *memoryRepo) CreateCard(_ context.Context, in CardInput) (Card, error) {
 	if !m.validColumn(in.ColumnID) {
 		return Card{}, ErrColumn
 	}
-	maxPos := -1
+	maxBacklog := -1
 	for _, existing := range m.cards {
-		if existing.BacklogPosition > maxPos {
-			maxPos = existing.BacklogPosition
+		if existing.BacklogPosition > maxBacklog {
+			maxBacklog = existing.BacklogPosition
 		}
 	}
 	urls := append([]string(nil), in.PRURLs...)
@@ -66,7 +101,7 @@ func (m *memoryRepo) CreateCard(_ context.Context, in CardInput) (Card, error) {
 	c := Card{
 		Number: m.next, ID: m.next, ColumnID: in.ColumnID,
 		Title: in.Title, Description: in.Description, PRURLs: urls,
-		BacklogPosition: maxPos + 1,
+		Position: m.nextPosition(in.ColumnID), BacklogPosition: maxBacklog + 1,
 	}
 	m.next++
 	m.cards[c.ID] = c
@@ -81,7 +116,14 @@ func (m *memoryRepo) UpdateCard(ctx context.Context, id int64, p CardPatch) (Car
 		if !m.validColumn(*p.ColumnID) {
 			return c, ErrColumn
 		}
-		c.ColumnID = *p.ColumnID
+		if *p.ColumnID != c.ColumnID {
+			source := c.ColumnID
+			c.ColumnID = *p.ColumnID
+			c.Position = m.nextPosition(*p.ColumnID)
+			m.cards[id] = c
+			m.compactColumn(source)
+			c = m.cards[id]
+		}
 	}
 	if p.Title != nil {
 		c.Title = *p.Title
@@ -97,6 +139,50 @@ func (m *memoryRepo) UpdateCard(ctx context.Context, id int64, p CardPatch) (Car
 	}
 	m.cards[id] = c
 	return c, nil
+}
+func (m *memoryRepo) ReorderCards(_ context.Context, orders []CardColumnOrder) ([]Card, error) {
+	if err := validateCardOrder(orders); err != nil {
+		return nil, err
+	}
+	for _, order := range orders {
+		if !m.validColumn(order.ColumnID) {
+			return nil, ErrCardOrderMismatch
+		}
+	}
+	requested := map[int64]struct{}{}
+	for _, order := range orders {
+		for _, id := range order.CardIDs {
+			requested[id] = struct{}{}
+		}
+	}
+	listed := map[int64]struct{}{}
+	for _, order := range orders {
+		listed[order.ColumnID] = struct{}{}
+	}
+	existing := map[int64]Card{}
+	for _, c := range m.cards {
+		if _, ok := listed[c.ColumnID]; ok {
+			existing[c.ID] = c
+		}
+	}
+	if len(existing) != len(requested) {
+		return nil, ErrCardOrderMismatch
+	}
+	for id := range requested {
+		if _, ok := existing[id]; !ok {
+			return nil, ErrCardOrderMismatch
+		}
+	}
+	for _, order := range orders {
+		for pos, id := range order.CardIDs {
+			c := m.cards[id]
+			c.ColumnID = order.ColumnID
+			c.Position = pos
+			m.cards[id] = c
+		}
+	}
+	board, _ := m.Board(context.Background())
+	return board.Cards, nil
 }
 func (m *memoryRepo) DeleteCard(ctx context.Context, id int64) error {
 	if _, err := m.GetCard(ctx, id); err != nil {

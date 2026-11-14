@@ -70,7 +70,7 @@
 ### 3.5 `CreateCard` / `ReorderBacklog` のロック
 
 - **Repository:** `Backlog(ctx) ([]Card, error)`、`ReorderBacklog(ctx, cardIDs []int64) ([]Card, error)`。
-- **CreateCard:** 既存どおり指定 `columnId` へ INSERT。同一トランザクションで `SELECT id FROM cards ORDER BY id FOR UPDATE` により全カードを主キー順ロックし、`backlog_position = MAX+1`（0 件なら 0）を付与してから INSERT（`ReorderBacklog` と同じロック順でデッドロックを避ける）。
+- **CreateCard:** 既存どおり指定 `columnId` へ INSERT。同一トランザクションで `SELECT id FROM cards ORDER BY id FOR UPDATE` により全カードを主キー順ロックし、`backlog_position = MAX+1`（0 件なら 0）を付与してから INSERT（`ReorderBacklog` と同じロック順でデッドロックを避ける）。なお、カードの列内並び替え（`cards.position`、`ReorderCards`）と統合した後は、全カード書き込み経路が `cards` に触れる前に `board_columns` の全列ロックを取る（`ReorderBacklog` も同様。詳細は card-drag-drop-design §3.4）。
 - バックログ UI の作成モーダルは `columnId` を利用者が選択して `POST /api/cards` に渡す（既定候補は Todo だが固定ではない）。
 
 ### 3.6 ハンドラー
