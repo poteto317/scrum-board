@@ -327,7 +327,7 @@ describe('Board card reorder state', () => {
     });
     scroller.scrollLeft = 0;
 
-    component.onCardDragStarted();
+    component.onCardDragStarted(initialBoard().cards[0]);
     component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
     const first = scroller.scrollLeft;
     expect(first).toBeGreaterThan(0);
@@ -356,7 +356,7 @@ describe('Board card reorder state', () => {
     expect(scroller.scrollLeft).toBe(released);
 
     // At the edge again, then the drag ends: nothing scrolls afterwards.
-    component.onCardDragStarted();
+    component.onCardDragStarted(initialBoard().cards[0]);
     component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
     vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 2);
     expect(vi.getTimerCount()).toBe(baselineTimers + 1);

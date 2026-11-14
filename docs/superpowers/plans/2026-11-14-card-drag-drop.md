@@ -144,12 +144,15 @@
   - 保存中はカード DnD・列 DnD・列追加を抑止。カードの本文リンクには `aria-disabled` を付けず（遷移はできる）、並べ替え不可の間は `aria-describedby` の説明文を切り替える。キーボード移動の結果は既存 `aria-live`（`reorderAnnouncement`）へ
   - 端での横スクロール追従（`L-680`）をカードドラッグ中も有効化。列内が縦に長い場合は、ポインターの下の `.card-list` の縦スクロールも補正する。CDK の自動スクロールは `cdkDropListAutoScrollDisabled` で止め（リスト自身のスクロールと競合するため）、`(cdkDragMoved)` のたびと、ドラッグ中の 50ms のタイマー（`CARD_AUTO_SCROLL_INTERVAL_MS`。端に置いたまま止まっても続く）で自前に補正する。タイマーは `(cdkDragStarted)` で始め、`(cdkDragReleased)`（マウスを離した時点。CDK の終了報告は最大 300ms 遅れる）・`(cdkDragEnded)`・ドロップ・画面の破棄で止める
 
+  - **ボードの自動反映（main の `startLiveRefresh`）との両立**（設計書 §4.4 の 9）: `draggingCardId` の signal を `(cdkDragStarted)` で立て、`(cdkDragEnded)` で下ろし、`startLiveRefresh` の `enabled` に加える（`(cdkDragReleased)` では下ろさない。CDK の終了報告は離した最大 300ms 後で、その間も `data` を差し替えてはならない）。`onCardDrop` は、`event.item.data` の id が移動元の列の `previousIndex` にあるカードの id と一致しなければ何もしない。ポーリングの応答は、取得を始めたときの `data` のままのときだけ適用する（`pollBoard`。保存より前に出した遅い応答が、保存した順序を巻き戻さないため）
+
 - [ ] **Step 7: RED/GREEN** — `board.spec.ts`:
   - 同一列・列間ドロップ、no-op で API 非送信
   - 通常クリックで navigate、修飾キー付き・primary 以外のクリックはブラウザー既定（アプリは navigate しない）
   - 500/409 ロールバックとバナー
   - 空列ドロップ
   - 列ヘッダー DnD がカード操作で誤発火しないこと（回帰）
+  - 自動反映との両立（`board-card-drag-live-refresh.spec.ts`。fake timers と `Api.board` のモック）: ドラッグ中はポーリングの応答でボードが差し替わらない（リクエストも出ない）、離してから `ended` までも保持、ドラッグ前から飛んでいた応答は捨てる、ドラッグ終了後は再開、移動元のカードが一致しないドロップは保存しない、保存中はポーリングしない、保存より前の遅い応答で順序を巻き戻さない。各ガードを外す変異で対応するテストが落ちることを確かめる
 
 - [ ] **Step 8:** Run: `cd frontend && npm test -- --watch=false`、`npm run build`、prettier check。Expected: PASS
 

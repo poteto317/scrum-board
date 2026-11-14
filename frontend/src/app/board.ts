@@ -16,7 +16,7 @@ import { Location } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { CDK_DRAG_CONFIG, CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
-import { finalize } from 'rxjs';
+import { filter, finalize } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import {
@@ -82,6 +82,12 @@ export class Board implements OnInit {
   );
   readonly copyLinkAnnouncement = this.linkCopy.message;
   readonly draggingColumnId = signal<number | null>(null);
+  /**
+   * The card CDK is dragging: from (cdkDragStarted) until (cdkDragEnded), which CDK emits only after the preview has
+   * settled (up to ~300ms after the pointer was let go) and just before the drop. CDK reports the drop's indexes
+   * against the list as it was when the drag began, so the board must not be replaced while this is set.
+   */
+  readonly draggingCardId = signal<number | null>(null);
   readonly dropSlot = signal<number | null>(null);
   readonly modal = signal<'column' | 'card' | null>(null);
   readonly formError = signal('');
@@ -133,8 +139,9 @@ export class Board implements OnInit {
         !this.reordering() &&
         !this.saving() &&
         this.modal() === null &&
-        this.draggingColumnId() === null,
-      fetch: () => this.api.board(),
+        this.draggingColumnId() === null &&
+        this.draggingCardId() === null,
+      fetch: () => this.pollBoard(),
       apply: (d) => {
         this.error.set('');
         if (sameJson(this.data(), d)) return;
@@ -143,6 +150,16 @@ export class Board implements OnInit {
       ...zoneAwareTimers(this.zone),
     });
     this.destroyRef.onDestroy(stop);
+  }
+
+  /**
+   * A poll's answer is only good for the board it was requested for. If anything changed the board in the meantime
+   * (a move, its saved answer, a created card, a reload), the answer is older than that change and would undo it
+   * until the next poll, so it is dropped.
+   */
+  private pollBoard() {
+    const requestedFor = this.data();
+    return this.api.board().pipe(filter(() => this.data() === requestedFor));
   }
 
   copyCardLink(number: number) {
@@ -247,7 +264,8 @@ export class Board implements OnInit {
     this.autoScrollAt(event.pointerPosition);
   }
 
-  onCardDragStarted() {
+  onCardDragStarted(card: Card) {
+    this.draggingCardId.set(card.id);
     this.stopAutoScrollTimer();
     this.dragMovedSinceTick = false;
     this.autoScrollTimer = setInterval(() => {
@@ -262,7 +280,9 @@ export class Board implements OnInit {
     this.stopAutoScrollTimer();
   }
 
+  /** CDK emits this and then the drop, one straight after the other, so no poll can run in between. */
   onCardDragEnded() {
+    this.draggingCardId.set(null);
     this.stopAutoScrollTimer();
     this.dragPointer = null;
   }
@@ -333,6 +353,11 @@ export class Board implements OnInit {
     if (!this.canReorderCards()) return;
     const previousColumnId = columnIdFromDropListId(event.previousContainer.id);
     if (previousColumnId === null) return;
+    // CDK's indexes refer to the list as it was when the drag began; if the card there is not the dragged one, the
+    // list changed underneath the drag and the indexes would move some other card.
+    const dragged = event.item.data as Card | undefined;
+    const source = this.grouped().get(previousColumnId) ?? [];
+    if (!dragged || source[event.previousIndex]?.id !== dragged.id) return;
     const next = applyCardDrop(
       this.data().cards,
       previousColumnId,
@@ -341,7 +366,7 @@ export class Board implements OnInit {
       event.currentIndex,
     );
     if (!next) return;
-    const title = (event.item.data as Card | undefined)?.title ?? 'カード';
+    const title = dragged.title;
     const columnName = this.data().columns.find((c) => c.id === columnId)?.name ?? '';
     this.persistCardOrder(
       next,
