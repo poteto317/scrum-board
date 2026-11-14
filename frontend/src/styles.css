@@ -321,7 +321,8 @@ dialog.modal-backdrop::backdrop {
 .kanban-column.drop-after::after {
   right: -12px;
 }
-.column-drag-handle {
+.column-drag-handle,
+.card-drag-handle {
   cursor: grab;
   border: 0;
   border-radius: 4px;
@@ -338,11 +339,77 @@ dialog.modal-backdrop::backdrop {
   display: inline-grid;
   place-items: center;
 }
-.column-drag-handle:hover {
+.card-drag-handle {
+  align-self: center;
+  margin-left: 6px;
+}
+.column-drag-handle:hover,
+.card-drag-handle:hover {
   background: #e6e9e1;
   color: var(--ink);
 }
-.column-drag-handle[aria-disabled='true'] {
+.column-drag-handle:active:not([aria-disabled='true']),
+.card-drag-handle:active:not([aria-disabled='true']) {
+  cursor: grabbing;
+}
+.column-drag-handle[aria-disabled='true'],
+.card-drag-handle[aria-disabled='true'] {
   cursor: default;
   opacity: 0.45;
+}
+.card-list.cdk-drop-list-dragging .task-card:not(.cdk-drag-placeholder) {
+  transition: transform 200ms ease;
+}
+.task-card {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background: var(--paper);
+  border: 1px solid #e1e5dc;
+  border-radius: 8px;
+  box-shadow: 0 2px 3px #25332104;
+  transition:
+    transform 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
+  overflow-wrap: anywhere;
+}
+.task-card:has(.task-card-body:focus-visible) {
+  outline: 2px solid #5b7c5b;
+  outline-offset: 2px;
+}
+.task-card-body:focus-visible {
+  outline: none;
+}
+.task-card.cdk-drag-preview {
+  box-shadow: 0 8px 20px #25332122;
+  transition: none;
+}
+.task-card.cdk-drag-placeholder {
+  opacity: 0.4;
+}
+.task-card.cdk-drag-animating {
+  transition: transform 200ms ease;
+}
+.task-card:hover {
+  transform: translateY(-2px);
+  border-color: #a2b5a2;
+  box-shadow: 0 5px 12px #2533210a;
+}
+.task-card-body {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 17px 44px 13px 8px;
+}
+.task-card .copy-card-link {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
+.copy-link-icon {
+  display: block;
 }

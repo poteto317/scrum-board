@@ -1,4 +1,4 @@
-import { CdkDrag, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
@@ -50,6 +50,12 @@ describe('Board template CDK wiring', () => {
       f.debugElement.queryAll(By.directive(CdkDropList)).map((d) => d.injector.get(CdkDropList));
     const drags = () =>
       f.debugElement.queryAll(By.directive(CdkDrag)).map((d) => d.injector.get(CdkDrag));
+    const handles = () =>
+      f.debugElement
+        .queryAll(By.directive(CdkDragHandle))
+        .map((d) => d.injector.get(CdkDragHandle));
+    const handleEls = () =>
+      Array.from(f.nativeElement.querySelectorAll('.card-drag-handle')) as HTMLElement[];
 
     // Each column's list has its own id and is connected to every other column's list, so a card can cross.
     expect(lists().map((l) => l.id)).toEqual(['card-list-1', 'card-list-2']);
@@ -62,6 +68,13 @@ describe('Board template CDK wiring', () => {
     expect(lists().every((l) => !l.disabled)).toBe(true);
     expect(drags().length).toBe(3);
     expect(drags().every((d) => !d.disabled)).toBe(true);
+    expect(handles().length).toBe(3);
+    expect(handles().every((h) => !h.disabled)).toBe(true);
+    expect(
+      handleEls().every(
+        (el) => el.getAttribute('aria-disabled') === 'false' && !el.hasAttribute('disabled'),
+      ),
+    ).toBe(true);
 
     // The list's dropped output reaches onCardDrop with that column's id: a real cross-column drop.
     const [todo, doing] = lists();
@@ -81,11 +94,17 @@ describe('Board template CDK wiring', () => {
       { columnId: 2, cardIds: [3, 1] },
     ]);
 
-    // While the save is pending, every list and card turns its dragging off.
+    // While the save is pending, every list, card, and handle turns its dragging off without native disabled.
     f.detectChanges();
     expect(f.componentInstance.reordering()).toBe(true);
     expect(lists().every((l) => l.disabled)).toBe(true);
     expect(drags().every((d) => d.disabled)).toBe(true);
+    expect(handles().every((h) => h.disabled)).toBe(true);
+    expect(
+      handleEls().every(
+        (el) => el.getAttribute('aria-disabled') === 'true' && !el.hasAttribute('disabled'),
+      ),
+    ).toBe(true);
   });
 
   // CDK's own edge scrolling is switched off, so (cdkDragMoved) is the only thing that scrolls while a card is
@@ -123,8 +142,8 @@ describe('Board template CDK wiring', () => {
     list.scrollTop = 0;
     const moved = vi.spyOn(f.componentInstance, 'onCardDragMoved');
 
-    const body = f.nativeElement.querySelector('.task-card-body') as HTMLElement;
-    body.dispatchEvent(
+    const handle = f.nativeElement.querySelector('.card-drag-handle') as HTMLElement;
+    handle.dispatchEvent(
       new MouseEvent('mousedown', {
         bubbles: true,
         cancelable: true,

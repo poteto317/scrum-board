@@ -166,65 +166,6 @@ h1 {
   padding: 4px;
   margin: -4px;
 }
-.card-list.cdk-drop-list-dragging .task-card:not(.cdk-drag-placeholder) {
-  transition: transform 200ms ease;
-}
-.task-card {
-  position: relative;
-  display: block;
-  cursor: grab;
-  background: var(--paper);
-  border: 1px solid #e1e5dc;
-  border-radius: 8px;
-  box-shadow: 0 2px 3px #25332104;
-  transition:
-    transform 0.15s,
-    border-color 0.15s,
-    box-shadow 0.15s;
-  overflow-wrap: anywhere;
-}
-/* The card's tab stop is its link, but the whole card is what moves: ring the card, not just the link. */
-.task-card:has(.task-card-body:focus-visible) {
-  outline: 2px solid #5b7c5b;
-  outline-offset: 2px;
-}
-.task-card-body:focus-visible {
-  outline: none;
-}
-.task-card.cdk-drag-preview {
-  box-shadow: 0 8px 20px #25332122;
-  /* The preview is a copy in <body> that CDK moves with an inline transform on every pointer event; the card's
-     own 0.15s transform transition would make it lag behind the pointer. */
-  transition: none;
-}
-.task-card.cdk-drag-placeholder {
-  opacity: 0.4;
-}
-.task-card.cdk-drag-animating {
-  transition: transform 200ms ease;
-}
-.task-card:hover {
-  transform: translateY(-2px);
-  border-color: #a2b5a2;
-  box-shadow: 0 5px 12px #2533210a;
-}
-.task-card-body {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  cursor: grab;
-  padding: 17px 16px 13px;
-  padding-right: 44px;
-}
-.copy-card-link {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-}
-.copy-link-icon {
-  display: block;
-}
 .card-topline {
   display: flex;
   justify-content: space-between;
