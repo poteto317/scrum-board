@@ -115,6 +115,41 @@ describe('Api', () => {
       .flush({ message: '競合' }, { status: 409, statusText: 'Conflict' });
     expect(status).toBe(409);
   });
+  it('lists command templates', () => {
+    let result: unknown;
+    api.listCommandTemplates().subscribe((res) => (result = res));
+    const req = http.expectOne('/api/command-templates');
+    expect(req.request.method).toBe('GET');
+    const payload = {
+      templates: [{ id: 1, name: 'gh', template: 'gh pr view {{url}}', position: 0 }],
+    };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
+  it('creates a command template', () => {
+    const input = { name: 'gh', template: 'gh pr view {{url}}' };
+    let result: unknown;
+    api.createCommandTemplate(input).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/command-templates');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual(input);
+    const created = { id: 4, name: 'gh', template: 'gh pr view {{url}}', position: 1 };
+    req.flush(created);
+    expect(result).toEqual(created);
+  });
+  it('patches a command template', () => {
+    api.updateCommandTemplate(4, { name: 'gh2' }).subscribe();
+    const req = http.expectOne('/api/command-templates/4');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ name: 'gh2' });
+    req.flush({ id: 4, name: 'gh2', template: 'gh pr view {{url}}', position: 1 });
+  });
+  it('deletes a command template', () => {
+    api.deleteCommandTemplate(4).subscribe();
+    const req = http.expectOne('/api/command-templates/4');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null);
+  });
 });
 
 it('requests history by public number and an optional event cursor', () => {

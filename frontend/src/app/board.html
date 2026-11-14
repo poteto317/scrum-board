@@ -34,7 +34,9 @@
         保存中などのため、いまはカードを移動できません。
       }
     </p>
-    <div class="sr-only copy-link-live" aria-live="polite">{{ copyLinkAnnouncement() }}</div>
+    <div class="sr-only copy-link-live" aria-live="polite">
+      {{ copyFeedback() }}
+    </div>
     @if (reorderError()) {
       <div class="reorder-alert" role="alert">
         <p>{{ reorderError() }}</p>
@@ -117,6 +119,7 @@
               @for (card of grouped().get(column.id) || []; track card.id; let cardIndex = $index) {
                 <article
                   class="task-card"
+                  [class.command-menu-open]="openCommandCardId() === card.id"
                   cdkDrag
                   [attr.data-card-id]="card.id"
                   [cdkDragData]="card"
@@ -144,30 +147,71 @@
                   >
                     <span aria-hidden="true">⋮⋮</span>
                   </button>
-                  <button
-                    type="button"
-                    class="copy-card-link icon-button"
-                    [attr.aria-label]="
-                      'TASK-' + card.number.toString().padStart(3, '0') + ' のリンクをコピー'
-                    "
-                    (click)="copyCardLink(card.number)"
-                  >
-                    <svg
-                      class="copy-link-icon"
-                      aria-hidden="true"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
+                  <div class="card-quick-actions">
+                    <div class="copy-command">
+                      <button
+                        type="button"
+                        class="copy-command-button"
+                        draggable="false"
+                        aria-haspopup="menu"
+                        [attr.aria-expanded]="openCommandCardId() === card.id ? 'true' : 'false'"
+                        [attr.aria-label]="
+                          'TASK-' + card.number.toString().padStart(3, '0') + ' のコマンド'
+                        "
+                        (click)="toggleCommandMenu(card.id, $event)"
+                      >
+                        コマンド
+                      </button>
+                      @if (openCommandCardId() === card.id) {
+                        <ul class="copy-command-menu" role="menu">
+                          @if (commands.listError()) {
+                            <li class="copy-command-empty" role="status">
+                              {{ commands.listError() }}
+                            </li>
+                          } @else if (commands.templates().length === 0) {
+                            <li class="copy-command-empty">{{ commandMenuEmpty }}</li>
+                          } @else {
+                            @for (command of commands.templates(); track command.id) {
+                              <li role="none">
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  (click)="copyCommand(command.template, card.number, $event)"
+                                >
+                                  {{ command.name }}
+                                </button>
+                              </li>
+                            }
+                          }
+                        </ul>
+                      }
+                    </div>
+                    <button
+                      type="button"
+                      class="copy-card-link icon-button"
+                      draggable="false"
+                      [attr.aria-label]="
+                        'TASK-' + card.number.toString().padStart(3, '0') + ' のリンクをコピー'
+                      "
+                      (click)="copyCardLink(card.number)"
                     >
-                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                    </svg>
-                  </button>
+                      <svg
+                        class="copy-link-icon"
+                        aria-hidden="true"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                      </svg>
+                    </button>
+                  </div>
                   <a
                     class="task-card-body"
                     [attr.href]="cardHref(card)"

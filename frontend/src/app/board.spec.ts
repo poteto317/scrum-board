@@ -4,15 +4,28 @@ import { Observable, of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
+import { CommandTemplatesSession } from './command-templates-session';
 import { cardDetailUrl } from './card-link';
+import { COPY_LINK_SUCCESS } from './copy-link-feedback';
+import {
+  COMMAND_MENU_EMPTY,
+  COPY_COMMAND_FAILURE,
+  COPY_COMMAND_SUCCESS,
+  resolveCommand,
+} from './command-template';
 import { BoardData, Column } from './models';
 import { TODO_COLUMN_MISSING } from './todo-column';
 
 describe('Board create requests', () => {
   it('freezes card inputs while creating and retains them on failure', () => {
     const pending = new Subject<never>();
-    const api = { createCard: vi.fn(() => pending) };
-    TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: api }] });
+    const api = {
+      createCard: vi.fn(() => pending),
+      listCommandTemplates: () => of({ templates: [] }),
+    };
+    TestBed.configureTestingModule({
+      providers: [CommandTemplatesSession, { provide: Api, useValue: api }],
+    });
     const board = TestBed.runInInjectionContext(() => new Board());
     board.data.set({
       columns: [
@@ -52,7 +65,15 @@ describe('Board create requests', () => {
         updatedAt: '',
       }),
     );
-    TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: { createCard } }] });
+    TestBed.configureTestingModule({
+      providers: [
+        CommandTemplatesSession,
+        {
+          provide: Api,
+          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }) },
+        },
+      ],
+    });
     const board = TestBed.runInInjectionContext(() => new Board());
     board.data.set({
       columns: [
@@ -86,7 +107,15 @@ describe('Board create requests', () => {
         updatedAt: '',
       }),
     );
-    TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: { createCard } }] });
+    TestBed.configureTestingModule({
+      providers: [
+        CommandTemplatesSession,
+        {
+          provide: Api,
+          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }) },
+        },
+      ],
+    });
     const board = TestBed.runInInjectionContext(() => new Board());
     board.data.set({ columns: [{ id: 1, name: 'Todo', position: 0 }], cards: [] });
     board.cardForm.setValue({ title: 'first', description: '' });
@@ -95,7 +124,15 @@ describe('Board create requests', () => {
   });
   it('does not create when Todo column is missing', () => {
     const createCard = vi.fn();
-    TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: { createCard } }] });
+    TestBed.configureTestingModule({
+      providers: [
+        CommandTemplatesSession,
+        {
+          provide: Api,
+          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }) },
+        },
+      ],
+    });
     const board = TestBed.runInInjectionContext(() => new Board());
     board.data.set({ columns: [{ id: 2, name: 'Doing', position: 0 }], cards: [] });
     board.cardForm.setValue({ title: 'x', description: '' });
@@ -119,6 +156,7 @@ describe('Board create requests', () => {
                 ],
                 cards: [],
               }),
+            listCommandTemplates: () => of({ templates: [] }),
           },
         },
       ],
@@ -151,8 +189,13 @@ describe('Board create requests', () => {
   });
   it('freezes column input while creating and restores it after failure', () => {
     const pending = new Subject<never>();
-    const api = { createColumn: vi.fn(() => pending) };
-    TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: api }] });
+    const api = {
+      createColumn: vi.fn(() => pending),
+      listCommandTemplates: () => of({ templates: [] }),
+    };
+    TestBed.configureTestingModule({
+      providers: [CommandTemplatesSession, { provide: Api, useValue: api }],
+    });
     const board = TestBed.runInInjectionContext(() => new Board());
     board.columnForm.controls.name.setValue('Review');
     board.addColumn();
@@ -189,7 +232,13 @@ describe('Board assignee chip', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: () => singleCardBoard('Cursor') } },
+        {
+          provide: Api,
+          useValue: {
+            board: () => singleCardBoard('Cursor'),
+            listCommandTemplates: () => of({ templates: [] }),
+          },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -203,7 +252,13 @@ describe('Board assignee chip', () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       imports: [Board],
-      providers: [provideRouter([]), { provide: Api, useValue: { board: singleCardBoard } }],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }) },
+        },
+      ],
     });
     const empty = TestBed.createComponent(Board);
     empty.detectChanges();
@@ -217,7 +272,13 @@ describe('Board task numbers', () => {
   it('links to the same public number shown on the card', async () => {
     TestBed.configureTestingModule({
       imports: [Board],
-      providers: [provideRouter([]), { provide: Api, useValue: { board: singleCardBoard } }],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }) },
+        },
+      ],
     });
     const f = TestBed.createComponent(Board);
     f.detectChanges();
@@ -253,7 +314,13 @@ describe('Board copy card link', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [Board],
-      providers: [provideRouter([]), { provide: Api, useValue: { board: singleCardBoard } }],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }) },
+        },
+      ],
     });
   });
 
@@ -306,6 +373,188 @@ describe('Board copy card link', () => {
     expect(f.nativeElement.querySelector('.copy-link-live').textContent).toContain(
       'リンクをコピーできませんでした',
     );
+  });
+});
+
+describe('Board copy command menu', () => {
+  const originalClipboard = navigator.clipboard;
+  const template = {
+    id: 4,
+    name: 'gh pr',
+    template: 'gh pr view {{url}} extra',
+    position: 0,
+  };
+
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: originalClipboard,
+    });
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  const create = async (
+    templates: { id: number; name: string; template: string; position: number }[],
+    listCommandTemplates = vi.fn(() => of({ templates })),
+  ) => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        { provide: Api, useValue: { board: singleCardBoard, listCommandTemplates } },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    return { f, listCommandTemplates };
+  };
+
+  const openMenu = (f: { nativeElement: HTMLElement; detectChanges(): void }) => {
+    const button = f.nativeElement.querySelector(
+      '.copy-command-button',
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    expect(button!.getAttribute('aria-haspopup')).toBe('menu');
+    expect(button!.getAttribute('aria-expanded')).toBe('false');
+    button!.click();
+    f.detectChanges();
+    const menu = f.nativeElement.querySelector('.copy-command-menu') as HTMLElement | null;
+    expect(menu).not.toBeNull();
+    expect(button!.getAttribute('aria-expanded')).toBe('true');
+    return { button: button!, menu: menu! };
+  };
+
+  it('loads templates and copies the resolved command without navigating', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { f, listCommandTemplates } = await create([template]);
+    expect(listCommandTemplates).toHaveBeenCalled();
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const { menu } = openMenu(f);
+    expect(menu.textContent).toContain(template.name);
+    expect(menu.querySelector('b')).toBeNull();
+    (menu.querySelector('button') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-link-live')?.textContent ?? '').includes(
+        COPY_COMMAND_SUCCESS,
+      );
+    });
+    expect(writeText).toHaveBeenCalledWith(
+      resolveCommand(template.template, cardDetailUrl(window.location.origin, 2)),
+    );
+    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(f.nativeElement.querySelector('.copy-link-live').textContent).toContain(
+      COPY_COMMAND_SUCCESS,
+    );
+  });
+
+  it('announces command copy failure in the shared live region', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    });
+    const { f } = await create([template]);
+    const { menu } = openMenu(f);
+    (menu.querySelector('button') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-link-live')?.textContent ?? '').includes(
+        COPY_COMMAND_FAILURE,
+      );
+    });
+    expect(f.nativeElement.querySelector('.copy-link-live').textContent).toContain(
+      COPY_COMMAND_FAILURE,
+    );
+  });
+
+  it('shows an empty notice and does not copy when no templates exist', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { f } = await create([]);
+    const { menu } = openMenu(f);
+    expect(menu.textContent).toContain(COMMAND_MENU_EMPTY);
+    expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
+    menu.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('shows a load failure instead of the empty-registration notice when listing templates fails', async () => {
+    const { f } = await create(
+      [],
+      vi.fn(() => throwError(() => ({ status: 404 }))),
+    );
+    const { menu } = openMenu(f);
+    expect(menu.textContent).not.toContain(COMMAND_MENU_EMPTY);
+    expect(menu.textContent).toContain('コマンド一覧を読み込めませんでした');
+    expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
+  });
+
+  it('raises the card while its command menu is open', async () => {
+    const { f } = await create([template]);
+    const card = f.nativeElement.querySelector('.task-card') as HTMLElement;
+    expect(card.classList.contains('command-menu-open')).toBe(false);
+    openMenu(f);
+    expect(card.classList.contains('command-menu-open')).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    f.detectChanges();
+    expect(card.classList.contains('command-menu-open')).toBe(false);
+  });
+
+  it('shows only the latest copy feedback when a link copy follows a command copy', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { f } = await create([template]);
+    const { menu } = openMenu(f);
+    (menu.querySelector('button') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-link-live')?.textContent ?? '').includes(
+        COPY_COMMAND_SUCCESS,
+      );
+    });
+    (f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return f.componentInstance.copyFeedback() === COPY_LINK_SUCCESS;
+    });
+    const live = f.nativeElement.querySelector('.copy-link-live').textContent ?? '';
+    expect(live).toContain(COPY_LINK_SUCCESS);
+    expect(live).not.toContain(COPY_COMMAND_SUCCESS);
+    expect(f.componentInstance.copyCommandAnnouncement()).toBe(COPY_COMMAND_SUCCESS);
+  });
+
+  it('renders the template name as text and closes on Escape or an outside click', async () => {
+    const { f } = await create([
+      { id: 4, name: '<b>gh</b>', template: 'echo {{url}}', position: 0 },
+    ]);
+    const { menu } = openMenu(f);
+    expect(menu.textContent).toContain('<b>gh</b>');
+    expect(menu.querySelector('b')).toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+    openMenu(f);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
   });
 });
 
@@ -403,7 +652,11 @@ describe('Board column reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: () => of(sampleBoard(cols)), reorderColumns },
+          useValue: {
+            board: () => of(sampleBoard(cols)),
+            reorderColumns,
+            listCommandTemplates: () => of({ templates: [] }),
+          },
         },
       ],
     });
@@ -482,7 +735,14 @@ describe('Board column reordering', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: () => of(sampleBoard(cols)), reorderColumns } },
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(sampleBoard(cols)),
+            reorderColumns,
+            listCommandTemplates: () => of({ templates: [] }),
+          },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -530,7 +790,14 @@ describe('Board column reordering', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: () => of(sampleBoard(cols)), reorderColumns } },
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(sampleBoard(cols)),
+            reorderColumns,
+            listCommandTemplates: () => of({ templates: [] }),
+          },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -586,7 +853,14 @@ describe('Board column reordering', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: () => of(sampleBoard(cols)), reorderColumns } },
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(sampleBoard(cols)),
+            reorderColumns,
+            listCommandTemplates: () => of({ templates: [] }),
+          },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -639,7 +913,13 @@ describe('Board column reordering', () => {
 
     TestBed.configureTestingModule({
       imports: [Board],
-      providers: [provideRouter([]), { provide: Api, useValue: { board, reorderColumns } }],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board, reorderColumns, listCommandTemplates: () => of({ templates: [] }) },
+        },
+      ],
     });
     const f = TestBed.createComponent(Board);
     f.detectChanges();
@@ -709,7 +989,14 @@ describe('Board column reordering', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: () => of(sampleBoard(cols)), reorderColumns } },
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(sampleBoard(cols)),
+            reorderColumns,
+            listCommandTemplates: () => of({ templates: [] }),
+          },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -829,7 +1116,12 @@ describe('Board card reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards,
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+          },
         },
       ],
     });
@@ -863,6 +1155,7 @@ describe('Board card reordering', () => {
             board: () => of(initial),
             reorderCards,
             reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
           },
         },
       ],
@@ -907,7 +1200,12 @@ describe('Board card reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards,
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+          },
         },
       ],
     });
@@ -950,7 +1248,12 @@ describe('Board card reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: () => of(boardData), reorderCards, reorderColumns: vi.fn() },
+          useValue: {
+            board: () => of(boardData),
+            reorderCards,
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+          },
         },
       ],
     });
@@ -985,6 +1288,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards: vi.fn(),
             reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
           },
         },
       ],
@@ -1025,6 +1329,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards,
             reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
           },
         },
       ],
@@ -1061,6 +1366,7 @@ describe('Board card reordering', () => {
             board: () => of(boardData),
             reorderCards,
             reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
           },
         },
       ],
@@ -1096,6 +1402,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards: vi.fn(),
             reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
           },
         },
       ],
@@ -1135,7 +1442,12 @@ describe('Board card reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards,
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+          },
         },
       ],
     });
@@ -1168,7 +1480,12 @@ describe('Board card reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards,
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+          },
         },
       ],
     });
@@ -1211,6 +1528,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards: () => new Subject(),
             reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
           },
         },
       ],
@@ -1261,7 +1579,14 @@ describe('Board card identity', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: () => of(crossed()), reorderCards } },
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(crossed()),
+            reorderCards,
+            listCommandTemplates: () => of({ templates: [] }),
+          },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -1334,7 +1659,10 @@ describe('Board live refresh', () => {
   it('applies silent board poll without toggling loading', async () => {
     vi.useFakeTimers();
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
-    const api = { board: vi.fn(() => of(initial)) };
+    const api = {
+      board: vi.fn(() => of(initial)),
+      listCommandTemplates: () => of({ templates: [] }),
+    };
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [provideRouter([]), { provide: Api, useValue: api }],
@@ -1374,7 +1702,10 @@ describe('Board live refresh', () => {
   it('does not apply poll while reordering', async () => {
     vi.useFakeTimers();
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
-    const api = { board: vi.fn(() => of(initial)) };
+    const api = {
+      board: vi.fn(() => of(initial)),
+      listCommandTemplates: () => of({ templates: [] }),
+    };
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [provideRouter([]), { provide: Api, useValue: api }],
@@ -1397,7 +1728,10 @@ describe('Board live refresh', () => {
     const board = vi.fn(() => boardImpl());
     TestBed.configureTestingModule({
       imports: [Board],
-      providers: [provideRouter([]), { provide: Api, useValue: { board } }],
+      providers: [
+        provideRouter([]),
+        { provide: Api, useValue: { board, listCommandTemplates: () => of({ templates: [] }) } },
+      ],
     });
     const f = TestBed.createComponent(Board);
     f.detectChanges();
@@ -1412,7 +1746,10 @@ describe('Board live refresh', () => {
   it('does not apply poll while dragging a column', async () => {
     vi.useFakeTimers();
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
-    const api = { board: vi.fn(() => of(initial)) };
+    const api = {
+      board: vi.fn(() => of(initial)),
+      listCommandTemplates: () => of({ templates: [] }),
+    };
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [provideRouter([]), { provide: Api, useValue: api }],
@@ -1431,7 +1768,10 @@ describe('Board live refresh', () => {
     vi.useFakeTimers();
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const slow = new Subject<BoardData>();
-    const api = { board: vi.fn(() => of(initial)) };
+    const api = {
+      board: vi.fn(() => of(initial)),
+      listCommandTemplates: () => of({ templates: [] }),
+    };
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [provideRouter([]), { provide: Api, useValue: api }],

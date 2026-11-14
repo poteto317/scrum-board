@@ -12,13 +12,15 @@ import (
 )
 
 type memoryRepo struct {
-	columns []Column
-	cards   map[int64]Card
-	next    int64
+	columns        []Column
+	cards          map[int64]Card
+	next           int64
+	templates      []CommandTemplate
+	nextTemplateID int64
 }
 
 func fresh() *memoryRepo {
-	return &memoryRepo{columns: []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}}, cards: map[int64]Card{}, next: 1}
+	return &memoryRepo{columns: []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}}, cards: map[int64]Card{}, next: 1, nextTemplateID: 1}
 }
 func (m *memoryRepo) Board(context.Context) (Board, error) {
 	cols := slices.Clone(m.columns)
@@ -410,4 +412,65 @@ func (m *memoryRepo) GetColumnByName(_ context.Context, name string) (Column, er
 func (m *memoryRepo) History(ctx context.Context, number, before int64) (HistoryPage, error) {
 	_, err := m.GetCardByNumber(ctx, number)
 	return HistoryPage{Events: []HistoryEvent{}}, err
+}
+
+func (m *memoryRepo) ListCommandTemplates(context.Context) ([]CommandTemplate, error) {
+	out := append([]CommandTemplate(nil), m.templates...)
+	slices.SortFunc(out, func(a, b CommandTemplate) int {
+		if c := cmp.Compare(a.Position, b.Position); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	if out == nil {
+		out = []CommandTemplate{}
+	}
+	return out, nil
+}
+
+func (m *memoryRepo) CreateCommandTemplate(_ context.Context, in CommandTemplateInput) (CommandTemplate, error) {
+	if len(m.templates) >= MaxCommandTemplates {
+		return CommandTemplate{}, ErrCommandTemplateLimit
+	}
+	if m.nextTemplateID < 1 {
+		m.nextTemplateID = 1
+	}
+	maxPos := -1
+	for _, item := range m.templates {
+		if item.Position > maxPos {
+			maxPos = item.Position
+		}
+	}
+	item := CommandTemplate{ID: m.nextTemplateID, Name: in.Name, Template: in.Template, Position: maxPos + 1}
+	m.nextTemplateID++
+	m.templates = append(m.templates, item)
+	return item, nil
+}
+
+func (m *memoryRepo) UpdateCommandTemplate(_ context.Context, id int64, p CommandTemplatePatch) (CommandTemplate, error) {
+	for i, item := range m.templates {
+		if item.ID != id {
+			continue
+		}
+		if p.Name != nil {
+			item.Name = *p.Name
+		}
+		if p.Template != nil {
+			item.Template = *p.Template
+		}
+		m.templates[i] = item
+		return item, nil
+	}
+	return CommandTemplate{}, ErrNotFound
+}
+
+func (m *memoryRepo) DeleteCommandTemplate(_ context.Context, id int64) error {
+	for i, item := range m.templates {
+		if item.ID != id {
+			continue
+		}
+		m.templates = append(m.templates[:i], m.templates[i+1:]...)
+		return nil
+	}
+	return ErrNotFound
 }

@@ -42,6 +42,7 @@ it('guards real router reuse: rejecting discard retains the old card, then flush
         ...patch,
       }),
     ),
+    listCommandTemplates: () => of({ templates: [] }),
   };
   TestBed.configureTestingModule({
     providers: [provideRouter(routes), { provide: Api, useValue: api }],

@@ -51,7 +51,15 @@ async function setup(reorderCards: ReturnType<typeof vi.fn>) {
     imports: [Board],
     providers: [
       provideRouter([]),
-      { provide: Api, useValue: { board, reorderCards, reorderColumns: vi.fn() } },
+      {
+        provide: Api,
+        useValue: {
+          board,
+          reorderCards,
+          reorderColumns: vi.fn(),
+          listCommandTemplates: () => of({ templates: [] }),
+        },
+      },
     ],
   });
   const f = TestBed.createComponent(Board);

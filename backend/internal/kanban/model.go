@@ -75,4 +75,8 @@ type Repository interface {
 	ReorderCards(context.Context, []CardColumnOrder) ([]Card, error)
 	Backlog(context.Context) ([]Card, error)
 	ReorderBacklog(context.Context, []int64) ([]Card, error)
+	ListCommandTemplates(context.Context) ([]CommandTemplate, error)
+	CreateCommandTemplate(context.Context, CommandTemplateInput) (CommandTemplate, error)
+	UpdateCommandTemplate(context.Context, int64, CommandTemplatePatch) (CommandTemplate, error)
+	DeleteCommandTemplate(context.Context, int64) error
 }

@@ -40,7 +40,14 @@ describe('Board template CDK wiring', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: () => of(board), reorderCards } },
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(board),
+            reorderCards,
+            listCommandTemplates: () => of({ templates: [] }),
+          },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -118,7 +125,14 @@ describe('Board template CDK wiring', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: () => of(board), reorderCards: vi.fn() } },
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(board),
+            reorderCards: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+          },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);

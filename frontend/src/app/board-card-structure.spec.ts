@@ -8,7 +8,7 @@ import { Api } from './api';
 import { Board } from './board';
 import { BoardData, Card } from './models';
 
-// The card is `<article cdkDrag>` holding the drag handle button, the copy button, and the `<a>` link as siblings.
+// The card is `<article cdkDrag>` holding the drag handle, `.card-quick-actions` (command + copy), and the body link as siblings.
 function card(id: number, position: number): Card {
   return {
     id,
@@ -36,7 +36,14 @@ async function setup() {
     imports: [Board],
     providers: [
       provideRouter([]),
-      { provide: Api, useValue: { board: () => of(board()), reorderCards } },
+      {
+        provide: Api,
+        useValue: {
+          board: () => of(board()),
+          reorderCards,
+          listCommandTemplates: () => of({ templates: [] }),
+        },
+      },
     ],
   });
   const f = TestBed.createComponent(Board);
@@ -56,8 +63,9 @@ describe('Board card structure', () => {
     vi.restoreAllMocks();
   });
 
-  it('places the drag handle, copy button, and body link as siblings inside the draggable article', async () => {
+  it('places the drag handle, quick actions, and body link as siblings inside the draggable article', async () => {
     const { f, root, article, handle, link, copy } = await setup();
+    const actions = article.querySelector('.card-quick-actions') as HTMLElement;
     const drags = f.debugElement.queryAll(By.directive(CdkDrag));
     const handles = f.debugElement.queryAll(By.directive(CdkDragHandle));
     expect(drags.length).toBe(2);
@@ -77,10 +85,11 @@ describe('Board card structure', () => {
     expect(link.hasAttribute('data-card-id')).toBe(false);
     expect(link.hasAttribute('aria-describedby')).toBe(false);
     expect(link.getAttribute('href')).toBe('/cards/1');
-    // The drag handle, copy button, and link are siblings: no button sits inside the anchor.
+    // The drag handle, quick-actions wrapper, and link are siblings. Copy stays inside quick actions, never inside the anchor.
     expect(handle.parentElement).toBe(article);
-    expect(copy.parentElement).toBe(article);
+    expect(actions.parentElement).toBe(article);
     expect(link.parentElement).toBe(article);
+    expect(actions.contains(copy)).toBe(true);
     expect(link.contains(handle)).toBe(false);
     expect(link.contains(copy)).toBe(false);
     expect(root.querySelectorAll('.task-card-body [data-card-id]').length).toBe(0);

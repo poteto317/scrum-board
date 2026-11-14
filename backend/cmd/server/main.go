@@ -73,6 +73,9 @@ func run() error {
 	if err == nil {
 		err = repo.InitializeHistory(migrationCtx)
 	}
+	if err == nil {
+		err = repo.InitializeCommandTemplates(migrationCtx)
+	}
 	migrationCancel()
 	if err != nil {
 		return err

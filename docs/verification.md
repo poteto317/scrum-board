@@ -72,7 +72,7 @@
 
 - `PUT /api/cards/order` と CDK ドラッグ&ドロップ（列内・列間）/ 上下キー
 - 複数 PR を持つカード: `GET /api/board`・バックログ・並び替え（`PUT /api/cards/order`、`PUT /api/backlog/order`）・列移動の応答に重複や欠落がなく、`prUrls` が登録順で保たれ、並び替え・列移動の履歴は status だけが変わること（`TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL`）。`prUrls` の更新は全列ロックで直列化され、並行初回保存で 1213 にならないこと
-- カードのドラッグ開始領域の限定（左端中央ハンドル `.card-drag-handle`）: `<article class="task-card" cdkDrag>` の直下にドラッグハンドル `<button type="button" class="card-drag-handle" cdkDragHandle>`（`⋮⋮` アイコン、カード左端の上下中央に常時表示）、コピーボタン `<button class="copy-card-link">`、本文リンク `<a class="task-card-body" href>` を兄弟として配置。マウスドラッグ（8px 閾値）およびタッチ長押しドラッグ（200ms 遅延）は `.card-drag-handle` からのみ開始でき、`.task-card`・`.task-card-body`・`.copy-card-link` からはドラッグが開始されないこと。`.task-card-body` の通常クリックと Enter は詳細へ遷移し、Ctrl/Cmd 付きのクリックはブラウザー既定に任せ、`.card-drag-handle` の単なるクリックやドラッグ後は遷移が起きないこと
+- カードのドラッグ開始領域の限定（左端中央ハンドル `.card-drag-handle`）: `<article class="task-card" cdkDrag>` の直下にドラッグハンドル `<button type="button" class="card-drag-handle" cdkDragHandle>`（`⋮⋮` アイコン、カード左端の上下中央に常時表示）、`<div class="card-quick-actions">`（コマンドメニューとコピーボタン `<button class="copy-card-link">`）、本文リンク `<a class="task-card-body" href>` を兄弟として配置。コピーボタンは `.card-quick-actions` の中にあり、本文リンクの中にはない。マウスドラッグ（8px 閾値）およびタッチ長押しドラッグ（200ms 遅延）は `.card-drag-handle` からのみ開始でき、`.task-card`・`.task-card-body`・`.copy-card-link` からはドラッグが開始されないこと。`.task-card-body` の通常クリックと Enter は詳細へ遷移し、Ctrl/Cmd 付きのクリックはブラウザー既定に任せ、`.card-drag-handle` の単なるクリックやドラッグ後は遷移が起きないこと
 - ボードの自動反映（5 秒ごとのポーリング。`startLiveRefresh`）との両立: カードのドラッグ中・保存中（`reordering` / `saving`）・作成モーダル表示中・列のドラッグ中は、ボードを更新しない（取得もしない）。ドラッグは `cdkDragStarted` から `cdkDragEnded`（離してからプレビューが戻り終わるまでの最大 300ms を含む）まで。CDK はドロップのインデックスをドラッグ開始時のリストに対して出すので、ドラッグ中にボードが差し替わると別のカードが動いて保存される。再現していた条件は、Todo に A〜E を置き、B を掴んだまま別経路で A を消して 5 秒待ってからドロップする、というもの（修正前の PUT は `[B,D,E,C]` で、B ではなく C が動いた）。修正後は動くのは B で、PUT の `cardIds` は掴んだときの並び `[A,B,C,D,E]` を元にした `[A,C,D,B,E]` になる（A は消えているのでサーバーは 409 を返し、誤ったカードは保存されない。画面は元に戻り、次のポーリングで `[B,C,D,E]` になる）。別経路で並びだけを変えた場合（同じカード集合）は 200 で保存され、動くのは掴んだカードである。ドロップ時は、`item.data` の id が移動元の `previousIndex` のカードと一致しなければ何も保存しない。ドラッグが終われば（no-op のドロップを含む）ポーリングは再開し、次の取得で別経路の変更が入る。保存より前に出した取得の遅い応答が、保存した順序を巻き戻さない（応答は、取得を始めたときの `data` のままのときだけ適用）。実ブラウザー（使い捨て MySQL につないだ別ポートの API と `ng serve`。マウスイベントを JavaScript から `mousedown` → 段階的な `mousemove` → 待つ → `mouseup` で送る）で、修正前のコードは上の `[B,D,E,C]` を再現し、修正後は、掴んでいる間は 12 秒待っても画面が差し替わらず取得のリクエストも出ない（ドロップ後に再開し、5 秒後には最新の `[B,C,D,E]` になる）ことを確認。`board-card-drag-live-refresh.spec.ts`（fake timers と `Api.board` のモック。実マウスのドラッグも含む）で、ガードを 1 つずつ外す変異（`enabled` から `draggingCardId` を外す／照合を外す／古い応答のフィルターを外す／`ended` で下ろさない／`released` で下ろす／立てない）がどれも落ちることを確認
 - コピーボタン（カードリンクのコピー機能との両立）: 単なるクリックは URL のコピーだけで、遷移も並べ替えも起きない。コピーボタンや本文リンク上からドラッグしてもカードは移動しない。上下矢印キー（↑/↓）による列内移動は `.card-drag-handle` にフォーカスがあるときのみ動作し、移動完了・失敗後も `.card-drag-handle` にフォーカスが残ること（コピーボタンや本文リンク上の ↑/↓ ではカードは動かない）
 - タッチ: ハンドル（`.card-drag-handle`）を 200ms 押し続けてから動かしたときだけドラッグが始まり（マウスはハンドル上で 8px 移動時に即時開始）、押し続けずにスワイプしたときやハンドル以外（`.task-card`・`.task-card-body`・`.copy-card-link`）を触ったときはドラッグが始まらず、`touchmove` が `preventDefault` されないこと
@@ -91,6 +91,13 @@
 - 400 / 409 / 永続化、並び替え後のカード追加が末尾、Create と Reorder の並行
 - `ReorderBacklog` もカード行に触れる前に全列ロック（`lockColumnRows`）を取り、`ReorderCards` / `CreateCard` / `UpdateCard` / `DeleteCard` / `ImportHistory` と交差してデッドロックしないこと（使い捨て MySQL の決定的テスト `TestCardWritersQueueOnTheAllColumnsLockMySQL` で、`ReorderBacklog` のロックを外すと落ちることを確認。統合前の `ReorderBacklog`（`cards` を主キー順にロックするだけ）は、`ReorderCards` と 80 並行で混在させると約 3 分の 1 が MySQL 1213 になることをレビューで実測した。マージ時にこのリポジトリの Go テストで並行ストレステストを組んだが交差を再現できず検出力がなかったため、決定的テストを根拠にする）
 - カードの `position`（列内の並び順）と `backlogPosition`（バックログの優先順位）が独立していること。一方の並び替えがもう一方を変えないこと
+
+### コマンドテンプレート
+
+- `GET` / `POST` / `PATCH` / `DELETE /api/command-templates`。作成は 201、部分更新は 200、削除は 204。`name` は前後空白を除去し、`template` は除去しない。制御文字、長さ（`name` 1〜60、`template` 1〜2000）、型不正、未知フィールド、空の PATCH は 400。全体 50 件を超える作成は 400。無い id は 404。プレースホルダクエリだけで保存し、サーバーは文字列を実行せず `{{url}}` も置換しない
+- フロントの `resolveCommand` はリテラル `{{url}}` だけを、そのカードの絶対詳細 URL（`origin + /cards/{number}`）へ置換する。複数の `{{url}}` はすべて置換し、`{{x}}` や `{{URL}}` は残す
+- ボードと詳細のコマンドメニュー（リンクコピーの隣、`aria-haspopup="menu"`）。0 件は「コマンドが未登録です。詳細画面で追加できます。」でコピーしない。一覧の読み込み失敗は「コマンド一覧を読み込めませんでした」を表示し、未登録の案内は出さない。成功は「コマンドをコピーしました」、失敗は「コマンドをコピーできませんでした」。メニューや管理導線を外すとテストが落ちる
+- 詳細画面だけの「コマンドを管理」ダイアログで追加・更新・削除の成否を伝える。成功は短い成功文、400 は API の `message`、通信失敗と 5xx も失敗文を出し、黙ってダイアログを閉じない。テンプレート本文はテキストとして表示し、HTML として挿入しない
 
 ### 開発用画面（web-dev / 自動反映）
 

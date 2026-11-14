@@ -6,6 +6,13 @@ import { CardDetail } from './card-detail';
 import { Api } from './api';
 import { Card } from './models';
 import { cardDetailUrl } from './card-link';
+import { COPY_LINK_SUCCESS } from './copy-link-feedback';
+import {
+  COMMAND_MENU_EMPTY,
+  COPY_COMMAND_FAILURE,
+  COPY_COMMAND_SUCCESS,
+  resolveCommand,
+} from './command-template';
 const card: Card = {
   id: 18,
   number: 3,
@@ -27,6 +34,7 @@ describe('CardDetail autosave', () => {
     cardByNumber: ReturnType<typeof vi.fn>;
     updateCard: ReturnType<typeof vi.fn>;
     deleteCard: ReturnType<typeof vi.fn>;
+    listCommandTemplates: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -47,6 +55,7 @@ describe('CardDetail autosave', () => {
       cardByNumber: vi.fn(() => of(card)),
       updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteCard: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
       imports: [CardDetail],
@@ -334,6 +343,7 @@ describe('CardDetail copy card link', () => {
     cardByNumber: ReturnType<typeof vi.fn>;
     updateCard: ReturnType<typeof vi.fn>;
     deleteCard: ReturnType<typeof vi.fn>;
+    listCommandTemplates: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
     params = new BehaviorSubject(new Map([['number', '3']]));
@@ -348,6 +358,7 @@ describe('CardDetail copy card link', () => {
       cardByNumber: vi.fn(() => of(card)),
       updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteCard: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
       imports: [CardDetail],
@@ -431,6 +442,361 @@ describe('CardDetail copy card link', () => {
   });
 });
 
+describe('CardDetail copy command menu and management', () => {
+  const originalClipboard = navigator.clipboard;
+  const template = {
+    id: 7,
+    name: 'gh pr',
+    template: 'gh pr view {{url}}',
+    position: 1,
+  };
+  let restoreDialog: () => void;
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    restoreDialog = () => {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    };
+  });
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: originalClipboard,
+    });
+    TestBed.resetTestingModule();
+    restoreDialog();
+    vi.restoreAllMocks();
+  });
+
+  const create = (
+    overrides: Record<string, unknown> = {},
+    templates: { id: number; name: string; template: string; position: number }[] = [template],
+  ) => {
+    const params = new BehaviorSubject(new Map([['number', '3']]));
+    const api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], cards: [] })),
+      cardByNumber: vi.fn(() => of(card)),
+      updateCard: vi.fn(),
+      deleteCard: vi.fn(),
+      listCommandTemplates: vi.fn(() => of({ templates })),
+      createCommandTemplate: vi.fn(),
+      updateCommandTemplate: vi.fn(),
+      deleteCommandTemplate: vi.fn(),
+      ...overrides,
+    };
+    const router = { navigate: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [CardDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        { provide: Router, useValue: router },
+      ],
+    });
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    return { f, api, router };
+  };
+
+  const openMenu = (f: { nativeElement: HTMLElement; detectChanges(): void }) => {
+    const button = f.nativeElement.querySelector(
+      '.copy-command-button',
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    expect(button!.getAttribute('aria-haspopup')).toBe('menu');
+    expect(button!.getAttribute('aria-expanded')).toBe('false');
+    button!.click();
+    f.detectChanges();
+    const menu = f.nativeElement.querySelector('.copy-command-menu') as HTMLElement | null;
+    expect(menu).not.toBeNull();
+    expect(button!.getAttribute('aria-expanded')).toBe('true');
+    return { button: button!, menu: menu! };
+  };
+
+  const openDialog = (f: { nativeElement: HTMLElement; detectChanges(): void }) => {
+    const manage = f.nativeElement.querySelector('.manage-commands') as HTMLButtonElement | null;
+    expect(manage).not.toBeNull();
+    expect(manage!.textContent).toContain('コマンドを管理');
+    manage!.click();
+    f.detectChanges();
+    const dialog = f.nativeElement.querySelector(
+      'dialog.command-templates-dialog',
+    ) as HTMLElement | null;
+    expect(dialog).not.toBeNull();
+    expect(dialog!.hasAttribute('appmodal')).toBe(true);
+    return dialog!;
+  };
+
+  const buttonByText = (root: ParentNode, text: string) =>
+    Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text) as
+      HTMLButtonElement | undefined;
+
+  const setControl = (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+    el.value = value;
+    el.dispatchEvent(new Event('input'));
+  };
+
+  it('copies the resolved command into the shared visible feedback without navigating', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { f, api, router } = create();
+    expect(api.listCommandTemplates).toHaveBeenCalled();
+    const { menu } = openMenu(f);
+    expect(menu.textContent).toContain(template.name);
+    (menu.querySelector('button') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      const feedback = f.nativeElement.querySelector('.copy-link-feedback');
+      return (feedback?.textContent ?? '').includes(COPY_COMMAND_SUCCESS);
+    });
+    const feedback = f.nativeElement.querySelector('.copy-link-feedback') as HTMLElement;
+    expect(feedback.getAttribute('aria-live')).toBe('polite');
+    expect(feedback.classList.contains('sr-only')).toBe(false);
+    expect(feedback.textContent).toContain(COPY_COMMAND_SUCCESS);
+    expect(writeText).toHaveBeenCalledWith(
+      resolveCommand(template.template, cardDetailUrl(window.location.origin, card.number)),
+    );
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows only the latest copy feedback when a link copy follows a command copy', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { f } = create();
+    const { menu } = openMenu(f);
+    (menu.querySelector('button') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-link-feedback')?.textContent ?? '').includes(
+        COPY_COMMAND_SUCCESS,
+      );
+    });
+    (f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return f.componentInstance.copyFeedback() === COPY_LINK_SUCCESS;
+    });
+    const feedback = f.nativeElement.querySelector('.copy-link-feedback').textContent ?? '';
+    expect(feedback).toContain(COPY_LINK_SUCCESS);
+    expect(feedback).not.toContain(COPY_COMMAND_SUCCESS);
+    expect(f.componentInstance.copyCommandFeedback()).toBe(COPY_COMMAND_SUCCESS);
+  });
+
+  it('shows command copy failure in the visible live feedback', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    });
+    const { f } = create();
+    const { menu } = openMenu(f);
+    (menu.querySelector('button') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-link-feedback')?.textContent ?? '').includes(
+        COPY_COMMAND_FAILURE,
+      );
+    });
+    expect(f.nativeElement.querySelector('.copy-link-feedback').textContent).toContain(
+      COPY_COMMAND_FAILURE,
+    );
+  });
+
+  it('shows an empty notice and does not copy when no templates exist', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { f } = create({}, []);
+    const { menu } = openMenu(f);
+    expect(menu.textContent).toContain(COMMAND_MENU_EMPTY);
+    expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
+    menu.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('shows a load failure instead of the empty-registration notice when listing templates fails', () => {
+    const { f } = create({
+      listCommandTemplates: vi.fn(() => throwError(() => ({ status: 0 }))),
+    });
+    const { menu } = openMenu(f);
+    expect(menu.textContent).not.toContain(COMMAND_MENU_EMPTY);
+    expect(menu.textContent).toContain('コマンド一覧を読み込めませんでした');
+    expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
+    const dialog = openDialog(f);
+    expect(dialog.textContent).toContain('コマンド一覧を読み込めませんでした');
+    expect(dialog.textContent).not.toContain(COMMAND_MENU_EMPTY);
+  });
+
+  it('closes the command menu on Escape and on an outside click', () => {
+    const { f } = create();
+    openMenu(f);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+    openMenu(f);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+  });
+
+  it('opens the manage dialog with an add form and url help', () => {
+    const { f } = create({}, []);
+    const dialog = openDialog(f);
+    expect(dialog.querySelector('#command-name')).not.toBeNull();
+    expect(dialog.querySelector('#command-template')).not.toBeNull();
+    expect(dialog.querySelector('form button[type="submit"]')).not.toBeNull();
+    expect(dialog.textContent).toContain('{{url}} はこのカードのリンクに置き換わります。');
+  });
+
+  it('adds a template, refreshes the list, and reports success', () => {
+    const created = { id: 8, name: 'new cmd', template: 'echo {{url}}', position: 2 };
+    const { f, api } = create({ createCommandTemplate: vi.fn(() => of(created)) }, []);
+    const dialog = openDialog(f);
+    setControl(dialog.querySelector('#command-name') as HTMLInputElement, created.name);
+    setControl(dialog.querySelector('#command-template') as HTMLTextAreaElement, created.template);
+    buttonByText(dialog, '追加')!.click();
+    f.detectChanges();
+    expect(api.createCommandTemplate).toHaveBeenCalledWith({
+      name: created.name,
+      template: created.template,
+    });
+    expect(dialog.textContent).toContain('コマンドを追加しました');
+    expect(dialog.textContent).toContain(created.name);
+    expect(dialog.querySelector('.command-template-body')?.textContent).toContain(created.template);
+  });
+
+  it('shows the API message when create returns 400', () => {
+    const { f, api } = create({
+      createCommandTemplate: vi.fn(() =>
+        throwError(() => ({ error: { message: '名前が長すぎます' } })),
+      ),
+    });
+    const dialog = openDialog(f);
+    setControl(dialog.querySelector('#command-name') as HTMLInputElement, 'too long');
+    setControl(dialog.querySelector('#command-template') as HTMLTextAreaElement, 'echo');
+    buttonByText(dialog, '追加')!.click();
+    f.detectChanges();
+    expect(api.createCommandTemplate).toHaveBeenCalled();
+    expect(dialog.textContent).toContain('名前が長すぎます');
+    expect(dialog.textContent).not.toContain('コマンドを追加しました');
+  });
+
+  it('shows a failure message when create hits a network or 5xx error', () => {
+    const { f } = create({
+      createCommandTemplate: vi.fn(() => throwError(() => ({ status: 500 }))),
+    });
+    const dialog = openDialog(f);
+    setControl(dialog.querySelector('#command-name') as HTMLInputElement, 'gh');
+    setControl(dialog.querySelector('#command-template') as HTMLTextAreaElement, 'echo {{url}}');
+    buttonByText(dialog, '追加')!.click();
+    f.detectChanges();
+    expect(dialog.textContent).toContain('通信に失敗しました。接続を確認して再試行してください。');
+    expect(dialog.textContent).not.toContain('コマンドを追加しました');
+  });
+
+  it('updates a template and reports success', () => {
+    const updated = { ...template, name: 'renamed', template: 'gh pr diff {{url}}' };
+    const { f, api } = create({
+      updateCommandTemplate: vi.fn(() => of(updated)),
+    });
+    const dialog = openDialog(f);
+    buttonByText(dialog, '編集')!.click();
+    f.detectChanges();
+    setControl(dialog.querySelector('.command-edit-name') as HTMLInputElement, updated.name);
+    setControl(
+      dialog.querySelector('.command-edit-template') as HTMLTextAreaElement,
+      updated.template,
+    );
+    (dialog.querySelector('.command-edit-form') as HTMLFormElement).requestSubmit();
+    f.detectChanges();
+    expect(api.updateCommandTemplate).toHaveBeenCalledWith(template.id, {
+      name: updated.name,
+      template: updated.template,
+    });
+    expect(dialog.textContent).toContain('コマンドを更新しました');
+    expect(dialog.textContent).toContain(updated.name);
+    expect(dialog.querySelector('.command-template-body')?.textContent).toContain(updated.template);
+  });
+
+  it('shows the API message when update returns 400', () => {
+    const { f } = create({
+      updateCommandTemplate: vi.fn(() =>
+        throwError(() => ({ error: { message: '本文が空です' } })),
+      ),
+    });
+    const dialog = openDialog(f);
+    buttonByText(dialog, '編集')!.click();
+    f.detectChanges();
+    (dialog.querySelector('.command-edit-form') as HTMLFormElement).requestSubmit();
+    f.detectChanges();
+    expect(dialog.textContent).toContain('本文が空です');
+    expect(dialog.textContent).not.toContain('コマンドを更新しました');
+  });
+
+  it('deletes a template and reports success', () => {
+    const { f, api } = create({
+      deleteCommandTemplate: vi.fn(() => of(undefined)),
+    });
+    const dialog = openDialog(f);
+    expect(dialog.textContent).toContain(template.template);
+    buttonByText(dialog, '削除')!.click();
+    f.detectChanges();
+    expect(api.deleteCommandTemplate).toHaveBeenCalledWith(template.id);
+    expect(dialog.textContent).toContain('コマンドを削除しました');
+    expect(dialog.textContent).not.toContain(template.template);
+  });
+
+  it('shows a failure message when delete hits a network error', () => {
+    const { f } = create({
+      deleteCommandTemplate: vi.fn(() => throwError(() => ({ status: 0 }))),
+    });
+    const dialog = openDialog(f);
+    buttonByText(dialog, '削除')!.click();
+    f.detectChanges();
+    expect(dialog.textContent).toContain('通信に失敗しました。接続を確認して再試行してください。');
+    expect(dialog.textContent).toContain(template.template);
+    expect(dialog.textContent).not.toContain('コマンドを削除しました');
+  });
+
+  it('renders the template body as text, not HTML', () => {
+    const hostile = {
+      id: 9,
+      name: 'safe',
+      template: '<img src=x onerror=alert(1)>',
+      position: 0,
+    };
+    const { f } = create({}, [hostile]);
+    const dialog = openDialog(f);
+    const body = dialog.querySelector('.command-template-body');
+    expect(body).not.toBeNull();
+    expect(body!.textContent).toContain(hostile.template);
+    expect(body!.querySelector('img')).toBeNull();
+    expect(dialog.querySelector('img')).toBeNull();
+  });
+});
+
 describe('CardDetail IME response handling', () => {
   it.each(['title', 'description'] as const)(
     'preserves buffered IME input in %s when an earlier save responds',
@@ -446,6 +812,7 @@ describe('CardDetail IME response handling', () => {
               board: () => of({ columns: [], cards: [] }),
               cardByNumber: () => of(card),
               updateCard: () => pending,
+              listCommandTemplates: vi.fn(() => of({ templates: [] })),
             },
           },
           { provide: ActivatedRoute, useValue: { paramMap: of(new Map([['number', '3']])) } },
@@ -483,6 +850,7 @@ describe('CardDetail live refresh', () => {
     cardByNumber: ReturnType<typeof vi.fn>;
     updateCard: ReturnType<typeof vi.fn>;
     deleteCard: ReturnType<typeof vi.fn>;
+    listCommandTemplates: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -503,6 +871,7 @@ describe('CardDetail live refresh', () => {
       cardByNumber: vi.fn(() => of(card)),
       updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteCard: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
       imports: [CardDetail],

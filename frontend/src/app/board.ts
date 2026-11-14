@@ -5,6 +5,7 @@ import {
   computed,
   DestroyRef,
   ElementRef,
+  HostListener,
   inject,
   Injector,
   NgZone,
@@ -44,7 +45,11 @@ import {
 } from './column-order';
 import { textLimit } from './form-validation';
 import { BoardData, Card, Column } from './models';
+import { COMMAND_MENU_EMPTY } from './command-template';
+import { CommandTemplatesSession } from './command-templates-session';
+import { CopyCommandFeedback } from './copy-command-feedback';
 import { CopyLinkFeedback } from './copy-link-feedback';
+import { LatestCopyFeedback } from './latest-copy-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
@@ -55,6 +60,7 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
   templateUrl: './board.html',
   styleUrl: './board.css',
   providers: [
+    CommandTemplatesSession,
     {
       provide: CDK_DRAG_CONFIG,
       useValue: {
@@ -83,7 +89,9 @@ export class Board implements OnInit {
   readonly reorderError = signal('');
   readonly reorderConflict = signal(false);
   readonly reorderAnnouncement = signal('');
-  private readonly linkCopy = new CopyLinkFeedback(this.destroyRef);
+  private readonly copyStatus = new LatestCopyFeedback(this.destroyRef);
+  private readonly linkCopy = new CopyLinkFeedback(this.destroyRef, this.copyStatus);
+  private readonly commandCopy = new CopyCommandFeedback(this.destroyRef, this.copyStatus);
   private autoScrollTimer: ReturnType<typeof setInterval> | null = null;
   private dragPointer: { x: number; y: number } | null = null;
   private dragMovedSinceTick = false;
@@ -91,6 +99,11 @@ export class Board implements OnInit {
     this.stopAutoScrollTimer(),
   );
   readonly copyLinkAnnouncement = this.linkCopy.message;
+  readonly copyCommandAnnouncement = this.commandCopy.message;
+  readonly copyFeedback = this.copyStatus.message;
+  readonly commands = inject(CommandTemplatesSession);
+  readonly commandMenuEmpty = COMMAND_MENU_EMPTY;
+  readonly openCommandCardId = signal<number | null>(null);
   readonly draggingColumnId = signal<number | null>(null);
   /**
    * The card CDK is dragging: from (cdkDragStarted) until (cdkDragEnded), which CDK emits only after the preview has
@@ -142,6 +155,7 @@ export class Board implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.commands.load();
     const stop = startLiveRefresh({
       enabled: () =>
         !this.loading() &&
@@ -173,6 +187,31 @@ export class Board implements OnInit {
 
   copyCardLink(number: number) {
     return this.linkCopy.copyCardNumber(number);
+  }
+
+  toggleCommandMenu(cardId: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.openCommandCardId.update((current) => (current === cardId ? null : cardId));
+  }
+
+  copyCommand(templateText: string, number: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.openCommandCardId.set(null);
+    return this.commandCopy.copyResolved(templateText, number);
+  }
+
+  @HostListener('document:click', ['$event'])
+  closeCommandMenuFromPointer(event: Event) {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.copy-command')) return;
+    this.openCommandCardId.set(null);
+  }
+
+  @HostListener('document:keydown.escape')
+  closeCommandMenuFromKeyboard() {
+    this.openCommandCardId.set(null);
   }
 
   load() {

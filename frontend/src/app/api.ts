@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { CommandTemplate } from './command-template';
 import { BoardData, Card, CardInput, Column, HistoryPage } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -42,5 +43,17 @@ export class Api {
   }
   deleteCard(id: number) {
     return this.http.delete<void>(`/api/cards/${id}`);
+  }
+  listCommandTemplates() {
+    return this.http.get<{ templates: CommandTemplate[] }>('/api/command-templates');
+  }
+  createCommandTemplate(input: { name: string; template: string }) {
+    return this.http.post<CommandTemplate>('/api/command-templates', input);
+  }
+  updateCommandTemplate(id: number, input: { name?: string; template?: string }) {
+    return this.http.patch<CommandTemplate>(`/api/command-templates/${id}`, input);
+  }
+  deleteCommandTemplate(id: number) {
+    return this.http.delete<void>(`/api/command-templates/${id}`);
   }
 }
