@@ -182,6 +182,7 @@ export class CardAutosave {
         if (generation !== this.generation) return;
         // A lost response can mean the write committed; resend these fields even if reverted locally.
         for (const field of fields) if (field in patch) this.retryFields.add(field);
+        this.sideDirty.clear();
         this.saving.set(false);
         this.clearTimers();
         this.error.set(errorMessage(error));
@@ -212,6 +213,7 @@ export class CardAutosave {
     this.clearTimers();
     this.request?.unsubscribe();
     this.request = undefined;
+    this.sideDirty.clear();
     this.saving.set(false);
     for (const resolve of this.waiters.splice(0)) resolve(false);
   }
