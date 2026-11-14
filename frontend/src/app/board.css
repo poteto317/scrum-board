@@ -357,7 +357,7 @@ h1 {
     flex-basis: 256px;
   }
 }
-@media (min-width: 701px) and (max-width: 1023px) {
+@media (min-width: 701px) and (max-width: 1051px) {
   .kanban-column {
     width: 237px;
     flex-basis: 237px;
