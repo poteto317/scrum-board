@@ -1,9 +1,10 @@
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of, Subject } from 'rxjs';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
+import { cardDetailUrl } from './card-link';
 import { BoardData, Column } from './models';
 
 describe('Board create requests', () => {
@@ -36,41 +37,103 @@ describe('Board create requests', () => {
   });
 });
 
+const singleCardBoard = () =>
+  of({
+    columns: [{ id: 1, name: 'Todo', position: 0 }],
+    cards: [
+      {
+        id: 17,
+        number: 2,
+        columnId: 1,
+        title: 'Task',
+        description: '',
+        backlogPosition: 0,
+        createdAt: '',
+        updatedAt: '',
+      },
+    ],
+  });
+
 describe('Board task numbers', () => {
   it('links to the same public number shown on the card', async () => {
     TestBed.configureTestingModule({
       imports: [Board],
-      providers: [
-        provideRouter([]),
-        {
-          provide: Api,
-          useValue: {
-            board: () =>
-              of({
-                columns: [{ id: 1, name: 'Todo', position: 0 }],
-                cards: [
-                  {
-                    id: 17,
-                    number: 2,
-                    columnId: 1,
-                    title: 'Task',
-                    description: '',
-                    backlogPosition: 0,
-                    createdAt: '',
-                    updatedAt: '',
-                  },
-                ],
-              }),
-          },
-        },
-      ],
+      providers: [provideRouter([]), { provide: Api, useValue: { board: singleCardBoard } }],
     });
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    const link: HTMLAnchorElement = f.nativeElement.querySelector('.task-card');
+    const card = f.nativeElement.querySelector('.task-card');
+    expect(card.tagName.toLowerCase()).toBe('article');
+    expect(f.nativeElement.querySelector('.card-arrow')).toBeNull();
+    const link: HTMLAnchorElement = f.nativeElement.querySelector('.task-card-body');
     expect(link.textContent).toContain('TASK-002');
     expect(link.getAttribute('href')).toBe('/cards/2');
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link');
+    expect(copyBtn).not.toBeNull();
+    expect(copyBtn.getAttribute('aria-label')).toBe('リンクをコピー');
+  });
+});
+
+describe('Board copy card link', () => {
+  const originalClipboard = navigator.clipboard;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideRouter([]), { provide: Api, useValue: { board: singleCardBoard } }],
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: originalClipboard,
+    });
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  const create = async () => {
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    return f;
+  };
+
+  it('copies the public card detail URL on success without navigating', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const f = await create();
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement;
+    copyBtn.click();
+    await vi.waitUntil(() => f.componentInstance.copyLinkAnnouncement() !== '');
+    f.detectChanges();
+    expect(writeText).toHaveBeenCalledWith(cardDetailUrl(window.location.origin, 2));
+    expect(navigateSpy).not.toHaveBeenCalled();
+    const live = f.nativeElement.querySelector('.copy-link-live');
+    expect(live).not.toBeNull();
+    expect(live.textContent).toContain('リンクをコピーしました');
+  });
+
+  it('announces failure when clipboard writeText rejects', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    });
+    const f = await create();
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement;
+    copyBtn.click();
+    await vi.waitUntil(() => f.componentInstance.copyLinkAnnouncement() !== '');
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-link-live').textContent).toContain(
+      'リンクをコピーできませんでした',
+    );
   });
 });
 

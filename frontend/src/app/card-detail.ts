@@ -20,6 +20,7 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { Column } from './models';
 import { CardAutosave } from './card-autosave';
+import { CopyLinkFeedback } from './copy-link-feedback';
 
 @Component({
   selector: 'app-card-detail',
@@ -43,7 +44,16 @@ export class CardDetail implements OnInit {
   readonly deleting = signal(false);
   readonly error = signal('');
   readonly confirmDelete = signal(false);
+  private readonly linkCopy = new CopyLinkFeedback(this.destroyRef);
+  readonly copyLinkFeedback = this.linkCopy.message;
   private deleted = false;
+
+  copyCardLink(): Promise<void> {
+    const card = this.card();
+    if (!card) return Promise.resolve();
+    return this.linkCopy.copyCardNumber(card.number);
+  }
+
   ngOnInit() {
     combineLatest([this.route.paramMap, this.reload$.pipe(startWith(undefined))])
       .pipe(

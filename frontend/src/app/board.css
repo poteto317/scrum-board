@@ -161,13 +161,11 @@ h1 {
   gap: 10px;
 }
 .task-card {
+  position: relative;
   display: block;
-  text-decoration: none;
-  color: inherit;
   background: var(--paper);
   border: 1px solid #e1e5dc;
   border-radius: 8px;
-  padding: 17px 16px 13px;
   box-shadow: 0 2px 3px #25332104;
   transition:
     transform 0.15s,
@@ -180,6 +178,22 @@ h1 {
   border-color: #a2b5a2;
   box-shadow: 0 5px 12px #2533210a;
 }
+.task-card-body {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 17px 16px 13px;
+  padding-right: 44px;
+}
+.copy-card-link {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
+.copy-link-icon {
+  display: block;
+}
 .card-topline {
   display: flex;
   justify-content: space-between;
@@ -190,9 +204,6 @@ h1 {
   font-family: monospace;
   font-size: 10px;
   letter-spacing: 0.5px;
-}
-.card-arrow {
-  font-size: 16px;
 }
 .task-card h3 {
   font-size: 14px;
