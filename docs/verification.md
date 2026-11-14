@@ -68,6 +68,12 @@
 - `PUT /api/columns/order` と UI のドラッグ&ドロップ / キーボード並び替え
 - 400 / 409 / 永続化、並び替え後の列追加、専用 Compose での smoke
 
+### プロダクトバックログ
+
+- `GET /api/backlog` / `PUT /api/backlog/order` と `/backlog` UI のドラッグ&ドロップ / 上下キー並び替え
+- 全ステータス（Done 含む）表示、バックログからの新規追加（初期ステータス選択）
+- 400 / 409 / 永続化、並び替え後のカード追加が末尾、Create と Reorder の並行
+
 ### 開発用画面（web-dev / 自動反映）
 
 - `./scripts/dev-web.sh`（または `stop web` + `--profile dev up -d web-dev`）で `:4200` に `ng serve` が起動すること

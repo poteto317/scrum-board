@@ -10,6 +10,7 @@ const initial: Card = {
   columnId: 1,
   title: '元のタイトル',
   description: '本文',
+  backlogPosition: 0,
   prUrl: '',
   createdAt: '',
   updatedAt: '',

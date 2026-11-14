@@ -1,0 +1,156 @@
+<main class="backlog-page">
+  <nav class="breadcrumb" aria-label="パンくず">
+    <a routerLink="/">ボード</a><span>/</span><strong>プロダクトバックログ</strong>
+  </nav>
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">PRODUCT BACKLOG</p>
+      <h1>優先順位リスト<span class="heading-dot">.</span></h1>
+      <p>全ステータスのカードを上から優先度順に並べます。</p>
+    </div>
+    <button class="primary" type="button" (click)="openCard()" [disabled]="loading() || reordering()">
+      アイテムを追加
+    </button>
+  </div>
+  @if (loading()) {
+    <div class="state-panel" role="status">読み込み中…</div>
+  } @else if (error()) {
+    <div class="state-panel" role="alert">
+      <p>{{ error() }}</p>
+      <button class="secondary" type="button" (click)="load()">再読み込み</button>
+    </div>
+  } @else {
+    <div class="sr-only" aria-live="polite">{{ reorderAnnouncement() }}</div>
+    @if (reorderError()) {
+      <div class="reorder-alert" role="alert">
+        <p>{{ reorderError() }}</p>
+        <div class="reorder-alert-actions">
+          <button type="button" class="secondary reorder-reload" (click)="load()">
+            最新を読み込む
+          </button>
+          @if (!reorderConflict()) {
+            <button type="button" class="secondary reorder-dismiss" (click)="dismissReorderError()">
+              閉じる
+            </button>
+          }
+        </div>
+      </div>
+    }
+    <div
+      class="backlog-scroll"
+      #backlogScroll
+      (dragover)="onListDragOver($event)"
+      (dragleave)="onListDragLeave($event)"
+      (drop)="onListDrop($event)"
+    >
+      @if (cards().length === 0) {
+        <div class="state-panel empty">まだアイテムがありません。「アイテムを追加」から始めましょう。</div>
+      } @else {
+        <ul class="backlog-list" #listContainer role="list">
+          @for (card of cards(); track card.id; let i = $index) {
+            <li
+              #row
+              class="backlog-row"
+              [attr.data-card-id]="card.id"
+              [class.dragging]="draggingCardId() === card.id"
+              [class.drop-before]="dropSlot() === i"
+              [class.drop-after]="dropSlot() === cards().length && i === cards().length - 1"
+            >
+              <div
+                class="backlog-drag-zone"
+                [attr.draggable]="canReorder() ? 'true' : null"
+                (dragstart)="onCardDragStart($event, card, row)"
+                (dragend)="onCardDragEnd()"
+              >
+                <button
+                  type="button"
+                  class="backlog-drag-handle"
+                  [attr.aria-label]="
+                    'TASK-' + card.number + ' を移動（ドラッグまたは上下矢印キー）'
+                  "
+                  [attr.aria-disabled]="!canReorder() || reordering() ? 'true' : null"
+                  (keydown)="onHandleKeydown($event, i)"
+                >
+                  ⋮⋮
+                </button>
+                <span class="backlog-rank" aria-hidden="true">{{ i + 1 }}</span>
+                <span class="backlog-number">TASK-{{ card.number }}</span>
+                <span class="backlog-title">{{ card.title }}</span>
+                <span class="backlog-status">{{ statusName(card.columnId) }}</span>
+                <a class="backlog-detail-link" [routerLink]="['/cards', card.number]" draggable="false"
+                  >詳細</a
+                >
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+    <footer class="backlog-footer">
+      <span
+        ><span class="tip-icon" aria-hidden="true">i</span>
+        ハンドルをドラッグ、または上下キーで優先順位を変えられます。</span
+      >
+    </footer>
+  }
+</main>
+@if (modal() === 'card') {
+  <dialog
+    appModal
+    class="modal-backdrop"
+    aria-labelledby="backlog-modal-title"
+    (click)="close()"
+    (cancel)="$event.preventDefault(); close()"
+  >
+    <section
+      class="modal"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="close()"
+      tabindex="-1"
+    >
+      <header class="modal-header">
+        <h2 id="backlog-modal-title">アイテムを追加</h2>
+        <button class="icon-button" (click)="close()" [disabled]="saving()" aria-label="閉じる">
+          ×
+        </button>
+      </header>
+      <form [formGroup]="cardForm" (ngSubmit)="addCard()">
+        <label for="backlog-card-title">タイトル <span class="required">必須</span></label
+        ><input
+          id="backlog-card-title"
+          formControlName="title"
+          placeholder="何に取り組みますか？"
+          autofocus
+        />
+        @if (cardForm.controls.title.touched && cardForm.controls.title.invalid) {
+          <p class="form-error">タイトルを1〜200文字で入力してください。</p>
+        }
+        <label for="backlog-card-status">初期ステータス</label
+        ><select id="backlog-card-status" formControlName="columnId">
+          @for (column of columns(); track column.id) {
+            <option [ngValue]="column.id">{{ column.name }}</option>
+          }</select
+        ><label for="backlog-card-description">説明 <span class="optional">任意</span></label
+        ><textarea
+          id="backlog-card-description"
+          formControlName="description"
+          rows="4"
+          placeholder="タスクの背景や、完了の条件など"
+        ></textarea>
+        @if (cardForm.controls.description.invalid) {
+          <p class="form-error">説明は10000文字以内で入力してください。</p>
+        }
+        @if (formError()) {
+          <p class="form-error" role="alert">{{ formError() }}</p>
+        }
+        <div class="form-actions">
+          <button class="secondary" type="button" (click)="close()" [disabled]="saving()">
+            キャンセル</button
+          ><button class="primary" type="submit" [disabled]="saving()">
+            {{ saving() ? '追加中…' : 'アイテムを追加' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </dialog>
+}

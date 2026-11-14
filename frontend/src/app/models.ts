@@ -9,6 +9,7 @@ export interface Card {
   columnId: number;
   title: string;
   description: string;
+  backlogPosition: number;
   prUrl: string;
   createdAt: string;
   updatedAt: string;

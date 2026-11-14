@@ -10,8 +10,10 @@ var (
 	ErrNotFound       = errors.New("not found")
 	ErrColumn         = errors.New("unknown column")
 	ErrDuplicate      = errors.New("duplicate column")
-	ErrColumnOrder    = errors.New("invalid column order")
-	ErrColumnMismatch = errors.New("column set mismatch")
+	ErrColumnOrder     = errors.New("invalid column order")
+	ErrColumnMismatch  = errors.New("column set mismatch")
+	ErrBacklogOrder    = errors.New("invalid backlog order")
+	ErrBacklogMismatch = errors.New("backlog set mismatch")
 )
 
 type Column struct {
@@ -20,14 +22,15 @@ type Column struct {
 	Position int    `json:"position"`
 }
 type Card struct {
-	Number      int64     `json:"number"`
-	ID          int64     `json:"id"`
-	ColumnID    int64     `json:"columnId"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	PRURL       string    `json:"prUrl"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Number          int64     `json:"number"`
+	ID              int64     `json:"id"`
+	ColumnID        int64     `json:"columnId"`
+	Title           string    `json:"title"`
+	Description     string    `json:"description"`
+	BacklogPosition int       `json:"backlogPosition"`
+	PRURL           string    `json:"prUrl"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 type Board struct {
 	Columns []Column `json:"columns"`
@@ -58,4 +61,6 @@ type Repository interface {
 	DeleteCard(context.Context, int64) error
 	CreateColumn(context.Context, string) (Column, error)
 	ReorderColumns(context.Context, []int64) ([]Column, error)
+	Backlog(context.Context) ([]Card, error)
+	ReorderBacklog(context.Context, []int64) ([]Card, error)
 }

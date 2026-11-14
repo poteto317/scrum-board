@@ -5,6 +5,17 @@
       >.</span
     ></a
   >
+  <span class="header-divider"></span>
+  <nav class="app-nav" aria-label="メイン">
+    <a
+      routerLink="/"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      ariaCurrentWhenActive="page"
+      >ボード</a
+    >
+    <a routerLink="/backlog" routerLinkActive="active" ariaCurrentWhenActive="page">バックログ</a>
+  </nav>
   <span class="header-divider"></span><span class="workspace-name">マイワークスペース</span>
   <span class="header-end"
     ><span class="local-dot"></span>Personal workspace
