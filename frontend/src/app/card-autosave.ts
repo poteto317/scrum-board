@@ -160,11 +160,17 @@ export class CardAutosave {
               control.setValue(card[field], { emitEvent: false });
           }
         }
-        // Form patches must not clobber side fields saved concurrently while in flight.
+        // Prefer local side fields only if they changed during this request (concurrent side-save).
+        // Otherwise adopt the server value so agent/other updates are not discarded (L-781).
         const local = this.card();
         const merged: Card = { ...card, prUrls: [...(card.prUrls ?? [])] };
         if (local) {
           for (const key of sideFields) {
+            const changedDuringFlight =
+              key === 'prUrls'
+                ? JSON.stringify(local.prUrls ?? []) !== JSON.stringify(confirmed.prUrls ?? [])
+                : local[key] !== confirmed[key];
+            if (!changedDuringFlight) continue;
             if (key === 'prUrls') merged.prUrls = [...(local.prUrls ?? [])];
             else merged[key] = local[key];
           }

@@ -96,6 +96,7 @@
                   type="button"
                   class="assignee-chip"
                   [attr.data-assignee]="assigneeKind(name)"
+                  [attr.aria-pressed]="card()!.assignee === name"
                   [class.selected]="card()!.assignee === name"
                   [disabled]="assignee.saving() || !card()"
                   (click)="assignee.selectPreset(name)"
