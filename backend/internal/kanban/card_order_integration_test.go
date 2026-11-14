@@ -72,6 +72,10 @@ func TestCardOrderMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	siblingBefore, err := r.History(ctx, c1.Number, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = r.ReorderCards(ctx, []CardColumnOrder{
 		{ColumnID: 1, CardIDs: []int64{sampleID, c1.ID}},
 		{ColumnID: 2, CardIDs: []int64{c2.ID}},
@@ -86,13 +90,14 @@ func TestCardOrderMySQL(t *testing.T) {
 	if len(pageAfter.Events) != len(pageBefore.Events)+1 {
 		t.Fatalf("history delta for moved card: before=%d after=%d", len(pageBefore.Events), len(pageAfter.Events))
 	}
+	// c1 stays in Todo (its position shifts up) when c2 leaves: no history for it.
 	pageSame, err := r.History(ctx, c1.Number, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Within-column-only cards should not gain history from the reorder of others;
-	// c1 stayed in column 1 — reorder of siblings doesn't touch c1 column.
-	_ = pageSame
+	if len(pageSame.Events) != len(siblingBefore.Events) {
+		t.Fatalf("a sibling's move must not add history to c1: before=%d after=%d", len(siblingBefore.Events), len(pageSame.Events))
+	}
 
 	_, err = r.ReorderCards(ctx, []CardColumnOrder{
 		{ColumnID: 1, CardIDs: []int64{c1.ID, sampleID}},
