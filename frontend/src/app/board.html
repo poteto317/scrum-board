@@ -121,7 +121,9 @@
                   [attr.data-card-id]="card.id"
                   [cdkDragData]="card"
                   [cdkDragDisabled]="!canReorderCards()"
+                  (cdkDragStarted)="onCardDragStarted()"
                   (cdkDragMoved)="onCardDragMoved($event)"
+                  (cdkDragEnded)="onCardDragEnded()"
                 >
                   <button
                     type="button"

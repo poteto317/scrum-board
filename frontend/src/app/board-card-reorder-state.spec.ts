@@ -4,6 +4,7 @@ import { of, Subject } from 'rxjs';
 import { describe, it, expect, onTestFinished, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
+import { CARD_AUTO_SCROLL_INTERVAL_MS } from './card-order';
 import { BoardData, Card } from './models';
 
 function card(id: number, columnId: number, position: number, title: string): Card {
@@ -298,5 +299,60 @@ describe('Board card reorder state', () => {
     list.scrollTop = 50;
     move(500, 495);
     expect(list.scrollTop).toBe(50);
+  });
+
+  // A column drag keeps scrolling while its pointer rests at an edge (dragover repeats); a card drag must too,
+  // otherwise carrying a card to a column that is off screen needs the pointer to keep wiggling.
+  it('keeps scrolling while the dragged card rests at the board edge, and stops when the drag ends', async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const { f, component } = await setup(vi.fn());
+    const scroller = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      right: 1000,
+      bottom: 600,
+      width: 1000,
+      height: 600,
+    } as DOMRect);
+    const original = document.elementFromPoint;
+    document.elementFromPoint = () => null;
+    onTestFinished(() => {
+      document.elementFromPoint = original;
+    });
+    scroller.scrollLeft = 0;
+
+    component.onCardDragStarted();
+    component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
+    const first = scroller.scrollLeft;
+    expect(first).toBeGreaterThan(0);
+
+    // The tick right after a move adds nothing (the move already scrolled); a resting pointer then scrolls each tick.
+    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS);
+    expect(scroller.scrollLeft).toBe(first);
+    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS);
+    const second = scroller.scrollLeft;
+    expect(second).toBeGreaterThan(first);
+    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 3);
+    expect(scroller.scrollLeft).toBeGreaterThan(second);
+
+    // Away from the edge the timer does not scroll.
+    component.onCardDragMoved({ pointerPosition: { x: 500, y: 300 } });
+    const middle = scroller.scrollLeft;
+    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 4);
+    expect(scroller.scrollLeft).toBe(middle);
+
+    // At the edge again, then the drag ends: nothing scrolls afterwards.
+    component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
+    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 2);
+    expect(vi.getTimerCount()).toBe(1);
+    component.onCardDragEnded();
+    expect(vi.getTimerCount()).toBe(0); // no interval is left running
+    const ended = scroller.scrollLeft;
+    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 5);
+    expect(scroller.scrollLeft).toBe(ended);
   });
 });

@@ -22,6 +22,7 @@ import {
   affectedColumnIds,
   applyCardDrop,
   buildCardOrderPayload,
+  CARD_AUTO_SCROLL_INTERVAL_MS,
   CARD_DRAG_THRESHOLD_PX,
   CARD_TOUCH_DRAG_DELAY_MS,
   columnIdFromDropListId,
@@ -70,6 +71,12 @@ export class Board implements OnInit {
   readonly reorderConflict = signal(false);
   readonly reorderAnnouncement = signal('');
   private readonly linkCopy = new CopyLinkFeedback(this.destroyRef);
+  private autoScrollTimer: ReturnType<typeof setInterval> | null = null;
+  private dragPointer: { x: number; y: number } | null = null;
+  private dragMovedSinceTick = false;
+  private readonly stopAutoScrollOnDestroy = this.destroyRef.onDestroy(() =>
+    this.stopAutoScrollTimer(),
+  );
   readonly copyLinkAnnouncement = this.linkCopy.message;
   readonly draggingColumnId = signal<number | null>(null);
   readonly dropSlot = signal<number | null>(null);
@@ -210,25 +217,52 @@ export class Board implements OnInit {
   }
 
   /** CDK owns drag-vs-click (dragStartThreshold); this only scrolls the board and the list under the pointer. */
+  /**
+   * CDK's own edge scrolling is off (it would fight the list's own scrolling), so this scrolls the board sideways and
+   * the list under the pointer. It runs on every pointer move and, like a column drag's repeating dragover, keeps
+   * going on a timer while the pointer rests at an edge.
+   */
   onCardDragMoved(event: { pointerPosition: { x: number; y: number } }) {
+    this.dragPointer = event.pointerPosition;
+    this.dragMovedSinceTick = true;
+    this.autoScrollAt(event.pointerPosition);
+  }
+
+  onCardDragStarted() {
+    this.stopAutoScrollTimer();
+    this.dragMovedSinceTick = false;
+    this.autoScrollTimer = setInterval(() => {
+      // A move in this interval already scrolled; only a resting pointer needs the timer.
+      if (!this.dragMovedSinceTick && this.dragPointer) this.autoScrollAt(this.dragPointer);
+      this.dragMovedSinceTick = false;
+    }, CARD_AUTO_SCROLL_INTERVAL_MS);
+  }
+
+  onCardDragEnded() {
+    this.stopAutoScrollTimer();
+    this.dragPointer = null;
+  }
+
+  private stopAutoScrollTimer() {
+    if (this.autoScrollTimer !== null) clearInterval(this.autoScrollTimer);
+    this.autoScrollTimer = null;
+  }
+
+  private autoScrollAt(pointer: { x: number; y: number }) {
     const scrollEl = this.boardScroll()?.nativeElement;
     if (scrollEl) {
       const scrollRect = scrollEl.getBoundingClientRect();
-      const delta = computeAutoScrollDelta(
-        event.pointerPosition.x,
-        scrollRect.left,
-        scrollRect.right,
-      );
+      const delta = computeAutoScrollDelta(pointer.x, scrollRect.left, scrollRect.right);
       if (delta !== 0) scrollEl.scrollLeft += delta;
     }
     const hit =
       typeof document.elementFromPoint === 'function'
-        ? document.elementFromPoint(event.pointerPosition.x, event.pointerPosition.y)
+        ? document.elementFromPoint(pointer.x, pointer.y)
         : null;
     const listEl = hit?.closest('.card-list') as HTMLElement | null;
     if (listEl) {
       const listRect = listEl.getBoundingClientRect();
-      const vDelta = computeAutoScrollDelta(event.pointerPosition.y, listRect.top, listRect.bottom);
+      const vDelta = computeAutoScrollDelta(pointer.y, listRect.top, listRect.bottom);
       if (vDelta !== 0) listEl.scrollTop += vDelta;
     }
   }
@@ -271,6 +305,7 @@ export class Board implements OnInit {
   }
 
   onCardDrop(event: CdkDragDrop<Card[]>, columnId: number) {
+    this.stopAutoScrollTimer();
     if (!this.canReorderCards()) return;
     const previousColumnId = columnIdFromDropListId(event.previousContainer.id);
     if (previousColumnId === null) return;

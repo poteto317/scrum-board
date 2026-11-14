@@ -1,6 +1,9 @@
 import { Card } from './models';
 
 export const CARD_DRAG_THRESHOLD_PX = 8;
+
+/** While a card is held at an edge, scroll once per this interval (a column drag's dragover repeats about as often). */
+export const CARD_AUTO_SCROLL_INTERVAL_MS = 50;
 /**
  * A finger must rest on a card this long before a move drags it. Cards fill most of the board, so
  * without the hold the first swipe over a card would start a drag (and cancel the scroll) instead of
