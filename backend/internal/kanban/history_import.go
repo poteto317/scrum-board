@@ -71,7 +71,12 @@ func (r MySQLRepository) ImportHistory(ctx context.Context, records []Historical
 		return err
 	}
 	defer tx.Rollback()
-	// Lock by stable card ID order to avoid deadlocks with other import batches.
+	// Every card writer takes the all-columns lock before touching cards (see lockColumnRows), so an import
+	// joins it too: otherwise its card-by-id locks can cross ReorderCards' index-order scan and deadlock.
+	if _, err = lockColumnRows(ctx, tx); err != nil {
+		return err
+	}
+	// Then lock by stable card ID order to avoid deadlocks with other import batches.
 	// The CLI runs during a maintenance window; live updates also lock cards before history writes.
 	for _, v := range records {
 		v.OccurredAt = v.OccurredAt.Truncate(time.Microsecond)
