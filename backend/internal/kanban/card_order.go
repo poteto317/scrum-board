@@ -65,21 +65,30 @@ func (r MySQLRepository) ReorderCards(ctx context.Context, orders []CardColumnOr
 	for _, order := range orders {
 		for pos, cardID := range order.CardIDs {
 			before := existingSet[cardID]
-			if _, err = tx.ExecContext(ctx,
-				"UPDATE cards SET column_id=?, position=?, updated_at=? WHERE id=?",
-				order.ColumnID, pos, now, cardID); err != nil {
+			columnChanged := before.ColumnID != order.ColumnID
+			if !columnChanged && before.Position == pos {
+				continue
+			}
+			// updated_at is the card's edit time: only a status change moves it. A card that merely
+			// shifts position keeps it (and its history revision) as it was.
+			query := "UPDATE cards SET column_id=?, position=?, updated_at=updated_at WHERE id=?"
+			args := []any{order.ColumnID, pos, cardID}
+			if columnChanged {
+				query = "UPDATE cards SET column_id=?, position=?, updated_at=? WHERE id=?"
+				args = []any{order.ColumnID, pos, now, cardID}
+			}
+			if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 				return nil, err
 			}
-			after := before
-			after.ColumnID = order.ColumnID
-			after.Position = pos
-			after.UpdatedAt = now
-			if before.ColumnID != order.ColumnID {
+			if columnChanged {
+				after := before
+				after.ColumnID = order.ColumnID
+				after.Position = pos
+				after.UpdatedAt = now
 				if err = appendHistory(ctx, tx, &before, after, "updated"); err != nil {
 					return nil, err
 				}
 			}
-			existingSet[cardID] = after
 		}
 	}
 
@@ -93,6 +102,10 @@ func (r MySQLRepository) ReorderCards(ctx context.Context, orders []CardColumnOr
 	return cards, nil
 }
 
+// lockCardsInColumns reads and locks every card in the given columns. ORDER BY only sorts the result: InnoDB
+// locks rows in the order the chosen index is scanned (cards_column_position for a large table, the primary key
+// for a tiny one), so the lock order is not guaranteed. Callers are serialized by the all-columns lock
+// (lockColumnRows / lockExistingColumn) taken first, which is what keeps concurrent writers from deadlocking.
 func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]Card, error) {
 	if len(columnIDs) == 0 {
 		return nil, ErrCardOrder

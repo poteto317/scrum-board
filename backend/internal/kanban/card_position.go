@@ -92,33 +92,26 @@ func backfillColumnByCreatedAt(ctx context.Context, db *sql.DB, columnID int64) 
 	}
 	cardRows.Close()
 	for pos, id := range ids {
-		if _, err = tx.ExecContext(ctx, "UPDATE cards SET position=? WHERE id=?", pos, id); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE cards SET position=?, updated_at=updated_at WHERE id=?", pos, id); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-// lockCardAndColumnPeers locks the target card and every card currently in its column or destColumnID, by id.
-func lockCardAndColumnPeers(ctx context.Context, tx *sql.Tx, cardID, destColumnID int64) ([]int64, error) {
-	rows, err := tx.QueryContext(ctx, `
-SELECT c.id FROM cards c
- JOIN cards self ON self.id=?
- WHERE c.id=? OR c.column_id IN (self.column_id, ?)
- ORDER BY c.id FOR UPDATE`, cardID, cardID, destColumnID)
+// lockExistingColumn takes the same all-columns X lock that ReorderCards takes, so every path that
+// changes card membership/position serializes on board_columns before touching cards.
+func lockExistingColumn(ctx context.Context, tx *sql.Tx, columnID int64) error {
+	cols, err := lockColumnRows(ctx, tx)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer rows.Close()
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err = rows.Scan(&id); err != nil {
-			return nil, err
+	for _, c := range cols {
+		if c.ID == columnID {
+			return nil
 		}
-		ids = append(ids, id)
 	}
-	return ids, rows.Err()
+	return ErrColumn
 }
 
 func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID int64) (int, error) {
@@ -163,18 +156,13 @@ func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID int64) err
 		return err
 	}
 	rows.Close()
+	// Closing a gap is not an edit of the remaining cards, so their updated_at stays as it was.
 	for pos, id := range ids {
-		if _, err = tx.ExecContext(ctx, "UPDATE cards SET position=? WHERE id=?", pos, id); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE cards SET position=?, updated_at=updated_at WHERE id=? AND position<>?", pos, id, pos); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func columnExists(ctx context.Context, tx *sql.Tx, columnID int64) bool {
-	var id int64
-	err := tx.QueryRowContext(ctx, "SELECT id FROM board_columns WHERE id=?", columnID).Scan(&id)
-	return err == nil
 }
 
 func listOrderedCards(ctx context.Context, tx *sql.Tx) ([]Card, error) {

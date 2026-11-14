@@ -84,6 +84,9 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if err != nil {
 		return Card{}, err
 	}
+	if err = lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
+		return Card{}, err
+	}
 	nextPos, err := nextCardPosition(ctx, tx, in.ColumnID)
 	if err != nil {
 		return Card{}, err
@@ -122,21 +125,17 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 		return Card{}, err
 	}
 	defer tx.Rollback()
-	// Non-move updates lock only the owning card so first PR-link INSERT does not take gap locks on missing rows.
-	// Column moves lock the card plus all cards in its current column and the destination, in id order
-	// (same discipline as ReorderCards) so concurrent status changes cannot deadlock or miss rows.
+	// A column move takes the same all-columns lock as ReorderCards/CreateCard before touching any card, so
+	// InnoDB never sees two writers wait on each other's card and column rows. The owning card is then locked
+	// alone, which also keeps the first PR-link INSERT from taking gap locks on missing rows.
 	if p.ColumnID != nil {
-		if !columnExists(ctx, tx, *p.ColumnID) {
-			return Card{}, ErrColumn
-		}
-		if _, err = lockCardAndColumnPeers(ctx, tx, id, *p.ColumnID); err != nil {
+		if err = lockExistingColumn(ctx, tx, *p.ColumnID); err != nil {
 			return Card{}, err
 		}
-	} else {
-		var lockedID int64
-		if err = tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
-			return Card{}, dbError(err)
-		}
+	}
+	var lockedID int64
+	if err = tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
+		return Card{}, dbError(err)
 	}
 	c, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
 	if err != nil {

@@ -101,16 +101,17 @@
 
 1. 入口でもバリデーションし、失敗時 `ErrCardOrder`。
 2. トランザクション開始。`board_columns` を `ORDER BY id FOR UPDATE` でロックし、列 ID の存在確認。
-3. 対象になりうるカードを決定的順でロック: リクエスト列に属するカード、およびリクエストの全 cardId を `SELECT id FROM cards WHERE ... ORDER BY id FOR UPDATE`。
+3. 対象になりうるカードをロック: リクエスト列に属するカード、およびリクエストの全 cardId を `SELECT id FROM cards WHERE ... ORDER BY id FOR UPDATE`。`ORDER BY` は結果の整列でしかなく、InnoDB は使うインデックスの走査順（テーブルが大きいと `cards_column_position`、小さいと主キー）で行ロックを取るため、`cards` のロック順は保証しない。書き込み経路どうしの直列化は手順 2 の全列ロックが担う（§3.4）。
 4. 集合一致を検証。不一致なら `ErrCardOrderMismatch`。
-5. 各 `(columnId, cardIds[i])` について `UPDATE cards SET column_id=?, position=?, updated_at=?`。値が変わらない行でも `RowsAffected` に依存しない（列並び替えと同じ。`L-540`）。
+5. 各 `(columnId, cardIds[i])` について、`column_id` と `position` の両方が現在値と同じカードは UPDATE しない。列が変わったカードは `UPDATE cards SET column_id=?, position=?, updated_at=?`、位置だけ変わるカードは `updated_at=updated_at` で据え置いて `column_id`・`position` のみ更新する。`updated_at` は「カードの編集時刻」で、ステータス変更でだけ動く（履歴の方針と一致。触っていないカードの更新日時や履歴の revision を変えない）。`RowsAffected` には依存しない（`L-540`）。
 6. **履歴**: 更新前後で `column_id` が変わったカードだけ `appendHistory(..., "updated")`（status 変更として既存の historyValues 経路）。`position` のみの変更は履歴に載せない。
 7. コミット前に `ORDER BY position, id` で全カードを再読込して返す。
 
 ### 3.4 `CreateCard` / `UpdateCard` の position（`L-540`）
 
-- **CreateCard**: 挿入前に当該 `column_id` のカードを `ORDER BY id FOR UPDATE` でロックし、`MAX(position)`（カード0なら `-1`）をとり `position = max+1` で INSERT。`ReorderCards` も対象カードを `ORDER BY id FOR UPDATE` するため、Create と Reorder の競合は直列化される。
-- **UpdateCard で `columnId` が変わるとき**: 移動先のカードを `ORDER BY id FOR UPDATE` したうえで `MAX(position)+1` を付与し、同一トランザクションでソース列の残カードを `ORDER BY position, id` の現順で `0..n-1` に詰め直す。履歴は列変更の1イベントのみ（詰め直し自体は履歴に載せない）。
+- **ロック順（全経路共通）**: `CreateCard`、`UpdateCard`（`columnId` 指定時）、`ReorderCards` は、`cards` に触れる前に `board_columns` を `ORDER BY id FOR UPDATE`（全列 X ロック）で取る。外部キー検査が `board_columns` の共有ロックを取るため、`cards` を先に握った経路と列を先に握った経路が混ざると循環待ち（MySQL 1213）になる。実 MySQL で、列ロックなしの `ReorderCards` と `CreateCard`/`UpdateCard` を 60 並行で混ぜると reorder の大半が 1213 になることを確認した。共有ロック（`FOR SHARE`）では Create と Move の `cards` ロック順の違いが残るため不可。ボード全体の書き込みが直列化されるが、列の並び替え・作成が既に同じロックを取っており、1 人用の小さなボードでは問題にならない。
+- **CreateCard**: 全列ロック（存在しない列なら `ErrColumn`）の後、当該 `column_id` のカードを `ORDER BY id FOR UPDATE` で読み、`MAX(position)`（カード0なら `-1`）をとり `position = max+1` で INSERT。
+- **UpdateCard で `columnId` が変わるとき**: 全列ロックの後、対象カードを単独で `FOR UPDATE` し、移動先のカードを読んで `MAX(position)+1` を付与する。同一トランザクションでソース列の残カードを `ORDER BY position, id` の現順で `0..n-1` に詰め直す。詰め直しは `position` が変わるカードだけを、`updated_at` を据え置いて更新する（`updated_at=updated_at`）。履歴は列変更の1イベントのみ（詰め直し自体は履歴に載せない）。
 - **UpdateCard で列が変わらないとき**: `position` は触らない。
 - **by-number status / 詳細のステータス選択**: 既存どおり `UpdateCard` の `ColumnID` 経由 → 末尾追加になる。
 
