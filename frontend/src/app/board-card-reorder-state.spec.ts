@@ -366,4 +366,35 @@ describe('Board card reorder state', () => {
     vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 5);
     expect(scroller.scrollLeft).toBe(ended);
   });
+
+  // A tall list can extend below (or above) the window. The pointer cannot reach the part of its edge band that lies
+  // off screen, so the band is the part of the list that is visible.
+  it('scrolls a list that runs off the bottom of the window when the pointer is at the window edge', async () => {
+    const { f, component } = await setup(vi.fn());
+    const scroller = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
+    const list = f.nativeElement.querySelector('.card-list') as HTMLElement;
+    const rect = (left: number, top: number, right: number, bottom: number) =>
+      ({ left, top, right, bottom, width: right - left, height: bottom - top }) as DOMRect;
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 600));
+    const height = window.innerHeight;
+    vi.spyOn(list, 'getBoundingClientRect').mockReturnValue(rect(100, 100, 300, height + 400));
+    const original = document.elementFromPoint;
+    document.elementFromPoint = () => list;
+    onTestFinished(() => {
+      document.elementFromPoint = original;
+    });
+    list.scrollTop = 0;
+
+    component.onCardDragMoved({ pointerPosition: { x: 200, y: height - 10 } }); // the window's bottom edge
+    expect(list.scrollTop).toBeGreaterThan(0);
+
+    const down = list.scrollTop;
+    component.onCardDragMoved({ pointerPosition: { x: 200, y: height - 200 } }); // clear of the edge: no scroll
+    expect(list.scrollTop).toBe(down);
+
+    // And the other way: a list that starts above the window scrolls up at the window's top edge.
+    vi.spyOn(list, 'getBoundingClientRect').mockReturnValue(rect(100, -400, 300, 500));
+    component.onCardDragMoved({ pointerPosition: { x: 200, y: 10 } });
+    expect(list.scrollTop).toBeLessThan(down);
+  });
 });

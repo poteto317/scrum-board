@@ -305,8 +305,13 @@ export class Board implements OnInit {
         : null;
     const listEl = hit?.closest('.card-list') as HTMLElement | null;
     if (listEl) {
+      // The part of a tall list that is off screen is out of the pointer's reach, so its edge band is the visible part.
       const listRect = listEl.getBoundingClientRect();
-      const vDelta = computeAutoScrollDelta(pointer.y, listRect.top, listRect.bottom);
+      const vDelta = computeAutoScrollDelta(
+        pointer.y,
+        Math.max(listRect.top, 0),
+        Math.min(listRect.bottom, window.innerHeight),
+      );
       if (vDelta !== 0) listEl.scrollTop += vDelta;
     }
   }
