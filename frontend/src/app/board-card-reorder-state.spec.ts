@@ -124,7 +124,12 @@ describe('Board card reorder state', () => {
     const failed = new Subject<{ cards: Card[] }>();
     const reorderCards = vi.fn().mockReturnValueOnce(saved).mockReturnValueOnce(failed);
     const { f, component } = await setup(reorderCards);
-    const focused = () => document.activeElement?.getAttribute('data-card-id');
+    // The card's tab stop is its link; data-card-id sits on the article around it.
+    const focused = () => {
+      const active = document.activeElement as HTMLElement | null;
+      expect(active?.classList.contains('task-card-body')).toBe(true);
+      return active?.closest('[data-card-id]')?.getAttribute('data-card-id');
+    };
 
     arrowDown(component, 0);
     f.detectChanges();

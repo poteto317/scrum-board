@@ -11,9 +11,38 @@
     </div>
   } @else {
     <section class="detail-heading">
-      <div class="eyebrow">TASK-{{ card()!.number.toString().padStart(3, '0') }}</div>
-      <h1>アイテムの詳細</h1>
-      <p>取り組むことを明確にして、次のステップへ。</p>
+      <div class="detail-heading-main">
+        <div class="eyebrow">TASK-{{ card()!.number.toString().padStart(3, '0') }}</div>
+        <h1>アイテムの詳細</h1>
+        <p>取り組むことを明確にして、次のステップへ。</p>
+      </div>
+      <div class="detail-heading-actions">
+        <button
+          type="button"
+          class="copy-card-link icon-button"
+          aria-label="リンクをコピー"
+          (click)="copyCardLink()"
+        >
+          <svg
+            class="copy-link-icon"
+            aria-hidden="true"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+        </button>
+        <p class="copy-link-feedback" role="status" aria-live="polite">
+          {{ copyLinkFeedback() }}
+        </p>
+      </div>
     </section>
     <form [formGroup]="form" (submit)="$event.preventDefault()" class="detail-layout">
       <section class="detail-card">

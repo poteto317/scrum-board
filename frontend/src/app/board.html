@@ -34,6 +34,7 @@
         保存中などのため、いまはカードを移動できません。
       }
     </p>
+    <div class="sr-only copy-link-live" aria-live="polite">{{ copyLinkAnnouncement() }}</div>
     @if (reorderError()) {
       <div class="reorder-alert" role="alert">
         <p>{{ reorderError() }}</p>
@@ -114,33 +115,61 @@
               (cdkDropListDropped)="onCardDrop($event, column.id)"
             >
               @for (card of grouped().get(column.id) || []; track card.id; let cardIndex = $index) {
-                <a
+                <article
                   class="task-card"
-                  [attr.href]="cardHref(card)"
-                  aria-describedby="card-drag-help"
                   cdkDrag
                   [attr.data-card-id]="card.id"
                   [cdkDragData]="card"
                   [cdkDragDisabled]="!canReorderCards()"
                   (cdkDragMoved)="onCardDragMoved($event)"
-                  (click)="onCardClick($event, card)"
-                  (keydown)="onCardKeydown($event, column.id, cardIndex)"
                 >
-                  <span class="card-topline"
-                    ><span class="card-id">TASK-{{ card.number.toString().padStart(3, '0') }}</span
-                    ><span class="card-arrow" aria-hidden="true">↗</span></span
+                  <button
+                    type="button"
+                    class="copy-card-link icon-button"
+                    [attr.aria-label]="
+                      'TASK-' + card.number.toString().padStart(3, '0') + ' のリンクをコピー'
+                    "
+                    (click)="copyCardLink(card.number)"
                   >
-                  <h3>{{ card.title }}</h3>
-                  @if (card.description) {
-                    <p class="card-description">{{ card.description }}</p>
-                  }
-                  <span class="card-footer"
-                    ><span class="card-status">{{ column.name }}</span
-                    ><span class="detail-hint"
-                      >詳細を開く <span aria-hidden="true">→</span></span
-                    ></span
+                    <svg
+                      class="copy-link-icon"
+                      aria-hidden="true"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                  </button>
+                  <a
+                    class="task-card-body"
+                    [attr.href]="cardHref(card)"
+                    aria-describedby="card-drag-help"
+                    (click)="onCardClick($event, card)"
+                    (keydown)="onCardKeydown($event, column.id, cardIndex)"
+                    ><span class="card-topline"
+                      ><span class="card-id"
+                        >TASK-{{ card.number.toString().padStart(3, '0') }}</span
+                      ></span
+                    >
+                    <h3>{{ card.title }}</h3>
+                    @if (card.description) {
+                      <p class="card-description">{{ card.description }}</p>
+                    }
+                    <span class="card-footer"
+                      ><span class="card-status">{{ column.name }}</span
+                      ><span class="detail-hint"
+                        >詳細を開く <span aria-hidden="true">→</span></span
+                      ></span
+                    ></a
                   >
-                </a>
+                </article>
               } @empty {
                 <div class="empty-column">
                   <span class="empty-symbol" aria-hidden="true">{{

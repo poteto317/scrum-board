@@ -35,6 +35,7 @@ import {
 } from './column-order';
 import { textLimit } from './form-validation';
 import { BoardData, Card, Column } from './models';
+import { CopyLinkFeedback } from './copy-link-feedback';
 
 @Component({
   selector: 'app-board',
@@ -68,6 +69,8 @@ export class Board implements OnInit {
   readonly reorderError = signal('');
   readonly reorderConflict = signal(false);
   readonly reorderAnnouncement = signal('');
+  private readonly linkCopy = new CopyLinkFeedback(this.destroyRef);
+  readonly copyLinkAnnouncement = this.linkCopy.message;
   readonly draggingColumnId = signal<number | null>(null);
   readonly dropSlot = signal<number | null>(null);
   readonly modal = signal<'column' | 'card' | null>(null);
@@ -114,6 +117,10 @@ export class Board implements OnInit {
 
   ngOnInit() {
     this.load();
+  }
+
+  copyCardLink(number: number) {
+    return this.linkCopy.copyCardNumber(number);
   }
 
   load() {
@@ -240,7 +247,10 @@ export class Board implements OnInit {
     void this.router.navigate(['/cards', card.number]);
   }
 
-  /** Enter on the card is the link's native click; only the arrow keys are handled here. */
+  /**
+   * Bound on the card's link only (not the article), so arrow keys pressed on the copy button never move the card.
+   * Enter on the link is its native click; only the arrow keys are handled here.
+   */
   onCardKeydown(event: KeyboardEvent, columnId: number, index: number) {
     const list = this.grouped().get(columnId) ?? [];
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -321,9 +331,10 @@ export class Board implements OnInit {
     afterNextRender(
       () => {
         if (this.destroyRef.destroyed || this.modal() !== null) return;
-        const el = this.columnsContainer()?.nativeElement?.querySelector(
-          `[data-card-id="${cardId}"]`,
-        ) as HTMLElement | null;
+        // data-card-id is on the (non-focusable) article that CDK drags; the card's tab stop is its link.
+        const el = this.columnsContainer()?.nativeElement?.querySelector<HTMLElement>(
+          `[data-card-id="${cardId}"] .task-card-body`,
+        );
         if (!el) return;
         el.focus();
         el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });

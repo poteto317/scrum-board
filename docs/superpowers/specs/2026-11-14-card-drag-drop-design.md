@@ -17,7 +17,7 @@
 
 1. `cards` テーブルに順序用の `position` が無く、`Board()` は `ORDER BY c.created_at, c.id` 固定である。
 2. カード移動は詳細画面（および `PATCH .../status`）の列変更のみ。ボード上の DnD はない。
-3. 列の並び替えは HTML5 DnD で実装済み。カードは `<a class="task-card" routerLink>` のため、全体ドラッグとクリック遷移が衝突しうる。
+3. 列の並び替えは HTML5 DnD で実装済み。カードは、この設計の起点では `<a class="task-card" routerLink>` で、全体ドラッグとクリック遷移が衝突しうる。main の「カードリンクのワンクリックコピー」（`2026-11-14-copy-card-link-design.md`）はこれを `<article class="task-card">` の中に「コピーボタン」と「本文リンク `<a class="task-card-body" routerLink>`」を並べる構造へ変えた。本設計は、その構造を残したままカード DnD を載せる（§4.4）。
 4. README の拡張例は「カードに `position` を追加し Angular CDK と API を接続」と明記されている。
 5. 既存 DB は init SQL の再実行では変わらないため、API 起動時の冪等マイグレーションが必要（採番・履歴と同様）。
 
@@ -137,9 +137,12 @@
 ### 4.4 ボード UI（CDK）
 
 1. 各列のカードリストを `cdkDropList` にし、`cdkDropListData` にその列のカード配列（または ID）を渡す。全列を `cdkDropListConnectedTo` で相互接続する。
-2. 各カード根要素に `cdkDrag`。**ルートは `<a class="task-card" [attr.href]>` とし、`routerLink` は付けない**（`RouterLink` は通常のクリックで常に遷移し、同じ要素の `(click)` から `preventDefault()` しても止められず、ドラッグ直後の誤遷移を抑止できないため）。`href` を残すので、新しいタブで開く・リンクのコピー・ステータスバーの URL 表示・Enter での遷移はブラウザーがそのまま行う。
-   - ドラッグか click かは CDK の `dragStartThreshold`（**8**、`CARD_DRAG_THRESHOLD_PX`）に任せる。CDK はドラッグ開始時に元の `<a>` を DOM から外してプレースホルダーに差し替えるため、ドラッグ後の click は元の要素に届かず、アプリ側にドラッグ追跡のフラグは持たない（実ブラウザーで、列内・列間のドラッグ後に click も遷移も起きないことを確認）。
-   - `(click)`: Ctrl/Cmd/Shift/Alt 付きや primary 以外のボタンはブラウザー既定に任せる。それ以外は `preventDefault()` + `Router.navigate`。
+2. **カードの構造と、どの要素が何を持つか**（コピーボタン機能との両立）。カードは `<article class="task-card">` で、その中に兄弟として `<button class="copy-card-link">`（`copyCardLink`）と `<a class="task-card-body">`（本文リンク）を置く。`<a>` の中に `<button>` は置けない（不正な HTML）ので、この兄弟構造は崩さない。
+   - **外側の `<article class="task-card">`**: `cdkDrag`、`[cdkDragData]`、`[cdkDragDisabled]`、`(cdkDragMoved)`、`data-card-id`。ドラッグするのはカード全体（コピーボタンを含む）で、プレースホルダーとプレビューもこの要素。`cursor: grab`、プレビューの `transition: none`、`.cdk-drag-placeholder` などの DnD 用スタイルもここに付く。
+   - **本文リンク `<a class="task-card-body">`**: **`routerLink` は付けず `[attr.href]="cardHref(card)"`**。`aria-describedby="card-drag-help"`、`(click)="onCardClick($event, card)"`、`(keydown)="onCardKeydown(...)"` もここ。`RouterLink` は通常のクリックで常に遷移し、同じ要素の `(click)` から `preventDefault()` しても止められず、ドラッグ直後の誤遷移を抑止できないため。`href` を残すので、新しいタブで開く・リンクのコピー・ステータスバーの URL 表示・Enter での遷移はブラウザーがそのまま行う。
+   - **コピーボタン**: ドラッグ関連の属性は持たない。単なるクリックはコピーだけで、遷移も並べ替えも起こさない（CDK の閾値 8px 未満ではドラッグにならず、ボタンは `<a>` の外なので遷移しない）。ボタン上からドラッグを始めた場合は、カード全体のドラッグとして扱い（実ブラウザーで、並びが変わり、click もコピーも遷移も起きないことを確認）、ドラッグ開始を抑える処理は入れない。
+   - ドラッグか click かは CDK の `dragStartThreshold`（**8**、`CARD_DRAG_THRESHOLD_PX`）に任せる。CDK はドラッグ開始時に元の `<article>` を DOM から外してプレースホルダーに差し替えるため、ドラッグ後の click は元の要素に届かず、アプリ側にドラッグ追跡のフラグは持たない（実ブラウザーで、列内・列間のドラッグ後に click も遷移も起きないことを確認）。
+   - `(click)`（リンク）: Ctrl/Cmd/Shift/Alt 付きや primary 以外のボタンはブラウザー既定に任せる。それ以外は `preventDefault()` + `Router.navigate`。
    - 操作の説明は `aria-label` ではなく、視覚的に隠した説明要素を `aria-describedby` で結ぶ（カード本文の読み上げを損なわない。並べ替え不可の間は文言を切り替える）。
 3. `(cdkDropListDropped)` で:
    - `L-541` どおりインデックス範囲をガード。
@@ -150,7 +153,7 @@
 4. 保存中は `reordering`（または `cardReordering`）で次のカード DnD・列 DnD・列追加を抑止する。
 5. 列ヘッダー HTML5 DnD との共存: カード上では列の `draggingColumnId` を立てない。列の `dragover`/`drop` は現行どおり `draggingColumnId === null` なら無視。
 6. ドラッグ中のボード横スクロール: CDK の近傍自動スクロール、または列 DnD と同様に端での `scrollLeft` 補正（`L-680`）。縦に長い列では列コンテナの縦スクロールも考慮する。
-7. キーボード: フォーカス可能なカード（`<a href>` はもともとフォーカス可能）で `ArrowUp` / `ArrowDown`（修飾キーなしのときだけ）により同一列内で1つ移動し、同じ保存 API を呼ぶ。保存中は無視する（`disabled` でフォーカス脱落させない。列 DnD と同じ）。カードのリンクには `aria-disabled` を付けない（遷移はできるため。並べ替え不可は `aria-describedby` の説明文の切替で伝える）。`aria-live` で結果を通知し、文言には移動後の位置を含める（同じカードを続けて動かしても毎回読み上げられる）。
+7. キーボード: カードのタブストップは本文リンク（`<a href>` はもともとフォーカス可能）。**キーイベントはリンクにだけ付け**（`<article>` には付けない）、リンクにフォーカスがあるとき `ArrowUp` / `ArrowDown`（修飾キーなしのときだけ）で同一列内で1つ移動し、同じ保存 API を呼ぶ。コピーボタンにフォーカスがあるときの矢印キーはカードを動かさない（ボタンのキーイベントはリンクへ届かない）。並べ替え後のフォーカスは、`data-card-id` を持つ `<article>` の中のリンク（`.task-card-body`）へ戻す（`<article>` はフォーカスできず、そこへの `focus()` は無言で失敗するため）。フォーカス枠は、リンクが `:focus-visible` のときにカード全体（`<article>`）へ付ける（`.task-card:has(.task-card-body:focus-visible)`。リンク自身の枠は消す）。`.card-list` の padding/margin 4px は枠とホバーの持ち上がりのために残す。保存中は無視する（`disabled` でフォーカス脱落させない。列 DnD と同じ）。カードのリンクには `aria-disabled` を付けない（遷移はできるため。並べ替え不可は `aria-describedby` の説明文の切替で伝える）。`aria-live` で結果を通知し、文言には移動後の位置を含める（同じカードを続けて動かしても毎回読み上げられる）。
 8. 空列へのドロップ: 空の `cdkDropList`（列ボディ）をドロップ対象として確保し、高さ・`min-height` でヒット領域を維持する。
 
 ### 4.5 ドキュメント

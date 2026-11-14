@@ -170,14 +170,12 @@ h1 {
   transition: transform 200ms ease;
 }
 .task-card {
+  position: relative;
   display: block;
-  text-decoration: none;
-  color: inherit;
   cursor: grab;
   background: var(--paper);
   border: 1px solid #e1e5dc;
   border-radius: 8px;
-  padding: 17px 16px 13px;
   box-shadow: 0 2px 3px #25332104;
   transition:
     transform 0.15s,
@@ -185,9 +183,13 @@ h1 {
     box-shadow 0.15s;
   overflow-wrap: anywhere;
 }
-.task-card:focus-visible {
+/* The card's tab stop is its link, but the whole card is what moves: ring the card, not just the link. */
+.task-card:has(.task-card-body:focus-visible) {
   outline: 2px solid #5b7c5b;
   outline-offset: 2px;
+}
+.task-card-body:focus-visible {
+  outline: none;
 }
 .task-card.cdk-drag-preview {
   box-shadow: 0 8px 20px #25332122;
@@ -206,6 +208,23 @@ h1 {
   border-color: #a2b5a2;
   box-shadow: 0 5px 12px #2533210a;
 }
+.task-card-body {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: grab;
+  padding: 17px 16px 13px;
+  padding-right: 44px;
+}
+.copy-card-link {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
+.copy-link-icon {
+  display: block;
+}
 .card-topline {
   display: flex;
   justify-content: space-between;
@@ -216,9 +235,6 @@ h1 {
   font-family: monospace;
   font-size: 10px;
   letter-spacing: 0.5px;
-}
-.card-arrow {
-  font-size: 16px;
 }
 .task-card h3 {
   font-size: 14px;
