@@ -274,13 +274,14 @@ describe('Board card reorder state', () => {
   });
 
   it('does not give each column its own vertical scroll', async () => {
-    const { f } = await setup(vi.fn());
-    const list = f.nativeElement.querySelector('.card-list') as HTMLElement;
-    const style = getComputedStyle(list);
-    expect(style.overflowY).not.toMatch(/^(auto|scroll)$/);
-    expect(style.maxHeight === 'none' || style.maxHeight === '' || style.maxHeight === '0px').toBe(
-      true,
-    );
+    await setup(vi.fn());
+    // Component CSS is injected into <style> tags (jsdom getComputedStyle does not apply it).
+    const css = Array.from(document.querySelectorAll('style'))
+      .map((s) => s.textContent ?? '')
+      .join('\n');
+    expect(css).toMatch(/\.card-list/);
+    expect(css).not.toMatch(/\.card-list[^{]*\{[^}]*max-height:\s*min\(60vh/s);
+    expect(css).not.toMatch(/\.card-list[^{]*\{[^}]*overflow-y:\s*auto/s);
   });
 
   // CDK's own edge scrolling is switched off (it would fight page scrolling), so this is the only
