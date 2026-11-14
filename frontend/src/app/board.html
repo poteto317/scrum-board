@@ -177,7 +177,7 @@
                         </svg>
                       </button>
                       @if (openCommandCardId() === card.id) {
-                        <ul class="copy-command-menu" role="menu">
+                        <ul class="copy-command-menu" role="menu" [ngStyle]="commandMenuStyle()">
                           @if (commands.listError()) {
                             <li class="copy-command-empty" role="status">
                               {{ commands.listError() }}
