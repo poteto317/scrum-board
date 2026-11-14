@@ -24,7 +24,6 @@ import {
   buildCardOrderPayload,
   CARD_DRAG_THRESHOLD_PX,
   columnIdFromDropListId,
-  dragExceededThreshold,
   dropListIdForColumn,
 } from './card-order';
 import {
@@ -53,8 +52,6 @@ export class Board implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly boardScroll = viewChild<ElementRef<HTMLElement>>('boardScroll');
   private readonly columnsContainer = viewChild<ElementRef<HTMLElement>>('columnsContainer');
-  private cardPointerStart: { x: number; y: number } | null = null;
-  private cardDragMoved = false;
 
   readonly data = signal<BoardData>({ columns: [], cards: [] });
   readonly loading = signal(true);
@@ -198,20 +195,8 @@ export class Board implements OnInit {
       });
   }
 
-  onCardPointerDown(event: PointerEvent) {
-    this.cardPointerStart = { x: event.clientX, y: event.clientY };
-    this.cardDragMoved = false;
-  }
-
+  /** CDK owns drag-vs-click (dragStartThreshold); this only scrolls the board and the list under the pointer. */
   onCardDragMoved(event: { pointerPosition: { x: number; y: number } }) {
-    const start = this.cardPointerStart;
-    if (start && !this.cardDragMoved) {
-      if (
-        dragExceededThreshold(event.pointerPosition.x - start.x, event.pointerPosition.y - start.y)
-      ) {
-        this.cardDragMoved = true;
-      }
-    }
     const scrollEl = this.boardScroll()?.nativeElement;
     if (scrollEl) {
       const scrollRect = scrollEl.getBoundingClientRect();
@@ -234,28 +219,12 @@ export class Board implements OnInit {
     }
   }
 
-  onCardDragEnded() {
-    this.cardPointerStart = null;
-    // Keep the flag through the synthetic click that follows a drag, then clear for keyboard.
-    if (this.cardDragMoved) {
-      queueMicrotask(() => {
-        this.cardDragMoved = false;
-      });
-    }
-  }
-
   /** Real URL of a card, so the browser's own link features (new tab, copy link, status bar) keep working. */
   cardHref(card: Card): string {
     return this.location.prepareExternalUrl(`/cards/${card.number}`);
   }
 
   onCardClick(event: MouseEvent, card: Card) {
-    if (this.cardDragMoved) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.cardDragMoved = false;
-      return;
-    }
     // Ctrl/Cmd/Shift/Alt-click and non-primary buttons are the browser's: let the href do its job.
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
       return;
@@ -276,7 +245,12 @@ export class Board implements OnInit {
     const movedId = list[index].id;
     const next = applyCardDrop(this.data().cards, columnId, columnId, index, toIndex);
     if (!next) return;
-    this.persistCardOrder(next, [columnId], `${list[index].title}を列内で移動しました`, movedId);
+    this.persistCardOrder(
+      next,
+      [columnId],
+      `${list[index].title}を${toIndex + 1}番目に移動しました`,
+      movedId,
+    );
   }
 
   onCardDrop(event: CdkDragDrop<Card[]>, columnId: number) {
@@ -291,9 +265,13 @@ export class Board implements OnInit {
       event.currentIndex,
     );
     if (!next) return;
-    const moved = event.item.data as Card | undefined;
-    const label = moved?.title ? `${moved.title}を移動しました` : 'カードを移動しました';
-    this.persistCardOrder(next, affectedColumnIds(previousColumnId, columnId), label);
+    const title = (event.item.data as Card | undefined)?.title ?? 'カード';
+    const columnName = this.data().columns.find((c) => c.id === columnId)?.name ?? '';
+    this.persistCardOrder(
+      next,
+      affectedColumnIds(previousColumnId, columnId),
+      `${title}を${columnName}の${event.currentIndex + 1}番目へ移動しました`,
+    );
   }
 
   private persistCardOrder(

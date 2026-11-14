@@ -162,6 +162,9 @@ h1 {
   min-height: 72px;
   max-height: min(60vh, 640px);
   overflow-y: auto;
+  /* Room for the focus ring and hover lift, which the scroll container would otherwise clip. */
+  padding: 4px;
+  margin: -4px;
 }
 .card-list.cdk-drop-list-dragging .task-card:not(.cdk-drag-placeholder) {
   transition: transform 200ms ease;

@@ -736,7 +736,7 @@ describe('Board card reordering', () => {
     ]);
   });
 
-  it('opens detail on short click but not after a long drag', async () => {
+  it('opens detail on a plain click', async () => {
     const navigate = vi.fn();
     TestBed.configureTestingModule({
       imports: [Board],
@@ -759,17 +759,91 @@ describe('Board card reordering', () => {
     (board as unknown as { router: { navigate: typeof navigate } }).router = {
       navigate,
     } as never;
-    const card = twoCardBoard().cards[0];
-    board.onCardPointerDown({ clientX: 10, clientY: 10 } as PointerEvent);
-    board.onCardClick(new MouseEvent('click'), card);
+    board.onCardClick(new MouseEvent('click', { cancelable: true }), twoCardBoard().cards[0]);
     expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
+  });
 
-    navigate.mockClear();
-    board.onCardPointerDown({ clientX: 10, clientY: 10 } as PointerEvent);
-    board.onCardDragMoved({ pointerPosition: { x: 30, y: 10 } });
-    const ev = new MouseEvent('click', { cancelable: true });
-    board.onCardClick(ev, card);
-    expect(navigate).not.toHaveBeenCalled();
+  it('announces the new position so consecutive moves read differently', async () => {
+    // The server answers with the order it was given, as the real API does.
+    const reorderCards = vi.fn((columns: { columnId: number; cardIds: number[] }[]) => {
+      const byId = new Map(twoCardBoard().cards.map((c) => [c.id, c]));
+      return of({
+        cards: columns.flatMap((col) =>
+          col.cardIds.map((id, position) => ({
+            ...byId.get(id)!,
+            columnId: col.columnId,
+            position,
+          })),
+        ),
+      });
+    });
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards,
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const board = f.componentInstance;
+    const press = (key: string, index: number) =>
+      board.onCardKeydown(new KeyboardEvent('keydown', { key, cancelable: true }), 1, index);
+    press('ArrowDown', 0);
+    const first = board.reorderAnnouncement();
+    expect(first).toContain('2番目');
+    press('ArrowUp', 1);
+    const second = board.reorderAnnouncement();
+    expect(second).toContain('1番目');
+    expect(second).not.toBe(first);
+  });
+
+  it('announces the destination column and position after a cross-column drop', async () => {
+    const boardData = twoCardBoard();
+    const reorderCards = vi.fn(() =>
+      of({
+        cards: boardData.cards.map((c) => (c.id === 1 ? { ...c, columnId: 2, position: 0 } : c)),
+      }),
+    );
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(boardData),
+            reorderCards,
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-2' },
+        previousIndex: 0,
+        currentIndex: 0,
+        item: { data: boardData.cards[0] },
+      } as never,
+      2,
+    );
+    const name = boardData.columns.find((c) => c.id === 2)?.name;
+    expect(f.componentInstance.reorderAnnouncement()).toBe(
+      `${boardData.cards[0].title}を${name}の1番目へ移動しました`,
+    );
   });
 
   it('leaves modified and non-primary clicks to the browser', async () => {

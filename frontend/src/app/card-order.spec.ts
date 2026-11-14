@@ -3,9 +3,7 @@ import {
   affectedColumnIds,
   applyCardDrop,
   buildCardOrderPayload,
-  CARD_DRAG_THRESHOLD_PX,
   columnIdFromDropListId,
-  dragExceededThreshold,
   dropListIdForColumn,
 } from './card-order';
 import { Card } from './models';
@@ -25,13 +23,6 @@ function card(id: number, columnId: number, position: number): Card {
 }
 
 describe('card-order helpers', () => {
-  it('detects drag distance against the 8px threshold', () => {
-    expect(dragExceededThreshold(0, 0)).toBe(false);
-    expect(dragExceededThreshold(7, 0)).toBe(false);
-    expect(dragExceededThreshold(8, 0)).toBe(true);
-    expect(dragExceededThreshold(0, CARD_DRAG_THRESHOLD_PX)).toBe(true);
-  });
-
   it('round-trips drop list ids and affected columns', () => {
     expect(dropListIdForColumn(9)).toBe('card-list-9');
     expect(columnIdFromDropListId('card-list-9')).toBe(9);

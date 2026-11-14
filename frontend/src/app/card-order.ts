@@ -2,14 +2,6 @@ import { Card } from './models';
 
 export const CARD_DRAG_THRESHOLD_PX = 8;
 
-export function dragExceededThreshold(
-  dx: number,
-  dy: number,
-  threshold = CARD_DRAG_THRESHOLD_PX,
-): boolean {
-  return dx * dx + dy * dy >= threshold * threshold;
-}
-
 export function dropListIdForColumn(columnId: number): string {
   return `card-list-${columnId}`;
 }
