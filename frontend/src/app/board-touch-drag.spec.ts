@@ -50,31 +50,39 @@ describe('Board card drag start', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    const el: HTMLElement = f.nativeElement.querySelector('.task-card');
+    // A real pointer lands on a child (the body link or the copy button) and bubbles up to the card that CDK watches.
+    const target = (selector: string): HTMLElement => f.nativeElement.querySelector(selector);
     const started = vi.fn();
     f.debugElement.query(By.directive(CdkDrag)).injector.get(CdkDrag).started.subscribe(started);
-    return { el, started };
+    return { target, started };
   }
 
-  it('does not start a drag when a swipe begins on a card, so the page and lists can scroll', async () => {
-    vi.useFakeTimers();
-    try {
-      const { el, started } = await renderCard();
-      el.dispatchEvent(touch('touchstart', 100, 100));
-      vi.advanceTimersByTime(50); // well inside the hold time
-      const move = touch('touchmove', 100, 130); // far past the 8px threshold
-      document.dispatchEvent(move);
-      expect(started).not.toHaveBeenCalled();
-      expect(move.defaultPrevented).toBe(false); // the browser keeps the scroll
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+  const targets = ['.task-card', '.task-card-body', '.copy-card-link'];
 
-  it('starts a drag after the finger has rested on the card', async () => {
+  it.each(targets)(
+    'does not start a drag when a swipe begins on %s, so the page and lists can scroll',
+    async (selector) => {
+      vi.useFakeTimers();
+      try {
+        const { target, started } = await renderCard();
+        const el = target(selector);
+        el.dispatchEvent(touch('touchstart', 100, 100));
+        vi.advanceTimersByTime(50); // well inside the hold time
+        const move = touch('touchmove', 100, 130); // far past the 8px threshold
+        document.dispatchEvent(move);
+        expect(started).not.toHaveBeenCalled();
+        expect(move.defaultPrevented).toBe(false); // the browser keeps the scroll
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each(targets)('starts a drag after the finger has rested on %s', async (selector) => {
     vi.useFakeTimers();
     try {
-      const { el, started } = await renderCard();
+      const { target, started } = await renderCard();
+      const el = target(selector);
       el.dispatchEvent(touch('touchstart', 100, 100));
       vi.advanceTimersByTime(CARD_TOUCH_DRAG_DELAY_MS + 50);
       const move = touch('touchmove', 100, 130);
@@ -87,8 +95,9 @@ describe('Board card drag start', () => {
     }
   });
 
-  it('still starts a mouse drag at once', async () => {
-    const { el, started } = await renderCard();
+  it.each(targets)('still starts a mouse drag at once from %s', async (selector) => {
+    const { target, started } = await renderCard();
+    const el = target(selector);
     // CDK ignores a mousedown whose buttons or detail is 0 as a screen reader's fake click.
     el.dispatchEvent(
       new MouseEvent('mousedown', {
