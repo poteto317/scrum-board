@@ -97,3 +97,39 @@ func TestInitializeCardPositionsOnLegacySchemaMySQL(t *testing.T) {
 		}
 	}
 }
+
+// backfillIdenticalColumnPositions picks the columns before backfillColumnByCreatedAt takes its row locks. If the
+// column was reordered in between, the locked rows no longer have identical positions and must be left alone.
+func TestBackfillColumnKeepsOrderChangedAfterSelectionMySQL(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, "DELETE FROM cards"); err != nil {
+		t.Fatal(err)
+	}
+	// Manual order (30, 10, 20 by position) differs from created_at order (10, 20, 30).
+	if _, err := db.ExecContext(ctx, "INSERT INTO cards(id,column_id,title,description,position,created_at) VALUES (10,1,'a','',1,'2026-01-01 00:00:00'),(20,1,'b','',2,'2026-01-02 00:00:00'),(30,1,'c','',0,'2026-01-03 00:00:00')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := backfillColumnByCreatedAt(ctx, db, 1); err != nil {
+		t.Fatal(err)
+	}
+	want := map[int64]int{30: 0, 10: 1, 20: 2}
+	rows, err := db.QueryContext(ctx, "SELECT id,position FROM cards")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var position int
+		if err = rows.Scan(&id, &position); err != nil {
+			t.Fatal(err)
+		}
+		if position != want[id] {
+			t.Fatalf("card %d: position %d, want %d (manual order overwritten)", id, position, want[id])
+		}
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+}

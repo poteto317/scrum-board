@@ -67,30 +67,39 @@ HAVING COUNT(*) >= 2 AND COUNT(DISTINCT position) = 1`)
 	return nil
 }
 
+// backfillColumnByCreatedAt renumbers one column by (created_at, id). The caller picked the column before this
+// transaction began, so the decision is made again here, after the rows are locked: a column whose positions
+// differ now (another process reordered it in between) keeps its order.
 func backfillColumnByCreatedAt(ctx context.Context, db *sql.DB, columnID int64) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	cardRows, err := tx.QueryContext(ctx, "SELECT id FROM cards WHERE column_id=? ORDER BY created_at,id FOR UPDATE", columnID)
+	cardRows, err := tx.QueryContext(ctx, "SELECT id,position FROM cards WHERE column_id=? ORDER BY created_at,id FOR UPDATE", columnID)
 	if err != nil {
 		return err
 	}
 	var ids []int64
+	positions := map[int]struct{}{}
 	for cardRows.Next() {
 		var id int64
-		if err = cardRows.Scan(&id); err != nil {
+		var position int
+		if err = cardRows.Scan(&id, &position); err != nil {
 			cardRows.Close()
 			return err
 		}
 		ids = append(ids, id)
+		positions[position] = struct{}{}
 	}
 	if err = cardRows.Err(); err != nil {
 		cardRows.Close()
 		return err
 	}
 	cardRows.Close()
+	if len(ids) < 2 || len(positions) != 1 {
+		return tx.Commit()
+	}
 	for pos, id := range ids {
 		if _, err = tx.ExecContext(ctx, "UPDATE cards SET position=?, updated_at=updated_at WHERE id=?", pos, id); err != nil {
 			return err
