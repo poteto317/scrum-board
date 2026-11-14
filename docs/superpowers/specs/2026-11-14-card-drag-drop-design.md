@@ -137,12 +137,12 @@
 ### 4.4 ボード UI（CDK）
 
 1. 各列のカードリストを `cdkDropList` にし、`cdkDropListData` にその列のカード配列（または ID）を渡す。全列を `cdkDropListConnectedTo` で相互接続する。
-2. 各カード根要素に `cdkDrag`。`<a routerLink>` を維持する場合:
+2. 各カード根要素に `cdkDrag`。**ルートは `<a class="task-card" [attr.href]>` とし、`routerLink` は付けない**（`RouterLink` は通常のクリックで常に遷移し、同じ要素の `(click)` から `preventDefault()` しても止められず、ドラッグ直後の誤遷移を抑止できないため）。`href` を残すので、新しいタブで開く・リンクのコピー・ステータスバーの URL 表示・Enter での遷移はブラウザーがそのまま行う。
    - `pointerdown` で開始座標を記録。
-   - `cdkDragMoved` / 自前の pointermove で移動距離が閾値（**8px**）を超えたら `cardDragMoved = true`。
-   - `(click)` で `cardDragMoved` なら `preventDefault()` + `stopPropagation()` し遷移しない。超えなければ通常のリンク遷移。
-   - `cdkDragEnded` でフラグをリセット。
-   - あるいはルートを `<div class="task-card" cdkDrag>` + 内部クリックで `Router.navigate` に替え、同じ閾値ロジックを使う。どちらか一方に統一する（実装プランでファイル単位に固定）。
+   - `cdkDragMoved` で移動距離が閾値（**8px**）を超えたら `cardDragMoved = true`。
+   - `(click)` で `cardDragMoved` なら `preventDefault()` + `stopPropagation()` し遷移しない。Ctrl/Cmd/Shift/Alt 付きや primary 以外のボタンはブラウザー既定に任せる。それ以外は `preventDefault()` + `Router.navigate`。
+   - `cdkDragEnded` でフラグをリセット（ドラッグ直後の合成 click を越えるため microtask で遅らせる）。
+   - 操作の説明は `aria-label` ではなく、視覚的に隠した説明要素を `aria-describedby` で結ぶ（カード本文の読み上げを損なわない。並べ替え不可の間は文言を切り替える）。
 3. `(cdkDropListDropped)` で:
    - `L-541` どおりインデックス範囲をガード。
    - 同一位置 no-op なら API しない。
@@ -152,7 +152,7 @@
 4. 保存中は `reordering`（または `cardReordering`）で次のカード DnD・列 DnD・列追加を抑止する。
 5. 列ヘッダー HTML5 DnD との共存: カード上では列の `draggingColumnId` を立てない。列の `dragover`/`drop` は現行どおり `draggingColumnId === null` なら無視。
 6. ドラッグ中のボード横スクロール: CDK の近傍自動スクロール、または列 DnD と同様に端での `scrollLeft` 補正（`L-680`）。縦に長い列では列コンテナの縦スクロールも考慮する。
-7. キーボード: フォーカス可能なカード（`tabindex="0"`）またはカード内の移動用コントロールで `ArrowUp` / `ArrowDown` により同一列内で1つ移動し、同じ保存 API を呼ぶ。保存中は `aria-disabled` で無視（`disabled` でフォーカス脱落させない。列 DnD と同じ）。`aria-live` で結果を通知する。
+7. キーボード: フォーカス可能なカード（`<a href>` はもともとフォーカス可能）で `ArrowUp` / `ArrowDown`（修飾キーなしのときだけ）により同一列内で1つ移動し、同じ保存 API を呼ぶ。保存中は `aria-disabled` で無視（`disabled` でフォーカス脱落させない。列 DnD と同じ）。`aria-live` で結果を通知する。
 8. 空列へのドロップ: 空の `cdkDropList`（列ボディ）をドロップ対象として確保し、高さ・`min-height` でヒット領域を維持する。
 
 ### 4.5 ドキュメント
