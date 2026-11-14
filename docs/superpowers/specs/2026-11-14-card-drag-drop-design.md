@@ -27,7 +27,7 @@
 - DB に `cards.position` を追加し、列内は `ORDER BY position, id`、ボード全体は列順とは独立にカード配列を返し、UI が列ごとにグルーピングする（現行と同じ）。
 - 並び替え・列間移動の永続化は **1 リクエスト・1 トランザクション**。失敗時は UI をロールバックし、ボード全体を消す初期ロード用 `error` とは別の非破壊バナーを使う（列並び替えと同型。`L-001`, `L-038`）。
 - カード DnD 中は列ヘッダー DnD と干渉しないこと。列の `dragstart` は現行どおり列ヘッダー起点のみ。
-- タッチでの CDK ドラッグは CDK の既定に任せる。キーボードはカードにフォーカス可能な操作で上下移動（および列間は既存のステータス選択を主経路とし、キーボードでの列間移動は必須にしない）。
+- タッチでの CDK ドラッグは CDK を使うが、`dragStartDelay` の既定（0）のままだと、カード上のスワイプが閾値（8px）を超えた時点でドラッグになってリストやボードをスクロールできない（カードは列幅のほぼ全面を占める）。そのためタッチだけ 200ms 押し続けてからドラッグにする（`dragStartDelay: { touch: 200, mouse: 0 }`。マウスは即時）。CDK は静止時に `touch-action` を付けないので、遅延の間のスワイプはブラウザーのスクロールになる。キーボードはカードにフォーカス可能な操作で上下移動（および列間は既存のステータス選択を主経路とし、キーボードでの列間移動は必須にしない）。
 
 ## 3. バックエンド設計
 
@@ -101,7 +101,7 @@
 
 1. 入口でもバリデーションし、失敗時 `ErrCardOrder`。
 2. トランザクション開始。`board_columns` を `ORDER BY id FOR UPDATE` でロックし、列 ID の存在確認。
-3. 対象になりうるカードをロック: リクエスト列に属するカード、およびリクエストの全 cardId を `SELECT id FROM cards WHERE ... ORDER BY id FOR UPDATE`。`ORDER BY` は結果の整列でしかなく、InnoDB は使うインデックスの走査順（テーブルが大きいと `cards_column_position`、小さいと主キー）で行ロックを取るため、`cards` のロック順は保証しない。書き込み経路どうしの直列化は手順 2 の全列ロックが担う（§3.4）。
+3. リクエストの列に現在属するカードをロック: `SELECT id FROM cards WHERE column_id IN (<リクエストの列>) ORDER BY id FOR UPDATE`。リクエストの `cardIds` にあってもこれらの列に属さないカード（他の列のカード）はロックせず、手順 4 の集合検証で不一致となり 409 になる（§3.3 整合性 3）。`ORDER BY` は結果の整列でしかなく、InnoDB は使うインデックスの走査順（テーブルが大きいと `cards_column_position`、小さいと主キー）で行ロックを取るため、`cards` のロック順は保証しない。書き込み経路どうしの直列化は手順 2 の全列ロックが担う（§3.4）。
 4. 集合一致を検証。不一致なら `ErrCardOrderMismatch`。
 5. 各 `(columnId, cardIds[i])` について、`column_id` と `position` の両方が現在値と同じカードは UPDATE しない。列が変わったカードは `UPDATE cards SET column_id=?, position=?, updated_at=?`、位置だけ変わるカードは `updated_at=updated_at` で据え置いて `column_id`・`position` のみ更新する。`updated_at` は「カードの編集時刻」で、ステータス変更でだけ動く（履歴の方針と一致。触っていないカードの更新日時や履歴の revision を変えない）。`RowsAffected` には依存しない（`L-540`）。
 6. **履歴**: 更新前後で `column_id` が変わったカードだけ `appendHistory(..., "updated")`（status 変更として既存の historyValues 経路）。`position` のみの変更は履歴に載せない。

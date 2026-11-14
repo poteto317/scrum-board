@@ -122,7 +122,7 @@
 **Interfaces:**
 - Produces:
   - `Api.reorderCards(columns: { columnId: number; cardIds: number[] }[])`
-  - `applyCardDrop(...)`, `buildCardOrderPayload(...)`, `dropListIdForColumn` / `columnIdFromDropListId` / `affectedColumnIds` 等の純粋関数と定数 `CARD_DRAG_THRESHOLD_PX = 8`（`card-order.ts`）。クリックとドラッグの判別は CDK の `dragStartThreshold` に任せ、自前の閾値判定関数は持たない
+  - `applyCardDrop(...)`, `buildCardOrderPayload(...)`, `dropListIdForColumn` / `columnIdFromDropListId` / `affectedColumnIds` 等の純粋関数と定数 `CARD_DRAG_THRESHOLD_PX = 8` と `CARD_TOUCH_DRAG_DELAY_MS = 200`（`card-order.ts`。後者はタッチだけの `dragStartDelay` で、スワイプによるスクロールとドラッグを分ける）。クリックとドラッグの判別は CDK の `dragStartThreshold` に任せ、自前の閾値判定関数は持たない
   - Board: `cdkDropList` 接続、カードは `<a href>`（クリック遷移）、楽観更新、既存 `reorderError` 共用または同等バナー
 
 - [ ] **Step 1:** `npm install @angular/cdk@^21.2.0`（frontend ディレクトリ）
