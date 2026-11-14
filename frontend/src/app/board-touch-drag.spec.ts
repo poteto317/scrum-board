@@ -1,4 +1,4 @@
-import { CdkDrag } from '@angular/cdk/drag-drop';
+import { CDK_DRAG_CONFIG, CdkDrag, DragRefConfig } from '@angular/cdk/drag-drop';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
@@ -53,8 +53,11 @@ describe('Board card drag start', () => {
     // A real pointer lands on a child (the body link or the copy button) and bubbles up to the card that CDK watches.
     const target = (selector: string): HTMLElement => f.nativeElement.querySelector(selector);
     const started = vi.fn();
-    f.debugElement.query(By.directive(CdkDrag)).injector.get(CdkDrag).started.subscribe(started);
-    return { target, started };
+    const drag = f.debugElement.query(By.directive(CdkDrag));
+    drag.injector.get(CdkDrag).started.subscribe(started);
+    // The configuration the board hands to its cards, as CDK sees it.
+    const config = drag.injector.get(CDK_DRAG_CONFIG) as DragRefConfig;
+    return { target, started, config };
   }
 
   const targets = ['.task-card', '.task-card-body', '.copy-card-link'];
@@ -116,6 +119,37 @@ describe('Board card drag start', () => {
     expect(started).toHaveBeenCalledTimes(1);
     document.dispatchEvent(
       new MouseEvent('mouseup', { bubbles: true, clientX: 100, clientY: 130 }),
+    );
+  });
+
+  // A click that wobbles a little must stay a click (opening the card), so a mouse drag needs 8px of travel.
+  it('starts a mouse drag only once the pointer has travelled the 8px threshold', async () => {
+    const { target, started, config } = await renderCard();
+    expect(config.dragStartThreshold).toBe(8);
+    const el = target('.task-card-body');
+    el.dispatchEvent(
+      new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+        detail: 1,
+        clientX: 100,
+        clientY: 100,
+      }),
+    );
+    const moveTo = (x: number, y: number) =>
+      document.dispatchEvent(
+        new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+      );
+    moveTo(107, 100);
+    expect(started).not.toHaveBeenCalled();
+    moveTo(100, 107);
+    expect(started).not.toHaveBeenCalled();
+    moveTo(108, 100);
+    expect(started).toHaveBeenCalledTimes(1);
+    document.dispatchEvent(
+      new MouseEvent('mouseup', { bubbles: true, clientX: 108, clientY: 100 }),
     );
   });
 });

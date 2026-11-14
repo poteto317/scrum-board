@@ -992,6 +992,46 @@ describe('Board card reordering', () => {
     expect(reorderCards).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores keys other than the up and down arrows, and arrows that have nowhere to go', async () => {
+    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const press = (key: string, columnId: number, index: number) => {
+      const ev = new KeyboardEvent('keydown', { key, cancelable: true });
+      f.componentInstance.onCardKeydown(ev, columnId, index);
+      return ev;
+    };
+
+    // Enter and Tab belong to the link and the browser; the others are not card moves either.
+    for (const key of ['Enter', 'Tab', ' ', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape']) {
+      for (const index of [0, 1]) {
+        expect(press(key, 1, index).defaultPrevented, `${key} on card ${index}`).toBe(false);
+      }
+    }
+    // The first card cannot go up and the last cannot go down: the key stays the browser's (page scroll).
+    expect(press('ArrowUp', 1, 0).defaultPrevented).toBe(false);
+    expect(press('ArrowDown', 1, 1).defaultPrevented).toBe(false);
+    // A column of one card has no neighbours at all.
+    expect(press('ArrowUp', 2, 0).defaultPrevented).toBe(false);
+    expect(press('ArrowDown', 2, 0).defaultPrevented).toBe(false);
+    expect(reorderCards).not.toHaveBeenCalled();
+
+    // The same keys on a card that can move are taken and saved.
+    expect(press('ArrowUp', 1, 1).defaultPrevented).toBe(true);
+    expect(reorderCards).toHaveBeenCalledTimes(1);
+  });
+
   it('describes card dragging differently while reordering is unavailable', async () => {
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1023,5 +1063,93 @@ describe('Board card reordering', () => {
     f.detectChanges();
     expect(f.componentInstance.canReorderCards()).toBe(false);
     expect(help()).toContain('保存中');
+  });
+});
+
+// Fixtures elsewhere give every card number === id, which cannot tell the two apart. Here they differ and
+// even cross over: card 1 is TASK-002, card 2 is TASK-003 and card 3 is TASK-001.
+describe('Board card identity', () => {
+  const crossed = (): BoardData => {
+    const base = {
+      description: '',
+      backlogPosition: 0,
+      prUrl: '',
+      createdAt: '',
+      updatedAt: '',
+    };
+    return {
+      columns: makeColumns().slice(0, 2),
+      cards: [
+        { ...base, id: 1, number: 2, columnId: 1, title: 'A', position: 0 },
+        { ...base, id: 2, number: 3, columnId: 1, title: 'B', position: 1 },
+        { ...base, id: 3, number: 1, columnId: 2, title: 'C', position: 0 },
+      ],
+    };
+  };
+
+  async function render(reorderCards: ReturnType<typeof vi.fn> = vi.fn()) {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        { provide: Api, useValue: { board: () => of(crossed()), reorderCards } },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const links = (): HTMLAnchorElement[] =>
+      Array.from(f.nativeElement.querySelectorAll('.task-card-body'));
+    return { f, links };
+  }
+
+  it('opens the card by its public number when its link is clicked, and links to that number', async () => {
+    const { f, links } = await render();
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    expect(links().map((a) => a.getAttribute('href'))).toEqual([
+      '/cards/2',
+      '/cards/3',
+      '/cards/1',
+    ]);
+    expect(links().map((a) => a.textContent)).toEqual([
+      expect.stringContaining('TASK-002'),
+      expect.stringContaining('TASK-003'),
+      expect.stringContaining('TASK-001'),
+    ]);
+
+    const [a, b, c] = links();
+    for (const link of [a, b, c]) {
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      link.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+    }
+    expect(navigate.mock.calls.map(([commands]) => commands)).toEqual([
+      ['/cards', 2],
+      ['/cards', 3],
+      ['/cards', 1],
+    ]);
+    f.destroy();
+  });
+
+  it('puts focus back on the moved card by its row id, not by its public number', async () => {
+    const answer = [
+      { ...crossed().cards[0], position: 1 },
+      { ...crossed().cards[1], position: 0 },
+      crossed().cards[2],
+    ];
+    const { f, links } = await render(vi.fn(() => of({ cards: answer })));
+
+    // Card A (id 1, TASK-002) moves down. Number 2 is card B's id, so a lookup by number lands on B.
+    links()[0].dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+    );
+    f.detectChanges();
+    await f.whenStable();
+    const active = document.activeElement as HTMLElement;
+    expect(active.classList.contains('task-card-body')).toBe(true);
+    expect(active.closest('[data-card-id]')?.getAttribute('data-card-id')).toBe('1');
+    expect(active.textContent).toContain('TASK-002');
+    expect(active.getAttribute('href')).toBe('/cards/2');
+    f.destroy();
   });
 });

@@ -154,6 +154,74 @@ describe('Board card reorder state', () => {
     expect(focused()).toBe('1');
   });
 
+  // The synchronous focus call at the start of a move does not survive the wait for the server; the answer has
+  // to put it back, because the board re-renders and the user may have tabbed away in the meantime.
+  it.each([
+    [
+      'saved',
+      (subject: Subject<{ cards: Card[] }>) => subject.next({ cards: initialBoard().cards }),
+    ],
+    ['failed', (subject: Subject<{ cards: Card[] }>) => subject.error({ status: 500, error: {} })],
+  ] as const)(
+    'puts focus back on the moved card when the answer arrives late and the move %s',
+    async (_name, answer) => {
+      const pending = new Subject<{ cards: Card[] }>();
+      const { f, component } = await setup(vi.fn(() => pending));
+
+      arrowDown(component, 0);
+      f.detectChanges();
+      await f.whenStable();
+      // The user moves on while the save is still in flight.
+      const elsewhere = f.nativeElement.querySelector('.column-drag-handle') as HTMLElement;
+      elsewhere.focus();
+      expect(document.activeElement).toBe(elsewhere);
+      expect(component.reordering()).toBe(true);
+
+      answer(pending);
+      pending.complete();
+      f.detectChanges();
+      await f.whenStable();
+      const active = document.activeElement as HTMLElement;
+      expect(active.classList.contains('task-card-body')).toBe(true);
+      expect(active.closest('[data-card-id]')?.getAttribute('data-card-id')).toBe('1');
+    },
+  );
+
+  // A banner from the last failed move would still be on screen next to a move that went through.
+  it.each([
+    ['a server error', 500, false],
+    ['a conflict', 409, true],
+  ] as const)(
+    'clears the banner of a failed move as soon as the next move starts (%s)',
+    async (_name, status, conflict) => {
+      const failed = new Subject<{ cards: Card[] }>();
+      const next = new Subject<{ cards: Card[] }>();
+      const reorderCards = vi.fn().mockReturnValueOnce(failed).mockReturnValueOnce(next);
+      const { f, component } = await setup(reorderCards);
+
+      arrowDown(component, 0);
+      failed.error({ status, error: { message: '保存に失敗しました。' } });
+      f.detectChanges();
+      expect(component.reorderError()).toBe('保存に失敗しました。');
+      expect(component.reorderConflict()).toBe(conflict);
+      expect(f.nativeElement.querySelector('.reorder-alert')).not.toBeNull();
+
+      arrowDown(component, 0);
+      expect(reorderCards).toHaveBeenCalledTimes(2);
+      expect(component.reorderError()).toBe('');
+      expect(component.reorderConflict()).toBe(false);
+      f.detectChanges();
+      expect(f.nativeElement.querySelector('.reorder-alert')).toBeNull();
+
+      next.next({ cards: initialBoard().cards });
+      next.complete();
+      f.detectChanges();
+      expect(component.reorderError()).toBe('');
+      expect(component.reorderConflict()).toBe(false);
+      expect(f.nativeElement.querySelector('.reorder-alert')).toBeNull();
+    },
+  );
+
   it('rolls back and offers "close" for a server error but not for a conflict', async () => {
     const serverError = new Subject<{ cards: Card[] }>();
     const conflict = new Subject<{ cards: Card[] }>();
