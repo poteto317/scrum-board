@@ -39,11 +39,9 @@
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
           </svg>
         </button>
-        @if (copyLinkFeedback()) {
-          <p class="copy-link-feedback" role="status" aria-live="polite">
-            {{ copyLinkFeedback() }}
-          </p>
-        }
+        <p class="copy-link-feedback" role="status" aria-live="polite">
+          {{ copyLinkFeedback() }}
+        </p>
       </div>
     </section>
     <form [formGroup]="form" (submit)="$event.preventDefault()" class="detail-layout">

@@ -102,7 +102,9 @@
                   <button
                     type="button"
                     class="copy-card-link icon-button"
-                    aria-label="リンクをコピー"
+                    [attr.aria-label]="
+                      'TASK-' + card.number.toString().padStart(3, '0') + ' のリンクをコピー'
+                    "
                     (click)="copyCardLink(card.number)"
                   >
                     <svg
