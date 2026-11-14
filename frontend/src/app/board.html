@@ -280,12 +280,7 @@
           @if (cardForm.controls.title.touched && cardForm.controls.title.invalid) {
             <p class="form-error">タイトルを1〜200文字で入力してください。</p>
           }
-          <label for="card-status">ステータス</label
-          ><select id="card-status" formControlName="columnId">
-            @for (column of data().columns; track column.id) {
-              <option [ngValue]="column.id">{{ column.name }}</option>
-            }</select
-          ><label for="card-description">説明 <span class="optional">任意</span></label
+          <label for="card-description">説明 <span class="optional">任意</span></label
           ><textarea
             id="card-description"
             formControlName="description"

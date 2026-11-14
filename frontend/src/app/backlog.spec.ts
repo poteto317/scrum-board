@@ -5,6 +5,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Backlog } from './backlog';
 import { Card, Column } from './models';
+import { TODO_COLUMN_MISSING } from './todo-column';
 
 function makeCards(): Card[] {
   return [
@@ -281,13 +282,13 @@ describe('Backlog reordering', () => {
     expect(f.nativeElement.querySelector('.reorder-dismiss')).toBeNull();
   });
 
-  it('creates a card from the backlog modal with selected status', async () => {
+  it('creates a card from the backlog modal always in Todo without a status select', async () => {
     const cards = makeCards().slice(0, 1);
     const columns = makeColumns();
     const created: Card = {
       id: 10,
       number: 10,
-      columnId: 2,
+      columnId: 1,
       title: 'New',
       description: 'd',
       position: 1,
@@ -330,20 +331,46 @@ describe('Backlog reordering', () => {
     try {
       f.componentInstance.openCard();
       f.detectChanges();
+      expect(f.nativeElement.querySelector('#backlog-card-status')).toBeNull();
       f.componentInstance.cardForm.setValue({
         title: 'New',
         description: 'd',
-        columnId: 2,
       });
       f.componentInstance.addCard();
       f.detectChanges();
-      expect(createCard).toHaveBeenCalledWith({ title: 'New', description: 'd', columnId: 2 });
+      expect(createCard).toHaveBeenCalledWith({ title: 'New', description: 'd', columnId: 1 });
       expect(f.componentInstance.cards().at(-1)?.id).toBe(10);
       expect(f.componentInstance.modal()).toBeNull();
     } finally {
       proto.showModal = origShowModal;
       proto.close = origClose;
     }
+  });
+
+  it('does not create from the backlog when Todo column is missing', async () => {
+    const createCard = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ cards: [] }),
+            board: () => of({ columns: [{ id: 2, name: 'Doing', position: 0 }], cards: [] }),
+            createCard,
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.openCard();
+    f.componentInstance.cardForm.setValue({ title: 'x', description: '' });
+    f.componentInstance.addCard();
+    expect(createCard).not.toHaveBeenCalled();
+    expect(f.componentInstance.formError()).toBe(TODO_COLUMN_MISSING);
   });
 
   it('disables the add-card button and blocks openCard when initial load fails or columns are empty', async () => {

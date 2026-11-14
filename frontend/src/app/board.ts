@@ -46,6 +46,7 @@ import { textLimit } from './form-validation';
 import { BoardData, Card, Column } from './models';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
+import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
   selector: 'app-board',
@@ -117,7 +118,6 @@ export class Board implements OnInit {
   readonly cardForm = new FormGroup({
     title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
-    columnId: new FormControl(0, { nonNullable: true }),
   });
   readonly grouped = computed(() => {
     const groups = new Map<number, BoardData['cards']>();
@@ -192,9 +192,9 @@ export class Board implements OnInit {
     this.modal.set('column');
   }
 
-  openCard(columnId: number) {
+  openCard(_columnId?: number) {
     if (this.reordering()) return;
-    this.cardForm.reset({ title: '', description: '', columnId });
+    this.cardForm.reset({ title: '', description: '' });
     this.formError.set('');
     this.modal.set('card');
   }
@@ -239,12 +239,17 @@ export class Board implements OnInit {
       this.cardForm.markAllAsTouched();
       return;
     }
+    const todoId = todoColumnId(this.data().columns);
+    if (todoId == null) {
+      this.formError.set(TODO_COLUMN_MISSING);
+      return;
+    }
     this.saving.set(true);
     this.formError.set('');
     const value = this.cardForm.getRawValue();
     this.cardForm.disable({ emitEvent: false });
     this.api
-      .createCard({ ...value, title: value.title.trim() })
+      .createCard({ ...value, title: value.title.trim(), columnId: todoId })
       .pipe(
         finalize(() => {
           this.saving.set(false);

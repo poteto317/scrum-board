@@ -21,6 +21,7 @@ import { computeAutoScrollDelta, computeDropSlot, moveCard, targetIndex } from '
 import { textLimit } from './form-validation';
 import { Card, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
+import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
   selector: 'app-backlog',
@@ -65,7 +66,6 @@ export class Backlog implements OnInit {
   readonly cardForm = new FormGroup({
     title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
-    columnId: new FormControl(0, { nonNullable: true }),
   });
 
   ngOnInit() {
@@ -118,8 +118,7 @@ export class Backlog implements OnInit {
     ) {
       return;
     }
-    const todoId = this.columns().find((c) => c.name === 'Todo')?.id ?? this.columns()[0]?.id ?? 0;
-    this.cardForm.reset({ title: '', description: '', columnId: todoId });
+    this.cardForm.reset({ title: '', description: '' });
     this.formError.set('');
     this.modal.set('card');
   }
@@ -138,12 +137,17 @@ export class Backlog implements OnInit {
       this.cardForm.markAllAsTouched();
       return;
     }
+    const todoId = todoColumnId(this.columns());
+    if (todoId == null) {
+      this.formError.set(TODO_COLUMN_MISSING);
+      return;
+    }
     this.saving.set(true);
     this.formError.set('');
     const value = this.cardForm.getRawValue();
     this.cardForm.disable({ emitEvent: false });
     this.api
-      .createCard({ ...value, title: value.title.trim() })
+      .createCard({ ...value, title: value.title.trim(), columnId: todoId })
       .pipe(
         finalize(() => {
           this.saving.set(false);

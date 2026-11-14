@@ -6,6 +6,7 @@ import { Api } from './api';
 import { Board } from './board';
 import { cardDetailUrl } from './card-link';
 import { BoardData, Column } from './models';
+import { TODO_COLUMN_MISSING } from './todo-column';
 
 describe('Board create requests', () => {
   it('freezes card inputs while creating and retains them on failure', () => {
@@ -13,15 +14,140 @@ describe('Board create requests', () => {
     const api = { createCard: vi.fn(() => pending) };
     TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: api }] });
     const board = TestBed.runInInjectionContext(() => new Board());
-    board.cardForm.setValue({ title: '保存するタイトル', description: '本文', columnId: 1 });
+    board.data.set({
+      columns: [
+        { id: 1, name: 'Todo', position: 0 },
+        { id: 2, name: 'Doing', position: 1 },
+      ],
+      cards: [],
+    });
+    board.cardForm.setValue({ title: '保存するタイトル', description: '本文' });
     board.addCard();
     board.addCard();
     expect(api.createCard).toHaveBeenCalledTimes(1);
+    expect(api.createCard).toHaveBeenCalledWith({
+      title: '保存するタイトル',
+      description: '本文',
+      columnId: 1,
+    });
     expect(board.cardForm.disabled).toBe(true);
     pending.error({ error: { message: '失敗' } });
     expect(board.cardForm.enabled).toBe(true);
     expect(board.cardForm.controls.title.value).toBe('保存するタイトル');
     expect(board.formError()).toBe('失敗');
+  });
+  it('always creates in Todo even when opened from another column', () => {
+    const createCard = vi.fn(() =>
+      of({
+        id: 9,
+        number: 9,
+        columnId: 1,
+        title: 'n',
+        description: '',
+        position: 0,
+        backlogPosition: 0,
+        prUrls: [],
+        assignee: '',
+        createdAt: '',
+        updatedAt: '',
+      }),
+    );
+    TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: { createCard } }] });
+    const board = TestBed.runInInjectionContext(() => new Board());
+    board.data.set({
+      columns: [
+        { id: 1, name: 'Todo', position: 0 },
+        { id: 2, name: 'Doing', position: 1 },
+      ],
+      cards: [],
+    });
+    board.openCard(2);
+    board.cardForm.setValue({ title: 'from doing', description: '' });
+    board.addCard();
+    expect(createCard).toHaveBeenCalledWith({
+      title: 'from doing',
+      description: '',
+      columnId: 1,
+    });
+  });
+  it('creates in an empty Todo column', () => {
+    const createCard = vi.fn(() =>
+      of({
+        id: 1,
+        number: 1,
+        columnId: 1,
+        title: 'first',
+        description: '',
+        position: 0,
+        backlogPosition: 0,
+        prUrls: [],
+        assignee: '',
+        createdAt: '',
+        updatedAt: '',
+      }),
+    );
+    TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: { createCard } }] });
+    const board = TestBed.runInInjectionContext(() => new Board());
+    board.data.set({ columns: [{ id: 1, name: 'Todo', position: 0 }], cards: [] });
+    board.cardForm.setValue({ title: 'first', description: '' });
+    board.addCard();
+    expect(createCard).toHaveBeenCalledWith({ title: 'first', description: '', columnId: 1 });
+  });
+  it('does not create when Todo column is missing', () => {
+    const createCard = vi.fn();
+    TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: { createCard } }] });
+    const board = TestBed.runInInjectionContext(() => new Board());
+    board.data.set({ columns: [{ id: 2, name: 'Doing', position: 0 }], cards: [] });
+    board.cardForm.setValue({ title: 'x', description: '' });
+    board.addCard();
+    expect(createCard).not.toHaveBeenCalled();
+    expect(board.formError()).toBe(TODO_COLUMN_MISSING);
+  });
+  it('omits the status select from the card modal', async () => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () =>
+              of({
+                columns: [
+                  { id: 1, name: 'Todo', position: 0 },
+                  { id: 2, name: 'Doing', position: 1 },
+                ],
+                cards: [],
+              }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    try {
+      f.componentInstance.openCard(2);
+      f.detectChanges();
+      expect(f.nativeElement.querySelector('#card-status')).toBeNull();
+      f.componentInstance.close();
+      f.detectChanges();
+    } finally {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    }
   });
   it('freezes column input while creating and restores it after failure', () => {
     const pending = new Subject<never>();
