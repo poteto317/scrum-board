@@ -665,7 +665,7 @@ describe('Board card reordering', () => {
     );
   });
 
-  it('moves within a column with ArrowDown and focuses the card', async () => {
+  it('moves within a column with ArrowDown (focus is covered in board-card-reorder-state.spec.ts)', async () => {
     const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
     TestBed.configureTestingModule({
       imports: [Board],
