@@ -1,7 +1,7 @@
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Backlog } from './backlog';
 import { Card, Column } from './models';
@@ -365,5 +365,64 @@ describe('Backlog reordering', () => {
     expect(addButton.disabled).toBe(true);
     f.componentInstance.openCard();
     expect(f.componentInstance.modal()).toBeNull();
+  });
+});
+
+describe('Backlog live refresh', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('applies silent backlog poll without setting loading', async () => {
+    vi.useFakeTimers();
+    const cards = makeCards();
+    const columns = makeColumns();
+    const api = {
+      backlog: vi.fn(() => of({ cards })),
+      board: vi.fn(() => of({ columns, cards: [] })),
+      createCard: vi.fn(),
+      reorderBacklog: vi.fn(),
+    };
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [provideRouter([]), { provide: Api, useValue: api }],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    expect(f.componentInstance.loading()).toBe(false);
+
+    const next = [...cards, { ...cards[0], id: 50, number: 50, title: 'Polled' }];
+    api.backlog.mockReturnValue(of({ cards: next }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.loading()).toBe(false);
+    expect(f.componentInstance.error()).toBe('');
+    expect(f.componentInstance.cards().some((c) => c.number === 50)).toBe(true);
+    f.destroy();
+  });
+
+  it('does not apply while reordering', async () => {
+    vi.useFakeTimers();
+    const cards = makeCards();
+    const columns = makeColumns();
+    const api = {
+      backlog: vi.fn(() => of({ cards })),
+      board: vi.fn(() => of({ columns, cards: [] })),
+      createCard: vi.fn(),
+      reorderBacklog: vi.fn(),
+    };
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [provideRouter([]), { provide: Api, useValue: api }],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    f.componentInstance.reordering.set(true);
+    const before = f.componentInstance.cards().length;
+    api.backlog.mockReturnValue(of({ cards: [] }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.cards()).toHaveLength(before);
+    f.destroy();
   });
 });

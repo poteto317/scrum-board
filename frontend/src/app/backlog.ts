@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   Injector,
+  NgZone,
   OnInit,
   signal,
   viewChild,
@@ -19,6 +20,7 @@ import { errorMessage } from './api-error';
 import { computeAutoScrollDelta, computeDropSlot, moveCard, targetIndex } from './backlog-order';
 import { textLimit } from './form-validation';
 import { Card, Column } from './models';
+import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 
 @Component({
   selector: 'app-backlog',
@@ -30,6 +32,7 @@ export class Backlog implements OnInit {
   private readonly api = inject(Api);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly zone = inject(NgZone);
   private readonly backlogScroll = viewChild<ElementRef<HTMLElement>>('backlogScroll');
   private readonly listContainer = viewChild<ElementRef<HTMLElement>>('listContainer');
 
@@ -67,6 +70,22 @@ export class Backlog implements OnInit {
 
   ngOnInit() {
     this.load();
+    const stop = startLiveRefresh({
+      enabled: () =>
+        !this.loading() &&
+        !this.reordering() &&
+        !this.saving() &&
+        this.modal() === null &&
+        this.draggingCardId() === null,
+      fetch: () => forkJoin({ backlog: this.api.backlog(), board: this.api.board() }),
+      apply: ({ backlog, board }) => {
+        this.error.set('');
+        if (!sameJson(this.cards(), backlog.cards)) this.cards.set(backlog.cards);
+        if (!sameJson(this.columns(), board.columns)) this.columns.set(board.columns);
+      },
+      ...zoneAwareTimers(this.zone),
+    });
+    this.destroyRef.onDestroy(stop);
   }
 
   load() {
