@@ -135,12 +135,7 @@
         @if (cardForm.controls.title.touched && cardForm.controls.title.invalid) {
           <p class="form-error">タイトルを1〜200文字で入力してください。</p>
         }
-        <label for="backlog-card-status">初期ステータス</label
-        ><select id="backlog-card-status" formControlName="columnId">
-          @for (column of columns(); track column.id) {
-            <option [ngValue]="column.id">{{ column.name }}</option>
-          }</select
-        ><label for="backlog-card-description">説明 <span class="optional">任意</span></label
+        <label for="backlog-card-description">説明 <span class="optional">任意</span></label
         ><textarea
           id="backlog-card-description"
           formControlName="description"
