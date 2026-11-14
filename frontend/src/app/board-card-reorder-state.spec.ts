@@ -1,7 +1,7 @@
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of, Subject } from 'rxjs';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, onTestFinished, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
 import { BoardData, Card } from './models';
@@ -189,5 +189,46 @@ describe('Board card reorder state', () => {
     expect(board).toHaveBeenCalledTimes(2);
     expect(f.nativeElement.querySelector('.reorder-alert')).toBeNull();
     expect(component.reorderConflict()).toBe(false);
+  });
+
+  // CDK's own edge scrolling is switched off (it would fight the list's own scrolling), so this is the only
+  // thing that scrolls the board sideways and a column's list up and down while a card is dragged to an edge.
+  it('scrolls the board and the list under the pointer when a card is dragged to an edge', async () => {
+    const { f, component } = await setup(vi.fn());
+    const scroller = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
+    const list = f.nativeElement.querySelector('.card-list') as HTMLElement;
+    const rect = (left: number, top: number, right: number, bottom: number) =>
+      ({ left, top, right, bottom, width: right - left, height: bottom - top }) as DOMRect;
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 600));
+    vi.spyOn(list, 'getBoundingClientRect').mockReturnValue(rect(100, 100, 300, 500));
+    let under: Element | null = list;
+    const original = document.elementFromPoint;
+    document.elementFromPoint = () => under;
+    onTestFinished(() => {
+      document.elementFromPoint = original;
+    });
+    scroller.scrollLeft = 0;
+    list.scrollTop = 0;
+    const move = (x: number, y: number) => component.onCardDragMoved({ pointerPosition: { x, y } });
+
+    move(500, 300); // the middle of both: nothing scrolls
+    expect([scroller.scrollLeft, list.scrollTop]).toEqual([0, 0]);
+
+    move(990, 300); // the board's right edge
+    expect(scroller.scrollLeft).toBeGreaterThan(0);
+    const right = scroller.scrollLeft;
+    move(5, 300); // the board's left edge
+    expect(scroller.scrollLeft).toBeLessThan(right);
+
+    move(200, 495); // the list's bottom edge
+    expect(list.scrollTop).toBeGreaterThan(0);
+    const down = list.scrollTop;
+    move(200, 105); // the list's top edge
+    expect(list.scrollTop).toBeLessThan(down);
+
+    under = null; // the pointer is over no list: only the board can scroll
+    list.scrollTop = 50;
+    move(500, 495);
+    expect(list.scrollTop).toBe(50);
   });
 });

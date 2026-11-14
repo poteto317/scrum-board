@@ -558,7 +558,8 @@ describe('Board column reordering', () => {
     expect(textDrag.defaultPrevented).toBe(true);
     expect(f.componentInstance.draggingColumnId()).toBeNull();
 
-    // Open card modal while reorder request is in-flight -> settling must not steal focus
+    // A column save is in flight when a modal appears -> settling must not steal focus from the modal.
+    // (The add-card button is disabled while saving, so the modal state is set directly to build this case.)
     const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
       showModal?: () => void;
       close?: () => void;
@@ -572,11 +573,6 @@ describe('Board column reordering', () => {
       this.open = false;
     };
     try {
-      f.componentInstance.openCard(1);
-      f.detectChanges();
-      const titleInput = f.nativeElement.querySelector('#card-title') as HTMLInputElement;
-      titleInput.focus();
-
       const handles = f.nativeElement.querySelectorAll(
         '.column-drag-handle',
       ) as NodeListOf<HTMLButtonElement>;
@@ -584,7 +580,10 @@ describe('Board column reordering', () => {
       handles[3].dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true }),
       );
+      expect(reorderColumns).toHaveBeenCalledTimes(1); // the save really is in flight
+      f.componentInstance.modal.set('card');
       f.detectChanges();
+      const titleInput = f.nativeElement.querySelector('#card-title') as HTMLInputElement;
       titleInput.focus();
 
       pending.next({ columns: [cols[0], cols[1], cols[3], cols[2]] });
