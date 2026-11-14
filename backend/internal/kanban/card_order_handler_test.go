@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -85,6 +86,55 @@ func TestReorderCardsValidationAndConflict(t *testing.T) {
 				t.Fatalf("status=%d body=%s", w.Code, w.Body)
 			}
 		})
+	}
+}
+
+// The Go tests decode into Card, which uses the same struct tags as the encoder, so renaming a tag would cancel out
+// there. The client reads these exact keys, so the raw JSON is checked.
+func TestCardPositionJSONKey(t *testing.T) {
+	repo := fresh()
+	seedCards(repo)
+	late := repo.cards[3]
+	late.Position = 7
+	repo.cards[3] = late
+	h := NewHandler(repo)
+
+	positions := func(w *httptest.ResponseRecorder) map[float64]float64 {
+		t.Helper()
+		if w.Code != 200 {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body)
+		}
+		var raw struct {
+			Cards []map[string]any `json:"cards"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+			t.Fatal(err)
+		}
+		if len(raw.Cards) != 3 {
+			t.Fatalf("want 3 cards: %s", w.Body)
+		}
+		byID := map[float64]float64{}
+		for _, card := range raw.Cards {
+			id, ok := card["id"].(float64)
+			if !ok {
+				t.Fatalf("card without a numeric id: %v", card)
+			}
+			position, ok := card["position"].(float64)
+			if !ok {
+				t.Fatalf("card %v has no numeric \"position\" key: %v", id, card)
+			}
+			byID[id] = position
+		}
+		return byID
+	}
+
+	got := positions(request(h, "GET", "/api/board", ""))
+	if got[1] != 0 || got[2] != 1 || got[3] != 7 {
+		t.Fatalf("GET /api/board positions: %v", got)
+	}
+	got = positions(request(h, "PUT", "/api/cards/order", `{"columns":[{"columnId":1,"cardIds":[2,1]}]}`))
+	if got[2] != 0 || got[1] != 1 || got[3] != 7 {
+		t.Fatalf("PUT /api/cards/order positions: %v", got)
 	}
 }
 
