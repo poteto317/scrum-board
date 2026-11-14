@@ -20,6 +20,7 @@ function card(id: number, columnId: number, position: number): Card {
     position,
     backlogPosition: position,
     prUrls: [],
+    assignee: '',
     createdAt: '',
     updatedAt: '',
   };
