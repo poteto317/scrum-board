@@ -8,9 +8,8 @@ import { Api } from './api';
 import { Board } from './board';
 import { CARD_TOUCH_DRAG_DELAY_MS } from './card-order';
 
-// Cards fill most of a column, so a swipe that starts on a card must scroll the list/board instead of dragging.
-// CDK decides this from the pointer events alone (it adds no touch-action at rest), so synthetic events are enough
-// to check our configuration; how a real browser then arbitrates the scroll is not covered here.
+// Dragging is restricted to the left-center handle (.card-drag-handle) so clicking or selecting the card body
+// never starts an accidental drag, while swiping quickly on the handle still lets the page/list scroll.
 describe('Board card drag start', () => {
   // CDK reads the pointer from touches[0].pageX/pageY and listens for touchmove on the document.
   function touch(type: string, x: number, y: number) {
@@ -34,6 +33,7 @@ describe('Board card drag start', () => {
           title: 'A',
           description: '',
           position: 0,
+          backlogPosition: 0,
           prUrls: [],
           assignee: '',
           createdAt: '',
@@ -51,20 +51,19 @@ describe('Board card drag start', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    // A real pointer lands on a child (the body link or the copy button) and bubbles up to the card that CDK watches.
     const target = (selector: string): HTMLElement => f.nativeElement.querySelector(selector);
     const started = vi.fn();
     const drag = f.debugElement.query(By.directive(CdkDrag));
     drag.injector.get(CdkDrag).started.subscribe(started);
-    // The configuration the board hands to its cards, as CDK sees it.
     const config = drag.injector.get(CDK_DRAG_CONFIG) as DragRefConfig;
     return { target, started, config };
   }
 
-  const targets = ['.task-card', '.task-card-body', '.copy-card-link'];
+  const handleTargets = ['.card-drag-handle', '.card-drag-handle span'];
+  const nonHandleTargets = ['.task-card', '.task-card-body', '.copy-card-link'];
 
-  it.each(targets)(
-    'does not start a drag when a swipe begins on %s, so the page and lists can scroll',
+  it.each([...handleTargets, ...nonHandleTargets])(
+    'does not start a drag when a quick swipe begins on %s, so the page and lists can scroll',
     async (selector) => {
       vi.useFakeTimers();
       try {
@@ -82,27 +81,29 @@ describe('Board card drag start', () => {
     },
   );
 
-  it.each(targets)('starts a drag after the finger has rested on %s', async (selector) => {
-    vi.useFakeTimers();
-    try {
-      const { target, started } = await renderCard();
-      const el = target(selector);
-      el.dispatchEvent(touch('touchstart', 100, 100));
-      vi.advanceTimersByTime(CARD_TOUCH_DRAG_DELAY_MS + 50);
-      const move = touch('touchmove', 100, 130);
-      document.dispatchEvent(move);
-      expect(started).toHaveBeenCalledTimes(1);
-      expect(move.defaultPrevented).toBe(true);
-      document.dispatchEvent(touch('touchend', 100, 130));
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+  it.each(handleTargets)(
+    'starts a touch drag after the finger has rested on the handle (%s)',
+    async (selector) => {
+      vi.useFakeTimers();
+      try {
+        const { target, started } = await renderCard();
+        const el = target(selector);
+        el.dispatchEvent(touch('touchstart', 100, 100));
+        vi.advanceTimersByTime(CARD_TOUCH_DRAG_DELAY_MS + 50);
+        const move = touch('touchmove', 100, 130);
+        document.dispatchEvent(move);
+        expect(started).toHaveBeenCalledTimes(1);
+        expect(move.defaultPrevented).toBe(true);
+        document.dispatchEvent(touch('touchend', 100, 130));
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
-  it.each(targets)('still starts a mouse drag at once from %s', async (selector) => {
+  it.each(handleTargets)('starts a mouse drag at once from the handle (%s)', async (selector) => {
     const { target, started } = await renderCard();
     const el = target(selector);
-    // CDK ignores a mousedown whose buttons or detail is 0 as a screen reader's fake click.
     el.dispatchEvent(
       new MouseEvent('mousedown', {
         bubbles: true,
@@ -123,11 +124,62 @@ describe('Board card drag start', () => {
     );
   });
 
-  // A click that wobbles a little must stay a click (opening the card), so a mouse drag needs 8px of travel.
-  it('starts a mouse drag only once the pointer has travelled the 8px threshold', async () => {
+  it.each(nonHandleTargets)(
+    'never starts a mouse drag from outside the handle (%s)',
+    async (selector) => {
+      const { target, started } = await renderCard();
+      const el = target(selector);
+      el.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          buttons: 1,
+          detail: 1,
+          clientX: 100,
+          clientY: 100,
+        }),
+      );
+      document.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+          clientY: 130,
+        }),
+      );
+      expect(started).not.toHaveBeenCalled();
+      document.dispatchEvent(
+        new MouseEvent('mouseup', { bubbles: true, clientX: 100, clientY: 130 }),
+      );
+    },
+  );
+
+  it.each(nonHandleTargets)(
+    'never starts a touch drag even after holding outside the handle (%s)',
+    async (selector) => {
+      vi.useFakeTimers();
+      try {
+        const { target, started } = await renderCard();
+        const el = target(selector);
+        el.dispatchEvent(touch('touchstart', 100, 100));
+        vi.advanceTimersByTime(CARD_TOUCH_DRAG_DELAY_MS + 50);
+        const move = touch('touchmove', 100, 130);
+        document.dispatchEvent(move);
+        expect(started).not.toHaveBeenCalled();
+        expect(move.defaultPrevented).toBe(false);
+        document.dispatchEvent(touch('touchend', 100, 130));
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  // A click on the handle that wobbles a little must not start a drag until the pointer has travelled 8px.
+  it('starts a mouse drag from the handle only once the pointer has travelled the 8px threshold', async () => {
     const { target, started, config } = await renderCard();
     expect(config.dragStartThreshold).toBe(8);
-    const el = target('.task-card-body');
+    const el = target('.card-drag-handle');
     el.dispatchEvent(
       new MouseEvent('mousedown', {
         bubbles: true,

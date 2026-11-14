@@ -75,12 +75,12 @@ function mouse(type: string, x: number, y: number, target: EventTarget = documen
   );
 }
 
-/** Holds card `cardId` with a real mouse drag: down, past CDK's 8px threshold, then a little further. */
+/** Holds card `cardId` with a real mouse drag on its handle: down, past CDK's 8px threshold, then a little further. */
 function grab(f: { nativeElement: HTMLElement }, cardId: number) {
-  const body = f.nativeElement.querySelector(
-    `[data-card-id="${cardId}"] .task-card-body`,
+  const handle = f.nativeElement.querySelector(
+    `[data-card-id="${cardId}"] .card-drag-handle`,
   ) as HTMLElement;
-  mouse('mousedown', 300, 300, body);
+  mouse('mousedown', 300, 300, handle);
   mouse('mousemove', 320, 320);
   mouse('mousemove', 330, 340);
 }

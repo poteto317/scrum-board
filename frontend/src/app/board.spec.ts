@@ -105,9 +105,14 @@ describe('Board task numbers', () => {
     expect(link.tagName).toBe('A');
     expect(link.getAttribute('href')).toBe('/cards/2');
     expect(link.getAttribute('role')).toBeNull();
-    // The accessible name stays the card's own text; the drag help is a description.
+    // The accessible name of the link stays the card's own text; the drag handle carries the move label and help.
     expect(link.getAttribute('aria-label')).toBeNull();
-    const helpId = link.getAttribute('aria-describedby') as string;
+    expect(link.getAttribute('aria-describedby')).toBeNull();
+    const handle = card.querySelector('.card-drag-handle') as HTMLButtonElement;
+    expect(handle.getAttribute('aria-label')).toBe(
+      'TASK-002 Taskを移動（ドラッグまたは上下矢印キー）',
+    );
+    const helpId = handle.getAttribute('aria-describedby') as string;
     expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ドラッグ');
     expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ステータス');
     const copyBtn = f.nativeElement.querySelector('.copy-card-link');
@@ -1089,7 +1094,7 @@ describe('Board card reordering', () => {
     await f.whenStable();
     const help = () =>
       f.nativeElement.querySelector(
-        '#' + f.nativeElement.querySelector('.task-card-body').getAttribute('aria-describedby'),
+        '#' + f.nativeElement.querySelector('.card-drag-handle').getAttribute('aria-describedby'),
       )?.textContent as string;
     expect(help()).toContain('上下矢印');
     f.componentInstance.onCardKeydown(
@@ -1138,7 +1143,9 @@ describe('Board card identity', () => {
     await f.whenStable();
     const links = (): HTMLAnchorElement[] =>
       Array.from(f.nativeElement.querySelectorAll('.task-card-body'));
-    return { f, links };
+    const handles = (): HTMLButtonElement[] =>
+      Array.from(f.nativeElement.querySelectorAll('.card-drag-handle'));
+    return { f, links, handles };
   }
 
   it('opens the card by its public number when its link is clicked, and links to that number', async () => {
@@ -1175,19 +1182,18 @@ describe('Board card identity', () => {
       { ...crossed().cards[1], position: 0 },
       crossed().cards[2],
     ];
-    const { f, links } = await render(vi.fn(() => of({ cards: answer })));
+    const { f, handles } = await render(vi.fn(() => of({ cards: answer })));
 
     // Card A (id 1, TASK-002) moves down. Number 2 is card B's id, so a lookup by number lands on B.
-    links()[0].dispatchEvent(
+    handles()[0].dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
     );
     f.detectChanges();
     await f.whenStable();
     const active = document.activeElement as HTMLElement;
-    expect(active.classList.contains('task-card-body')).toBe(true);
+    expect(active.classList.contains('card-drag-handle')).toBe(true);
     expect(active.closest('[data-card-id]')?.getAttribute('data-card-id')).toBe('1');
-    expect(active.textContent).toContain('TASK-002');
-    expect(active.getAttribute('href')).toBe('/cards/2');
+    expect(active.getAttribute('aria-label')).toContain('TASK-002');
     f.destroy();
   });
 });

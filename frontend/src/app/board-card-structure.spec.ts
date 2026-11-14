@@ -1,4 +1,4 @@
-import { CdkDrag } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
@@ -8,8 +8,7 @@ import { Api } from './api';
 import { Board } from './board';
 import { BoardData, Card } from './models';
 
-// The card is `<article cdkDrag>` holding the copy button and the `<a>` link. These drive the real DOM so the
-// split between "the article is dragged" and "the link navigates / handles keys / takes focus" stays pinned.
+// The card is `<article cdkDrag>` holding the drag handle button, the copy button, and the `<a>` link as siblings.
 function card(id: number, position: number): Card {
   return {
     id,
@@ -45,9 +44,10 @@ async function setup() {
   await f.whenStable();
   const root: HTMLElement = f.nativeElement;
   const article = root.querySelector('.task-card') as HTMLElement;
+  const handle = article.querySelector('.card-drag-handle') as HTMLButtonElement;
   const link = article.querySelector('.task-card-body') as HTMLAnchorElement;
   const copy = article.querySelector('.copy-card-link') as HTMLButtonElement;
-  return { f, root, article, link, copy, reorderCards };
+  return { f, root, article, handle, link, copy, reorderCards };
 }
 
 describe('Board card structure', () => {
@@ -56,25 +56,38 @@ describe('Board card structure', () => {
     vi.restoreAllMocks();
   });
 
-  it('drags the whole article and keeps the link a plain, focusable anchor', async () => {
-    const { f, root, article, link, copy } = await setup();
+  it('places the drag handle, copy button, and body link as siblings inside the draggable article', async () => {
+    const { f, root, article, handle, link, copy } = await setup();
     const drags = f.debugElement.queryAll(By.directive(CdkDrag));
+    const handles = f.debugElement.queryAll(By.directive(CdkDragHandle));
     expect(drags.length).toBe(2);
+    expect(handles.length).toBe(2);
     expect(drags[0].nativeElement).toBe(article);
+    expect(handles[0].nativeElement).toBe(handle);
     expect(article.tagName).toBe('ARTICLE');
     expect(article.getAttribute('data-card-id')).toBe('1');
+    expect(handle.tagName).toBe('BUTTON');
+    expect(handle.getAttribute('type')).toBe('button');
+    expect(handle.textContent?.trim()).toBe('⋮⋮');
+    expect(handle.getAttribute('aria-label')).toBe(
+      'TASK-001 card 1を移動（ドラッグまたは上下矢印キー）',
+    );
+    expect(handle.getAttribute('aria-describedby')).toBe('card-drag-help');
     expect(link.tagName).toBe('A');
     expect(link.hasAttribute('data-card-id')).toBe(false);
+    expect(link.hasAttribute('aria-describedby')).toBe(false);
     expect(link.getAttribute('href')).toBe('/cards/1');
-    // The copy button and the link are siblings: a button must not sit inside an anchor.
+    // The drag handle, copy button, and link are siblings: no button sits inside the anchor.
+    expect(handle.parentElement).toBe(article);
     expect(copy.parentElement).toBe(article);
     expect(link.parentElement).toBe(article);
+    expect(link.contains(handle)).toBe(false);
     expect(link.contains(copy)).toBe(false);
     expect(root.querySelectorAll('.task-card-body [data-card-id]').length).toBe(0);
   });
 
-  it('handles arrow keys from the link only, never from the copy button', async () => {
-    const { copy, link, reorderCards } = await setup();
+  it('handles arrow keys from the drag handle only, never from the link or copy button', async () => {
+    const { handle, copy, link, reorderCards } = await setup();
     const press = (el: HTMLElement) => {
       const ev = new KeyboardEvent('keydown', {
         key: 'ArrowDown',
@@ -89,13 +102,22 @@ describe('Board card structure', () => {
     expect(reorderCards).not.toHaveBeenCalled();
 
     const onLink = press(link);
-    expect(onLink.defaultPrevented).toBe(true);
+    expect(onLink.defaultPrevented).toBe(false);
+    expect(reorderCards).not.toHaveBeenCalled();
+
+    const onHandle = press(handle);
+    expect(onHandle.defaultPrevented).toBe(true);
     expect(reorderCards).toHaveBeenCalledTimes(1);
   });
 
-  it('navigates on a plain click of the link but leaves a Ctrl-click to the browser', async () => {
-    const { link } = await setup();
+  it('navigates on a plain click of the link, leaves Ctrl-click to the browser, and does not navigate on handle click', async () => {
+    const { handle, link } = await setup();
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    const handleClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+    handle.dispatchEvent(handleClick);
+    expect(navigate).not.toHaveBeenCalled();
+
     const ctrl = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
     link.dispatchEvent(ctrl);
     expect(ctrl.defaultPrevented).toBe(false);

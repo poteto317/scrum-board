@@ -5,9 +5,8 @@ export const CARD_DRAG_THRESHOLD_PX = 8;
 /** While a card is held at an edge, scroll once per this interval (a column drag's dragover repeats about as often). */
 export const CARD_AUTO_SCROLL_INTERVAL_MS = 50;
 /**
- * A finger must rest on a card this long before a move drags it. Cards fill most of the board, so
- * without the hold the first swipe over a card would start a drag (and cancel the scroll) instead of
- * scrolling the list or the board. A mouse drags at once.
+ * A finger must rest on a card's drag handle this long before a move drags it, so a quick swipe over the handle
+ * scrolls the list or the board instead of starting a drag. A mouse drags from the handle once past the threshold.
  */
 export const CARD_TOUCH_DRAG_DELAY_MS = 200;
 

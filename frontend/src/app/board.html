@@ -29,7 +29,7 @@
     <div class="sr-only" aria-live="polite">{{ reorderAnnouncement() }}</div>
     <p id="card-drag-help" class="sr-only">
       @if (canReorderCards()) {
-        上下矢印キーで列内を移動できます。別のステータスへは、カードを開いてステータスを変更してください。ドラッグでも移動できます。
+        左端のハンドルをドラッグして別の位置やステータスへ移動できます。ハンドルで上下矢印キーを押すと列内を移動できます。
       } @else {
         保存中などのため、いまはカードを移動できません。
       }
@@ -128,6 +128,24 @@
                 >
                   <button
                     type="button"
+                    class="card-drag-handle"
+                    cdkDragHandle
+                    [cdkDragHandleDisabled]="!canReorderCards()"
+                    [attr.aria-disabled]="!canReorderCards()"
+                    [attr.aria-label]="
+                      'TASK-' +
+                      card.number.toString().padStart(3, '0') +
+                      ' ' +
+                      card.title +
+                      'を移動（ドラッグまたは上下矢印キー）'
+                    "
+                    aria-describedby="card-drag-help"
+                    (keydown)="onCardKeydown($event, column.id, cardIndex)"
+                  >
+                    <span aria-hidden="true">⋮⋮</span>
+                  </button>
+                  <button
+                    type="button"
                     class="copy-card-link icon-button"
                     [attr.aria-label]="
                       'TASK-' + card.number.toString().padStart(3, '0') + ' のリンクをコピー'
@@ -153,9 +171,7 @@
                   <a
                     class="task-card-body"
                     [attr.href]="cardHref(card)"
-                    aria-describedby="card-drag-help"
                     (click)="onCardClick($event, card)"
-                    (keydown)="onCardKeydown($event, column.id, cardIndex)"
                     ><span class="card-topline"
                       ><span class="card-id"
                         >TASK-{{ card.number.toString().padStart(3, '0') }}</span
@@ -208,7 +224,7 @@
     <footer class="board-footer">
       <span
         ><span class="tip-icon" aria-hidden="true">i</span>
-        列の見出しをドラッグ、またはハンドルで左右キーを押すと列を並び替えられます。</span
+        列の見出しやカード左端のハンドルをドラッグ（または矢印キー）すると並び替えられます。</span
       ><span class="footer-note">少しずつ、よりよいチームへ。</span>
     </footer>
   }

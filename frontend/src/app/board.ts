@@ -15,7 +15,13 @@ import {
 import { Location } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { CDK_DRAG_CONFIG, CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import {
+  CDK_DRAG_CONFIG,
+  CdkDrag,
+  CdkDragDrop,
+  CdkDragHandle,
+  CdkDropList,
+} from '@angular/cdk/drag-drop';
 import { filter, finalize } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
@@ -43,7 +49,7 @@ import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 
 @Component({
   selector: 'app-board',
-  imports: [ReactiveFormsModule, Modal, CdkDropList, CdkDrag],
+  imports: [ReactiveFormsModule, Modal, CdkDropList, CdkDrag, CdkDragHandle],
   templateUrl: './board.html',
   styleUrl: './board.css',
   providers: [
@@ -254,7 +260,6 @@ export class Board implements OnInit {
       });
   }
 
-  /** CDK owns drag-vs-click (dragStartThreshold); this only scrolls the board and the list under the pointer. */
   /**
    * CDK's own edge scrolling is off (it would fight the list's own scrolling), so this scrolls the board sideways and
    * the list under the pointer. It runs on every pointer move and, like a column drag's repeating dragover, keeps
@@ -333,8 +338,8 @@ export class Board implements OnInit {
   }
 
   /**
-   * Bound on the card's link only (not the article), so arrow keys pressed on the copy button never move the card.
-   * Enter on the link is its native click; only the arrow keys are handled here.
+   * Bound on the card's drag handle only (not the article, link, or copy button), so arrow keys pressed on the link
+   * or copy button never move the card. Enter on the link is its native click; only the arrow keys are handled here.
    */
   onCardKeydown(event: KeyboardEvent, columnId: number, index: number) {
     const list = this.grouped().get(columnId) ?? [];
@@ -418,20 +423,7 @@ export class Board implements OnInit {
   }
 
   private focusCardAfterRender(cardId: number) {
-    if (this.destroyRef.destroyed || this.modal() !== null) return;
-    afterNextRender(
-      () => {
-        if (this.destroyRef.destroyed || this.modal() !== null) return;
-        // data-card-id is on the (non-focusable) article that CDK drags; the card's tab stop is its link.
-        const el = this.columnsContainer()?.nativeElement?.querySelector<HTMLElement>(
-          `[data-card-id="${cardId}"] .task-card-body`,
-        );
-        if (!el) return;
-        el.focus();
-        el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-      },
-      { injector: this.injector },
-    );
+    this.focusAfterRender(`[data-card-id="${cardId}"] .card-drag-handle`);
   }
 
   onColumnDragStart(event: DragEvent, column: Column, columnEl: HTMLElement) {
@@ -572,22 +564,18 @@ export class Board implements OnInit {
   }
 
   private focusHandleAfterRender(columnId: number) {
+    this.focusAfterRender(`[data-column-id="${columnId}"] .column-drag-handle`);
+  }
+
+  private focusAfterRender(selector: string) {
     if (this.destroyRef.destroyed || this.modal() !== null) return;
     afterNextRender(
       () => {
         if (this.destroyRef.destroyed || this.modal() !== null) return;
-        const container = this.columnsContainer()?.nativeElement;
-        if (!container) return;
-        const handles = Array.from(
-          container.querySelectorAll<HTMLButtonElement>('.column-drag-handle'),
-        );
-        const target = handles.find(
-          (el) =>
-            Number(el.closest('[data-column-id]')?.getAttribute('data-column-id')) === columnId,
-        );
-        if (!target) return;
-        target.focus();
-        target.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+        const el = this.columnsContainer()?.nativeElement?.querySelector<HTMLElement>(selector);
+        if (!el) return;
+        el.focus();
+        el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
       },
       { injector: this.injector },
     );
