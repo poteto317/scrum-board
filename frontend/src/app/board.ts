@@ -11,6 +11,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { Location } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { CDK_DRAG_CONFIG, CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
@@ -47,6 +48,7 @@ import { BoardData, Card, Column } from './models';
 export class Board implements OnInit {
   private readonly api = inject(Api);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly boardScroll = viewChild<ElementRef<HTMLElement>>('boardScroll');
@@ -242,24 +244,30 @@ export class Board implements OnInit {
     }
   }
 
-  onCardClick(event: Event, card: Card) {
+  /** Real URL of a card, so the browser's own link features (new tab, copy link, status bar) keep working. */
+  cardHref(card: Card): string {
+    return this.location.prepareExternalUrl(`/cards/${card.number}`);
+  }
+
+  onCardClick(event: MouseEvent, card: Card) {
     if (this.cardDragMoved) {
       event.preventDefault();
       event.stopPropagation();
       this.cardDragMoved = false;
       return;
     }
+    // Ctrl/Cmd/Shift/Alt-click and non-primary buttons are the browser's: let the href do its job.
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    event.preventDefault();
     void this.router.navigate(['/cards', card.number]);
   }
 
+  /** Enter on the card is the link's native click; only the arrow keys are handled here. */
   onCardKeydown(event: KeyboardEvent, columnId: number, index: number) {
     const list = this.grouped().get(columnId) ?? [];
-    const card = list[index];
-    if ((event.key === 'Enter' || event.key === ' ') && card && !this.cardDragMoved) {
-      event.preventDefault();
-      void this.router.navigate(['/cards', card.number]);
-      return;
-    }
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
     if (!this.canReorderCards()) return;
     const toIndex = event.key === 'ArrowUp' ? index - 1 : index + 1;

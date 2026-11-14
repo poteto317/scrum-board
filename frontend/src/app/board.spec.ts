@@ -70,7 +70,14 @@ describe('Board task numbers', () => {
     await f.whenStable();
     const link: HTMLElement = f.nativeElement.querySelector('.task-card');
     expect(link.textContent).toContain('TASK-002');
-    expect(link.getAttribute('role')).toBe('link');
+    // A real link keeps "open in new tab", "copy link" and the status-bar URL working.
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toBe('/cards/2');
+    expect(link.getAttribute('role')).toBeNull();
+    // The accessible name stays the card's own text; the drag help is a description.
+    expect(link.getAttribute('aria-label')).toBeNull();
+    const helpId = link.getAttribute('aria-describedby') as string;
+    expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ドラッグ');
   });
 });
 
@@ -754,14 +761,123 @@ describe('Board card reordering', () => {
     } as never;
     const card = twoCardBoard().cards[0];
     board.onCardPointerDown({ clientX: 10, clientY: 10 } as PointerEvent);
-    board.onCardClick(new Event('click'), card);
+    board.onCardClick(new MouseEvent('click'), card);
     expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
 
     navigate.mockClear();
     board.onCardPointerDown({ clientX: 10, clientY: 10 } as PointerEvent);
     board.onCardDragMoved({ pointerPosition: { x: 30, y: 10 } });
-    const ev = new Event('click', { cancelable: true });
+    const ev = new MouseEvent('click', { cancelable: true });
     board.onCardClick(ev, card);
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('leaves modified and non-primary clicks to the browser', async () => {
+    const navigate = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards: vi.fn(),
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const board = f.componentInstance;
+    (board as unknown as { router: { navigate: typeof navigate } }).router = {
+      navigate,
+    } as never;
+    const card = twoCardBoard().cards[0];
+    for (const init of [
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+      { altKey: true },
+      { button: 1 },
+    ]) {
+      const ev = new MouseEvent('click', { cancelable: true, ...init });
+      board.onCardClick(ev, card);
+      expect(ev.defaultPrevented).toBe(false);
+    }
+    expect(navigate).not.toHaveBeenCalled();
+
+    const plain = new MouseEvent('click', { cancelable: true });
+    board.onCardClick(plain, card);
+    expect(plain.defaultPrevented).toBe(true);
+    expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
+  });
+
+  it('keeps browser and assistive shortcuts that use modifier keys', async () => {
+    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    for (const init of [
+      { altKey: true },
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+    ]) {
+      const ev = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true, ...init });
+      f.componentInstance.onCardKeydown(ev, 1, 0);
+      expect(ev.defaultPrevented).toBe(false);
+    }
+    expect(reorderCards).not.toHaveBeenCalled();
+
+    const plain = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true });
+    f.componentInstance.onCardKeydown(plain, 1, 0);
+    expect(plain.defaultPrevented).toBe(true);
+    expect(reorderCards).toHaveBeenCalledTimes(1);
+  });
+
+  it('describes card dragging differently while reordering is unavailable', async () => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards: () => new Subject(),
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const help = () =>
+      f.nativeElement.querySelector(
+        '#' + f.nativeElement.querySelector('.task-card').getAttribute('aria-describedby'),
+      )?.textContent as string;
+    expect(help()).toContain('上下矢印');
+    f.componentInstance.onCardKeydown(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }),
+      1,
+      0,
+    );
+    f.detectChanges();
+    expect(f.componentInstance.canReorderCards()).toBe(false);
+    expect(help()).toContain('保存中');
   });
 });

@@ -27,6 +27,13 @@
     </div>
   } @else {
     <div class="sr-only" aria-live="polite">{{ reorderAnnouncement() }}</div>
+    <p id="card-drag-help" class="sr-only">
+      @if (canReorderCards()) {
+        ドラッグで別の位置や列へ移動できます。上下矢印キーで列内を移動できます。
+      } @else {
+        保存中などのため、いまはカードを移動できません。
+      }
+    </p>
     @if (reorderError()) {
       <div class="reorder-alert" role="alert">
         <p>{{ reorderError() }}</p>
@@ -107,18 +114,15 @@
               (cdkDropListDropped)="onCardDrop($event, column.id)"
             >
               @for (card of grouped().get(column.id) || []; track card.id; let cardIndex = $index) {
-                <div
+                <a
                   class="task-card"
-                  role="link"
-                  tabindex="0"
+                  [attr.href]="cardHref(card)"
+                  aria-describedby="card-drag-help"
                   cdkDrag
                   [attr.data-card-id]="card.id"
                   [cdkDragData]="card"
                   [cdkDragDisabled]="!canReorderCards()"
                   [attr.aria-disabled]="!canReorderCards() ? 'true' : null"
-                  [attr.aria-label]="
-                    card.title + '（ドラッグで移動、クリックで詳細、上下矢印で列内移動）'
-                  "
                   (pointerdown)="onCardPointerDown($event)"
                   (cdkDragMoved)="onCardDragMoved($event)"
                   (cdkDragEnded)="onCardDragEnded()"
@@ -139,7 +143,7 @@
                       >詳細を開く <span aria-hidden="true">→</span></span
                     ></span
                   >
-                </div>
+                </a>
               } @empty {
                 <div class="empty-column">
                   <span class="empty-symbol" aria-hidden="true">{{
