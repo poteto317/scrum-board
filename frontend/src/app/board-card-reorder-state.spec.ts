@@ -309,6 +309,8 @@ describe('Board card reorder state', () => {
       vi.useRealTimers();
     });
     const { f, component } = await setup(vi.fn());
+    // The board's live refresh keeps one polling interval running; count only the auto-scroll timer on top of it.
+    const baselineTimers = vi.getTimerCount();
     const scroller = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
     vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({
       left: 0,
@@ -348,7 +350,7 @@ describe('Board card reorder state', () => {
     // Letting go stops it at once, before CDK reports the end (the preview is still settling into place).
     component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
     component.onCardDragReleased();
-    expect(vi.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(baselineTimers);
     const released = scroller.scrollLeft;
     vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 3);
     expect(scroller.scrollLeft).toBe(released);
@@ -357,9 +359,9 @@ describe('Board card reorder state', () => {
     component.onCardDragStarted();
     component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
     vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 2);
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(baselineTimers + 1);
     component.onCardDragEnded();
-    expect(vi.getTimerCount()).toBe(0); // no interval is left running
+    expect(vi.getTimerCount()).toBe(baselineTimers); // no auto-scroll interval is left running
     const ended = scroller.scrollLeft;
     vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 5);
     expect(scroller.scrollLeft).toBe(ended);

@@ -1,6 +1,6 @@
 import { provideRouter, Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
-import { of, Subject, throwError } from 'rxjs';
+import { Observable, of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
@@ -1150,6 +1150,130 @@ describe('Board card identity', () => {
     expect(active.closest('[data-card-id]')?.getAttribute('data-card-id')).toBe('1');
     expect(active.textContent).toContain('TASK-002');
     expect(active.getAttribute('href')).toBe('/cards/2');
+    f.destroy();
+  });
+});
+
+describe('Board live refresh', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('applies silent board poll without toggling loading', async () => {
+    vi.useFakeTimers();
+    const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
+    const api = { board: vi.fn(() => of(initial)) };
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideRouter([]), { provide: Api, useValue: api }],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    expect(f.componentInstance.loading()).toBe(false);
+    expect(f.componentInstance.data().cards).toHaveLength(1);
+
+    const polled: BoardData = {
+      columns: initial.columns,
+      cards: [
+        ...initial.cards,
+        {
+          id: 99,
+          number: 99,
+          columnId: 1,
+          title: 'From poll',
+          description: '',
+          position: 1,
+          backlogPosition: 1,
+          prUrls: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+    };
+    api.board.mockReturnValue(of(polled));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.loading()).toBe(false);
+    expect(f.componentInstance.error()).toBe('');
+    expect(f.componentInstance.data().cards.map((c) => c.number)).toContain(99);
+    f.destroy();
+  });
+
+  it('does not apply poll while reordering', async () => {
+    vi.useFakeTimers();
+    const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
+    const api = { board: vi.fn(() => of(initial)) };
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideRouter([]), { provide: Api, useValue: api }],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    f.componentInstance.reordering.set(true);
+    const before = f.componentInstance.data().cards.length;
+    api.board.mockReturnValue(of({ ...initial, cards: [] }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.data().cards).toHaveLength(before);
+    f.destroy();
+  });
+
+  it('clears a prior load error when a poll applies', async () => {
+    vi.useFakeTimers();
+    const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
+    let boardImpl: () => Observable<BoardData> = () =>
+      throwError(() => ({ status: 500, error: { message: '失敗' } }));
+    const board = vi.fn(() => boardImpl());
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideRouter([]), { provide: Api, useValue: { board } }],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    expect(f.componentInstance.error()).toContain('失敗');
+    boardImpl = () => of(initial);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.error()).toBe('');
+    expect(f.componentInstance.data().cards).toHaveLength(1);
+    f.destroy();
+  });
+
+  it('does not apply poll while dragging a column', async () => {
+    vi.useFakeTimers();
+    const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
+    const api = { board: vi.fn(() => of(initial)) };
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideRouter([]), { provide: Api, useValue: api }],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    f.componentInstance.draggingColumnId.set(1);
+    const before = f.componentInstance.data().cards.length;
+    api.board.mockReturnValue(of({ ...initial, cards: [] }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.data().cards).toHaveLength(before);
+    f.destroy();
+  });
+
+  it('does not apply an in-flight poll after reordering starts', async () => {
+    vi.useFakeTimers();
+    const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
+    const slow = new Subject<BoardData>();
+    const api = { board: vi.fn(() => of(initial)) };
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideRouter([]), { provide: Api, useValue: api }],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    api.board.mockReturnValue(slow.asObservable());
+    await vi.advanceTimersByTimeAsync(5000);
+    f.componentInstance.reordering.set(true);
+    const before = f.componentInstance.data().cards.length;
+    slow.next({ ...initial, cards: [] });
+    slow.complete();
+    expect(f.componentInstance.data().cards).toHaveLength(before);
     f.destroy();
   });
 });

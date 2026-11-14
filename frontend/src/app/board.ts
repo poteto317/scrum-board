@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   Injector,
+  NgZone,
   OnInit,
   signal,
   viewChild,
@@ -37,6 +38,7 @@ import {
 import { textLimit } from './form-validation';
 import { BoardData, Card, Column } from './models';
 import { CopyLinkFeedback } from './copy-link-feedback';
+import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 
 @Component({
   selector: 'app-board',
@@ -59,6 +61,7 @@ export class Board implements OnInit {
   private readonly location = inject(Location);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly zone = inject(NgZone);
   private readonly boardScroll = viewChild<ElementRef<HTMLElement>>('boardScroll');
   private readonly columnsContainer = viewChild<ElementRef<HTMLElement>>('columnsContainer');
 
@@ -124,6 +127,22 @@ export class Board implements OnInit {
 
   ngOnInit() {
     this.load();
+    const stop = startLiveRefresh({
+      enabled: () =>
+        !this.loading() &&
+        !this.reordering() &&
+        !this.saving() &&
+        this.modal() === null &&
+        this.draggingColumnId() === null,
+      fetch: () => this.api.board(),
+      apply: (d) => {
+        this.error.set('');
+        if (sameJson(this.data(), d)) return;
+        this.data.set(d);
+      },
+      ...zoneAwareTimers(this.zone),
+    });
+    this.destroyRef.onDestroy(stop);
   }
 
   copyCardLink(number: number) {

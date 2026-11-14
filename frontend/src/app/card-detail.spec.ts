@@ -405,3 +405,105 @@ describe('CardDetail IME response handling', () => {
     },
   );
 });
+
+describe('CardDetail live refresh', () => {
+  let params: BehaviorSubject<Map<string, string>>;
+  let api: {
+    history: ReturnType<typeof vi.fn>;
+    board: ReturnType<typeof vi.fn>;
+    cardByNumber: ReturnType<typeof vi.fn>;
+    updateCard: ReturnType<typeof vi.fn>;
+    deleteCard: ReturnType<typeof vi.fn>;
+  };
+  let router: { navigate: ReturnType<typeof vi.fn> };
+  beforeEach(() => {
+    vi.useFakeTimers();
+    params = new BehaviorSubject(new Map([['number', '3']]));
+    router = { navigate: vi.fn() };
+    api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      board: vi.fn(() =>
+        of({
+          columns: [
+            { id: 1, name: 'Todo', position: 0 },
+            { id: 2, name: 'Doing', position: 0 },
+          ],
+          cards: [],
+        }),
+      ),
+      cardByNumber: vi.fn(() => of(card)),
+      updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
+      deleteCard: vi.fn(() => of(undefined)),
+    };
+    TestBed.configureTestingModule({
+      imports: [CardDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        { provide: Router, useValue: router },
+      ],
+    });
+  });
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+  const create = () => {
+    const f = TestBed.createComponent(CardDetail);
+    f.detectChanges();
+    return f;
+  };
+
+  it('refreshes card from poll when no local edits', async () => {
+    const f = create();
+    expect(f.componentInstance.loading()).toBe(false);
+    api.cardByNumber.mockReturnValue(
+      of({ ...card, title: '外部更新', updatedAt: '2026-11-14T12:00:00Z' }),
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.card()?.title).toBe('外部更新');
+    expect(f.componentInstance.loading()).toBe(false);
+    f.destroy();
+  });
+
+  it('does not overwrite card while autosave.hasChanges()', async () => {
+    const f = create();
+    // emitEvent: false avoids scheduling autosave; advancing 5s would flush a save and clear hasChanges.
+    f.componentInstance.form.controls.title.setValue('編集中', { emitEvent: false });
+    expect(f.componentInstance.autosave.hasChanges()).toBe(true);
+    api.cardByNumber.mockReturnValue(of({ ...card, title: 'サーバ側' }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.form.controls.title.value).toBe('編集中');
+    expect(f.componentInstance.card()?.title).not.toBe('サーバ側');
+    f.destroy();
+  });
+
+  it('ignores poll for a different card number after navigation', async () => {
+    const slow = new Subject<Card>();
+    const f = create();
+    expect(f.componentInstance.card()?.number).toBe(3);
+    // Next poll returns a slow observable for card #3
+    api.cardByNumber.mockReturnValue(slow.asObservable());
+    await vi.advanceTimersByTimeAsync(5000);
+    const other = { ...card, id: 90, number: 9, title: '別カード' };
+    api.cardByNumber.mockReturnValue(of(other));
+    api.board.mockReturnValue(
+      of({
+        columns: [
+          { id: 1, name: 'Todo', position: 0 },
+          { id: 2, name: 'Doing', position: 0 },
+        ],
+        cards: [],
+      }),
+    );
+    params.next(new Map([['number', '9']]));
+    expect(f.componentInstance.card()?.number).toBe(9);
+    expect(f.componentInstance.card()?.title).toBe('別カード');
+    slow.next({ ...card, title: '遅延した旧カード' });
+    slow.complete();
+    expect(f.componentInstance.card()?.number).toBe(9);
+    expect(f.componentInstance.card()?.title).not.toBe('遅延した旧カード');
+    f.destroy();
+  });
+});

@@ -1,6 +1,6 @@
 import { CardHistory } from './card-history';
 import { Modal } from './modal';
-import { Component, DestroyRef, HostListener, inject, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, HostListener, inject, NgZone, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -22,6 +22,7 @@ import { Column } from './models';
 import { CardAutosave } from './card-autosave';
 import { CardPrLinks } from './card-pr-links';
 import { CopyLinkFeedback } from './copy-link-feedback';
+import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 
 @Component({
   selector: 'app-card-detail',
@@ -35,6 +36,7 @@ export class CardDetail implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly zone = inject(NgZone);
   private readonly reload$ = new Subject<void>();
   private readonly changed$ = new Subject<void>();
   readonly autosave = inject(CardAutosave);
@@ -46,6 +48,7 @@ export class CardDetail implements OnInit {
   readonly deleting = signal(false);
   readonly error = signal('');
   readonly confirmDelete = signal(false);
+  private readonly routeNumber = signal(0);
   private readonly linkCopy = new CopyLinkFeedback(this.destroyRef);
   readonly copyLinkFeedback = this.linkCopy.message;
   private deleted = false;
@@ -66,6 +69,9 @@ export class CardDetail implements OnInit {
   }
 
   ngOnInit() {
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      this.routeNumber.set(Number(params.get('number')));
+    });
     combineLatest([this.route.paramMap, this.reload$.pipe(startWith(undefined))])
       .pipe(
         switchMap(([params]) => {
@@ -93,6 +99,42 @@ export class CardDetail implements OnInit {
         this.columns.set(board.columns);
         this.autosave.reset({ ...card, prUrls: card.prUrls ?? [] });
       });
+    const stop = startLiveRefresh({
+      enabled: () =>
+        !this.loading() &&
+        this.routeNumber() > 0 &&
+        !this.autosave.hasChanges() &&
+        !this.autosave.saving() &&
+        !this.prLinks.saving() &&
+        !this.confirmDelete() &&
+        !this.deleting(),
+      fetch: () => {
+        const number = this.routeNumber();
+        return forkJoin({
+          board: this.api.board(),
+          card: this.api.cardByNumber(number),
+        });
+      },
+      apply: ({ board, card }) => {
+        if (card.number !== this.routeNumber()) return;
+        if (
+          this.autosave.hasChanges() ||
+          this.autosave.saving() ||
+          this.prLinks.saving() ||
+          this.confirmDelete() ||
+          this.deleting()
+        ) {
+          return;
+        }
+        this.error.set('');
+        this.columns.set(board.columns);
+        const next = { ...card, prUrls: card.prUrls ?? [] };
+        if (this.card() && sameJson(this.card(), next)) return;
+        this.autosave.reset(next);
+      },
+      ...zoneAwareTimers(this.zone),
+    });
+    this.destroyRef.onDestroy(stop);
   }
   load() {
     this.reload$.next();
