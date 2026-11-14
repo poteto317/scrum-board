@@ -46,6 +46,7 @@ import { textLimit } from './form-validation';
 import { BoardData, Card, Column } from './models';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
+import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
@@ -266,9 +267,9 @@ export class Board implements OnInit {
   }
 
   /**
-   * CDK's own edge scrolling is off (it would fight the list's own scrolling), so this scrolls the board sideways and
-   * the list under the pointer. It runs on every pointer move and, like a column drag's repeating dragover, keeps
-   * going on a timer while the pointer rests at an edge.
+   * CDK's own edge scrolling is off (it would fight page scrolling), so this scrolls the board sideways and the
+   * document vertically. It runs on every pointer move and, like a column drag's repeating dragover, keeps going on a
+   * timer while the pointer rests at an edge.
    */
   onCardDragMoved(event: { pointerPosition: { x: number; y: number } }) {
     this.dragPointer = event.pointerPosition;
@@ -311,21 +312,8 @@ export class Board implements OnInit {
       const delta = computeAutoScrollDelta(pointer.x, scrollRect.left, scrollRect.right);
       if (delta !== 0) scrollEl.scrollLeft += delta;
     }
-    const hit =
-      typeof document.elementFromPoint === 'function'
-        ? document.elementFromPoint(pointer.x, pointer.y)
-        : null;
-    const listEl = hit?.closest('.card-list') as HTMLElement | null;
-    if (listEl) {
-      // The part of a tall list that is off screen is out of the pointer's reach, so its edge band is the visible part.
-      const listRect = listEl.getBoundingClientRect();
-      const vDelta = computeAutoScrollDelta(
-        pointer.y,
-        Math.max(listRect.top, 0),
-        Math.min(listRect.bottom, window.innerHeight),
-      );
-      if (vDelta !== 0) listEl.scrollTop += vDelta;
-    }
+    // Columns grow with their cards; vertical browsing is the page, not each .card-list.
+    autoScrollPageVertically(pageScrollElement(), pointer.y, window.innerHeight);
   }
 
   /** Real URL of a card, so the browser's own link features (new tab, copy link, status bar) keep working. */
