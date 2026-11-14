@@ -48,7 +48,26 @@ MySQLのデータはComposeの名前付きボリューム`mysql_data`に保存�
 
 ポートが競合する場合は`.env`の`WEB_PORT`、`API_PORT`、`MYSQL_PORT`を変更してください。画面のコンテナ間通信はポート変更の影響を受けません。
 
-## コードを編集しながら開発する
+## コードを編集しながら開発する（画面の自動反映）
+
+### Dockerのまま（推奨）
+
+静的な `web`（Nginx）の代わりに、`ng serve` の `web-dev` を同じポートで起動します。CSS/HTML/TSを保存するとブラウザーへ自動反映されます。
+
+```sh
+./scripts/dev-web.sh
+# または
+docker compose stop web
+docker compose --profile dev up -d web-dev
+```
+
+`web` と `web-dev` はどちらも `${WEB_PORT:-4200}` を使うため同時には起動できません。`docker compose --profile dev up` をサービス名なしで実行すると両方上がってポートが衝突することがあるので、上記のとおり `web` を止めてから `web-dev` だけを起動してください（`./scripts/dev-web.sh` 推奨）。
+
+- アプリ: http://localhost:4200
+- コンテナ起動のたびに `npm ci` が走るため、数十秒かかることがあります（`docker compose --profile dev logs -f web-dev`）
+- 静的配信に戻す: `docker compose --profile dev stop web-dev && docker compose up -d web`
+
+### ホストで Angular / Go を動かす場合
 
 ホストにはNode.js 24（24.14.1で確認）、npm、Go 1.26以降を用意してください。Angular 21とTypeScript 5.9を利用しています。依存は`package-lock.json`と`go.sum`に記録しています。
 
@@ -56,6 +75,7 @@ MySQLのデータはComposeの名前付きボリューム`mysql_data`に保存�
 
 ```sh
 docker compose stop web api
+docker compose --profile dev stop web-dev
 docker compose up -d db
 ```
 
@@ -75,7 +95,7 @@ npm ci
 npm start
 ```
 
-http://localhost:4200 を開きます。Angular開発サーバーの`proxy.conf.json`が`/api`を`127.0.0.1:8080`へ転送します。
+http://localhost:4200 を開きます。Angular開発サーバーの`proxy.conf.json`が`/api`を`127.0.0.1:8080`へ転送します。コンテナ内の `web-dev` は `proxy.docker.json` で `api` サービスへ転送します。
 
 Goの環境変数（ホストで`go run`する場合、ルートの`.env`は自動読込しません）:
 
