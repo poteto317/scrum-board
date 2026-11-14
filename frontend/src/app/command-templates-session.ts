@@ -31,6 +31,8 @@ export class CommandTemplatesSession {
   });
   /** Bumped on each load and on a successful create/update/delete so an older list response cannot overwrite local edits. */
   private loadGeneration = 0;
+  /** True only after a successful list response — false until then and after a list failure. */
+  private listSynced = false;
 
   load() {
     const generation = ++this.loadGeneration;
@@ -41,10 +43,12 @@ export class CommandTemplatesSession {
         next: (res) => {
           if (generation !== this.loadGeneration) return;
           this.listError.set('');
+          this.listSynced = true;
           this.templates.set(res?.templates ?? []);
         },
         error: () => {
           if (generation !== this.loadGeneration) return;
+          this.listSynced = false;
           this.templates.set([]);
           this.listError.set(COMMAND_LIST_LOAD_FAILURE);
         },
@@ -53,6 +57,20 @@ export class CommandTemplatesSession {
 
   private invalidateLoad() {
     this.loadGeneration++;
+  }
+
+  /**
+   * Apply a local list change only when the last list fetch succeeded.
+   * Otherwise re-fetch so a failed/pending list cannot leave the UI with a single new row.
+   */
+  private afterSuccessfulMutate(applyLocal: () => void) {
+    this.invalidateLoad();
+    this.listError.set('');
+    if (this.listSynced) {
+      applyLocal();
+      return;
+    }
+    this.load();
   }
 
   create() {
@@ -68,11 +86,11 @@ export class CommandTemplatesSession {
       )
       .subscribe({
         next: (created) => {
-          this.invalidateLoad();
-          this.listError.set('');
-          this.templates.update((list) => [...list, created]);
           this.createForm.reset();
           this.adminMessage.set(COMMAND_CREATE_SUCCESS);
+          this.afterSuccessfulMutate(() =>
+            this.templates.update((list) => [...list, created]),
+          );
         },
         error: (error) => this.adminMessage.set(errorMessage(error)),
       });
@@ -91,10 +109,11 @@ export class CommandTemplatesSession {
       )
       .subscribe({
         next: (updated) => {
-          this.invalidateLoad();
-          this.templates.update((list) => list.map((item) => (item.id === id ? updated : item)));
           this.editingId.set(null);
           this.adminMessage.set(COMMAND_UPDATE_SUCCESS);
+          this.afterSuccessfulMutate(() =>
+            this.templates.update((list) => list.map((item) => (item.id === id ? updated : item))),
+          );
         },
         error: (error) => this.adminMessage.set(errorMessage(error)),
       });
@@ -112,10 +131,11 @@ export class CommandTemplatesSession {
       )
       .subscribe({
         next: () => {
-          this.invalidateLoad();
-          this.templates.update((list) => list.filter((item) => item.id !== id));
           if (this.editingId() === id) this.editingId.set(null);
           this.adminMessage.set(COMMAND_DELETE_SUCCESS);
+          this.afterSuccessfulMutate(() =>
+            this.templates.update((list) => list.filter((item) => item.id !== id)),
+          );
         },
         error: (error) => this.adminMessage.set(errorMessage(error)),
       });

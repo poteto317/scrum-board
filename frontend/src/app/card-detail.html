@@ -318,11 +318,11 @@
                 /></label>
                 <label
                   >本文
-                  <textarea
+                  <input
                     class="command-edit-template"
                     formControlName="template"
-                    rows="3"
-                  ></textarea>
+                    autocomplete="off"
+                  />
                 </label>
                 <div class="form-actions">
                   <button
@@ -366,7 +366,7 @@
         <label for="command-name">名前</label>
         <input id="command-name" formControlName="name" autocomplete="off" />
         <label for="command-template">本文</label>
-        <textarea id="command-template" formControlName="template" rows="3"></textarea>
+        <input id="command-template" formControlName="template" autocomplete="off" />
         <div class="form-actions">
           <button class="primary" type="submit" [disabled]="commands.saving()">
             {{ commands.saving() ? '保存中…' : '追加' }}
