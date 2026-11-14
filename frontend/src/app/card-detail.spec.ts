@@ -672,7 +672,16 @@ describe('CardDetail copy command menu and management', () => {
 
   it('adds a template, refreshes the list, and reports success', () => {
     const created = { id: 8, name: 'new cmd', template: 'echo {{url}}', position: 2 };
-    const { f, api } = create({ createCommandTemplate: vi.fn(() => of(created)) }, []);
+    const { f, api } = create(
+      {
+        createCommandTemplate: vi.fn(() => of(created)),
+        listCommandTemplates: vi
+          .fn()
+          .mockReturnValueOnce(of({ templates: [] }))
+          .mockReturnValue(of({ templates: [created] })),
+      },
+      [],
+    );
     const dialog = openDialog(f);
     setControl(dialog.querySelector('#command-name') as HTMLInputElement, created.name);
     setControl(dialog.querySelector('#command-template') as HTMLInputElement, created.template);
@@ -720,6 +729,10 @@ describe('CardDetail copy command menu and management', () => {
     const updated = { ...template, name: 'renamed', template: 'gh pr diff {{url}}' };
     const { f, api } = create({
       updateCommandTemplate: vi.fn(() => of(updated)),
+      listCommandTemplates: vi
+        .fn()
+        .mockReturnValueOnce(of({ templates: [template] }))
+        .mockReturnValue(of({ templates: [updated] })),
     });
     const dialog = openDialog(f);
     buttonByText(dialog, '編集')!.click();
@@ -758,6 +771,10 @@ describe('CardDetail copy command menu and management', () => {
   it('deletes a template and reports success', () => {
     const { f, api } = create({
       deleteCommandTemplate: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi
+        .fn()
+        .mockReturnValueOnce(of({ templates: [template] }))
+        .mockReturnValue(of({ templates: [] })),
     });
     const dialog = openDialog(f);
     expect(dialog.textContent).toContain(template.template);

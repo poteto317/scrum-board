@@ -13,7 +13,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { Location } from '@angular/common';
+import { Location, NgStyle } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import {
@@ -56,7 +56,7 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
   selector: 'app-board',
-  imports: [ReactiveFormsModule, Modal, CdkDropList, CdkDrag, CdkDragHandle],
+  imports: [ReactiveFormsModule, Modal, CdkDropList, CdkDrag, CdkDragHandle, NgStyle],
   templateUrl: './board.html',
   styleUrl: './board.css',
   providers: [
@@ -104,6 +104,8 @@ export class Board implements OnInit {
   readonly commands = inject(CommandTemplatesSession);
   readonly commandMenuEmpty = COMMAND_MENU_EMPTY;
   readonly openCommandCardId = signal<number | null>(null);
+  /** Viewport-fixed coords so the menu is not clipped by `.board-scroll` overflow. */
+  readonly commandMenuStyle = signal<Record<string, string>>({});
   readonly draggingColumnId = signal<number | null>(null);
   /**
    * The card CDK is dragging: from (cdkDragStarted) until (cdkDragEnded), which CDK emits only after the preview has
@@ -192,13 +194,42 @@ export class Board implements OnInit {
   toggleCommandMenu(cardId: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
-    this.openCommandCardId.update((current) => (current === cardId ? null : cardId));
+    const opening = this.openCommandCardId() !== cardId;
+    if (!opening) {
+      this.openCommandCardId.set(null);
+      this.commandMenuStyle.set({});
+      return;
+    }
+    const button = event.currentTarget;
+    if (!(button instanceof HTMLElement)) return;
+    const rect = button.getBoundingClientRect();
+    const menuMax = 240;
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const openUp = spaceBelow < menuMax && rect.top > spaceBelow;
+    this.commandMenuStyle.set(
+      openUp
+        ? {
+            top: 'auto',
+            bottom: `${Math.max(8, window.innerHeight - rect.top + gap)}px`,
+            left: 'auto',
+            right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+          }
+        : {
+            top: `${rect.bottom + gap}px`,
+            bottom: 'auto',
+            left: 'auto',
+            right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+          },
+    );
+    this.openCommandCardId.set(cardId);
   }
 
   copyCommand(templateText: string, number: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
     this.openCommandCardId.set(null);
+    this.commandMenuStyle.set({});
     return this.commandCopy.copyResolved(templateText, number);
   }
 
@@ -207,11 +238,13 @@ export class Board implements OnInit {
     const target = event.target;
     if (target instanceof Element && target.closest('.copy-command')) return;
     this.openCommandCardId.set(null);
+    this.commandMenuStyle.set({});
   }
 
   @HostListener('document:keydown.escape')
   closeCommandMenuFromKeyboard() {
     this.openCommandCardId.set(null);
+    this.commandMenuStyle.set({});
   }
 
   load() {

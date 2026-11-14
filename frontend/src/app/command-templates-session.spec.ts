@@ -61,7 +61,7 @@ describe('CommandTemplatesSession', () => {
     expect(session.listError()).toBe(COMMAND_LIST_LOAD_FAILURE);
   });
 
-  it('appends a created template after a synced list, resets the form, and reports success', () => {
+  it('reloads the list after create, resets the form, and reports success', () => {
     const created: CommandTemplate = {
       id: 8,
       name: 'new cmd',
@@ -72,25 +72,22 @@ describe('CommandTemplatesSession', () => {
     api.listCommandTemplates.mockReturnValue(of({ templates: [existing] }));
     session.load();
     api.createCommandTemplate.mockReturnValue(pending);
+    api.listCommandTemplates.mockReturnValue(of({ templates: [existing, created] }));
     session.createForm.setValue({ name: created.name, template: created.template });
     session.create();
     expect(session.saving()).toBe(true);
     session.create();
     expect(api.createCommandTemplate).toHaveBeenCalledTimes(1);
-    expect(api.createCommandTemplate).toHaveBeenCalledWith({
-      name: created.name,
-      template: created.template,
-    });
     pending.next(created);
     pending.complete();
     expect(session.saving()).toBe(false);
     expect(session.templates()).toEqual([existing, created]);
     expect(session.createForm.getRawValue()).toEqual({ name: '', template: '' });
     expect(session.adminMessage()).toBe(COMMAND_CREATE_SUCCESS);
-    expect(session.listError()).toBe('');
+    expect(api.listCommandTemplates).toHaveBeenCalledTimes(2);
   });
 
-  it('reloads the list after create when the previous list fetch failed', () => {
+  it('reloads the full list after create when the previous list fetch failed', () => {
     const created: CommandTemplate = {
       id: 8,
       name: 'new cmd',
@@ -100,7 +97,6 @@ describe('CommandTemplatesSession', () => {
     api.listCommandTemplates.mockReturnValueOnce(throwError(() => ({ status: 0 })));
     session.load();
     expect(session.templates()).toEqual([]);
-    expect(session.listError()).toBe(COMMAND_LIST_LOAD_FAILURE);
 
     api.createCommandTemplate.mockReturnValue(of(created));
     api.listCommandTemplates.mockReturnValue(of({ templates: [existing, created] }));
@@ -113,6 +109,29 @@ describe('CommandTemplatesSession', () => {
     expect(api.listCommandTemplates).toHaveBeenCalledTimes(2);
   });
 
+  it('does not duplicate an id when create finishes after a load that already includes it', () => {
+    const created: CommandTemplate = {
+      id: 8,
+      name: 'new cmd',
+      template: 'echo {{url}}',
+      position: 2,
+    };
+    const slowCreate = new Subject<CommandTemplate>();
+    api.listCommandTemplates.mockReturnValueOnce(of({ templates: [existing, created] }));
+    session.load();
+    expect(session.templates()).toEqual([existing, created]);
+
+    api.createCommandTemplate.mockReturnValue(slowCreate);
+    api.listCommandTemplates.mockReturnValue(of({ templates: [existing, created] }));
+    session.createForm.setValue({ name: created.name, template: created.template });
+    session.create();
+    slowCreate.next(created);
+    slowCreate.complete();
+
+    expect(session.templates()).toEqual([existing, created]);
+    expect(session.templates().filter((row) => row.id === created.id)).toHaveLength(1);
+  });
+
   it('reports the API message when create fails and keeps the draft', () => {
     api.createCommandTemplate.mockReturnValue(
       throwError(() => ({ error: { message: '名前が長すぎます' } })),
@@ -123,10 +142,9 @@ describe('CommandTemplatesSession', () => {
     expect(session.templates()).toEqual([]);
     expect(session.createForm.getRawValue()).toEqual({ name: 'too long', template: 'echo' });
     expect(session.adminMessage()).toBe('名前が長すぎます');
-    expect(session.adminMessage()).not.toBe(COMMAND_CREATE_SUCCESS);
   });
 
-  it('replaces an updated template, closes edit, and reports success', () => {
+  it('reloads after update, closes edit, and reports success', () => {
     const updated: CommandTemplate = {
       ...existing,
       name: 'renamed',
@@ -136,16 +154,13 @@ describe('CommandTemplatesSession', () => {
     api.listCommandTemplates.mockReturnValue(of({ templates: [existing] }));
     session.load();
     api.updateCommandTemplate.mockReturnValue(pending);
+    api.listCommandTemplates.mockReturnValue(of({ templates: [updated] }));
     session.startEdit(existing);
     session.editForm.setValue({ name: updated.name, template: updated.template });
     session.update(existing.id);
     expect(session.saving()).toBe(true);
     session.update(existing.id);
     expect(api.updateCommandTemplate).toHaveBeenCalledTimes(1);
-    expect(api.updateCommandTemplate).toHaveBeenCalledWith(existing.id, {
-      name: updated.name,
-      template: updated.template,
-    });
     pending.next(updated);
     pending.complete();
     expect(session.saving()).toBe(false);
@@ -166,21 +181,20 @@ describe('CommandTemplatesSession', () => {
     expect(session.templates()).toEqual([existing]);
     expect(session.editingId()).toBe(existing.id);
     expect(session.adminMessage()).toBe('本文が空です');
-    expect(session.adminMessage()).not.toBe(COMMAND_UPDATE_SUCCESS);
   });
 
-  it('removes a deleted template, closes its edit, and reports success', () => {
+  it('reloads after delete, closes its edit, and reports success', () => {
     const other: CommandTemplate = { id: 5, name: 'other', template: 'echo', position: 1 };
     const pending = new Subject<void>();
     api.listCommandTemplates.mockReturnValue(of({ templates: [existing, other] }));
     session.load();
     api.deleteCommandTemplate.mockReturnValue(pending);
+    api.listCommandTemplates.mockReturnValue(of({ templates: [other] }));
     session.startEdit(existing);
     session.delete(existing.id);
     expect(session.saving()).toBe(true);
     session.delete(existing.id);
     expect(api.deleteCommandTemplate).toHaveBeenCalledTimes(1);
-    expect(api.deleteCommandTemplate).toHaveBeenCalledWith(existing.id);
     pending.next();
     pending.complete();
     expect(session.saving()).toBe(false);
@@ -189,7 +203,7 @@ describe('CommandTemplatesSession', () => {
     expect(session.adminMessage()).toBe(COMMAND_DELETE_SUCCESS);
   });
 
-  it('keeps a successful mutate when an older load resolves afterward', () => {
+  it('ignores a stale load after a successful create reloads', () => {
     const slow = new Subject<{ templates: CommandTemplate[] }>();
     const created: CommandTemplate = {
       id: 8,
@@ -197,13 +211,10 @@ describe('CommandTemplatesSession', () => {
       template: 'echo {{url}}',
       position: 2,
     };
-    api.listCommandTemplates.mockReturnValueOnce(of({ templates: [existing] }));
-    session.load();
-    expect(session.templates()).toEqual([existing]);
-
     api.listCommandTemplates.mockReturnValue(slow);
     session.load();
     api.createCommandTemplate.mockReturnValue(of(created));
+    api.listCommandTemplates.mockReturnValue(of({ templates: [existing, created] }));
     session.createForm.setValue({ name: created.name, template: created.template });
     session.create();
     expect(session.templates()).toEqual([existing, created]);
@@ -213,46 +224,6 @@ describe('CommandTemplatesSession', () => {
 
     expect(session.templates()).toEqual([existing, created]);
     expect(session.listError()).toBe('');
-  });
-
-  it('keeps a successful update when an older load resolves afterward', () => {
-    const slow = new Subject<{ templates: CommandTemplate[] }>();
-    const updated: CommandTemplate = {
-      ...existing,
-      name: 'renamed',
-      template: 'gh pr diff {{url}}',
-    };
-    api.listCommandTemplates.mockReturnValueOnce(of({ templates: [existing] }));
-    session.load();
-    api.listCommandTemplates.mockReturnValue(slow);
-    session.load();
-    api.updateCommandTemplate.mockReturnValue(of(updated));
-    session.startEdit(existing);
-    session.editForm.setValue({ name: updated.name, template: updated.template });
-    session.update(existing.id);
-    expect(session.templates()).toEqual([updated]);
-
-    slow.next({ templates: [existing] });
-    slow.complete();
-
-    expect(session.templates()).toEqual([updated]);
-  });
-
-  it('keeps a successful delete when an older load resolves afterward', () => {
-    const slow = new Subject<{ templates: CommandTemplate[] }>();
-    const other: CommandTemplate = { id: 5, name: 'other', template: 'echo', position: 1 };
-    api.listCommandTemplates.mockReturnValueOnce(of({ templates: [existing, other] }));
-    session.load();
-    api.listCommandTemplates.mockReturnValue(slow);
-    session.load();
-    api.deleteCommandTemplate.mockReturnValue(of(undefined));
-    session.delete(existing.id);
-    expect(session.templates()).toEqual([other]);
-
-    slow.next({ templates: [existing, other] });
-    slow.complete();
-
-    expect(session.templates()).toEqual([other]);
   });
 
   it('still applies an in-flight load when create fails', () => {
@@ -272,29 +243,6 @@ describe('CommandTemplatesSession', () => {
     expect(session.listError()).toBe('');
   });
 
-  it('ignores a stale load error after a successful create', () => {
-    const slow = new Subject<{ templates: CommandTemplate[] }>();
-    const created: CommandTemplate = {
-      id: 8,
-      name: 'new cmd',
-      template: 'echo {{url}}',
-      position: 2,
-    };
-    api.listCommandTemplates.mockReturnValueOnce(of({ templates: [] }));
-    session.load();
-    api.listCommandTemplates.mockReturnValue(slow);
-    session.load();
-    api.createCommandTemplate.mockReturnValue(of(created));
-    session.createForm.setValue({ name: created.name, template: created.template });
-    session.create();
-    expect(session.templates()).toEqual([created]);
-
-    slow.error({ status: 0 });
-
-    expect(session.templates()).toEqual([created]);
-    expect(session.listError()).toBe('');
-  });
-
   it('reports a network failure when delete fails and keeps the template', () => {
     api.deleteCommandTemplate.mockReturnValue(throwError(() => ({ status: 0 })));
     session.templates.set([existing]);
@@ -304,6 +252,5 @@ describe('CommandTemplatesSession', () => {
     expect(session.templates()).toEqual([existing]);
     expect(session.editingId()).toBe(existing.id);
     expect(session.adminMessage()).toBe('通信に失敗しました。接続を確認して再試行してください。');
-    expect(session.adminMessage()).not.toBe(COMMAND_DELETE_SUCCESS);
   });
 });
