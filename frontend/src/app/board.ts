@@ -23,6 +23,7 @@ import {
   applyCardDrop,
   buildCardOrderPayload,
   CARD_DRAG_THRESHOLD_PX,
+  CARD_TOUCH_DRAG_DELAY_MS,
   columnIdFromDropListId,
   dropListIdForColumn,
 } from './card-order';
@@ -41,7 +42,13 @@ import { BoardData, Card, Column } from './models';
   templateUrl: './board.html',
   styleUrl: './board.css',
   providers: [
-    { provide: CDK_DRAG_CONFIG, useValue: { dragStartThreshold: CARD_DRAG_THRESHOLD_PX } },
+    {
+      provide: CDK_DRAG_CONFIG,
+      useValue: {
+        dragStartThreshold: CARD_DRAG_THRESHOLD_PX,
+        dragStartDelay: { touch: CARD_TOUCH_DRAG_DELAY_MS, mouse: 0 },
+      },
+    },
   ],
 })
 export class Board implements OnInit {

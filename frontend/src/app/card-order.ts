@@ -1,6 +1,12 @@
 import { Card } from './models';
 
 export const CARD_DRAG_THRESHOLD_PX = 8;
+/**
+ * A finger must rest on a card this long before a move drags it. Cards fill most of the board, so
+ * without the hold the first swipe over a card would start a drag (and cancel the scroll) instead of
+ * scrolling the list or the board. A mouse drags at once.
+ */
+export const CARD_TOUCH_DRAG_DELAY_MS = 200;
 
 export function dropListIdForColumn(columnId: number): string {
   return `card-list-${columnId}`;
