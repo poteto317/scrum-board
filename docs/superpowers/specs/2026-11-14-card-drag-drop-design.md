@@ -109,7 +109,7 @@
 
 ### 3.4 `CreateCard` / `UpdateCard` の position（`L-540`）
 
-- **ロック順（全経路共通）**: `CreateCard`、`UpdateCard`（`columnId` 指定時）、`ReorderCards` は、`cards` に触れる前に `board_columns` を `ORDER BY id FOR UPDATE`（全列 X ロック）で取る。外部キー検査が `board_columns` の共有ロックを取るため、`cards` を先に握った経路と列を先に握った経路が混ざると循環待ち（MySQL 1213）になる。実 MySQL で、列ロックなしの `ReorderCards` と `CreateCard`/`UpdateCard` を 60 並行で混ぜると reorder の大半が 1213 になることを確認した。共有ロック（`FOR SHARE`）では Create と Move の `cards` ロック順の違いが残るため不可。ボード全体の書き込みが直列化されるが、列の並び替え・作成が既に同じロックを取っており、1 人用の小さなボードでは問題にならない。
+- **ロック順（全経路共通）**: `CreateCard`、`UpdateCard`（`columnId` 指定時）、`DeleteCard`、`ReorderCards` は、`cards` に触れる前に `board_columns` を `ORDER BY id FOR UPDATE`（全列 X ロック）で取る。外部キー検査が `board_columns` の共有ロックを取るため、`cards` を先に握った経路と列を先に握った経路が混ざると循環待ち（MySQL 1213）になる。実 MySQL で、列ロックなしの `ReorderCards` と `CreateCard`/`UpdateCard` を 60 並行で混ぜると reorder の大半が 1213 になることを確認した。共有ロック（`FOR SHARE`）では Create と Move の `cards` ロック順の違いが残るため不可。`DeleteCard` も対象で、`DELETE` は主キー→セカンダリインデックスの順に、`lockCardsInColumns`/`nextCardPosition` はセカンダリ→主キーの順にロックするため、全列ロックの外に置くと逆順の循環待ちになる（実 MySQL で再現）。失敗した書き込みの再試行（1213 のリトライ）は、順序のバグを隠すだけなので入れない。Delete は列内に `position` の穴を残し（詰め直しは設計外）、次の並び替えで 0..n-1 に振り直される。ボード全体の書き込みが直列化されるが、列の並び替え・作成が既に同じロックを取っており、1 人用の小さなボードでは問題にならない。
 - **CreateCard**: 全列ロック（存在しない列なら `ErrColumn`）の後、当該 `column_id` のカードを `ORDER BY id FOR UPDATE` で読み、`MAX(position)`（カード0なら `-1`）をとり `position = max+1` で INSERT。
 - **UpdateCard で `columnId` が変わるとき**: 全列ロックの後、対象カードを単独で `FOR UPDATE` し、移動先のカードを読んで `MAX(position)+1` を付与する。同一トランザクションでソース列の残カードを `ORDER BY position, id` の現順で `0..n-1` に詰め直す。詰め直しは `position` が変わるカードだけを、`updated_at` を据え置いて更新する（`updated_at=updated_at`）。履歴は列変更の1イベントのみ（詰め直し自体は履歴に載せない）。
 - **UpdateCard で列が変わらないとき**: `position` は触らない。
@@ -138,10 +138,8 @@
 
 1. 各列のカードリストを `cdkDropList` にし、`cdkDropListData` にその列のカード配列（または ID）を渡す。全列を `cdkDropListConnectedTo` で相互接続する。
 2. 各カード根要素に `cdkDrag`。**ルートは `<a class="task-card" [attr.href]>` とし、`routerLink` は付けない**（`RouterLink` は通常のクリックで常に遷移し、同じ要素の `(click)` から `preventDefault()` しても止められず、ドラッグ直後の誤遷移を抑止できないため）。`href` を残すので、新しいタブで開く・リンクのコピー・ステータスバーの URL 表示・Enter での遷移はブラウザーがそのまま行う。
-   - `pointerdown` で開始座標を記録。
-   - `cdkDragMoved` で移動距離が閾値（**8px**）を超えたら `cardDragMoved = true`。
-   - `(click)` で `cardDragMoved` なら `preventDefault()` + `stopPropagation()` し遷移しない。Ctrl/Cmd/Shift/Alt 付きや primary 以外のボタンはブラウザー既定に任せる。それ以外は `preventDefault()` + `Router.navigate`。
-   - `cdkDragEnded` でフラグをリセット（ドラッグ直後の合成 click を越えるため microtask で遅らせる）。
+   - ドラッグか click かは CDK の `dragStartThreshold`（**8**、`CARD_DRAG_THRESHOLD_PX`）に任せる。CDK はドラッグ開始時に元の `<a>` を DOM から外してプレースホルダーに差し替えるため、ドラッグ後の click は元の要素に届かず、アプリ側にドラッグ追跡のフラグは持たない（実ブラウザーで、列内・列間のドラッグ後に click も遷移も起きないことを確認）。
+   - `(click)`: Ctrl/Cmd/Shift/Alt 付きや primary 以外のボタンはブラウザー既定に任せる。それ以外は `preventDefault()` + `Router.navigate`。
    - 操作の説明は `aria-label` ではなく、視覚的に隠した説明要素を `aria-describedby` で結ぶ（カード本文の読み上げを損なわない。並べ替え不可の間は文言を切り替える）。
 3. `(cdkDropListDropped)` で:
    - `L-541` どおりインデックス範囲をガード。
@@ -152,7 +150,7 @@
 4. 保存中は `reordering`（または `cardReordering`）で次のカード DnD・列 DnD・列追加を抑止する。
 5. 列ヘッダー HTML5 DnD との共存: カード上では列の `draggingColumnId` を立てない。列の `dragover`/`drop` は現行どおり `draggingColumnId === null` なら無視。
 6. ドラッグ中のボード横スクロール: CDK の近傍自動スクロール、または列 DnD と同様に端での `scrollLeft` 補正（`L-680`）。縦に長い列では列コンテナの縦スクロールも考慮する。
-7. キーボード: フォーカス可能なカード（`<a href>` はもともとフォーカス可能）で `ArrowUp` / `ArrowDown`（修飾キーなしのときだけ）により同一列内で1つ移動し、同じ保存 API を呼ぶ。保存中は `aria-disabled` で無視（`disabled` でフォーカス脱落させない。列 DnD と同じ）。`aria-live` で結果を通知する。
+7. キーボード: フォーカス可能なカード（`<a href>` はもともとフォーカス可能）で `ArrowUp` / `ArrowDown`（修飾キーなしのときだけ）により同一列内で1つ移動し、同じ保存 API を呼ぶ。保存中は無視する（`disabled` でフォーカス脱落させない。列 DnD と同じ）。カードのリンクには `aria-disabled` を付けない（遷移はできるため。並べ替え不可は `aria-describedby` の説明文の切替で伝える）。`aria-live` で結果を通知し、文言には移動後の位置を含める（同じカードを続けて動かしても毎回読み上げられる）。
 8. 空列へのドロップ: 空の `cdkDropList`（列ボディ）をドロップ対象として確保し、高さ・`min-height` でヒット領域を維持する。
 
 ### 4.5 ドキュメント

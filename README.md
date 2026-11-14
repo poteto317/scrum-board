@@ -162,6 +162,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | GET | `/api/board` | `{columns: [...], cards: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
 | POST | `/api/cards` | `{title, description, columnId, prUrl?}`でカード追加 |
+| PUT | `/api/cards/order` | `{columns:[{columnId, cardIds}]}`でカードの列内並べ替え・列間移動（[詳細](docs/api.md#カードの並び替え列間移動)） |
 | POST | `/api/cards/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてカードを起票する)） |
 | GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
 | GET | `/api/cards/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
@@ -173,7 +174,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 
 タイトルは1〜200文字、説明は10000文字以内。タイトル・列名の前後の空白は削除します。絵文字を含むUnicode文字数で検証します。空のPATCH、未知のプロパティ、不正なJSONも拒否します。エラー形式は`{"message":"..."}`。不正入力400、未存在404、重複列409、内部エラー500です。
 
-列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のカードは作成日時・ID順です。ステータス移動でもこの順序を維持します。
+列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のカードは`position`・ID順で、`GET /api/board`もこの順です。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます。ドラッグ&ドロップは`PUT /api/cards/order`で保存し、`cards.position`はAPI起動時に自動で追加されます。
 
 ## 検証
 

@@ -71,12 +71,13 @@
 ### カードの並び替え・列間移動
 
 - `PUT /api/cards/order` と CDK ドラッグ&ドロップ（列内・列間）/ 上下キー
-- 短いドラッグ距離では詳細へ遷移、長いドラッグでは DnD（カードは `<a href>`。実ブラウザーで、短いクリックと Enter は遷移し、長いドラッグ後は遷移しないことを確認）
+- 短いドラッグ距離では詳細へ遷移、長いドラッグでは DnD（カードは `<a href>`。ドラッグか click かは CDK の閾値に任せる。実ブラウザーで、短いクリックと Enter は遷移し、列内・列間のドラッグ後は click も遷移も起きないことを確認）
+- キーボード操作のアナウンスに移動後の位置が入り、続けて動かしても毎回読み上げられること。カードのフォーカス枠が `.card-list` のスクロール領域で切れないこと（実ブラウザーの Tab キーで確認）
 - 400 / 409 / 永続化、詳細ステータス移動が末尾、再起動で DnD 順が消えないこと
-- 使い捨て MySQL（`scrumboard_numbering_test`）で、`CreateCard` / `UpdateCard`（列移動・編集）/ `ReorderCards` の 60 並行混在が MySQL 1213（デッドロック）にならないこと。修正前は reorder の大半が 1213 になる
+- 使い捨て MySQL（`scrumboard_numbering_test`）で、`CreateCard` / `UpdateCard`（列移動・編集）/ `DeleteCard` / `ReorderCards` の 60 並行混在が MySQL 1213（デッドロック）にならないこと。修正前は reorder の大半が 1213 になる
 - 列内の並び替えや位置のずれで、触っていないカードの `updatedAt` が変わらないこと（列が変わったカードだけ更新）
 - `position` 列のない旧スキーマの DB から `InitializeCardPositions` で `created_at, id` 順に採番され、再起動で手動の順序が保たれ、`updatedAt` が変わらないこと
-- `go test` / `npm test -- --watch=false`（88）/ `npm run build`
+- `go test` / `npm test -- --watch=false`（全件）/ `npm run build`
 
 ### 開発用画面（web-dev / 自動反映）
 
