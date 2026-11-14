@@ -44,7 +44,7 @@
   - `board-cdk-wiring.spec.ts` / `board-card-reorder-state.spec.ts` の「list.scrollTop が増える」を、モックした `scrollingElement.scrollTop` の増減に合わせる（実装と同じ `scrollTop` 加算。`window.scrollBy` は使わない）。
   - ページ縦 auto-scroll の呼び出しを外すと落ちるテストを置く（配線漏れ検知。L-060）。
   - 端静止でタイマーが進んでも `scrollHeight` が不変であることを固定（L-680）。
-  - `.card-list` の computed style で `overflow-y` が `auto`/`scroll` でない、または `max-height` が無いことを固定してよい。
+  - 注入された `<style>` 本文（jsdom では getComputedStyle が空のため）で、`.card-list` ブロックに `max-height: min(60vh` / `overflow-y: auto` が無いことを固定する。
 
 ## 知見
 
