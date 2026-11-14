@@ -141,6 +141,11 @@ func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]C
 		}
 		cards = append(cards, c)
 	}
+	// PR URLs are read in a separate query (not joined) so one card is never returned once per PR and
+	// card_pr_links rows are never locked on behalf of a reorder.
+	if err = attachPRURLs(ctx, tx, cards); err != nil {
+		return nil, err
+	}
 	return cards, nil
 }
 

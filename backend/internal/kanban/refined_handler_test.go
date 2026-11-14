@@ -178,7 +178,7 @@ func TestRefinedCardIsCreatedInTodoWithTrimmedValues(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
 		t.Fatal(err)
 	}
-	if card.Title != "整えた題名" || card.Description != "整えた説明" || card.ColumnID != 1 || card.PRURL != "" {
+	if card.Title != "整えた題名" || card.Description != "整えた説明" || card.ColumnID != 1 || len(card.PRURLs) != 0 {
 		t.Fatalf("card=%+v", card)
 	}
 	if len(repo.cards) != 1 {

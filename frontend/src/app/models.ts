@@ -11,7 +11,7 @@ export interface Card {
   description: string;
   position: number;
   backlogPosition: number;
-  prUrl: string;
+  prUrls: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -20,7 +20,7 @@ export interface BoardData {
   cards: Card[];
 }
 export type CardInput = Pick<Card, 'title' | 'description' | 'columnId'> &
-  Partial<Pick<Card, 'prUrl'>>;
+  Partial<Pick<Card, 'prUrls'>>;
 
 export interface HistoryChange {
   field: string;

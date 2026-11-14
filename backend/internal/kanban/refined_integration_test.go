@@ -22,7 +22,7 @@ func TestMySQLRefinedCardIsFiledInTodoWithHistory(t *testing.T) {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}
 	todo, err := r.GetColumnByName(ctx, "Todo")
-	if err != nil || card.ColumnID != todo.ID || card.Title != "整えた題名" || card.Description != "整えた説明" || card.PRURL != "" {
+	if err != nil || card.ColumnID != todo.ID || card.Title != "整えた題名" || card.Description != "整えた説明" || len(card.PRURLs) != 0 {
 		t.Fatalf("card=%+v todo=%+v err=%v", card, todo, err)
 	}
 	page, err := r.History(ctx, card.Number, 0)

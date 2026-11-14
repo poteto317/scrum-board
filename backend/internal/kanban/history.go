@@ -41,7 +41,7 @@ func historyValues(ctx context.Context, tx *sql.Tx, c Card) (map[string]string, 
 	if err := tx.QueryRowContext(ctx, "SELECT name FROM board_columns WHERE id=?", c.ColumnID).Scan(&name); err != nil {
 		return nil, err
 	}
-	return map[string]string{"title": c.Title, "description": c.Description, "status": name, "prUrl": c.PRURL}, nil
+	return map[string]string{"title": c.Title, "description": c.Description, "status": name, "prUrls": prURLsJSON(c.PRURLs)}, nil
 }
 func appendHistory(ctx context.Context, tx *sql.Tx, before *Card, after Card, kind string) error {
 	values, err := historyValues(ctx, tx, after)
@@ -56,7 +56,7 @@ func appendHistory(ctx context.Context, tx *sql.Tx, before *Card, after Card, ki
 		}
 	}
 	changes := []HistoryChange{}
-	for _, field := range []string{"title", "description", "status", "prUrl"} {
+	for _, field := range []string{"title", "description", "status", "prUrls"} {
 		if before == nil || old[field] != values[field] {
 			changes = append(changes, HistoryChange{field, old[field], values[field]})
 		}

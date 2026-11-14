@@ -31,7 +31,7 @@ type Card struct {
 	Description     string    `json:"description"`
 	Position        int       `json:"position"`
 	BacklogPosition int       `json:"backlogPosition"`
-	PRURL           string    `json:"prUrl"`
+	PRURLs          []string  `json:"prUrls"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
@@ -45,16 +45,16 @@ type Board struct {
 	Cards   []Card   `json:"cards"`
 }
 type CardInput struct {
-	ColumnID    int64  `json:"columnId"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	PRURL       string `json:"prUrl"`
+	ColumnID    int64    `json:"columnId"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	PRURLs      []string `json:"prUrls"`
 }
 type CardPatch struct {
-	ColumnID    *int64  `json:"columnId"`
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	PRURL       *string `json:"prUrl"`
+	ColumnID    *int64    `json:"columnId"`
+	Title       *string   `json:"title"`
+	Description *string   `json:"description"`
+	PRURLs      *[]string `json:"prUrls"`
 }
 
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.

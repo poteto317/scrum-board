@@ -20,12 +20,13 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { Column } from './models';
 import { CardAutosave } from './card-autosave';
+import { CardPrLinks } from './card-pr-links';
 import { CopyLinkFeedback } from './copy-link-feedback';
 
 @Component({
   selector: 'app-card-detail',
   imports: [ReactiveFormsModule, RouterLink, DatePipe, Modal, CardHistory],
-  providers: [CardAutosave],
+  providers: [CardAutosave, CardPrLinks],
   templateUrl: './card-detail.html',
   styleUrl: './card-detail.css',
 })
@@ -37,6 +38,7 @@ export class CardDetail implements OnInit {
   private readonly reload$ = new Subject<void>();
   private readonly changed$ = new Subject<void>();
   readonly autosave = inject(CardAutosave);
+  readonly prLinks = inject(CardPrLinks);
   readonly card = this.autosave.card;
   readonly form = this.autosave.form;
   readonly columns = signal<Column[]>([]);
@@ -47,6 +49,15 @@ export class CardDetail implements OnInit {
   private readonly linkCopy = new CopyLinkFeedback(this.destroyRef);
   readonly copyLinkFeedback = this.linkCopy.message;
   private deleted = false;
+
+  constructor() {
+    this.prLinks.bind({
+      card: () => this.card(),
+      applyPrSave: (updated) => this.autosave.applyPrSave(updated),
+      onError: (message) => this.error.set(message),
+      cancel$: this.changed$,
+    });
+  }
 
   copyCardLink(): Promise<void> {
     const card = this.card();
@@ -60,6 +71,7 @@ export class CardDetail implements OnInit {
         switchMap(([params]) => {
           this.changed$.next();
           this.autosave.reset(null);
+          this.prLinks.reset();
           this.deleted = false;
           this.confirmDelete.set(false);
           this.loading.set(true);
@@ -79,14 +91,20 @@ export class CardDetail implements OnInit {
       )
       .subscribe(({ board, card }) => {
         this.columns.set(board.columns);
-        this.autosave.reset(card);
+        this.autosave.reset({ ...card, prUrls: card.prUrls ?? [] });
       });
   }
   load() {
     this.reload$.next();
   }
   async canLeave(): Promise<boolean> {
-    if (this.deleted || !this.autosave.hasChanges()) return true;
+    if (this.deleted) return true;
+    if (this.prLinks.saving()) {
+      return window.confirm(
+        'PRの保存中です。移動すると保存が中断される可能性があります。移動しますか？',
+      );
+    }
+    if (!this.autosave.hasChanges()) return true;
     if (await this.autosave.settle()) return true;
     return window.confirm('未保存の変更があります。変更を破棄して移動しますか？');
   }

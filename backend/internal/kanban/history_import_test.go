@@ -61,16 +61,26 @@ func TestHistoricalRecordLimits(t *testing.T) {
 		mutate func(*HistoricalRecord)
 		want   bool
 	}{
-		"number zero":            {func(v *HistoricalRecord) { v.Number = 0 }, false},
-		"number negative":        {func(v *HistoricalRecord) { v.Number = -1 }, false},
-		"year 999":               {func(v *HistoricalRecord) { v.OccurredAt = time.Date(999, 1, 1, 0, 0, 0, 0, time.UTC) }, false},
-		"year 1000":              {func(v *HistoricalRecord) { v.OccurredAt = time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC) }, true},
-		"key 128 chars":          {func(v *HistoricalRecord) { v.Key = strings.Repeat("k", 128) }, true},
-		"key 129 chars":          {func(v *HistoricalRecord) { v.Key = strings.Repeat("k", 129) }, false},
-		"note 4000 chars":        {func(v *HistoricalRecord) { v.Note = long(4000) }, true},
-		"note 4001 chars":        {func(v *HistoricalRecord) { v.Note = long(4001) }, false},
-		"four changes":           {func(v *HistoricalRecord) { v.Changes = fieldChanges("title", "description", "status", "prUrl") }, true},
-		"five changes":           {func(v *HistoricalRecord) { v.Changes = fieldChanges("title", "description", "status", "prUrl", "x") }, false},
+		"number zero":     {func(v *HistoricalRecord) { v.Number = 0 }, false},
+		"number negative": {func(v *HistoricalRecord) { v.Number = -1 }, false},
+		"year 999":        {func(v *HistoricalRecord) { v.OccurredAt = time.Date(999, 1, 1, 0, 0, 0, 0, time.UTC) }, false},
+		"year 1000":       {func(v *HistoricalRecord) { v.OccurredAt = time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC) }, true},
+		"key 128 chars":   {func(v *HistoricalRecord) { v.Key = strings.Repeat("k", 128) }, true},
+		"key 129 chars":   {func(v *HistoricalRecord) { v.Key = strings.Repeat("k", 129) }, false},
+		"note 4000 chars": {func(v *HistoricalRecord) { v.Note = long(4000) }, true},
+		"note 4001 chars": {func(v *HistoricalRecord) { v.Note = long(4001) }, false},
+		"four changes": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{
+				{Field: "title"}, {Field: "description"}, {Field: "status"},
+				{Field: "prUrls", Before: "[]", After: "[]"},
+			}
+		}, true},
+		"five changes": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{
+				{Field: "title"}, {Field: "description"}, {Field: "status"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "x"},
+			}
+		}, false},
 		"title before 200":       {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "title", Before: long(200)}} }, true},
 		"title before 201":       {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "title", Before: long(201)}} }, false},
 		"title after 201":        {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "title", After: long(201)}} }, false},
@@ -79,11 +89,23 @@ func TestHistoricalRecordLimits(t *testing.T) {
 		"description after big":  {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "description", After: long(10001)}} }, false},
 		"status 60":              {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "status", After: long(60)}} }, true},
 		"status 61":              {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "status", After: long(61)}} }, false},
-		"prUrl 2048": {func(v *HistoricalRecord) {
-			v.Changes = []HistoryChange{{Field: "prUrl", After: strings.Repeat("a", 2048)}}
+		"prUrls empty": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "prUrls", Before: "[]", After: "[]"}}
 		}, true},
-		"prUrl 2049": {func(v *HistoricalRecord) {
-			v.Changes = []HistoryChange{{Field: "prUrl", After: strings.Repeat("a", 2049)}}
+		"prUrls one": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "prUrls", Before: "[]", After: `["https://github.com/a/b/pull/1"]`}}
+		}, true},
+		"prUrls legacy field": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "prUrl", Before: "", After: "https://github.com/a/b/pull/1"}}
+		}, false},
+		"prUrls empty element": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "prUrls", Before: "[]", After: `[""]`}}
+		}, false},
+		"prUrls null element": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "prUrls", Before: "[]", After: `[null]`}}
+		}, false},
+		"prUrls too long": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "prUrls", Before: "[]", After: strings.Repeat("a", 65537)}}
 		}, false},
 	} {
 		v := valid()

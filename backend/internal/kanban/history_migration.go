@@ -60,7 +60,7 @@ func (r MySQLRepository) baseline(ctx context.Context, id int64) error {
 		return err
 	}
 	if !exists {
-		c, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
+		c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func (r MySQLRepository) baseline(ctx context.Context, id int64) error {
 			return err
 		}
 		changes := []HistoryChange{}
-		for _, field := range []string{"title", "description", "status", "prUrl"} {
+		for _, field := range []string{"title", "description", "status", "prUrls"} {
 			changes = append(changes, HistoryChange{Field: field, After: values[field]})
 		}
 		err = insertHistory(ctx, tx, id, HistoryEvent{Kind: "baseline", OccurredAt: time.Now().UTC(), Changes: changes, Note: "履歴機能導入時の状態です。導入前の変更順序や初期内容を示すものではありません。"}, "baseline-v1")

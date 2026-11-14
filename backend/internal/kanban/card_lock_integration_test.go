@@ -353,6 +353,11 @@ func TestCardWritersQueueOnTheAllColumnsLockMySQL(t *testing.T) {
 			_, err := r.UpdateCard(ctx, b.ID, CardPatch{ColumnID: &three})
 			return err
 		},
+		"UpdateCard rewriting the PR links": func(r MySQLRepository, _, b Card) error {
+			urls := []string{"https://github.com/o/r/pull/1", "https://github.com/o/r/pull/2"}
+			_, err := r.UpdateCard(ctx, b.ID, CardPatch{PRURLs: &urls})
+			return err
+		},
 		"DeleteCard": func(r MySQLRepository, _, b Card) error { return r.DeleteCard(ctx, b.ID) },
 		"ReorderCards": func(r MySQLRepository, _, _ Card) error {
 			_, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: reverseIDs(t, r, 1)}})

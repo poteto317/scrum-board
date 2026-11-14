@@ -34,7 +34,7 @@ describe('Board card drag start', () => {
           title: 'A',
           description: '',
           position: 0,
-          prUrl: '',
+          prUrls: [],
           createdAt: '',
           updatedAt: '',
         },

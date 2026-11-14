@@ -12,7 +12,7 @@ const initial: Card = {
   description: '本文',
   position: 0,
   backlogPosition: 0,
-  prUrl: '',
+  prUrls: [],
   createdAt: '',
   updatedAt: '',
 };

@@ -101,7 +101,13 @@ func listBacklogCards(ctx context.Context, tx *sql.Tx) ([]Card, error) {
 		}
 		cards = append(cards, c)
 	}
-	return cards, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = attachPRURLs(ctx, tx, cards); err != nil {
+		return nil, err
+	}
+	return cards, nil
 }
 
 func sameCardIDSet(existing, requested []int64) bool {

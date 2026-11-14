@@ -19,7 +19,7 @@ function card(id: number, position: number): Card {
     description: '',
     position,
     backlogPosition: position,
-    prUrl: '',
+    prUrls: [],
     createdAt: '',
     updatedAt: '',
   };

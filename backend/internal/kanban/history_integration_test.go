@@ -50,7 +50,7 @@ func TestMySQLHistory(t *testing.T) {
 		{Field: "title", After: after.Title},
 		{Field: "description", After: after.Description},
 		{Field: "status", After: status},
-		{Field: "prUrl", After: after.PRURL},
+		{Field: "prUrls", After: prURLsJSON(after.PRURLs)},
 	}
 	if !reflect.DeepEqual(baseline.Changes, wantBaseline) || baseline.Note == "" || baseline.OccurredAt.Year() < 2020 || baseline.EvidenceURL != "" {
 		t.Fatalf("baseline content: %+v want %+v", baseline, wantBaseline)
@@ -67,7 +67,8 @@ func TestMySQLHistory(t *testing.T) {
 		t.Fatalf("created restart: %+v %v", page, err)
 	}
 	title, desc, url, col := "changed", "changed body", "https://github.com/a/b/pull/1", int64(2)
-	if _, err = r.UpdateCard(ctx, c.ID, CardPatch{Title: &title, Description: &desc, PRURL: &url, ColumnID: &col}); err != nil {
+	urls := []string{url}
+	if _, err = r.UpdateCard(ctx, c.ID, CardPatch{Title: &title, Description: &desc, PRURLs: &urls, ColumnID: &col}); err != nil {
 		t.Fatal(err)
 	}
 	page, err = r.History(ctx, c.Number, 0)
@@ -464,7 +465,8 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 	ctx := context.Background()
 	c := newHistoryCard(t, r)
 	title, desc, url, col := "new title", "new body", "https://github.com/a/b/pull/9", int64(2)
-	if _, err := r.UpdateCard(ctx, c.ID, CardPatch{Title: &title, Description: &desc, PRURL: &url, ColumnID: &col}); err != nil {
+	urls := []string{url}
+	if _, err := r.UpdateCard(ctx, c.ID, CardPatch{Title: &title, Description: &desc, PRURLs: &urls, ColumnID: &col}); err != nil {
 		t.Fatal(err)
 	}
 	page, err := r.History(ctx, c.Number, 0)
@@ -475,7 +477,7 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 		{Field: "title", Before: "history subject", After: "new title"},
 		{Field: "description", Before: "body", After: "new body"},
 		{Field: "status", Before: "Todo", After: "Doing"},
-		{Field: "prUrl", Before: "", After: url},
+		{Field: "prUrls", Before: "[]", After: prURLsJSON(urls)},
 	}
 	if !reflect.DeepEqual(page.Events[0].Changes, want) || page.Events[0].Kind != "updated" {
 		t.Fatalf("changes: %+v", page.Events[0])

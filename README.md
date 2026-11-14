@@ -162,14 +162,14 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | --- | --- | --- |
 | GET | `/api/board` | `{columns: [...], cards: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
-| POST | `/api/cards` | `{title, description, columnId, prUrl?}`でカード追加 |
+| POST | `/api/cards` | `{title, description, columnId, prUrls?}`でカード追加 |
 | PUT | `/api/cards/order` | `{columns:[{columnId, cardIds}]}`でカードの列内並べ替え・列間移動（[詳細](docs/api.md#カードの並び替え列間移動)） |
 | POST | `/api/cards/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてカードを起票する)） |
 | GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
 | GET | `/api/cards/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
 | GET | `/api/cards/by-number/{number}` | タスク番号によるカード詳細 |
 | PATCH | `/api/cards/by-number/{number}/status` | `{status}`（列名）でステータスだけ変更 |
-| PATCH | `/api/cards/{id}` | `{title?, description?, columnId?, prUrl?}`で部分更新 |
+| PATCH | `/api/cards/{id}` | `{title?, description?, columnId?, prUrls?}`で部分更新 |
 | DELETE | `/api/cards/{id}` | 削除（204） |
 | GET | `/api/health` | 起動確認 |
 
@@ -254,9 +254,9 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 
 ### カードとGitHub PRの紐付け
 
-カード詳細のプロパティにGitHub PRのURLを入力すると自動保存され、そのPRへのリンクを残せます。1カードにつき1 URLで、空欄にすると紐付けを解除します。APIからも `prUrl` の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。
+カード詳細のプロパティでGitHub PRのURLを追加・削除できます。1カードに複数URLを登録でき（件数上限なし、登録順）、削除で解除します。APIからは `prUrls` 配列の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。
 
-URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します。既存のカード・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
+URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します（1カード複数行）。既存のカード・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。起動時に旧スキーマ（1カード1行）から自動移行します。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
 
 更新前のバックアップから復元する場合は、ダンプに含まれない補助表が取り残されないよう、復元の前にAPIを止めて補助表を削除してください。取り残された行は、復元で戻ったカードやその後に作ったカードと内部IDが重なり、別のカードにPR URLや番号が付くおそれがあります。更新後に保存したPR URLは失われ、番号は次のAPI起動時に作成日時・内部ID順で採番し直されます。
 
@@ -269,7 +269,7 @@ docker compose start api
 
 ### 詳細の自動保存
 
-カード詳細には保存ボタンがありません。タイトル・説明・GitHub PR URLは入力が600ms止まると自動保存し、入力し続けても最大2秒ごとに保存します。入力欄を離れたときとステータス変更は即時保存します。日本語変換中の本文は確定まで送信しません。
+カード詳細には保存ボタンがありません。タイトル・説明は入力が600ms止まると自動保存し、入力し続けても最大2秒ごとに保存します。入力欄を離れたときとステータス変更は即時保存します。GitHub PRの追加・削除は操作のたびに即時保存します。日本語変換中の本文は確定まで送信しません。
 
 保存中も編集を続けられ、変更した有効な項目だけを順番にPATCHします。不正入力はそのまま残し、他の有効な項目は保存します。通信失敗では入力を保持し「再試行」を表示します。アプリ内の移動では保存完了を待ち、不正入力や失敗が残れば破棄確認します。リロード・タブ終了でも未保存時はブラウザーの標準確認を使います。未保存の入力をオフラインで永続化する機能は含みません。
 
