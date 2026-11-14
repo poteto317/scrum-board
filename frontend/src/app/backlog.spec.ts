@@ -1,6 +1,6 @@
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Backlog } from './backlog';
@@ -231,6 +231,10 @@ describe('Backlog reordering', () => {
     f.componentInstance.cards.set([cards[0]]);
     f.detectChanges();
     expect(f.componentInstance.canReorder()).toBe(false);
+    const singleZone = f.nativeElement.querySelector('.backlog-drag-zone') as HTMLElement;
+    const singleHandle = f.nativeElement.querySelector('.backlog-drag-handle') as HTMLButtonElement;
+    expect(singleZone.getAttribute('draggable')).toBeNull();
+    expect(singleHandle.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('rolls back optimistic order on save failure and shows reload on conflict', async () => {
@@ -330,5 +334,36 @@ describe('Backlog reordering', () => {
       proto.showModal = origShowModal;
       proto.close = origClose;
     }
+  });
+
+  it('disables the add-card button and blocks openCard when initial load fails or columns are empty', async () => {
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => throwError(() => ({ status: 500, error: { message: '失敗' } })),
+            board: () => throwError(() => ({ status: 500, error: { message: '失敗' } })),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const addButton = f.nativeElement.querySelector(
+      '.page-heading button.primary',
+    ) as HTMLButtonElement;
+    expect(addButton.disabled).toBe(true);
+    f.componentInstance.openCard();
+    expect(f.componentInstance.modal()).toBeNull();
+
+    f.componentInstance.error.set('');
+    f.detectChanges();
+    expect(addButton.disabled).toBe(true);
+    f.componentInstance.openCard();
+    expect(f.componentInstance.modal()).toBeNull();
   });
 });
