@@ -232,6 +232,23 @@ describe('side field preservation', () => {
     expect(edit.card()?.assignee).toBe('Claude');
     TestBed.resetTestingModule();
   });
+  it('keeps a set-then-cleared assignee over a stale in-flight form response', () => {
+    const response = new Subject<Card>();
+    const api = {
+      updateCard: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(CardAutosave);
+    edit.reset(initial);
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    edit.applyAssigneeSave({ assignee: 'Cursor', updatedAt: 't1' });
+    edit.applyAssigneeSave({ assignee: '', updatedAt: 't2' });
+    response.next({ ...initial, title: '編集', assignee: 'Cursor' });
+    response.complete();
+    expect(edit.card()?.assignee).toBe('');
+    TestBed.resetTestingModule();
+  });
 });
 
 describe('server changes to untouched fields', () => {
