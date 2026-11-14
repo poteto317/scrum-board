@@ -1,6 +1,6 @@
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
@@ -55,6 +55,7 @@ describe('Board task numbers', () => {
                     columnId: 1,
                     title: 'Task',
                     description: '',
+                    position: 0,
                     createdAt: '',
                     updatedAt: '',
                   },
@@ -67,9 +68,9 @@ describe('Board task numbers', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    const link: HTMLAnchorElement = f.nativeElement.querySelector('.task-card');
+    const link: HTMLElement = f.nativeElement.querySelector('.task-card');
     expect(link.textContent).toContain('TASK-002');
-    expect(link.getAttribute('href')).toBe('/cards/2');
+    expect(link.getAttribute('role')).toBe('link');
   });
 });
 
@@ -83,6 +84,7 @@ function sampleBoard(columns: Column[]): BoardData {
         columnId: columns[0].id,
         title: 'Card 1',
         description: '',
+        position: 0,
         prUrl: '',
         createdAt: '',
         updatedAt: '',
@@ -497,6 +499,11 @@ describe('Board column reordering', () => {
       this.open = false;
     };
     try {
+      f.componentInstance.openCard(1);
+      f.detectChanges();
+      const titleInput = f.nativeElement.querySelector('#card-title') as HTMLInputElement;
+      titleInput.focus();
+
       const handles = f.nativeElement.querySelectorAll(
         '.column-drag-handle',
       ) as NodeListOf<HTMLButtonElement>;
@@ -505,10 +512,6 @@ describe('Board column reordering', () => {
         new KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true }),
       );
       f.detectChanges();
-
-      f.componentInstance.openCard(1);
-      f.detectChanges();
-      const titleInput = f.nativeElement.querySelector('#card-title') as HTMLInputElement;
       titleInput.focus();
 
       pending.next({ columns: [cols[0], cols[1], cols[3], cols[2]] });
@@ -523,5 +526,242 @@ describe('Board column reordering', () => {
       proto.showModal = origShowModal;
       proto.close = origClose;
     }
+  });
+});
+
+describe('Board card reordering', () => {
+  function twoCardBoard(): BoardData {
+    return {
+      columns: makeColumns().slice(0, 2),
+      cards: [
+        {
+          id: 1,
+          number: 1,
+          columnId: 1,
+          title: 'A',
+          description: '',
+          position: 0,
+          prUrl: '',
+          createdAt: '',
+          updatedAt: '',
+        },
+        {
+          id: 2,
+          number: 2,
+          columnId: 1,
+          title: 'B',
+          description: '',
+          position: 1,
+          prUrl: '',
+          createdAt: '',
+          updatedAt: '',
+        },
+        {
+          id: 3,
+          number: 3,
+          columnId: 2,
+          title: 'C',
+          description: '',
+          position: 0,
+          prUrl: '',
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+    };
+  }
+
+  it('reorders within a column via drop and persists', async () => {
+    const reorderCards = vi.fn(() =>
+      of({
+        cards: [
+          { ...twoCardBoard().cards[1], position: 0 },
+          { ...twoCardBoard().cards[0], position: 1 },
+          twoCardBoard().cards[2],
+        ],
+      }),
+    );
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-1' },
+        previousIndex: 0,
+        currentIndex: 1,
+        item: { data: twoCardBoard().cards[0] },
+      } as never,
+      1,
+    );
+    expect(reorderCards).toHaveBeenCalledWith([{ columnId: 1, cardIds: [2, 1] }]);
+  });
+
+  it('skips API for no-op drops and rolls back on failure', async () => {
+    const err = Object.assign(new Error('conflict'), { status: 409 });
+    const reorderCards = vi.fn(() => throwError(() => err));
+    const initial = twoCardBoard();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(initial),
+            reorderCards,
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-1' },
+        previousIndex: 0,
+        currentIndex: 0,
+        item: { data: initial.cards[0] },
+      } as never,
+      1,
+    );
+    expect(reorderCards).not.toHaveBeenCalled();
+
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-2' },
+        previousIndex: 0,
+        currentIndex: 0,
+        item: { data: initial.cards[0] },
+      } as never,
+      2,
+    );
+    expect(reorderCards).toHaveBeenCalled();
+    expect(f.componentInstance.reorderConflict()).toBe(true);
+    expect(f.componentInstance.data().cards.map((c) => c.columnId)).toEqual(
+      initial.cards.map((c) => c.columnId),
+    );
+  });
+
+  it('moves within a column with ArrowDown and focuses the card', async () => {
+    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(twoCardBoard()), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardKeydown(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }),
+      1,
+      0,
+    );
+    expect(reorderCards).toHaveBeenCalledWith([{ columnId: 1, cardIds: [2, 1] }]);
+  });
+
+  it('drops into an empty column', async () => {
+    const boardData: BoardData = {
+      columns: makeColumns().slice(0, 2),
+      cards: [
+        {
+          id: 1,
+          number: 1,
+          columnId: 1,
+          title: 'A',
+          description: '',
+          position: 0,
+          prUrl: '',
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+    };
+    const reorderCards = vi.fn(() =>
+      of({ cards: [{ ...boardData.cards[0], columnId: 2, position: 0 }] }),
+    );
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: { board: () => of(boardData), reorderCards, reorderColumns: vi.fn() },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onCardDrop(
+      {
+        previousContainer: { id: 'card-list-1' },
+        container: { id: 'card-list-2' },
+        previousIndex: 0,
+        currentIndex: 0,
+        item: { data: boardData.cards[0] },
+      } as never,
+      2,
+    );
+    expect(reorderCards).toHaveBeenCalledWith([
+      { columnId: 1, cardIds: [] },
+      { columnId: 2, cardIds: [1] },
+    ]);
+  });
+
+  it('opens detail on short click but not after a long drag', async () => {
+    const navigate = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderCards: vi.fn(),
+            reorderColumns: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const board = f.componentInstance;
+    (board as unknown as { router: { navigate: typeof navigate } }).router = {
+      navigate,
+    } as never;
+    const card = twoCardBoard().cards[0];
+    board.onCardPointerDown({ clientX: 10, clientY: 10 } as PointerEvent);
+    board.onCardClick(new Event('click'), card);
+    expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
+
+    navigate.mockClear();
+    board.onCardPointerDown({ clientX: 10, clientY: 10 } as PointerEvent);
+    board.onCardDragMoved({ pointerPosition: { x: 30, y: 10 } });
+    const ev = new Event('click', { cancelable: true });
+    board.onCardClick(ev, card);
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

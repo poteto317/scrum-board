@@ -12,10 +12,20 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
+import { CDK_DRAG_CONFIG, CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { finalize } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
+import {
+  affectedColumnIds,
+  applyCardDrop,
+  buildCardOrderPayload,
+  CARD_DRAG_THRESHOLD_PX,
+  columnIdFromDropListId,
+  dragExceededThreshold,
+  dropListIdForColumn,
+} from './card-order';
 import {
   computeAutoScrollDelta,
   computeDropSlot,
@@ -23,20 +33,26 @@ import {
   targetColumnIndex,
 } from './column-order';
 import { textLimit } from './form-validation';
-import { BoardData, Column } from './models';
+import { BoardData, Card, Column } from './models';
 
 @Component({
   selector: 'app-board',
-  imports: [ReactiveFormsModule, RouterLink, Modal],
+  imports: [ReactiveFormsModule, Modal, CdkDropList, CdkDrag],
   templateUrl: './board.html',
   styleUrl: './board.css',
+  providers: [
+    { provide: CDK_DRAG_CONFIG, useValue: { dragStartThreshold: CARD_DRAG_THRESHOLD_PX } },
+  ],
 })
 export class Board implements OnInit {
   private readonly api = inject(Api);
+  private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly boardScroll = viewChild<ElementRef<HTMLElement>>('boardScroll');
   private readonly columnsContainer = viewChild<ElementRef<HTMLElement>>('columnsContainer');
+  private cardPointerStart: { x: number; y: number } | null = null;
+  private cardDragMoved = false;
 
   readonly data = signal<BoardData>({ columns: [], cards: [] });
   readonly loading = signal(true);
@@ -58,6 +74,10 @@ export class Board implements OnInit {
       this.modal() === null &&
       this.data().columns.length > 1,
   );
+  readonly canReorderCards = computed(
+    () => !this.loading() && !this.saving() && !this.reordering() && this.modal() === null,
+  );
+  readonly dropListIds = computed(() => this.data().columns.map((c) => this.dropListId(c.id)));
   readonly columnForm = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [textLimit(60, true)] }),
   });
@@ -70,8 +90,17 @@ export class Board implements OnInit {
     const groups = new Map<number, BoardData['cards']>();
     for (const column of this.data().columns) groups.set(column.id, []);
     for (const card of this.data().cards) groups.get(card.columnId)?.push(card);
+    for (const [, list] of groups) {
+      list.sort((a, b) => a.position - b.position || a.id - b.id);
+    }
     return groups;
   });
+  dropListId(columnId: number) {
+    return dropListIdForColumn(columnId);
+  }
+  connectedLists(columnId: number) {
+    return this.dropListIds().filter((id) => id !== dropListIdForColumn(columnId));
+  }
   readonly done = computed(() => {
     const id = this.data().columns.find((c) => c.name === 'Done')?.id;
     return this.data().cards.filter((c) => c.columnId === id).length;
@@ -100,6 +129,7 @@ export class Board implements OnInit {
   }
 
   openCard(columnId: number) {
+    if (this.reordering()) return;
     this.cardForm.reset({ title: '', description: '', columnId });
     this.formError.set('');
     this.modal.set('card');
@@ -141,7 +171,7 @@ export class Board implements OnInit {
   }
 
   addCard() {
-    if (this.cardForm.invalid || this.saving()) {
+    if (this.cardForm.invalid || this.saving() || this.reordering()) {
       this.cardForm.markAllAsTouched();
       return;
     }
@@ -164,6 +194,149 @@ export class Board implements OnInit {
         },
         error: (e) => this.formError.set(errorMessage(e)),
       });
+  }
+
+  onCardPointerDown(event: PointerEvent) {
+    this.cardPointerStart = { x: event.clientX, y: event.clientY };
+    this.cardDragMoved = false;
+  }
+
+  onCardDragMoved(event: { pointerPosition: { x: number; y: number } }) {
+    const start = this.cardPointerStart;
+    if (start && !this.cardDragMoved) {
+      if (
+        dragExceededThreshold(event.pointerPosition.x - start.x, event.pointerPosition.y - start.y)
+      ) {
+        this.cardDragMoved = true;
+      }
+    }
+    const scrollEl = this.boardScroll()?.nativeElement;
+    if (scrollEl) {
+      const scrollRect = scrollEl.getBoundingClientRect();
+      const delta = computeAutoScrollDelta(
+        event.pointerPosition.x,
+        scrollRect.left,
+        scrollRect.right,
+      );
+      if (delta !== 0) scrollEl.scrollLeft += delta;
+    }
+    const hit =
+      typeof document.elementFromPoint === 'function'
+        ? document.elementFromPoint(event.pointerPosition.x, event.pointerPosition.y)
+        : null;
+    const listEl = hit?.closest('.card-list') as HTMLElement | null;
+    if (listEl) {
+      const listRect = listEl.getBoundingClientRect();
+      const vDelta = computeAutoScrollDelta(event.pointerPosition.y, listRect.top, listRect.bottom);
+      if (vDelta !== 0) listEl.scrollTop += vDelta;
+    }
+  }
+
+  onCardDragEnded() {
+    this.cardPointerStart = null;
+    // Keep the flag through the synthetic click that follows a drag, then clear for keyboard.
+    if (this.cardDragMoved) {
+      queueMicrotask(() => {
+        this.cardDragMoved = false;
+      });
+    }
+  }
+
+  onCardClick(event: Event, card: Card) {
+    if (this.cardDragMoved) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.cardDragMoved = false;
+      return;
+    }
+    void this.router.navigate(['/cards', card.number]);
+  }
+
+  onCardKeydown(event: KeyboardEvent, columnId: number, index: number) {
+    const list = this.grouped().get(columnId) ?? [];
+    const card = list[index];
+    if ((event.key === 'Enter' || event.key === ' ') && card && !this.cardDragMoved) {
+      event.preventDefault();
+      void this.router.navigate(['/cards', card.number]);
+      return;
+    }
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    if (!this.canReorderCards()) return;
+    const toIndex = event.key === 'ArrowUp' ? index - 1 : index + 1;
+    if (toIndex < 0 || toIndex >= list.length) return;
+    event.preventDefault();
+    const movedId = list[index].id;
+    const next = applyCardDrop(this.data().cards, columnId, columnId, index, toIndex);
+    if (!next) return;
+    this.persistCardOrder(next, [columnId], `${list[index].title}を列内で移動しました`, movedId);
+  }
+
+  onCardDrop(event: CdkDragDrop<Card[]>, columnId: number) {
+    if (!this.canReorderCards()) return;
+    const previousColumnId = columnIdFromDropListId(event.previousContainer.id);
+    if (previousColumnId === null) return;
+    const next = applyCardDrop(
+      this.data().cards,
+      previousColumnId,
+      columnId,
+      event.previousIndex,
+      event.currentIndex,
+    );
+    if (!next) return;
+    const moved = event.item.data as Card | undefined;
+    const label = moved?.title ? `${moved.title}を移動しました` : 'カードを移動しました';
+    this.persistCardOrder(next, affectedColumnIds(previousColumnId, columnId), label);
+  }
+
+  private persistCardOrder(
+    nextCards: Card[],
+    columnIds: number[],
+    announcement: string,
+    focusCardId?: number,
+  ) {
+    if (this.reordering()) return;
+    const previous = this.data().cards;
+    const restoreFocus = () => {
+      if (focusCardId !== undefined) this.focusCardAfterRender(focusCardId);
+    };
+    this.reordering.set(true);
+    this.reorderError.set('');
+    this.reorderConflict.set(false);
+    this.data.update((d) => ({ ...d, cards: nextCards }));
+    restoreFocus();
+    this.api
+      .reorderCards(buildCardOrderPayload(nextCards, columnIds))
+      .pipe(finalize(() => this.reordering.set(false)))
+      .subscribe({
+        next: (res) => {
+          this.data.update((d) => ({ ...d, cards: res.cards }));
+          this.reorderAnnouncement.set(announcement);
+          restoreFocus();
+        },
+        error: (e) => {
+          this.data.update((d) => ({ ...d, cards: previous }));
+          this.reorderError.set(errorMessage(e));
+          this.reorderConflict.set((e as { status?: number } | null)?.status === 409);
+          this.reorderAnnouncement.set('カードの移動を保存できませんでした');
+          restoreFocus();
+        },
+      });
+  }
+
+  private focusCardAfterRender(cardId: number) {
+    if (this.destroyRef.destroyed || this.modal() !== null) return;
+    afterNextRender(
+      () => {
+        if (this.destroyRef.destroyed || this.modal() !== null) return;
+        const el = this.columnsContainer()?.nativeElement?.querySelector(
+          `[data-card-id="${cardId}"]`,
+        ) as HTMLElement | null;
+        if (!el) return;
+        el.focus();
+        el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      },
+      { injector: this.injector },
+    );
   }
 
   onColumnDragStart(event: DragEvent, column: Column, columnEl: HTMLElement) {

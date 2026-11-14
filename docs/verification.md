@@ -68,6 +68,13 @@
 - `PUT /api/columns/order` と UI のドラッグ&ドロップ / キーボード並び替え
 - 400 / 409 / 永続化、並び替え後の列追加、専用 Compose での smoke
 
+### カードの並び替え・列間移動
+
+- `PUT /api/cards/order` と CDK ドラッグ&ドロップ（列内・列間）/ 上下キー
+- 短いドラッグ距離では詳細へ遷移、長いドラッグでは DnD
+- 400 / 409 / 永続化、詳細ステータス移動が末尾、再起動で DnD 順が消えないこと
+- `go test` / `npm test -- --watch=false` / `npm run build`
+
 ### 開発用画面（web-dev / 自動反映）
 
 - `./scripts/dev-web.sh`（または `stop web` + `--profile dev up -d web-dev`）で `:4200` に `ng serve` が起動すること

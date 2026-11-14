@@ -159,11 +159,18 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 72px;
+  max-height: min(60vh, 640px);
+  overflow-y: auto;
+}
+.card-list.cdk-drop-list-dragging .task-card:not(.cdk-drag-placeholder) {
+  transition: transform 200ms ease;
 }
 .task-card {
   display: block;
   text-decoration: none;
   color: inherit;
+  cursor: grab;
   background: var(--paper);
   border: 1px solid #e1e5dc;
   border-radius: 8px;
@@ -174,6 +181,19 @@ h1 {
     border-color 0.15s,
     box-shadow 0.15s;
   overflow-wrap: anywhere;
+}
+.task-card:focus-visible {
+  outline: 2px solid #5b7c5b;
+  outline-offset: 2px;
+}
+.task-card.cdk-drag-preview {
+  box-shadow: 0 8px 20px #25332122;
+}
+.task-card.cdk-drag-placeholder {
+  opacity: 0.4;
+}
+.task-card.cdk-drag-animating {
+  transition: transform 200ms ease;
 }
 .task-card:hover {
   transform: translateY(-2px);

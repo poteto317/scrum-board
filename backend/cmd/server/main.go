@@ -56,7 +56,10 @@ func run() error {
 	}
 	repo := kanban.MySQLRepository{DB: db}
 	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	err = repo.InitializePRLinks(migrationCtx)
+	err = repo.InitializeCardPositions(migrationCtx)
+	if err == nil {
+		err = repo.InitializePRLinks(migrationCtx)
+	}
 	if err == nil {
 		err = repo.InitializeNumbers(migrationCtx)
 	}

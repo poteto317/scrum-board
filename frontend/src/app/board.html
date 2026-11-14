@@ -90,15 +90,42 @@
                 class="icon-button"
                 draggable="false"
                 (click)="openCard(column.id)"
+                [disabled]="reordering()"
                 [attr.aria-label]="column.name + 'にカードを追加'"
               >
                 ＋
               </button>
             </header>
-            <div class="card-list">
-              @for (card of grouped().get(column.id) || []; track card.id) {
-                <a class="task-card" [routerLink]="['/cards', card.number]"
-                  ><span class="card-topline"
+            <div
+              class="card-list"
+              cdkDropList
+              [id]="dropListId(column.id)"
+              [cdkDropListData]="grouped().get(column.id) || []"
+              [cdkDropListConnectedTo]="connectedLists(column.id)"
+              [cdkDropListDisabled]="!canReorderCards()"
+              [cdkDropListAutoScrollDisabled]="true"
+              (cdkDropListDropped)="onCardDrop($event, column.id)"
+            >
+              @for (card of grouped().get(column.id) || []; track card.id; let cardIndex = $index) {
+                <div
+                  class="task-card"
+                  role="link"
+                  tabindex="0"
+                  cdkDrag
+                  [attr.data-card-id]="card.id"
+                  [cdkDragData]="card"
+                  [cdkDragDisabled]="!canReorderCards()"
+                  [attr.aria-disabled]="!canReorderCards() ? 'true' : null"
+                  [attr.aria-label]="
+                    card.title + '（ドラッグで移動、クリックで詳細、上下矢印で列内移動）'
+                  "
+                  (pointerdown)="onCardPointerDown($event)"
+                  (cdkDragMoved)="onCardDragMoved($event)"
+                  (cdkDragEnded)="onCardDragEnded()"
+                  (click)="onCardClick($event, card)"
+                  (keydown)="onCardKeydown($event, column.id, cardIndex)"
+                >
+                  <span class="card-topline"
                     ><span class="card-id">TASK-{{ card.number.toString().padStart(3, '0') }}</span
                     ><span class="card-arrow" aria-hidden="true">↗</span></span
                   >
@@ -111,8 +138,8 @@
                     ><span class="detail-hint"
                       >詳細を開く <span aria-hidden="true">→</span></span
                     ></span
-                  ></a
-                >
+                  >
+                </div>
               } @empty {
                 <div class="empty-column">
                   <span class="empty-symbol" aria-hidden="true">{{
@@ -127,7 +154,7 @@
                 </div>
               }
             </div>
-            <button class="add-card" (click)="openCard(column.id)">
+            <button class="add-card" (click)="openCard(column.id)" [disabled]="reordering()">
               <span aria-hidden="true">＋</span> アイテムを追加
             </button>
           </section>

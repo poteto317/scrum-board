@@ -197,3 +197,22 @@ curl --fail-with-body --request PUT \
 - HTTP 400: `columnIds` 未指定・`null`・空配列、0以下のID、重複ID、不正JSON、未知のフィールド。
 - HTTP 409: DBに存在する列の集合と一致しない場合（不足または存在しない列IDの指定）。
 - HTTP 500: DB更新に失敗した場合（トランザクションはロールバックされます）。
+
+# カードの並び替え・列間移動
+
+`PUT /api/cards/order` で、影響する列ごとのカード順を一括更新します。リクエストには、対象列に現在属するカード ID の完全な集合を新しい順で含めます。列間移動では、ソース列とデスト列の両方を同じリクエストに含めます。
+
+```sh
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"columns":[{"columnId":1,"cardIds":[2,1]},{"columnId":2,"cardIds":[3]}]}' \
+  http://127.0.0.1:4200/api/cards/order
+```
+
+- 成功時は HTTP 200 で `{"cards":[...]}`（ボードと同じく `position`・`id` 昇順の**全カード**）を返します。各カードに `position` が含まれます。`GET /api/board` のカード順もこれに従います。
+- 空配列の `cardIds` は「その列にカードが0枚」を表します。
+- 列（ステータス）が変わったカードだけ履歴に `updated`（status 変更）が追加されます。列内の並び替えのみでは履歴は増えません。
+- カードの新規作成、および詳細画面や `PATCH .../status` による列変更では、移動先列の末尾（`MAX(position)+1`）に配置されます。
+- HTTP 400: `columns` 未指定・`null`・空配列、`columnId` の重複や 0 以下、`cardIds` が `null`、カード ID の重複や 0 以下、不正 JSON、未知のフィールド。
+- HTTP 409: 指定列に現在属するカード集合と `cardIds` の和集合が一致しない場合、または存在しない列・カード ID。
+- HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。

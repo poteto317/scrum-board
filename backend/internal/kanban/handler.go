@@ -30,6 +30,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/cards/by-number/{number}/history", h.history)
 	mux.HandleFunc("POST /api/columns", h.createColumn)
 	mux.HandleFunc("PUT /api/columns/order", h.reorderColumns)
+	mux.HandleFunc("PUT /api/cards/order", h.reorderCards)
 	mux.HandleFunc("POST /api/cards", h.createCard)
 	mux.HandleFunc("POST /api/cards/refined", h.createRefinedCard)
 	mux.HandleFunc("GET /api/cards/{id}", h.getCard)
@@ -112,6 +113,25 @@ func (h handler) reorderColumns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, 200, map[string][]Column{"columns": cols})
+}
+
+func (h handler) reorderCards(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Columns []CardColumnOrder `json:"columns"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if err := validateCardOrder(in.Columns); err != nil {
+		fail(w, err)
+		return
+	}
+	cards, err := h.repo.ReorderCards(r.Context(), in.Columns)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, 200, map[string][]Card{"cards": cards})
 }
 func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
 	var in CardInput

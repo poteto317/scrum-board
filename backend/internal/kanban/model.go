@@ -7,11 +7,13 @@ import (
 )
 
 var (
-	ErrNotFound       = errors.New("not found")
-	ErrColumn         = errors.New("unknown column")
-	ErrDuplicate      = errors.New("duplicate column")
-	ErrColumnOrder    = errors.New("invalid column order")
-	ErrColumnMismatch = errors.New("column set mismatch")
+	ErrNotFound          = errors.New("not found")
+	ErrColumn            = errors.New("unknown column")
+	ErrDuplicate         = errors.New("duplicate column")
+	ErrColumnOrder       = errors.New("invalid column order")
+	ErrColumnMismatch    = errors.New("column set mismatch")
+	ErrCardOrder         = errors.New("invalid card order")
+	ErrCardOrderMismatch = errors.New("card set mismatch")
 )
 
 type Column struct {
@@ -25,9 +27,15 @@ type Card struct {
 	ColumnID    int64     `json:"columnId"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
+	Position    int       `json:"position"`
 	PRURL       string    `json:"prUrl"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type CardColumnOrder struct {
+	ColumnID int64   `json:"columnId"`
+	CardIDs  []int64 `json:"cardIds"`
 }
 type Board struct {
 	Columns []Column `json:"columns"`
@@ -58,4 +66,5 @@ type Repository interface {
 	DeleteCard(context.Context, int64) error
 	CreateColumn(context.Context, string) (Column, error)
 	ReorderColumns(context.Context, []int64) ([]Column, error)
+	ReorderCards(context.Context, []CardColumnOrder) ([]Card, error)
 }

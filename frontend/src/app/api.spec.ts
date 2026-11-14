@@ -59,6 +59,20 @@ describe('Api', () => {
       .flush({ message: '競合' }, { status: 409, statusText: 'Conflict' });
     expect(status).toBe(409);
   });
+  it('sends PUT /api/cards/order with column cardIds', () => {
+    let result: unknown;
+    const columns = [
+      { columnId: 1, cardIds: [2, 1] },
+      { columnId: 2, cardIds: [3] },
+    ];
+    api.reorderCards(columns).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/cards/order');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ columns });
+    const payload = { cards: [{ id: 2, number: 2, columnId: 1, title: 'x', position: 0 }] };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
 });
 
 it('requests history by public number and an optional event cursor', () => {
