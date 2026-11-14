@@ -142,7 +142,7 @@
   - 空列: `@empty` のプレースホルダを残しつつドロップ可能な最小高さを確保（空でも `cdkDropList` が有効）
   - `cdkDropListDropped` → 純粋関数で next cards → 楽観更新 → `reorderCards` → 成功で全 cards 置換 / 失敗でロールバック＋バナー（列 DnD と同じ `reordering` / `reorderError` / `reorderConflict` を共用して二重送信抑止）
   - 保存中はカード DnD・列 DnD・列追加を抑止。カードの本文リンクには `aria-disabled` を付けず（遷移はできる）、並べ替え不可の間は `aria-describedby` の説明文を切り替える。キーボード移動の結果は既存 `aria-live`（`reorderAnnouncement`）へ
-  - 端での横スクロール追従（`L-680`）をカードドラッグ中も有効化。列内が縦に長い場合は列の `.card-list`（または列スクロール親）の縦自動スクロールも有効にする（CDK `autoScrollStep` / scrollable parents）
+  - 端での横スクロール追従（`L-680`）をカードドラッグ中も有効化。列内が縦に長い場合は、ポインターの下の `.card-list` の縦スクロールも補正する。CDK の自動スクロールは `cdkDropListAutoScrollDisabled` で止め（リスト自身のスクロールと競合するため）、`(cdkDragMoved)` のたびと、ドラッグ中の 50ms のタイマー（`CARD_AUTO_SCROLL_INTERVAL_MS`。端に置いたまま止まっても続く）で自前に補正する。タイマーは `(cdkDragStarted)` で始め、`(cdkDragReleased)`（マウスを離した時点。CDK の終了報告は最大 300ms 遅れる）・`(cdkDragEnded)`・ドロップ・画面の破棄で止める
 
 - [ ] **Step 7: RED/GREEN** — `board.spec.ts`:
   - 同一列・列間ドロップ、no-op で API 非送信
