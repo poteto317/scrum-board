@@ -34,6 +34,7 @@ export class CardAutosave {
   private composing = new Set<Field>();
   private retryFields = new Set<Field>();
   private edits: Record<Field, number> = { title: 0, description: 0, columnId: 0 };
+  private sideDirty = new Set<SideField>();
   private waiters: ((saved: boolean) => void)[] = [];
 
   constructor() {
@@ -52,6 +53,7 @@ export class CardAutosave {
     this.card.set(card);
     this.composing.clear();
     this.retryFields.clear();
+    this.sideDirty.clear();
     this.error.set('');
     this.changed.set(false);
     if (card)
@@ -74,6 +76,7 @@ export class CardAutosave {
     };
     for (const key of sideFields) {
       if (updated[key] === undefined) continue;
+      this.sideDirty.add(key);
       if (key === 'prUrls') next.prUrls = [...(updated.prUrls ?? [])];
       else next[key] = (updated[key] as string) ?? '';
     }
@@ -160,19 +163,16 @@ export class CardAutosave {
               control.setValue(card[field], { emitEvent: false });
           }
         }
-        // Prefer local side fields only if they changed during this request (concurrent side-save).
-        // Otherwise adopt the server value so agent/other updates are not discarded (L-781).
+        // Prefer local side fields touched during this request (including set→clear).
+        // Untouched fields adopt the server value so agent updates are kept (L-781).
         const local = this.card();
         const merged: Card = { ...card, prUrls: [...(card.prUrls ?? [])] };
         if (local) {
           for (const key of sideFields) {
-            const changedDuringFlight =
-              key === 'prUrls'
-                ? JSON.stringify(local.prUrls ?? []) !== JSON.stringify(confirmed.prUrls ?? [])
-                : local[key] !== confirmed[key];
-            if (!changedDuringFlight) continue;
+            if (!this.sideDirty.has(key)) continue;
             if (key === 'prUrls') merged.prUrls = [...(local.prUrls ?? [])];
             else merged[key] = local[key];
+            this.sideDirty.delete(key);
           }
         }
         this.card.set(merged);
