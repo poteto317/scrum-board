@@ -36,23 +36,47 @@ func validHistoricalRecord(v HistoricalRecord, now time.Time) bool {
 	}
 	seen := map[string]bool{}
 	for _, c := range v.Changes {
-		limit := 0
-		switch c.Field {
-		case "title":
-			limit = 200
-		case "description":
-			limit = 10000
-		case "status":
-			limit = 60
-		case "prUrl":
-			limit = 2048
-		default:
-			return false
-		}
-		if seen[c.Field] || utf8.RuneCountInString(c.Before) > limit || utf8.RuneCountInString(c.After) > limit {
+		if seen[c.Field] {
 			return false
 		}
 		seen[c.Field] = true
+		switch c.Field {
+		case "title":
+			if utf8.RuneCountInString(c.Before) > 200 || utf8.RuneCountInString(c.After) > 200 {
+				return false
+			}
+		case "description":
+			if utf8.RuneCountInString(c.Before) > 10000 || utf8.RuneCountInString(c.After) > 10000 {
+				return false
+			}
+		case "status":
+			if utf8.RuneCountInString(c.Before) > 60 || utf8.RuneCountInString(c.After) > 60 {
+				return false
+			}
+		case "prUrls":
+			if !validImportedPRURLs(c.Before) || !validImportedPRURLs(c.After) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validImportedPRURLs(raw string) bool {
+	if len(raw) > 65536 {
+		return false
+	}
+	var urls []any
+	if err := json.Unmarshal([]byte(raw), &urls); err != nil {
+		return false
+	}
+	for _, item := range urls {
+		s, ok := item.(string)
+		if !ok || s == "" || !validPRURL(s) {
+			return false
+		}
 	}
 	return true
 }

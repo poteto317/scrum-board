@@ -36,7 +36,20 @@ export class CardHistory implements OnChanges {
     description: '説明',
     status: 'ステータス',
     prUrl: 'GitHub PR',
+    prUrls: 'GitHub PR',
   };
+  prUrlList(value: string): string[] | null {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === 'string')) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+  safePr(value: string) {
+    return !!value && validPrUrl(value) && value === value.trim();
+  }
   readonly kinds: Record<string, string> = {
     created: '作成',
     updated: '変更',

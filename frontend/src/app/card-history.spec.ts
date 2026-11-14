@@ -256,3 +256,38 @@ it('shows an empty placeholder for blank values and the empty state', () => {
   const none = setup({ history: vi.fn(() => of({ events: [], nextBefore: 0 })) });
   expect(none.nativeElement.textContent).toContain('履歴はまだありません');
 });
+it('renders prUrls JSON arrays as links and falls back for invalid JSON', () => {
+  const url = 'https://github.com/a/b/pull/1';
+  const linked = setup({
+    history: vi.fn(() =>
+      of({
+        events: [
+          {
+            ...event,
+            changes: [{ field: 'prUrls', before: '[]', after: JSON.stringify([url]) }],
+          },
+        ],
+        nextBefore: 0,
+      }),
+    ),
+  });
+  const anchor = linked.nativeElement.querySelector('.pr-history a');
+  expect(anchor?.getAttribute('href')).toBe(url);
+  expect(linked.nativeElement.textContent).toContain('GitHub PR');
+  TestBed.resetTestingModule();
+  const invalid = setup({
+    history: vi.fn(() =>
+      of({
+        events: [
+          {
+            ...event,
+            changes: [{ field: 'prUrls', before: '[]', after: 'not-json' }],
+          },
+        ],
+        nextBefore: 0,
+      }),
+    ),
+  });
+  expect(invalid.nativeElement.querySelector('.pr-history')).toBeNull();
+  expect(invalid.nativeElement.textContent).toContain('not-json');
+});

@@ -85,29 +85,49 @@
           </select>
           <p class="field-note">ステータスを選ぶと自動保存され、<br />ボード上の列が変わります。</p>
           <label for="detail-pr-url">GitHub PR <span class="optional">任意</span></label>
-          <input
-            id="detail-pr-url"
-            type="url"
-            formControlName="prUrl"
-            (blur)="autosave.flush()"
-            (compositionstart)="autosave.composition('prUrl', true)"
-            (compositionend)="autosave.composition('prUrl', false)"
-            placeholder="https://github.com/owner/repo/pull/1"
-            aria-describedby="pr-url-note pr-url-error"
-          />
+          <div class="pr-add">
+            <input
+              id="detail-pr-url"
+              type="url"
+              [formControl]="prLinks.draft"
+              placeholder="https://github.com/owner/repo/pull/1"
+              aria-describedby="pr-url-note pr-url-error"
+              (keydown.enter)="$event.preventDefault(); prLinks.add()"
+            />
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="prLinks.saving() || !card()"
+              (click)="prLinks.add()"
+            >
+              追加
+            </button>
+          </div>
           <p id="pr-url-note" class="field-note">
-            対応するPRのURLを自動保存します。空欄にすると紐付けを解除します。
+            URLを追加して紐付けます。削除で解除できます。複数可（登録順）。
           </p>
           <p id="pr-url-error" class="form-error">
-            @if (form.controls.prUrl.invalid && form.controls.prUrl.touched) {
+            @if (prLinks.draft.invalid && prLinks.draft.touched && prLinks.draft.value.trim()) {
               GitHub PRのURLを入力してください。例: https://github.com/owner/repo/pull/1
             }
           </p>
-          @if (card()!.prUrl) {
-            <a class="pr-link" [href]="card()!.prUrl" target="_blank" rel="noopener noreferrer"
-              >GitHub PR ↗<span class="pr-link-url">{{ card()!.prUrl }}</span></a
-            >
-          }
+          <ul class="pr-list" aria-label="紐付けたGitHub PR">
+            @for (url of card()!.prUrls; track $index) {
+              <li class="pr-item">
+                <a class="pr-link" [href]="url" target="_blank" rel="noopener noreferrer"
+                  >GitHub PR ↗<span class="pr-link-url">{{ url }}</span></a
+                >
+                <button
+                  type="button"
+                  class="secondary pr-remove"
+                  [disabled]="prLinks.saving()"
+                  (click)="prLinks.remove($index)"
+                >
+                  削除
+                </button>
+              </li>
+            }
+          </ul>
           <div class="timestamps">
             <span>作成日時</span><time>{{ card()!.createdAt | date: 'yyyy/MM/dd HH:mm' }}</time
             ><span>更新日時</span><time>{{ card()!.updatedAt | date: 'yyyy/MM/dd HH:mm' }}</time>

@@ -11,7 +11,7 @@ const initial: Card = {
   title: '元のタイトル',
   description: '本文',
   backlogPosition: 0,
-  prUrl: '',
+  prUrls: [],
   createdAt: '',
   updatedAt: '',
 };

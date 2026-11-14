@@ -13,7 +13,7 @@ const card: Card = {
   title: '学習',
   description: '元の説明',
   backlogPosition: 0,
-  prUrl: '',
+  prUrls: [],
   createdAt: '',
   updatedAt: '',
 };
@@ -109,16 +109,11 @@ describe('CardDetail autosave', () => {
     expect(f.nativeElement.textContent).toContain('通信失敗');
     expect(f.nativeElement.textContent).toContain('再試行');
   });
-  const typed: Record<'title' | 'description' | 'prUrl', [string, string, unknown]> = {
+  const typed: Record<'title' | 'description', [string, string, unknown]> = {
     title: ['#detail-title', '新しいタイトル', { title: '新しいタイトル' }],
     description: ['#detail-description', '新しい本文', { description: '新しい本文' }],
-    prUrl: [
-      '#detail-pr-url',
-      'https://github.com/poteto317/scrum-board/pull/9',
-      { prUrl: 'https://github.com/poteto317/scrum-board/pull/9' },
-    ],
   };
-  it.each(['title', 'description', 'prUrl'] as const)(
+  it.each(['title', 'description'] as const)(
     'holds %s while composing and saves it after compositionend',
     (field) => {
       const [selector, value, patch] = typed[field];
@@ -135,7 +130,7 @@ describe('CardDetail autosave', () => {
       expect(api.updateCard).toHaveBeenCalledWith(18, patch);
     },
   );
-  it.each(['title', 'description', 'prUrl'] as const)('saves %s immediately on blur', (field) => {
+  it.each(['title', 'description'] as const)('saves %s immediately on blur', (field) => {
     const [selector, value, patch] = typed[field];
     const f = create();
     const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
@@ -155,20 +150,54 @@ describe('CardDetail autosave', () => {
     vi.advanceTimersByTime(2500);
     expect(api.updateCard).not.toHaveBeenCalled();
   });
-  it('keeps an invalid PR URL unsent and uses only the saved PR as a link', () => {
+  it('adds and removes PR URLs via immediate PATCH', () => {
+    const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
+    const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
+    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1] }));
+    api.updateCard.mockReturnValueOnce(of({ ...card, prUrls: [url1, url2] }));
+    api.updateCard.mockReturnValueOnce(of({ ...card, prUrls: [url1] }));
+    const f = create();
+    expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(1);
+    const input = f.nativeElement.querySelector('#detail-pr-url') as HTMLInputElement;
+    input.value = url2;
+    input.dispatchEvent(new Event('input'));
+    f.nativeElement.querySelector('.pr-add button').click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, { prUrls: [url1, url2] });
+    expect(input.value).toBe('');
+    expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(2);
+    f.nativeElement.querySelectorAll('.pr-remove')[1].click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, { prUrls: [url1] });
+    expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(1);
+  });
+  it('keeps an invalid PR URL unsent and uses only the saved PRs as links', () => {
     const url = 'https://github.com/poteto317/scrum-board/pull/2';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrl: url }));
+    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
     const f = create();
     const input = f.nativeElement.querySelector('#detail-pr-url') as HTMLInputElement;
     input.value = 'https://github.com.evil/a/b/pull/1';
     input.dispatchEvent(new Event('input'));
-    input.dispatchEvent(new Event('blur'));
+    f.nativeElement.querySelector('.pr-add button').click();
     f.detectChanges();
     expect(api.updateCard).not.toHaveBeenCalled();
     const link = f.nativeElement.querySelector('.pr-link');
     expect(link.getAttribute('href')).toBe(url);
     expect(link.rel).toBe('noopener noreferrer');
     expect(f.nativeElement.textContent).toContain('GitHub PRのURLを入力してください');
+  });
+  it('keeps the PR list when add PATCH fails', () => {
+    const url = 'https://github.com/poteto317/scrum-board/pull/2';
+    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
+    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '保存失敗' } })));
+    const f = create();
+    const input = f.nativeElement.querySelector('#detail-pr-url') as HTMLInputElement;
+    input.value = 'https://github.com/poteto317/scrum-board/pull/9';
+    input.dispatchEvent(new Event('input'));
+    f.nativeElement.querySelector('.pr-add button').click();
+    f.detectChanges();
+    expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(1);
+    expect(f.nativeElement.textContent).toContain('保存失敗');
   });
   it('flushes edits before allowing navigation', async () => {
     const pending = new Subject<Card>();
@@ -333,7 +362,7 @@ describe('CardDetail copy card link', () => {
 });
 
 describe('CardDetail IME response handling', () => {
-  it.each(['title', 'description', 'prUrl'] as const)(
+  it.each(['title', 'description'] as const)(
     'preserves buffered IME input in %s when an earlier save responds',
     (field) => {
       const pending = new Subject<Card>();
@@ -355,9 +384,8 @@ describe('CardDetail IME response handling', () => {
       });
       const f = TestBed.createComponent(CardDetail);
       f.detectChanges();
-      const selector = field === 'prUrl' ? '#detail-pr-url' : `#detail-${field}`;
-      const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
-      const sent = field === 'prUrl' ? 'https://github.com/a/b/pull/1' : '送信するタイトル';
+      const input = f.nativeElement.querySelector(`#detail-${field}`) as HTMLInputElement;
+      const sent = field === 'title' ? '送信するタイトル' : '送信する本文';
       input.value = sent;
       input.dispatchEvent(new Event('input'));
       input.dispatchEvent(new Event('blur'));
@@ -366,7 +394,7 @@ describe('CardDetail IME response handling', () => {
       input.dispatchEvent(new Event('input'));
       expect(f.componentInstance.form.controls[field].value).toBe(sent);
       // The response differs from what the user sees, so only the composing guard keeps the DOM value.
-      const serverValue = field === 'prUrl' ? 'https://github.com/a/b/pull/2' : '別の人の編集';
+      const serverValue = '別の人の編集';
       pending.next({ ...card, [field]: serverValue });
       pending.complete();
       expect(input.value).toBe('変換途中の日本語');
