@@ -191,6 +191,9 @@ h1 {
 }
 .task-card.cdk-drag-preview {
   box-shadow: 0 8px 20px #25332122;
+  /* The preview is a copy in <body> that CDK moves with an inline transform on every pointer event; the card's
+     own 0.15s transform transition would make it lag behind the pointer. */
+  transition: none;
 }
 .task-card.cdk-drag-placeholder {
   opacity: 0.4;
