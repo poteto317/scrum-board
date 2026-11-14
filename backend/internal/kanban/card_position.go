@@ -100,7 +100,8 @@ func backfillColumnByCreatedAt(ctx context.Context, db *sql.DB, columnID int64) 
 }
 
 // lockExistingColumn takes the same all-columns X lock that ReorderCards takes, so every path that
-// changes card membership/position serializes on board_columns before touching cards.
+// changes card membership/position (create, status move, reorder, delete) serializes on board_columns
+// before touching cards.
 func lockExistingColumn(ctx context.Context, tx *sql.Tx, columnID int64) error {
 	cols, err := lockColumnRows(ctx, tx)
 	if err != nil {

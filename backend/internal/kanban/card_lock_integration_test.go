@@ -30,7 +30,7 @@ func newOrderedBoard(t *testing.T) (MySQLRepository, Card, Card) {
 	return r, a, b
 }
 
-// CreateCard, UpdateCard (status move / edit) and ReorderCards must take locks in the same order,
+// CreateCard, UpdateCard (status move / edit), DeleteCard and ReorderCards must take locks in the same order,
 // otherwise InnoDB reports error 1213 (deadlock) under concurrent use.
 func TestCardWritesDoNotDeadlockMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t)
@@ -77,6 +77,13 @@ func TestCardWritesDoNotDeadlockMySQL(t *testing.T) {
 			_, err := r.UpdateCard(ctx, a.ID, CardPatch{Title: &title})
 			return err
 		})
+		run(func() error {
+			c, err := r.CreateCard(ctx, CardInput{ColumnID: col, Title: "d"})
+			if err != nil {
+				return err
+			}
+			return r.DeleteCard(ctx, c.ID)
+		})
 	}
 	wg.Wait()
 	close(errCh)
@@ -90,11 +97,14 @@ func TestCardWritesDoNotDeadlockMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// DeleteCard leaves a gap (positions stay unique and ordered; the next reorder renumbers them densely).
 	for _, column := range []int64{1, 2, 3} {
-		for i, c := range cardsInColumn(board.Cards, column) {
-			if c.Position != i {
-				t.Fatalf("column %d positions not dense: %+v", column, cardsInColumn(board.Cards, column))
+		prev := -1
+		for _, c := range cardsInColumn(board.Cards, column) {
+			if c.Position <= prev {
+				t.Fatalf("column %d positions not strictly increasing: %+v", column, cardsInColumn(board.Cards, column))
 			}
+			prev = c.Position
 		}
 	}
 }
@@ -191,5 +201,24 @@ func TestReorderKeepsUpdatedAtOfUnmovedCardsMySQL(t *testing.T) {
 		if !last[id].Equal(moved[id]) {
 			t.Fatalf("compaction changed updatedAt of card %d: %v -> %v", id, moved[id], last[id])
 		}
+	}
+}
+
+// DeleteCard joins the all-columns lock, so it reports a missing card the same way and still cascades.
+func TestDeleteCardMySQL(t *testing.T) {
+	r, a, _ := newOrderedBoard(t)
+	ctx := context.Background()
+	if err := r.DeleteCard(ctx, 99999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing card want ErrNotFound, got %v", err)
+	}
+	if err := r.DeleteCard(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.DeleteCard(ctx, a.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second delete want ErrNotFound, got %v", err)
+	}
+	var rest int
+	if err := r.DB.QueryRow("SELECT (SELECT COUNT(*) FROM card_history WHERE card_id=?)+(SELECT COUNT(*) FROM card_numbers WHERE card_id=?)", a.ID, a.ID).Scan(&rest); err != nil || rest != 0 {
+		t.Fatalf("history/number cascade: %d %v", rest, err)
 	}
 }

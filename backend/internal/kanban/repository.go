@@ -125,7 +125,7 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 		return Card{}, err
 	}
 	defer tx.Rollback()
-	// A column move takes the same all-columns lock as ReorderCards/CreateCard before touching any card, so
+	// A column move takes the same all-columns lock as ReorderCards/CreateCard before touching any card (DeleteCard does too), so
 	// InnoDB never sees two writers wait on each other's card and column rows. The owning card is then locked
 	// alone, which also keeps the first PR-link INSERT from taking gap locks on missing rows.
 	if p.ColumnID != nil {
@@ -183,7 +183,17 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	return c, tx.Commit()
 }
 func (r MySQLRepository) DeleteCard(ctx context.Context, id int64) error {
-	res, err := r.DB.ExecContext(ctx, "DELETE FROM cards WHERE id=?", id)
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// DELETE locks the primary key and then cards_column_position, the opposite of the secondary-then-primary
+	// order of the column scans in lockCardsInColumns/nextCardPosition, so it joins the all-columns lock too.
+	if _, err = lockColumnRows(ctx, tx); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, "DELETE FROM cards WHERE id=?", id)
 	if err != nil {
 		return err
 	}
@@ -194,7 +204,7 @@ func (r MySQLRepository) DeleteCard(ctx context.Context, id int64) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit()
 }
 func (r MySQLRepository) CreateColumn(ctx context.Context, name string) (Column, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
