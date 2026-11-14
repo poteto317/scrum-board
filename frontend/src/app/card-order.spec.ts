@@ -16,6 +16,7 @@ function card(id: number, columnId: number, position: number): Card {
     title: `c${id}`,
     description: '',
     position,
+    backlogPosition: position,
     prUrl: '',
     createdAt: '',
     updatedAt: '',

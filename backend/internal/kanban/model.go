@@ -14,6 +14,8 @@ var (
 	ErrColumnMismatch    = errors.New("column set mismatch")
 	ErrCardOrder         = errors.New("invalid card order")
 	ErrCardOrderMismatch = errors.New("card set mismatch")
+	ErrBacklogOrder      = errors.New("invalid backlog order")
+	ErrBacklogMismatch   = errors.New("backlog set mismatch")
 )
 
 type Column struct {
@@ -22,15 +24,16 @@ type Column struct {
 	Position int    `json:"position"`
 }
 type Card struct {
-	Number      int64     `json:"number"`
-	ID          int64     `json:"id"`
-	ColumnID    int64     `json:"columnId"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Position    int       `json:"position"`
-	PRURL       string    `json:"prUrl"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Number          int64     `json:"number"`
+	ID              int64     `json:"id"`
+	ColumnID        int64     `json:"columnId"`
+	Title           string    `json:"title"`
+	Description     string    `json:"description"`
+	Position        int       `json:"position"`
+	BacklogPosition int       `json:"backlogPosition"`
+	PRURL           string    `json:"prUrl"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 type CardColumnOrder struct {
@@ -67,4 +70,6 @@ type Repository interface {
 	CreateColumn(context.Context, string) (Column, error)
 	ReorderColumns(context.Context, []int64) ([]Column, error)
 	ReorderCards(context.Context, []CardColumnOrder) ([]Card, error)
+	Backlog(context.Context) ([]Card, error)
+	ReorderBacklog(context.Context, []int64) ([]Card, error)
 }

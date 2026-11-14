@@ -3,6 +3,7 @@ package kanban
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -31,7 +32,7 @@ func newOrderedBoard(t *testing.T) (MySQLRepository, Card, Card) {
 	return r, a, b
 }
 
-// CreateCard, UpdateCard (status move / edit), DeleteCard and ReorderCards must take locks in the same order,
+// CreateCard, UpdateCard (status move / edit), DeleteCard, ReorderCards and ReorderBacklog must take locks in the same order,
 // otherwise InnoDB reports error 1213 (deadlock) under concurrent use.
 func TestCardWritesDoNotDeadlockMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t)
@@ -165,6 +166,42 @@ func TestSuccessfulReordersRunAlongsideWritesMySQL(t *testing.T) {
 			}
 			prev = c.Position
 		}
+	}
+}
+
+// position (order inside a column) and backlogPosition (order of the whole backlog) are separate columns:
+// reordering one must not change the other.
+func TestPositionAndBacklogPositionAreIndependentMySQL(t *testing.T) {
+	r, a, b := newOrderedBoard(t)
+	ctx := context.Background()
+	positions := func() (map[int64]int, map[int64]int) {
+		board, err := r.Board(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pos, backlog := map[int64]int{}, map[int64]int{}
+		for _, c := range board.Cards {
+			pos[c.ID], backlog[c.ID] = c.Position, c.BacklogPosition
+		}
+		return pos, backlog
+	}
+	pos0, backlog0 := positions()
+	if len(backlog0) != 3 || backlog0[a.ID] >= backlog0[b.ID] {
+		t.Fatalf("new cards must get increasing backlogPosition: %v", backlog0)
+	}
+	if _, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: reverseIDs(t, r, 1)}}); err != nil {
+		t.Fatal(err)
+	}
+	pos1, backlog1 := positions()
+	if fmt.Sprint(backlog1) != fmt.Sprint(backlog0) || fmt.Sprint(pos1) == fmt.Sprint(pos0) {
+		t.Fatalf("ReorderCards must change position only: pos %v -> %v, backlog %v -> %v", pos0, pos1, backlog0, backlog1)
+	}
+	if _, err := r.ReorderBacklog(ctx, []int64{b.ID, a.ID, 1}); err != nil {
+		t.Fatal(err)
+	}
+	pos2, backlog2 := positions()
+	if fmt.Sprint(pos2) != fmt.Sprint(pos1) || fmt.Sprint(backlog2) == fmt.Sprint(backlog1) {
+		t.Fatalf("ReorderBacklog must change backlogPosition only: pos %v -> %v, backlog %v -> %v", pos1, pos2, backlog1, backlog2)
 	}
 }
 
@@ -319,6 +356,18 @@ func TestCardWritersQueueOnTheAllColumnsLockMySQL(t *testing.T) {
 		"DeleteCard": func(r MySQLRepository, _, b Card) error { return r.DeleteCard(ctx, b.ID) },
 		"ReorderCards": func(r MySQLRepository, _, _ Card) error {
 			_, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: reverseIDs(t, r, 1)}})
+			return err
+		},
+		"ReorderBacklog": func(r MySQLRepository, _, _ Card) error {
+			board, err := r.Board(ctx)
+			if err != nil {
+				return err
+			}
+			ids := make([]int64, 0, len(board.Cards))
+			for i := len(board.Cards) - 1; i >= 0; i-- {
+				ids = append(ids, board.Cards[i].ID)
+			}
+			_, err = r.ReorderBacklog(ctx, ids)
 			return err
 		},
 		"ImportHistory": func(r MySQLRepository, a, _ Card) error {

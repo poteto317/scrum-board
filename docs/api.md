@@ -217,3 +217,30 @@ curl --fail-with-body --request PUT \
 - HTTP 400: `columns` 未指定・`null`・空配列、`columnId` の重複や 0 以下、`cardIds` が `null`、カード ID の重複や 0 以下、不正 JSON、未知のフィールド。
 - HTTP 409: 指定列に現在属するカード集合と `cardIds` の和集合が一致しない場合、または存在しない列・カード ID。
 - HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。
+
+`position`（列内の並び順。カードの並び替え・列間移動が更新する）と `backlogPosition`（プロダクトバックログ全体の優先順位。`/api/backlog/order` が更新する）は独立した値で、一方を変えても他方は変わりません。どちらも各カードに含まれます。
+
+# プロダクトバックログ
+
+全カードを `backlog_position` 昇順（同値は `id` 昇順）で返します。ステータス（列）に関係なく Done も含みます。
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/backlog
+```
+
+成功時は HTTP 200 で `{"cards":[...]}`（各カードに `backlogPosition` 付き）を返します。
+
+`PUT /api/backlog/order` で全カードの優先順位を更新します。リクエストボディには現在存在するすべてのカードIDを新しい順で配列指定します。
+
+```sh
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"cardIds":[3,1,2]}' \
+  http://127.0.0.1:4200/api/backlog/order
+```
+
+- 成功時は HTTP 200 で `{"cards":[...]}`（新しい `backlogPosition` 付き）。
+- 新規カード作成（`POST /api/cards`）は現在の最大 `backlog_position + 1` を付与するため、並び替え後も常に末尾に追加されます。
+- HTTP 400: `cardIds` 未指定・`null`・空配列、0以下のID、重複ID、不正JSON、未知のフィールド。
+- HTTP 409: DBに存在するカードの集合と一致しない場合（不足または存在しないカードIDの指定）。
+- HTTP 500: DB更新に失敗した場合（トランザクションはロールバックされます）。

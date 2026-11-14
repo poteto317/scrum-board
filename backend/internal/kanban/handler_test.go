@@ -88,7 +88,17 @@ func (m *memoryRepo) CreateCard(_ context.Context, in CardInput) (Card, error) {
 	if !m.validColumn(in.ColumnID) {
 		return Card{}, ErrColumn
 	}
-	c := Card{Number: m.next, ID: m.next, ColumnID: in.ColumnID, Title: in.Title, Description: in.Description, Position: m.nextPosition(in.ColumnID), PRURL: in.PRURL}
+	maxBacklog := -1
+	for _, existing := range m.cards {
+		if existing.BacklogPosition > maxBacklog {
+			maxBacklog = existing.BacklogPosition
+		}
+	}
+	c := Card{
+		Number: m.next, ID: m.next, ColumnID: in.ColumnID,
+		Title: in.Title, Description: in.Description, PRURL: in.PRURL,
+		Position: m.nextPosition(in.ColumnID), BacklogPosition: maxBacklog + 1,
+	}
 	m.next++
 	m.cards[c.ID] = c
 	return c, nil
@@ -215,6 +225,42 @@ func (m *memoryRepo) ReorderColumns(_ context.Context, columnIDs []int64) ([]Col
 	}
 	m.columns = next
 	return slices.Clone(next), nil
+}
+
+func (m *memoryRepo) Backlog(context.Context) ([]Card, error) {
+	cards := make([]Card, 0, len(m.cards))
+	for _, c := range m.cards {
+		cards = append(cards, c)
+	}
+	slices.SortFunc(cards, func(a, b Card) int {
+		if c := cmp.Compare(a.BacklogPosition, b.BacklogPosition); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return cards, nil
+}
+
+func (m *memoryRepo) ReorderBacklog(_ context.Context, cardIDs []int64) ([]Card, error) {
+	if err := validateBacklogOrder(cardIDs); err != nil {
+		return nil, err
+	}
+	if len(cardIDs) != len(m.cards) {
+		return nil, ErrBacklogMismatch
+	}
+	byID := make(map[int64]Card, len(m.cards))
+	for _, c := range m.cards {
+		byID[c.ID] = c
+	}
+	for i, id := range cardIDs {
+		c, ok := byID[id]
+		if !ok {
+			return nil, ErrBacklogMismatch
+		}
+		c.BacklogPosition = i
+		m.cards[id] = c
+	}
+	return m.Backlog(context.Background())
 }
 func request(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()

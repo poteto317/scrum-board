@@ -12,6 +12,7 @@ const card: Card = {
   title: '学習',
   description: '元の説明',
   position: 0,
+  backlogPosition: 0,
   prUrl: '',
   createdAt: '',
   updatedAt: '',

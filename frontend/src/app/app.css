@@ -44,6 +44,27 @@
   width: 1px;
   background: var(--line);
 }
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.app-nav a {
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 550;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.app-nav a:hover {
+  color: var(--ink);
+  background: #eef1ea;
+}
+.app-nav a.active {
+  color: var(--ink);
+  background: #e9ede7;
+}
 .workspace-name {
   font-size: 14px;
   color: var(--muted);
@@ -83,5 +104,8 @@
   .header-divider,
   .header-end {
     display: none;
+  }
+  .app-nav {
+    margin-left: auto;
   }
 }

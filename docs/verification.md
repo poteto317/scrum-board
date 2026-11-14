@@ -75,10 +75,18 @@
 - タッチ: 200ms 押し続けてからドラッグ（マウスは即時）。押し続けずにカード上をスワイプしたときはドラッグが始まらず、`touchmove` が `preventDefault` されない（単体テストとエミュレーションした合成 `touchmove` で確認。実機でのスクロール動作は未確認）
 - キーボード操作のアナウンスに移動後の位置が入り、続けて動かしても毎回読み上げられること。カードのフォーカス枠が `.card-list` のスクロール領域で切れないこと（実ブラウザーの Tab キーで確認）
 - 400 / 409 / 永続化、詳細ステータス移動が末尾、再起動で DnD 順が消えないこと
-- 使い捨て MySQL（`scrumboard_numbering_test`）で、`CreateCard` / `UpdateCard`（列移動・編集）/ `DeleteCard` / `ReorderCards` の並行混在が MySQL 1213（デッドロック）にならないこと（ストレステスト。交差が起きるかはタイミング次第で、`CreateCard` / `UpdateCard` が全列ロックを取っていなかった修正前は reorder の大半が 1213 になった）。あわせて、決定的なテストで、5 つのカード書き込み経路（作成・列移動・削除・並べ替え・履歴取り込み）がどれも、別のトランザクションが全列ロックを保持している間は、カード行に触れる前にそこで待つことを確認する（どの経路のロックを外してもこのテストが落ちる）。履歴取り込み（`ImportHistory`）も、`ReorderCards` / `CreateCard` と交差してデッドロックしないこと（決定的テスト。修正前は取り込み側が 1213 で失敗）。`ReorderCards` の 409 / 400 が、古いカード集合・他列のカード混入・存在しない列などで返り、DB が変わらないこと
+- 使い捨て MySQL（`scrumboard_numbering_test`）で、`CreateCard` / `UpdateCard`（列移動・編集）/ `DeleteCard` / `ReorderCards` の並行混在が MySQL 1213（デッドロック）にならないこと（ストレステスト。交差が起きるかはタイミング次第で、`CreateCard` / `UpdateCard` が全列ロックを取っていなかった修正前は reorder の大半が 1213 になった）。あわせて、決定的なテストで、6 つのカード書き込み経路（作成・列移動・削除・カードの並べ替え・バックログの並べ替え・履歴取り込み）がどれも、別のトランザクションが全列ロックを保持している間は、カード行に触れる前にそこで待つことを確認する（どの経路のロックを外してもこのテストが落ちる）。履歴取り込み（`ImportHistory`）も、`ReorderCards` / `CreateCard` と交差してデッドロックしないこと（決定的テスト。修正前は取り込み側が 1213 で失敗）。`ReorderCards` の 409 / 400 が、古いカード集合・他列のカード混入・存在しない列などで返り、DB が変わらないこと
 - 列内の並び替えや位置のずれで、触っていないカードの `updatedAt` が変わらないこと（列が変わったカードだけ更新）
 - `position` 列のない旧スキーマの DB から `InitializeCardPositions` で `created_at, id` 順に採番され、再起動で手動の順序が保たれ、`updatedAt` が変わらないこと
 - `go test` / `npm test -- --watch=false`（全件）/ `npm run build`
+
+### プロダクトバックログ
+
+- `GET /api/backlog` / `PUT /api/backlog/order` と `/backlog` UI のドラッグ&ドロップ / 上下キー並び替え
+- 全ステータス（Done 含む）表示、バックログからの新規追加（初期ステータス選択）
+- 400 / 409 / 永続化、並び替え後のカード追加が末尾、Create と Reorder の並行
+- `ReorderBacklog` もカード行に触れる前に全列ロック（`lockColumnRows`）を取り、`ReorderCards` / `CreateCard` / `UpdateCard` / `DeleteCard` / `ImportHistory` と交差してデッドロックしないこと（使い捨て MySQL の決定的テスト `TestCardWritersQueueOnTheAllColumnsLockMySQL` で、`ReorderBacklog` のロックを外すと落ちることを確認。統合前の `ReorderBacklog`（`cards` を主キー順にロックするだけ）は、`ReorderCards` と 80 並行で混在させると約 3 分の 1 が MySQL 1213 になることをレビューで実測した。マージ時にこのリポジトリの Go テストで並行ストレステストを組んだが交差を再現できず検出力がなかったため、決定的テストを根拠にする）
+- カードの `position`（列内の並び順）と `backlogPosition`（バックログの優先順位）が独立していること。一方の並び替えがもう一方を変えないこと
 
 ### 開発用画面（web-dev / 自動反映）
 

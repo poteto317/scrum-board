@@ -10,6 +10,7 @@ export interface Card {
   title: string;
   description: string;
   position: number;
+  backlogPosition: number;
   prUrl: string;
   createdAt: string;
   updatedAt: string;

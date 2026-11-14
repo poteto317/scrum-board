@@ -50,6 +50,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 	if err = (MySQLRepository{DB: db}).InitializeCardPositions(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err = (MySQLRepository{DB: db}).InitializeBacklogPositions(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if err = (MySQLRepository{DB: db}).InitializePRLinks(t.Context()); err != nil {
 		t.Fatal(err)
 	}

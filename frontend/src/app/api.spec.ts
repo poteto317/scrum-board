@@ -73,6 +73,41 @@ describe('Api', () => {
     req.flush(payload);
     expect(result).toEqual(payload);
   });
+  it('fetches backlog cards', () => {
+    let result: unknown;
+    api.backlog().subscribe((res) => (result = res));
+    const req = http.expectOne('/api/backlog');
+    expect(req.request.method).toBe('GET');
+    const payload = {
+      cards: [{ id: 2, number: 2, columnId: 1, title: 'B', backlogPosition: 0 }],
+    };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
+  it('sends PUT /api/backlog/order with cardIds and returns reordered cards', () => {
+    let result: unknown;
+    api.reorderBacklog([3, 1, 2]).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/backlog/order');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ cardIds: [3, 1, 2] });
+    const payload = {
+      cards: [
+        { id: 3, backlogPosition: 0 },
+        { id: 1, backlogPosition: 1 },
+        { id: 2, backlogPosition: 2 },
+      ],
+    };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
+  it('propagates backlog reorder conflict errors', () => {
+    let status = 0;
+    api.reorderBacklog([1, 2]).subscribe({ error: (e) => (status = e.status) });
+    http
+      .expectOne('/api/backlog/order')
+      .flush({ message: '競合' }, { status: 409, statusText: 'Conflict' });
+    expect(status).toBe(409);
+  });
 });
 
 it('requests history by public number and an optional event cursor', () => {

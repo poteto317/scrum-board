@@ -14,6 +14,7 @@ function card(id: number, columnId: number, position: number, title: string): Ca
     title,
     description: '',
     position,
+    backlogPosition: position,
     prUrl: '',
     createdAt: '',
     updatedAt: '',

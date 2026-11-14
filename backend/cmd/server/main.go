@@ -58,6 +58,9 @@ func run() error {
 	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	err = repo.InitializeCardPositions(migrationCtx)
 	if err == nil {
+		err = repo.InitializeBacklogPositions(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializePRLinks(migrationCtx)
 	}
 	if err == nil {

@@ -62,3 +62,20 @@ func validateCardOrder(orders []CardColumnOrder) error {
 	}
 	return nil
 }
+
+func validateBacklogOrder(cardIDs []int64) error {
+	if len(cardIDs) == 0 {
+		return ErrBacklogOrder
+	}
+	seen := make(map[int64]struct{}, len(cardIDs))
+	for _, id := range cardIDs {
+		if id <= 0 {
+			return ErrBacklogOrder
+		}
+		if _, exists := seen[id]; exists {
+			return ErrBacklogOrder
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
+}
