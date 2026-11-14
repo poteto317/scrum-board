@@ -78,8 +78,23 @@ func TestHistoricalRecordLimits(t *testing.T) {
 		"five changes": {func(v *HistoricalRecord) {
 			v.Changes = []HistoryChange{
 				{Field: "title"}, {Field: "description"}, {Field: "status"},
-				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "x"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "assignee"},
 			}
+		}, true},
+		"six changes": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{
+				{Field: "title"}, {Field: "description"}, {Field: "status"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "assignee"}, {Field: "x"},
+			}
+		}, false},
+		"assignee 60": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "assignee", After: long(60)}}
+		}, true},
+		"assignee 61": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "assignee", After: long(61)}}
+		}, false},
+		"assignee control": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "assignee", After: "a\nb"}}
 		}, false},
 		"title before 200":       {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "title", Before: long(200)}} }, true},
 		"title before 201":       {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "title", Before: long(201)}} }, false},

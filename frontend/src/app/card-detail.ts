@@ -19,6 +19,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { Column } from './models';
+import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
+import { CardAssignee } from './card-assignee';
 import { CardAutosave } from './card-autosave';
 import { CardPrLinks } from './card-pr-links';
 import { CopyLinkFeedback } from './copy-link-feedback';
@@ -27,7 +29,7 @@ import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 @Component({
   selector: 'app-card-detail',
   imports: [ReactiveFormsModule, RouterLink, DatePipe, Modal, CardHistory],
-  providers: [CardAutosave, CardPrLinks],
+  providers: [CardAutosave, CardPrLinks, CardAssignee],
   templateUrl: './card-detail.html',
   styleUrl: './card-detail.css',
 })
@@ -41,6 +43,9 @@ export class CardDetail implements OnInit {
   private readonly changed$ = new Subject<void>();
   readonly autosave = inject(CardAutosave);
   readonly prLinks = inject(CardPrLinks);
+  readonly assignee = inject(CardAssignee);
+  readonly presets = ASSIGNEE_PRESETS;
+  readonly assigneeKind = assigneeKind;
   readonly card = this.autosave.card;
   readonly form = this.autosave.form;
   readonly columns = signal<Column[]>([]);
@@ -57,6 +62,12 @@ export class CardDetail implements OnInit {
     this.prLinks.bind({
       card: () => this.card(),
       applyPrSave: (updated) => this.autosave.applyPrSave(updated),
+      onError: (message) => this.error.set(message),
+      cancel$: this.changed$,
+    });
+    this.assignee.bind({
+      card: () => this.card(),
+      applyAssigneeSave: (updated) => this.autosave.applyAssigneeSave(updated),
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
@@ -78,6 +89,7 @@ export class CardDetail implements OnInit {
           this.changed$.next();
           this.autosave.reset(null);
           this.prLinks.reset();
+          this.assignee.reset();
           this.deleted = false;
           this.confirmDelete.set(false);
           this.loading.set(true);
@@ -97,17 +109,11 @@ export class CardDetail implements OnInit {
       )
       .subscribe(({ board, card }) => {
         this.columns.set(board.columns);
-        this.autosave.reset({ ...card, prUrls: card.prUrls ?? [] });
+        this.autosave.reset({ ...card, prUrls: card.prUrls ?? [], assignee: card.assignee ?? '' });
       });
     const stop = startLiveRefresh({
       enabled: () =>
-        !this.loading() &&
-        this.routeNumber() > 0 &&
-        !this.autosave.hasChanges() &&
-        !this.autosave.saving() &&
-        !this.prLinks.saving() &&
-        !this.confirmDelete() &&
-        !this.deleting(),
+        !this.loading() && this.routeNumber() > 0 && !this.autosave.hasChanges() && !this.busy(),
       fetch: () => {
         const number = this.routeNumber();
         return forkJoin({
@@ -117,18 +123,10 @@ export class CardDetail implements OnInit {
       },
       apply: ({ board, card }) => {
         if (card.number !== this.routeNumber()) return;
-        if (
-          this.autosave.hasChanges() ||
-          this.autosave.saving() ||
-          this.prLinks.saving() ||
-          this.confirmDelete() ||
-          this.deleting()
-        ) {
-          return;
-        }
+        if (this.autosave.hasChanges() || this.busy()) return;
         this.error.set('');
         this.columns.set(board.columns);
-        const next = { ...card, prUrls: card.prUrls ?? [] };
+        const next = { ...card, prUrls: card.prUrls ?? [], assignee: card.assignee ?? '' };
         if (this.card() && sameJson(this.card(), next)) return;
         this.autosave.reset(next);
       },
@@ -139,12 +137,24 @@ export class CardDetail implements OnInit {
   load() {
     this.reload$.next();
   }
+  /** True while any immediate save or destructive action is in flight. */
+  busy() {
+    return (
+      this.autosave.saving() ||
+      this.prLinks.saving() ||
+      this.assignee.saving() ||
+      this.confirmDelete() ||
+      this.deleting()
+    );
+  }
+  /** Saving in flight (excludes delete confirmation UI). */
+  savingBusy() {
+    return this.autosave.saving() || this.prLinks.saving() || this.assignee.saving() || this.deleting();
+  }
   async canLeave(): Promise<boolean> {
     if (this.deleted) return true;
-    if (this.prLinks.saving()) {
-      return window.confirm(
-        'PRの保存中です。移動すると保存が中断される可能性があります。移動しますか？',
-      );
+    if (this.prLinks.saving() || this.assignee.saving()) {
+      return window.confirm('保存中です。移動すると保存が中断される可能性があります。移動しますか？');
     }
     if (!this.autosave.hasChanges()) return true;
     if (await this.autosave.settle()) return true;
@@ -152,13 +162,23 @@ export class CardDetail implements OnInit {
   }
   @HostListener('window:beforeunload', ['$event'])
   beforeUnload(event: BeforeUnloadEvent) {
-    if (!this.deleted && this.autosave.hasChanges()) {
+    if (
+      !this.deleted &&
+      (this.autosave.hasChanges() || this.prLinks.saving() || this.assignee.saving())
+    ) {
       event.preventDefault();
       event.returnValue = '';
     }
   }
   remove() {
-    if (this.deleting() || this.autosave.saving() || !this.card()) return;
+    if (
+      this.deleting() ||
+      this.autosave.saving() ||
+      this.prLinks.saving() ||
+      this.assignee.saving() ||
+      !this.card()
+    )
+      return;
     this.autosave.cancel();
     this.form.disable({ emitEvent: false });
     this.deleting.set(true);

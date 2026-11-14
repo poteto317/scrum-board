@@ -166,7 +166,15 @@
                       <p class="card-description">{{ card.description }}</p>
                     }
                     <span class="card-footer"
-                      ><span class="card-status">{{ column.name }}</span
+                      ><span class="card-footer-meta"
+                        ><span class="card-status">{{ column.name }}</span>
+                        @if (card.assignee) {
+                          <span
+                            class="card-assignee"
+                            [attr.data-assignee]="assigneeKind(card.assignee)"
+                            >{{ card.assignee }}</span
+                          >
+                        }</span
                       ><span class="detail-hint"
                         >詳細を開く <span aria-hidden="true">→</span></span
                       ></span

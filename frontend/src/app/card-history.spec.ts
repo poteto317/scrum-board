@@ -13,6 +13,32 @@ const event = {
   note: '観測時点の復元',
   evidenceUrl: 'https://github.com/a/b/pull/2',
 };
+it('labels assignee changes as 対応', () => {
+  const api = {
+    history: vi.fn(() =>
+      of({
+        events: [
+          {
+            ...event,
+            kind: 'updated',
+            changes: [{ field: 'assignee', before: '', after: 'Cursor' }],
+            evidenceUrl: '',
+          },
+        ],
+        nextBefore: 0,
+      }),
+    ),
+  };
+  TestBed.configureTestingModule({
+    imports: [CardHistory],
+    providers: [{ provide: Api, useValue: api }],
+  });
+  const f = TestBed.createComponent(CardHistory);
+  f.componentRef.setInput('number', 3);
+  f.detectChanges();
+  expect(f.nativeElement.textContent).toContain('対応');
+  expect(f.nativeElement.textContent).toContain('Cursor');
+});
 it('shows recovered evidence and appends the next page', () => {
   const api = {
     history: vi

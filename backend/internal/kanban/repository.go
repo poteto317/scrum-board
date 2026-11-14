@@ -31,7 +31,7 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Card, error) {
 	var c Card
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.BacklogPosition, &c.CreatedAt, &c.UpdatedAt)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.BacklogPosition, &c.Assignee, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
 	}
@@ -42,7 +42,7 @@ func scanCard(s scanner) (Card, error) {
 // numberedCards は card_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.position, c.backlog_position, c.created_at, c.updated_at"
+const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.position, c.backlog_position, c.assignee, c.created_at, c.updated_at"
 const numberedCards = " FROM cards c JOIN card_numbers n ON n.card_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -119,7 +119,7 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if err != nil {
 		return Card{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO cards(column_id,title,description,position,backlog_position) VALUES(?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, nextBacklog)
+	result, err := tx.ExecContext(ctx, "INSERT INTO cards(column_id,title,description,position,backlog_position,assignee) VALUES(?,?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, nextBacklog, in.Assignee)
 	if err != nil {
 		return Card{}, dbError(err)
 	}
@@ -192,7 +192,10 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 		c.Position = nextPos
 		moved = true
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE cards SET title=?,description=?,column_id=?,position=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, time.Now().UTC(), id)
+	if p.Assignee != nil {
+		c.Assignee = *p.Assignee
+	}
+	_, err = tx.ExecContext(ctx, "UPDATE cards SET title=?,description=?,column_id=?,position=?,assignee=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.Assignee, time.Now().UTC(), id)
 	if err != nil {
 		return Card{}, dbError(err)
 	}

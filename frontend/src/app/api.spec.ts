@@ -34,6 +34,13 @@ describe('Api', () => {
     expect(req.request.method).toBe('GET');
     req.flush({ id: 18, number: 3, columnId: 1, title: 'Task', description: '' });
   });
+  it('patches assignee by public number', () => {
+    api.updateAssigneeByNumber(7, 'Claude').subscribe((card) => expect(card.assignee).toBe('Claude'));
+    const req = http.expectOne('/api/cards/by-number/7/assignee');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ assignee: 'Claude' });
+    req.flush({ id: 22, number: 7, assignee: 'Claude' });
+  });
   it('sends PUT /api/columns/order with columnIds and returns reordered columns', () => {
     let result: unknown;
     api.reorderColumns([1, 2, 9, 3]).subscribe((res) => (result = res));

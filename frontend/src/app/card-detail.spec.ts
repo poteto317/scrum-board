@@ -15,6 +15,7 @@ const card: Card = {
   position: 0,
   backlogPosition: 0,
   prUrls: [],
+  assignee: '',
   createdAt: '',
   updatedAt: '',
 };
@@ -200,6 +201,61 @@ describe('CardDetail autosave', () => {
     expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(1);
     expect(f.nativeElement.textContent).toContain('保存失敗');
   });
+  it('sets a preset assignee with immediate PATCH', () => {
+    api.updateCard.mockReturnValue(of({ ...card, assignee: 'Cursor' }));
+    const f = create();
+    const chip = Array.from(
+      f.nativeElement.querySelectorAll('.assignee-chip') as NodeListOf<HTMLButtonElement>,
+    ).find((b) => b.textContent?.trim() === 'Cursor')!;
+    chip.click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, { assignee: 'Cursor' });
+    expect(f.componentInstance.card()?.assignee).toBe('Cursor');
+    expect(chip.classList.contains('selected')).toBe(true);
+  });
+  it('clears the free-text draft when the selected preset is clicked again', () => {
+    api.cardByNumber.mockReturnValue(of({ ...card, assignee: 'Cursor' }));
+    const f = create();
+    const input = f.nativeElement.querySelector('#detail-assignee') as HTMLInputElement;
+    input.value = 'leftover';
+    input.dispatchEvent(new Event('input'));
+    const chip = Array.from(
+      f.nativeElement.querySelectorAll('.assignee-chip') as NodeListOf<HTMLButtonElement>,
+    ).find((b) => b.textContent?.trim() === 'Cursor')!;
+    chip.click();
+    f.detectChanges();
+    expect(api.updateCard).not.toHaveBeenCalled();
+    expect(input.value).toBe('');
+  });
+  it('applies free-text assignee and clears it', () => {
+    api.updateCard
+      .mockReturnValueOnce(of({ ...card, assignee: 'mash' }))
+      .mockReturnValueOnce(of({ ...card, assignee: '' }));
+    const f = create();
+    const input = f.nativeElement.querySelector('#detail-assignee') as HTMLInputElement;
+    input.value = 'mash';
+    input.dispatchEvent(new Event('input'));
+    f.nativeElement.querySelector('.assignee-custom button').click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, { assignee: 'mash' });
+    expect(f.componentInstance.card()?.assignee).toBe('mash');
+    f.nativeElement.querySelector('.assignee-clear').click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, { assignee: '' });
+    expect(f.componentInstance.card()?.assignee).toBe('');
+  });
+  it('reverts assignee display when PATCH fails and keeps the draft', () => {
+    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '対応の保存失敗' } })));
+    const f = create();
+    const input = f.nativeElement.querySelector('#detail-assignee') as HTMLInputElement;
+    input.value = 'draft-name';
+    input.dispatchEvent(new Event('input'));
+    f.nativeElement.querySelector('.assignee-custom button').click();
+    f.detectChanges();
+    expect(f.componentInstance.card()?.assignee).toBe('');
+    expect(input.value).toBe('draft-name');
+    expect(f.nativeElement.textContent).toContain('対応の保存失敗');
+  });
   it('flushes edits before allowing navigation', async () => {
     const pending = new Subject<Card>();
     api.updateCard.mockReturnValue(pending);
@@ -253,6 +309,19 @@ describe('CardDetail autosave', () => {
     expect(api.updateCard).not.toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
     expect(await f.componentInstance.canLeave()).toBe(true);
+  });
+  it('confirms before leave while assignee PATCH is in flight', async () => {
+    const pending = new Subject<Card>();
+    api.updateCard.mockReturnValue(pending);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const f = create();
+    const chip = Array.from(
+      f.nativeElement.querySelectorAll('.assignee-chip') as NodeListOf<HTMLButtonElement>,
+    ).find((b) => b.textContent?.trim() === 'Cursor')!;
+    chip.click();
+    expect(await f.componentInstance.canLeave()).toBe(false);
+    expect(confirm).toHaveBeenCalled();
+    pending.complete();
   });
 });
 

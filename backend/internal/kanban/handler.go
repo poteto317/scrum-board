@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -39,6 +40,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/cards/by-number/{number}", h.getCardByNumber)
 	mux.HandleFunc("PATCH /api/cards/{id}", h.updateCard)
 	mux.HandleFunc("PATCH /api/cards/by-number/{number}/status", h.changeStatusByNumber)
+	mux.HandleFunc("PATCH /api/cards/by-number/{number}/assignee", h.changeAssigneeByNumber)
 	mux.HandleFunc("DELETE /api/cards/{id}", h.deleteCard)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -179,6 +181,12 @@ func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "タイトルは1〜200文字、説明は10000文字以内で入力し、ステータスを選んでください。")
 		return
 	}
+	assignee, assigneeOK := NormalizeAssignee(in.Assignee)
+	if !assigneeOK {
+		invalid(w, "対応者は60文字以内で、制御文字を含めず入力してください。")
+		return
+	}
+	in.Assignee = assignee
 	c, e := h.repo.CreateCard(r.Context(), in)
 	if e != nil {
 		fail(w, e)
@@ -191,11 +199,35 @@ func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var p CardPatch
-	if !decode(w, r, &p) {
+	var body struct {
+		ColumnID    *int64          `json:"columnId"`
+		Title       *string         `json:"title"`
+		Description *string         `json:"description"`
+		PRURLs      *[]string       `json:"prUrls"`
+		Assignee    json.RawMessage `json:"assignee"`
+	}
+	if !decode(w, r, &body) {
 		return
 	}
-	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil {
+	p := CardPatch{ColumnID: body.ColumnID, Title: body.Title, Description: body.Description, PRURLs: body.PRURLs}
+	if len(body.Assignee) > 0 {
+		if string(body.Assignee) == "null" {
+			invalid(w, "対応者は60文字以内で、制御文字を含めず入力してください。")
+			return
+		}
+		var raw string
+		if err := json.Unmarshal(body.Assignee, &raw); err != nil {
+			invalid(w, "対応者は60文字以内で、制御文字を含めず入力してください。")
+			return
+		}
+		value, valid := NormalizeAssignee(raw)
+		if !valid {
+			invalid(w, "対応者は60文字以内で、制御文字を含めず入力してください。")
+			return
+		}
+		p.Assignee = &value
+	}
+	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil && p.Assignee == nil {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}

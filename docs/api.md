@@ -18,6 +18,19 @@ curl --fail-with-body --request PATCH \
 - 成功時はHTTP 200と更新後のカードJSONを返します。既存のタイトル・説明・番号・作成日時を保持し、columnIdと更新日時を変更します。
 - 同じステータスへ再送しても成功し、カードを追加したり番号を消費したりしません。更新日時は保存時刻になります。
 
+## 対応者（assignee）
+
+カードJSONの `assignee` は対応者ラベルです。未設定は空文字 `""` です。前後空白は除去します。プリセットは `Cursor` / `Claude` / `Codex` / `Antigravity`（ASCIIの大小無視で正規化）。それ以外は1〜60 Unicode文字の自由テキストです。
+
+```sh
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"assignee":"Cursor"}' \
+  http://127.0.0.1:4200/api/cards/by-number/7/assignee
+```
+
+クリアは `{"assignee":""}` です。`null`・未知フィールド・61文字超・制御文字は400です（`PATCH /api/cards/{id}` で他フィールドと同居しても `assignee:null` は400で、他フィールドも適用しません）。既存の `PATCH /api/cards/{id}` でも `assignee` を部分更新できます。作成時の任意プロパティとしても送れます。
+
 Goへ直接アクセスする場合はポート8080でも同じパスを利用できます。Dockerの公開ポートを変更した場合はURLも合わせてください。
 
 ## 対象と結果の確認
@@ -66,8 +79,9 @@ number・id・title・description・columnIdなどを混ぜて送ると400にな
 | --- | --- |
 | `GET /api/cards/by-number/{number}` | 公開タスク番号 |
 | `PATCH /api/cards/by-number/{number}/status` | 公開タスク番号とステータス名 |
+| `PATCH /api/cards/by-number/{number}/assignee` | 公開タスク番号と対応者ラベル |
 | `GET /api/cards/{id}` | 内部ID |
-| `PATCH /api/cards/{id}` | 内部IDとtitle/description/columnId/prUrlsの部分更新 |
+| `PATCH /api/cards/{id}` | 内部IDとtitle/description/columnId/prUrls/assigneeの部分更新 |
 
 番号とIDを推測で読み替えません。例のカードに `PATCH /api/cards/7` を送ると、内部ID7を対象にしてしまいます。生成AIから画面のタスクを変更するときはby-numberを使ってください。
 
@@ -92,7 +106,7 @@ curl --fail-with-body --request PATCH \
 
 ## 変更履歴
 
-`GET /api/cards/by-number/{number}/history` は `{events: [...], nextBefore: 0}` を返します。eventsにはid、kind、occurredAt、recordedAt、changes（field/before/after）、note、evidenceUrlがあります。kindはcreated/updated/baseline/restoredです。statusの値は列名です。
+`GET /api/cards/by-number/{number}/history` は `{events: [...], nextBefore: 0}` を返します。eventsにはid、kind、occurredAt、recordedAt、changes（field/before/after）、note、evidenceUrlがあります。kindはcreated/updated/baseline/restoredです。statusの値は列名、assigneeは対応者ラベルです。
 
 日時降順・同時刻はID降順で最大50件。nextBeforeが0以外なら `?before={nextBefore}` で続けます。別カードのカーソルや未存在カードは404、不正カーソルは400です。更新成功後は先頭から再取得してください。履歴取得の失敗はカード編集を妨げません。
 
@@ -119,7 +133,7 @@ KANBAN_IMPORT_DSN='scrum:scrum_dev@tcp(127.0.0.1:3307)/scrumboard?parseTime=true
   go run ./cmd/import-history --file /absolute/path/reviewed-history.json
 ```
 
-DBの接続設定は利用環境に合わせ、バックアップを取得してから実行してください。対象が履歴初期化済みであることを確認します。JSONは最大2MiB/10000件で、changesはtitle/description/status/prUrlsの最大4項目です。各記録の必須項目はnumber・cardId・createdAt・key・occurredAt・noteで、空にできるのはchangesとevidenceUrlだけです（noteは1〜4000文字）。keyは英数字と`_.:-`の1〜128文字、changesの値はtitle 200・description 10000・status 60・prUrlsは65536バイト以内のJSON配列（各要素は非空のGitHub PR URL）で同じfieldを重複できません。旧フィールド名`prUrl`や未知のキーは拒否します。失敗時のメッセージは原因の項目を示さないため、このとおりに確認してください。復元登録日時はDBが記録し、kindはrestored固定です。マニフェストやSQLダンプはGitへ追加しないでください。CLIは実在しない操作者、分からない変更前の値、正確な操作時刻を推測する道具ではありません。
+DBの接続設定は利用環境に合わせ、バックアップを取得してから実行してください。対象が履歴初期化済みであることを確認します。JSONは最大2MiB/10000件で、changesはtitle/description/status/prUrls/assigneeの最大5項目です。各記録の必須項目はnumber・cardId・createdAt・key・occurredAt・noteで、空にできるのはchangesとevidenceUrlだけです（noteは1〜4000文字）。keyは英数字と`_.:-`の1〜128文字、changesの値はtitle 200・description 10000・status 60・assignee 60・prUrlsは65536バイト以内のJSON配列（各要素は非空のGitHub PR URL）で同じfieldを重複できません。旧フィールド名`prUrl`や未知のキーは拒否します。失敗時のメッセージは原因の項目を示さないため、このとおりに確認してください。復元登録日時はDBが記録し、kindはrestored固定です。マニフェストやSQLダンプはGitへ追加しないでください。CLIは実在しない操作者、分からない変更前の値、正確な操作時刻を推測する道具ではありません。
 
 occurredAtはMySQLのDATETIME(6)に合わせてマイクロ秒未満を切り捨てて保存・比較します。occurredAtは取り込み時刻より5分を超える未来の値を拒否し、1件でも不正なら全体を書き込みません（誤記すると一覧の最上位に残り、追記専用のため直せないためです）。カードのcreatedAtより前の値は、作成前にマージされたPRなどがあるため拒否しません。createdAtは対象カードの応答値をそのまま指定してください。取り込みはカード・履歴を書く前に、ほかのカード書き込み（作成・ステータス変更・PR リンクの書き換え・削除・並び替え）と同じ全列ロックを取るので、ボードの更新とデッドロックしません（取り込み中はそれらの書き込みが待たされます）。同時バッチでもカードID順のロックとREAD COMMITTEDのキー確認で、異なる内容の同一キーを黙って無視しません。
 

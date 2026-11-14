@@ -37,6 +37,9 @@ export class Api {
   updateCard(id: number, input: Partial<CardInput>) {
     return this.http.patch<Card>(`/api/cards/${id}`, input);
   }
+  updateAssigneeByNumber(number: number, assignee: string) {
+    return this.http.patch<Card>(`/api/cards/by-number/${number}/assignee`, { assignee });
+  }
   deleteCard(id: number) {
     return this.http.delete<void>(`/api/cards/${id}`);
   }

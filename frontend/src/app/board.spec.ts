@@ -37,7 +37,7 @@ describe('Board create requests', () => {
   });
 });
 
-const singleCardBoard = () =>
+const singleCardBoard = (assignee = '') =>
   of({
     columns: [{ id: 1, name: 'Todo', position: 0 }],
     cards: [
@@ -49,11 +49,43 @@ const singleCardBoard = () =>
         description: '',
         position: 0,
         backlogPosition: 0,
+        prUrls: [],
+        assignee,
         createdAt: '',
         updatedAt: '',
       },
     ],
   });
+
+describe('Board assignee chip', () => {
+  it('shows an assignee chip when set and hides it when empty', async () => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        { provide: Api, useValue: { board: () => singleCardBoard('Cursor') } },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    const chip = f.nativeElement.querySelector('.card-assignee') as HTMLElement;
+    expect(chip.textContent?.trim()).toBe('Cursor');
+    expect(chip.getAttribute('data-assignee')).toBe('cursor');
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideRouter([]), { provide: Api, useValue: { board: singleCardBoard } }],
+    });
+    const empty = TestBed.createComponent(Board);
+    empty.detectChanges();
+    await empty.whenStable();
+    empty.detectChanges();
+    expect(empty.nativeElement.querySelector('.card-assignee')).toBeNull();
+  });
+});
 
 describe('Board task numbers', () => {
   it('links to the same public number shown on the card', async () => {
@@ -159,6 +191,7 @@ function sampleBoard(columns: Column[]): BoardData {
         position: 0,
         backlogPosition: 0,
         prUrls: [],
+        assignee: '',
         createdAt: '',
         updatedAt: '',
       },
@@ -1187,6 +1220,7 @@ describe('Board live refresh', () => {
           position: 1,
           backlogPosition: 1,
           prUrls: [],
+          assignee: '',
           createdAt: '',
           updatedAt: '',
         },
