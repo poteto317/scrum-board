@@ -71,7 +71,7 @@ describe('Board task numbers', () => {
     expect(link.getAttribute('href')).toBe('/cards/2');
     const copyBtn = f.nativeElement.querySelector('.copy-card-link');
     expect(copyBtn).not.toBeNull();
-    expect(copyBtn.getAttribute('aria-label')).toBe('リンクをコピー');
+    expect(copyBtn.getAttribute('aria-label')).toBe('TASK-002 のリンクをコピー');
   });
 });
 

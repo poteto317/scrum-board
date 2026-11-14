@@ -34,6 +34,10 @@
   color: var(--muted);
   text-align: right;
   max-width: 12rem;
+  min-height: 1.2em;
+}
+.copy-link-feedback:empty {
+  display: none;
 }
 .eyebrow {
   font-size: 11px;
