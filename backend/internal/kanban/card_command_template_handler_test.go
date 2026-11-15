@@ -127,6 +127,18 @@ func TestCardCommandTemplatesHTTP(t *testing.T) {
 	}
 }
 
+func TestDefaultsAndApplyRejectUnknownIDs(t *testing.T) {
+	h := NewHandler(fresh())
+	w := request(h, "PUT", "/api/command-template-defaults", `{"templateIds":[999999]}`)
+	if w.Code != 400 {
+		t.Fatalf("defaults unknown: %d %s", w.Code, w.Body.String())
+	}
+	w = request(h, "POST", "/api/command-templates/apply-to-all-cards", `{"templateIds":[999999]}`)
+	if w.Code != 400 {
+		t.Fatalf("apply unknown: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestDecodeTemplateIDsRequiresField(t *testing.T) {
 	h := NewHandler(fresh())
 	w := request(h, "PUT", "/api/command-template-defaults", `{}`)
