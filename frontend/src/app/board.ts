@@ -104,6 +104,7 @@ export class Board implements OnInit {
   readonly openCommandCardId = signal<number | null>(null);
   readonly commandMenuTemplates = signal<CommandTemplate[]>([]);
   readonly commandMenuError = signal('');
+  readonly commandMenuLoading = signal(false);
   private commandMenuLoadGeneration = 0;
   /** Viewport-fixed coords so the menu is not clipped by `.board-scroll` overflow. */
   readonly commandMenuStyle = signal<Record<string, string>>({});
@@ -205,6 +206,7 @@ export class Board implements OnInit {
     this.commandMenuStyle.set({});
     this.commandMenuTemplates.set([]);
     this.commandMenuError.set('');
+    this.commandMenuLoading.set(true);
     this.openCommandCardId.set(cardId);
     const generation = ++this.commandMenuLoadGeneration;
     this.api
@@ -217,6 +219,7 @@ export class Board implements OnInit {
           }
           this.commandMenuTemplates.set(res?.templates ?? []);
           this.commandMenuError.set('');
+          this.commandMenuLoading.set(false);
         },
         error: (error) => {
           if (generation !== this.commandMenuLoadGeneration || this.openCommandCardId() !== cardId) {
@@ -224,6 +227,7 @@ export class Board implements OnInit {
           }
           this.commandMenuTemplates.set([]);
           this.commandMenuError.set(errorMessage(error));
+          this.commandMenuLoading.set(false);
         },
       });
     afterNextRender(
@@ -262,6 +266,7 @@ export class Board implements OnInit {
     this.commandMenuStyle.set({});
     this.commandMenuTemplates.set([]);
     this.commandMenuError.set('');
+    this.commandMenuLoading.set(false);
   }
 
   copyCommand(templateText: string, number: number, event: Event) {
