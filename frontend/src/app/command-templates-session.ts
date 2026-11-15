@@ -10,8 +10,14 @@ export const COMMAND_LIST_LOAD_FAILURE = 'コマンド一覧を読み込めま�
 export const COMMAND_CREATE_SUCCESS = 'コマンドを追加しました';
 export const COMMAND_UPDATE_SUCCESS = 'コマンドを更新しました';
 export const COMMAND_DELETE_SUCCESS = 'コマンドを削除しました';
+export const COMMAND_APPLY_ALL_SUCCESS = '全カードのコマンド表示を置き換えました';
+export const COMMAND_DEFAULTS_SUCCESS = '新規カードの初期コマンドを更新しました';
+export const COMMAND_APPLY_ALL_CONFIRM =
+  'チェックしたコマンドで、すべてのカードの表示セットを置き換えます。よろしいですか？';
+export const COMMAND_DEFAULTS_CONFIRM =
+  'チェックしたコマンドを新規カードの初期セットにします。既存カードは変わりません。よろしいですか？';
 
-/** Command-template list and admin CRUD, shared by the board menu and card detail. */
+/** Catalog list and admin CRUD for card detail (menus use per-card links). */
 @Injectable()
 export class CommandTemplatesSession {
   private readonly api = inject(Api);
@@ -21,6 +27,7 @@ export class CommandTemplatesSession {
   readonly adminMessage = signal('');
   readonly saving = signal(false);
   readonly editingId = signal<number | null>(null);
+  readonly bulkSelectedIds = signal<number[]>([]);
   readonly createForm = new FormGroup({
     name: new FormControl('', { nonNullable: true }),
     template: new FormControl('', { nonNullable: true }),
@@ -93,7 +100,7 @@ export class CommandTemplatesSession {
       });
   }
 
-  delete(id: number) {
+  delete(id: number, onSuccess?: () => void) {
     if (this.saving()) return;
     this.saving.set(true);
     this.adminMessage.set('');
@@ -106,8 +113,10 @@ export class CommandTemplatesSession {
       .subscribe({
         next: () => {
           if (this.editingId() === id) this.editingId.set(null);
+          this.bulkSelectedIds.set(this.bulkSelectedIds().filter((x) => x !== id));
           this.adminMessage.set(COMMAND_DELETE_SUCCESS);
           this.load();
+          onSuccess?.();
         },
         error: (error) => this.adminMessage.set(errorMessage(error)),
       });
@@ -120,5 +129,60 @@ export class CommandTemplatesSession {
 
   cancelEdit() {
     this.editingId.set(null);
+  }
+
+  toggleBulk(id: number, checked: boolean) {
+    const current = this.bulkSelectedIds();
+    if (checked) {
+      if (!current.includes(id)) this.bulkSelectedIds.set([...current, id]);
+      return;
+    }
+    this.bulkSelectedIds.set(current.filter((x) => x !== id));
+  }
+
+  isBulkSelected(id: number) {
+    return this.bulkSelectedIds().includes(id);
+  }
+
+  applyToAllCards(
+    confirmFn: (message: string) => boolean = (m) => window.confirm(m),
+    onSuccess?: () => void,
+  ) {
+    if (this.saving()) return;
+    if (!confirmFn(COMMAND_APPLY_ALL_CONFIRM)) return;
+    this.saving.set(true);
+    this.adminMessage.set('');
+    const ids = this.bulkSelectedIds();
+    this.api
+      .applyCommandTemplatesToAllCards(ids)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => this.saving.set(false)),
+      )
+      .subscribe({
+        next: () => {
+          this.adminMessage.set(COMMAND_APPLY_ALL_SUCCESS);
+          onSuccess?.();
+        },
+        error: (error) => this.adminMessage.set(errorMessage(error)),
+      });
+  }
+
+  setAsDefaults(confirmFn: (message: string) => boolean = (m) => window.confirm(m)) {
+    if (this.saving()) return;
+    if (!confirmFn(COMMAND_DEFAULTS_CONFIRM)) return;
+    this.saving.set(true);
+    this.adminMessage.set('');
+    const ids = this.bulkSelectedIds();
+    this.api
+      .replaceCommandTemplateDefaults(ids)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => this.saving.set(false)),
+      )
+      .subscribe({
+        next: () => this.adminMessage.set(COMMAND_DEFAULTS_SUCCESS),
+        error: (error) => this.adminMessage.set(errorMessage(error)),
+      });
   }
 }
