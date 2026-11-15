@@ -254,6 +254,16 @@ export class CardDetail implements OnInit {
   toggleCommandMenu(event: Event) {
     event.preventDefault();
     event.stopPropagation();
+    // Loading / load failure: toggle menu so the existing status rows show (spec).
+    if (this.cardCommands.loading() || this.cardCommands.loadError()) {
+      this.commandMenuOpen.update((open) => !open);
+      return;
+    }
+    const templates = this.cardCommands.templates();
+    if (templates.length === 1) {
+      void this.copyCommand(templates[0].template, event);
+      return;
+    }
     this.commandMenuOpen.update((open) => !open);
   }
 

@@ -558,7 +558,7 @@ describe('CardDetail copy command menu and management', () => {
     el.dispatchEvent(new Event('input'));
   };
 
-  it('copies the resolved command into the shared visible feedback without navigating', async () => {
+  it('copies immediately when only one template is linked without opening the menu', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -567,14 +567,19 @@ describe('CardDetail copy command menu and management', () => {
     const { f, api, router } = create();
     expect(api.listCommandTemplates).toHaveBeenCalled();
     expect(api.listCardCommandTemplatesByNumber).toHaveBeenCalled();
-    const { menu } = openMenu(f);
-    expect(menu.textContent).toContain(template.name);
-    (menu.querySelector('button') as HTMLButtonElement).click();
+    const button = f.nativeElement.querySelector(
+      '.copy-command-button',
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    button!.click();
+    f.detectChanges();
     await vi.waitUntil(() => {
       f.detectChanges();
       const feedback = f.nativeElement.querySelector('.copy-link-feedback');
       return (feedback?.textContent ?? '').includes(COPY_COMMAND_SUCCESS);
     });
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+    expect(button!.getAttribute('aria-expanded')).toBe('false');
     const feedback = f.nativeElement.querySelector('.copy-link-feedback') as HTMLElement;
     expect(feedback.getAttribute('aria-live')).toBe('polite');
     expect(feedback.classList.contains('sr-only')).toBe(false);
@@ -585,6 +590,29 @@ describe('CardDetail copy command menu and management', () => {
     expect(router.navigate).not.toHaveBeenCalled();
   });
 
+  it('keeps the menu for multiple templates and copies the chosen item', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const second = { id: 8, name: 'echo', template: 'echo {{url}}', position: 2 };
+    const { f } = create({}, [template, second]);
+    const { menu } = openMenu(f);
+    expect(menu.textContent).toContain(template.name);
+    expect(menu.textContent).toContain(second.name);
+    (menu.querySelector('button') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-link-feedback')?.textContent ?? '').includes(
+        COPY_COMMAND_SUCCESS,
+      );
+    });
+    expect(writeText).toHaveBeenCalledWith(
+      resolveCommand(template.template, cardDetailUrl(window.location.origin, card.number)),
+    );
+  });
+
   it('shows only the latest copy feedback when a link copy follows a command copy', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
@@ -592,8 +620,12 @@ describe('CardDetail copy command menu and management', () => {
       value: { writeText },
     });
     const { f } = create();
-    const { menu } = openMenu(f);
-    (menu.querySelector('button') as HTMLButtonElement).click();
+    const button = f.nativeElement.querySelector(
+      '.copy-command-button',
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    button!.click();
+    f.detectChanges();
     await vi.waitUntil(() => {
       f.detectChanges();
       return (f.nativeElement.querySelector('.copy-link-feedback')?.textContent ?? '').includes(
@@ -617,8 +649,12 @@ describe('CardDetail copy command menu and management', () => {
       value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     });
     const { f } = create();
-    const { menu } = openMenu(f);
-    (menu.querySelector('button') as HTMLButtonElement).click();
+    const button = f.nativeElement.querySelector(
+      '.copy-command-button',
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    button!.click();
+    f.detectChanges();
     await vi.waitUntil(() => {
       f.detectChanges();
       return (f.nativeElement.querySelector('.copy-link-feedback')?.textContent ?? '').includes(
@@ -671,7 +707,8 @@ describe('CardDetail copy command menu and management', () => {
   });
 
   it('closes the command menu on Escape and on an outside click', () => {
-    const { f } = create();
+    const second = { id: 8, name: 'echo', template: 'echo {{url}}', position: 2 };
+    const { f } = create({}, [template, second]);
     openMenu(f);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     f.detectChanges();
