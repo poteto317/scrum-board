@@ -8,7 +8,7 @@ import { CommandTemplatesSession } from './command-templates-session';
 import { cardDetailUrl } from './card-link';
 import { COPY_LINK_SUCCESS } from './copy-link-feedback';
 import {
-  COMMAND_MENU_EMPTY,
+  COMMAND_CARD_MENU_EMPTY,
   COPY_COMMAND_FAILURE,
   COPY_COMMAND_SUCCESS,
   resolveCommand,
@@ -21,7 +21,7 @@ describe('Board create requests', () => {
     const pending = new Subject<never>();
     const api = {
       createCard: vi.fn(() => pending),
-      listCommandTemplates: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       providers: [CommandTemplatesSession, { provide: Api, useValue: api }],
@@ -70,7 +70,7 @@ describe('Board create requests', () => {
         CommandTemplatesSession,
         {
           provide: Api,
-          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }) },
+          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -112,7 +112,7 @@ describe('Board create requests', () => {
         CommandTemplatesSession,
         {
           provide: Api,
-          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }) },
+          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -129,7 +129,7 @@ describe('Board create requests', () => {
         CommandTemplatesSession,
         {
           provide: Api,
-          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }) },
+          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -156,7 +156,7 @@ describe('Board create requests', () => {
                 ],
                 cards: [],
               }),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -191,7 +191,7 @@ describe('Board create requests', () => {
     const pending = new Subject<never>();
     const api = {
       createColumn: vi.fn(() => pending),
-      listCommandTemplates: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       providers: [CommandTemplatesSession, { provide: Api, useValue: api }],
@@ -236,7 +236,7 @@ describe('Board assignee chip', () => {
           provide: Api,
           useValue: {
             board: () => singleCardBoard('Cursor'),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -256,7 +256,7 @@ describe('Board assignee chip', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -276,7 +276,7 @@ describe('Board task numbers', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -318,7 +318,7 @@ describe('Board copy card link', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -400,20 +400,23 @@ describe('Board copy command menu', () => {
 
   const create = async (
     templates: { id: number; name: string; template: string; position: number }[],
-    listCommandTemplates = vi.fn(() => of({ templates })),
+    listCardCommandTemplatesByNumber = vi.fn(() => of({ templates })),
   ) => {
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board: singleCardBoard, listCommandTemplates } },
+        {
+          provide: Api,
+          useValue: { board: singleCardBoard, listCardCommandTemplatesByNumber },
+        },
       ],
     });
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
     f.detectChanges();
-    return { f, listCommandTemplates };
+    return { f, listCardCommandTemplatesByNumber };
   };
 
   const openMenu = (f: { nativeElement: HTMLElement; detectChanges(): void }) => {
@@ -437,11 +440,11 @@ describe('Board copy command menu', () => {
       configurable: true,
       value: { writeText },
     });
-    const { f, listCommandTemplates } = await create([template]);
-    expect(listCommandTemplates).toHaveBeenCalled();
+    const { f, listCardCommandTemplatesByNumber } = await create([template]);
     const router = TestBed.inject(Router);
     const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     const { menu } = openMenu(f);
+    expect(listCardCommandTemplatesByNumber).toHaveBeenCalled();
     expect(menu.textContent).toContain(template.name);
     expect(menu.querySelector('b')).toBeNull();
     (menu.querySelector('button') as HTMLButtonElement).click();
@@ -487,7 +490,7 @@ describe('Board copy command menu', () => {
     });
     const { f } = await create([]);
     const { menu } = openMenu(f);
-    expect(menu.textContent).toContain(COMMAND_MENU_EMPTY);
+    expect(menu.textContent).toContain(COMMAND_CARD_MENU_EMPTY);
     expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
     menu.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(writeText).not.toHaveBeenCalled();
@@ -499,8 +502,8 @@ describe('Board copy command menu', () => {
       vi.fn(() => throwError(() => ({ status: 404 }))),
     );
     const { menu } = openMenu(f);
-    expect(menu.textContent).not.toContain(COMMAND_MENU_EMPTY);
-    expect(menu.textContent).toContain('コマンド一覧を読み込めませんでした');
+    expect(menu.textContent).not.toContain(COMMAND_CARD_MENU_EMPTY);
+    expect(menu.textContent).toContain('通信に失敗しました');
     expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
   });
 
@@ -655,7 +658,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -740,7 +743,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -795,7 +798,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -858,7 +861,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -917,7 +920,7 @@ describe('Board column reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board, reorderColumns, listCommandTemplates: () => of({ templates: [] }) },
+          useValue: { board, reorderColumns, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -994,7 +997,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1120,7 +1123,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1155,7 +1158,7 @@ describe('Board card reordering', () => {
             board: () => of(initial),
             reorderCards,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1204,7 +1207,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1252,7 +1255,7 @@ describe('Board card reordering', () => {
             board: () => of(boardData),
             reorderCards,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1288,7 +1291,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards: vi.fn(),
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1329,7 +1332,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1366,7 +1369,7 @@ describe('Board card reordering', () => {
             board: () => of(boardData),
             reorderCards,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1402,7 +1405,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards: vi.fn(),
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1446,7 +1449,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1484,7 +1487,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1528,7 +1531,7 @@ describe('Board card reordering', () => {
             board: () => of(twoCardBoard()),
             reorderCards: () => new Subject(),
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1584,7 +1587,7 @@ describe('Board card identity', () => {
           useValue: {
             board: () => of(crossed()),
             reorderCards,
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1661,7 +1664,7 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1704,7 +1707,7 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1730,7 +1733,7 @@ describe('Board live refresh', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board, listCommandTemplates: () => of({ templates: [] }) } },
+        { provide: Api, useValue: { board, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) } },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -1748,7 +1751,7 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1770,7 +1773,7 @@ describe('Board live refresh', () => {
     const slow = new Subject<BoardData>();
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       imports: [Board],

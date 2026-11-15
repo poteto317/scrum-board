@@ -23,6 +23,7 @@ import {
   CdkDragHandle,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter, finalize } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
@@ -45,8 +46,7 @@ import {
 } from './column-order';
 import { textLimit } from './form-validation';
 import { BoardData, Card, Column } from './models';
-import { COMMAND_MENU_EMPTY } from './command-template';
-import { CommandTemplatesSession } from './command-templates-session';
+import { COMMAND_CARD_MENU_EMPTY, CommandTemplate } from './command-template';
 import { CopyCommandFeedback } from './copy-command-feedback';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { LatestCopyFeedback } from './latest-copy-feedback';
@@ -60,7 +60,6 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
   templateUrl: './board.html',
   styleUrl: './board.css',
   providers: [
-    CommandTemplatesSession,
     {
       provide: CDK_DRAG_CONFIG,
       useValue: {
@@ -101,9 +100,11 @@ export class Board implements OnInit {
   readonly copyLinkAnnouncement = this.linkCopy.message;
   readonly copyCommandAnnouncement = this.commandCopy.message;
   readonly copyFeedback = this.copyStatus.message;
-  readonly commands = inject(CommandTemplatesSession);
-  readonly commandMenuEmpty = COMMAND_MENU_EMPTY;
+  readonly commandMenuEmpty = COMMAND_CARD_MENU_EMPTY;
   readonly openCommandCardId = signal<number | null>(null);
+  readonly commandMenuTemplates = signal<CommandTemplate[]>([]);
+  readonly commandMenuError = signal('');
+  private commandMenuLoadGeneration = 0;
   /** Viewport-fixed coords so the menu is not clipped by `.board-scroll` overflow. */
   readonly commandMenuStyle = signal<Record<string, string>>({});
   readonly draggingColumnId = signal<number | null>(null);
@@ -157,7 +158,6 @@ export class Board implements OnInit {
 
   ngOnInit() {
     this.load();
-    this.commands.load();
     const stop = startLiveRefresh({
       enabled: () =>
         !this.loading() &&
@@ -191,7 +191,7 @@ export class Board implements OnInit {
     return this.linkCopy.copyCardNumber(number);
   }
 
-  toggleCommandMenu(cardId: number, event: Event) {
+  toggleCommandMenu(cardId: number, cardNumber: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
     const opening = this.openCommandCardId() !== cardId;
@@ -203,7 +203,29 @@ export class Board implements OnInit {
     if (!(button instanceof HTMLElement)) return;
     // Apply .command-menu-open first so hover transform is cleared (it would be the fixed containing block).
     this.commandMenuStyle.set({});
+    this.commandMenuTemplates.set([]);
+    this.commandMenuError.set('');
     this.openCommandCardId.set(cardId);
+    const generation = ++this.commandMenuLoadGeneration;
+    this.api
+      .listCardCommandTemplatesByNumber(cardNumber)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          if (generation !== this.commandMenuLoadGeneration || this.openCommandCardId() !== cardId) {
+            return;
+          }
+          this.commandMenuTemplates.set(res?.templates ?? []);
+          this.commandMenuError.set('');
+        },
+        error: (error) => {
+          if (generation !== this.commandMenuLoadGeneration || this.openCommandCardId() !== cardId) {
+            return;
+          }
+          this.commandMenuTemplates.set([]);
+          this.commandMenuError.set(errorMessage(error));
+        },
+      });
     afterNextRender(
       () => {
         if (this.openCommandCardId() !== cardId) return;
@@ -235,8 +257,11 @@ export class Board implements OnInit {
   }
 
   private closeCommandMenu() {
+    this.commandMenuLoadGeneration++;
     this.openCommandCardId.set(null);
     this.commandMenuStyle.set({});
+    this.commandMenuTemplates.set([]);
+    this.commandMenuError.set('');
   }
 
   copyCommand(templateText: string, number: number, event: Event) {
