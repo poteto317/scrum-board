@@ -33,6 +33,7 @@ func TestNormalizeRelatedItems(t *testing.T) {
 		{"too long label", []RelatedItem{{Kind: "url", URL: "https://a.com", Label: strings.Repeat("あ", relatedLabelMax+1)}}},
 		{"too long url", []RelatedItem{{Kind: "url", URL: "https://a.com/" + strings.Repeat("x", relatedURLMax)}}},
 		{"newline url", []RelatedItem{{Kind: "url", URL: "https://a.com/\n"}}},
+		{"label control", []RelatedItem{{Kind: "url", URL: "https://a.com", Label: "a\tb"}}},
 	}
 	for _, tc := range cases {
 		if _, valid := normalizeRelatedItems(tc.items); valid {

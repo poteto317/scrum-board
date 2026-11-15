@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"unicode"
 )
 
 // ErrRelatedItem is a client validation failure for relatedItems (maps to HTTP 400).
@@ -34,6 +35,11 @@ func normalizeRelatedItems(items []RelatedItem) ([]RelatedItem, bool) {
 		label := strings.TrimSpace(raw.Label)
 		if len([]rune(label)) > relatedLabelMax {
 			return nil, false
+		}
+		for _, r := range label {
+			if unicode.IsControl(r) {
+				return nil, false
+			}
 		}
 		switch kind {
 		case relatedKindCard:
