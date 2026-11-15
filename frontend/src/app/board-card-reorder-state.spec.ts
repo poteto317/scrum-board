@@ -29,6 +29,7 @@ function card(id: number, columnId: number, position: number, title: string): Ca
     position,
     backlogPosition: position,
     prUrls: [],
+    relatedItems: [],
     assignee: '',
     createdAt: '',
     updatedAt: '',

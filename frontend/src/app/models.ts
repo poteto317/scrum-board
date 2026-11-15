@@ -3,6 +3,14 @@ export interface Column {
   name: string;
   position: number;
 }
+export interface RelatedItem {
+  kind: 'card' | 'url';
+  number?: number;
+  title?: string;
+  url?: string;
+  label?: string;
+}
+
 export interface Card {
   number: number;
   id: number;
@@ -12,6 +20,7 @@ export interface Card {
   position: number;
   backlogPosition: number;
   prUrls: string[];
+  relatedItems: RelatedItem[];
   assignee: string;
   createdAt: string;
   updatedAt: string;
@@ -21,7 +30,7 @@ export interface BoardData {
   cards: Card[];
 }
 export type CardInput = Pick<Card, 'title' | 'description' | 'columnId'> &
-  Partial<Pick<Card, 'prUrls' | 'assignee'>>;
+  Partial<Pick<Card, 'prUrls' | 'relatedItems' | 'assignee'>>;
 
 export interface HistoryChange {
   field: string;
