@@ -46,6 +46,12 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/command-templates", h.createCommandTemplate)
 	mux.HandleFunc("PATCH /api/command-templates/{id}", h.updateCommandTemplate)
 	mux.HandleFunc("DELETE /api/command-templates/{id}", h.deleteCommandTemplate)
+	mux.HandleFunc("POST /api/command-templates/apply-to-all-cards", h.applyCommandTemplatesToAllCards)
+	mux.HandleFunc("GET /api/command-template-defaults", h.listCommandTemplateDefaults)
+	mux.HandleFunc("PUT /api/command-template-defaults", h.replaceCommandTemplateDefaults)
+	// by-number only: GET /api/cards/{id}/command-templates conflicts with GET /api/cards/by-number/{number} in ServeMux.
+	mux.HandleFunc("GET /api/cards/by-number/{number}/command-templates", h.listCardCommandTemplatesByNumber)
+	mux.HandleFunc("PUT /api/cards/by-number/{number}/command-templates", h.replaceCardCommandTemplatesByNumber)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
