@@ -31,6 +31,8 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, 400, map[string]string{"message": "バックログの並び順を確認してください。"})
 	case errors.Is(err, ErrCommandTemplateLimit):
 		reply(w, 400, map[string]string{"message": "コマンドテンプレートは50件までです。"})
+	case errors.Is(err, ErrUnknownCommandTemplateIDs):
+		reply(w, 400, map[string]string{"message": "存在しないコマンドテンプレートが含まれています。"})
 	case errors.Is(err, ErrDuplicate):
 		reply(w, 409, map[string]string{"message": "同じ名前の列がすでにあります。"})
 	case errors.Is(err, ErrColumnMismatch):

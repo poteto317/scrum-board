@@ -79,4 +79,9 @@ type Repository interface {
 	CreateCommandTemplate(context.Context, CommandTemplateInput) (CommandTemplate, error)
 	UpdateCommandTemplate(context.Context, int64, CommandTemplatePatch) (CommandTemplate, error)
 	DeleteCommandTemplate(context.Context, int64) error
+	ListCardCommandTemplates(context.Context, int64) ([]CommandTemplate, error)
+	ReplaceCardCommandTemplates(context.Context, int64, []int64) ([]CommandTemplate, error)
+	ListCommandTemplateDefaults(context.Context) ([]int64, error)
+	ReplaceCommandTemplateDefaults(context.Context, []int64) ([]int64, error)
+	ApplyCommandTemplatesToAllCards(context.Context, []int64) error
 }
