@@ -58,6 +58,7 @@
       tabindex="0"
       role="region"
       aria-label="かんばんボード。列が多い場合は横スクロールできます。"
+      (scroll)="closeCommandMenuOnViewportChange()"
       (dragover)="onColumnsDragOver($event)"
       (dragleave)="onColumnsDragLeave($event)"
       (drop)="onColumnsDrop($event)"
