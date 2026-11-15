@@ -27,6 +27,12 @@ export class CopyCommandFeedback {
   ): Promise<void> {
     const ok = await copyText(resolveCommand(template, cardDetailUrl(origin, number)));
     if (this.state.isDestroyed) return;
+    this.announce(ok);
+  }
+
+  /** Feedback only (clipboard already written, e.g. ClipboardItem path). */
+  announce(ok: boolean): void {
+    if (this.state.isDestroyed) return;
     this.state.show(ok ? COPY_COMMAND_SUCCESS : COPY_COMMAND_FAILURE);
   }
 
