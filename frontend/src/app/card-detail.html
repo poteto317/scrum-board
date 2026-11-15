@@ -54,6 +54,8 @@
               <ul class="copy-command-menu" role="menu">
                 @if (cardCommands.loadError()) {
                   <li class="copy-command-empty" role="status">{{ cardCommands.loadError() }}</li>
+                } @else if (cardCommands.loading()) {
+                  <li class="copy-command-empty" role="status">読み込み中…</li>
                 } @else if (cardCommands.templates().length === 0) {
                   <li class="copy-command-empty">{{ commandMenuEmpty }}</li>
                 } @else {
