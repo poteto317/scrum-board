@@ -6,6 +6,9 @@ import { BoardData, Card, CardInput, Column, HistoryPage } from './models';
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
+  publicConfig() {
+    return this.http.get<{ publicOrigin: string }>('/api/public-config');
+  }
   board() {
     return this.http.get<BoardData>('/api/board');
   }

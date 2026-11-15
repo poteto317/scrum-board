@@ -55,6 +55,12 @@ describe('CopyCommandFeedback', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('gh pr view http://example/cards/1');
   });
 
+  it('sets failure message when public origin cannot be loaded', () => {
+    vi.useFakeTimers();
+    feedback.failOrigin();
+    expect(feedback.message()).toBe(COPY_COMMAND_FAILURE);
+  });
+
   it('does not update after destroy while copy is in flight', async () => {
     let resolveWrite!: () => void;
     Object.defineProperty(navigator, 'clipboard', {

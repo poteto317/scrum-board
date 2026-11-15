@@ -26,6 +26,7 @@ import { CardPrLinks } from './card-pr-links';
 import { COMMAND_CARD_MENU_EMPTY } from './command-template';
 import { CardCommandsSession } from './card-commands-session';
 import { CommandTemplatesSession } from './command-templates-session';
+import { AppOrigin } from './app-origin';
 import { CopyCommandFeedback } from './copy-command-feedback';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { LatestCopyFeedback } from './latest-copy-feedback';
@@ -46,6 +47,7 @@ import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 })
 export class CardDetail implements OnInit {
   private readonly api = inject(Api);
+  private readonly appOrigin = inject(AppOrigin);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -94,10 +96,15 @@ export class CardDetail implements OnInit {
     });
   }
 
-  copyCardLink(): Promise<void> {
+  async copyCardLink(): Promise<void> {
     const card = this.card();
-    if (!card) return Promise.resolve();
-    return this.linkCopy.copyCardNumber(card.number);
+    if (!card) return;
+    const resolved = await this.appOrigin.resolve();
+    if (!resolved.ok) {
+      this.linkCopy.failOrigin();
+      return;
+    }
+    return this.linkCopy.copyCardNumber(card.number, resolved.origin);
   }
 
   ngOnInit() {
@@ -254,13 +261,18 @@ export class CardDetail implements OnInit {
     this.commandMenuOpen.update((open) => !open);
   }
 
-  copyCommand(templateText: string, event: Event) {
+  async copyCommand(templateText: string, event: Event) {
     event.preventDefault();
     event.stopPropagation();
     const current = this.card();
     if (!current) return;
     this.commandMenuOpen.set(false);
-    return this.commandCopy.copyResolved(templateText, current.number);
+    const resolved = await this.appOrigin.resolve();
+    if (!resolved.ok) {
+      this.commandCopy.failOrigin();
+      return;
+    }
+    return this.commandCopy.copyResolved(templateText, current.number, resolved.origin);
   }
 
   openCommandManager() {
