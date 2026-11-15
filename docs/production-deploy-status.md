@@ -41,4 +41,19 @@
 
 ## ローカルデータの移行
 
-ローカル dump → Cloud SQL インポート → `backend/cmd/rewrite-origins`（`--dry-run` 後本実行）は README「本番へのデータ移行」を参照。本番試行では初期 SQL のみ投入（ローカル dump は未実施）。
+**移行ステータス: DONE（2026-11-15）** — カード #42
+
+詳細手順の正本: README「本番へのデータ移行」§1（dump）+ `docs/superpowers/specs/2026-11-15-prod-data-deploy-design.md`（TCP インポート。README §2 の GCS ではない）。
+
+| 項目 | 値 |
+| --- | --- |
+| 手段 | ローカル `mysqldump` → Cloud SQL パブリック IP + authorized network + Docker `mysql` クライアント（root）→ `rewrite-origins` |
+| ローカル件数 | 41 |
+| 本番件数（移行後） | 41（Basic Auth 付き `GET /api/board`） |
+| `rewrite-origins` | dry-run 1 match → 本実行 1 row updated |
+| dump | `backups/scrumboard-cloud-*.sql`（gitignore・非コミット） |
+| authorized network | 当回は既存 IP で足りたため追記・削除操作は不要（設計の追記→削除手順は未使用） |
+| root 一時パスワード | 作業後に再設定し破棄 |
+| スモーク | Basic Auth 付き board 件数 41、`GET /api/public-config` の `publicOrigin` 一致、認証なし `/api/board` が 401 |
+
+秘密（DB / Auth / root 一時パスワード）はドキュメント・Git に記載しない。
