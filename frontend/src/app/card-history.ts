@@ -37,6 +37,7 @@ export class CardHistory implements OnChanges {
     status: 'ステータス',
     prUrl: 'GitHub PR',
     prUrls: 'GitHub PR',
+    relatedItems: '関連',
     assignee: '対応',
   };
   prUrlList(value: string): string[] | null {

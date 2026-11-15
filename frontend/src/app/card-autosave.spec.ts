@@ -218,7 +218,27 @@ describe('side field preservation', () => {
     expect(edit.card()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
-
+  it('keeps local relatedItems when marked dirty during an in-flight form flush', () => {
+    const response = new Subject<Card>();
+    const api = {
+      updateCard: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(CardAutosave);
+    edit.reset(initial);
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    edit.markRelatedSideDirty();
+    edit.applyRelatedSave({
+      relatedItems: [{ kind: 'url', url: 'https://example.com', label: '' }],
+      updatedAt: '2026-11-15T12:00:00Z',
+    });
+    response.next({ ...initial, title: '編集', relatedItems: [] });
+    response.complete();
+    expect(edit.card()?.relatedItems).toEqual([{ kind: 'url', url: 'https://example.com', label: '' }]);
+    expect(edit.card()?.title).toBe('編集');
+    TestBed.resetTestingModule();
+  });
   it('adopts a server assignee when the local side field was untouched during flush', () => {
     const response = new Subject<Card>();
     const api = {
