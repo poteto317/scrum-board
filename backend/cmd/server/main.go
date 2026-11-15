@@ -54,6 +54,9 @@ func run() error {
 		err = repo.InitializePRLinks(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeRelatedItems(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeNumbers(migrationCtx)
 	}
 	if err == nil {
