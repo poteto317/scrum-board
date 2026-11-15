@@ -7,9 +7,10 @@ import (
 )
 
 type handler struct {
-	repo      Repository
-	formatter CardFormatter
-	slots     chan struct{}
+	repo         Repository
+	formatter    CardFormatter
+	slots        chan struct{}
+	publicOrigin string
 }
 
 // Option customizes NewHandler without changing the call sites that only need the repository.
@@ -20,6 +21,11 @@ func WithCardFormatter(f CardFormatter) Option {
 	return func(h *handler) { h.formatter = f }
 }
 
+// WithPublicOrigin sets the canonical public origin for GET /api/public-config (already normalized).
+func WithPublicOrigin(origin string) Option {
+	return func(h *handler) { h.publicOrigin = NormalizePublicOrigin(origin) }
+}
+
 func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{repo: repo, slots: make(chan struct{}, maxConcurrentFormats)}
 	for _, opt := range opts {
@@ -27,6 +33,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, map[string]string{"status": "ok"}) })
+	mux.HandleFunc("GET /api/public-config", h.publicConfig)
 	mux.HandleFunc("GET /api/board", h.board)
 	mux.HandleFunc("GET /api/backlog", h.backlog)
 	mux.HandleFunc("PUT /api/backlog/order", h.reorderBacklog)
