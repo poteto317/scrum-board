@@ -56,6 +56,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 	if err = (MySQLRepository{DB: db}).InitializePRLinks(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err = (MySQLRepository{DB: db}).InitializeRelatedItems(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if err = (MySQLRepository{DB: db}).prepareHistory(t.Context()); err != nil {
 		t.Fatal(err)
 	}
