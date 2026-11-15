@@ -465,6 +465,8 @@ describe('Backlog live refresh', () => {
 });
 
 describe('Backlog add dialog accidental close', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
   it('keeps the add dialog open on backdrop click, omits cancel, and closes via ×', async () => {
     const cards = makeCards();
     const columns = makeColumns();
@@ -501,11 +503,16 @@ describe('Backlog add dialog accidental close', () => {
       f.componentInstance.openCard();
       f.detectChanges();
       expect(f.componentInstance.modal()).toBe('card');
+      f.componentInstance.cardForm.setValue({ title: '下書き', description: '残る' });
       const dialog = f.nativeElement.querySelector('dialog.modal-backdrop') as HTMLElement;
       expect(dialog).not.toBeNull();
       dialog.click();
       f.detectChanges();
       expect(f.componentInstance.modal()).toBe('card');
+      expect(f.componentInstance.cardForm.getRawValue()).toEqual({
+        title: '下書き',
+        description: '残る',
+      });
       const cancel = Array.from(dialog.querySelectorAll('button')).find((b) =>
         (b.textContent ?? '').includes('キャンセル'),
       );
