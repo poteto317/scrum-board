@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS command_template_defaults (
 
 | 方法 | パス | 内容 |
 | --- | --- | --- |
-| GET | `/api/cards/{id}/command-templates` および `/api/cards/by-number/{n}/command-templates` | `{ "templates": [ { id, name, template, position }, ... ] }`（カード内 `position` 昇順） |
+| GET | `/api/cards/by-number/{n}/command-templates` | `{ "templates": [ { id, name, template, position }, ... ] }`（カード内 `position` 昇順）。Go ServeMux の衝突回避のため `{id}` パスは置かない（履歴 API と同様 by-number） |
 | PUT | 同上 | body: `{ "templateIds": number[] }`。紐付けを置き換え → **200** + 上記と同じ一覧 |
 | GET | `/api/command-template-defaults` | `{ "templateIds": number[] }`（`position` 昇順の id のみ） |
 | PUT | `/api/command-template-defaults` | `{ "templateIds": number[] }` → **200** + 同じ形 |
@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS command_template_defaults (
 
 ### バリデーション
 
+- カードが存在しない GET/PUT → **404**（空の紐付けと混同しない。L-002）
 - `templateIds` 内の id が1件でもカタログに無い → **400**（部分適用しない）
 - 重複 id → **順序を保って一意化**して受理
 - 空配列は許可（カード／デフォルトを空にする。apply-to-all で全カードを空にする）
@@ -99,7 +100,9 @@ CREATE TABLE IF NOT EXISTS command_template_defaults (
 
 - **そのカードの紐付けだけ**表示。カタログ全件は出さない
 - 0 件のとき: 「このカードにコマンドがありません。詳細画面で選べます。」（文言は短く固定）
-- コピー時の `{{url}}` 置換・成功／失敗フィードバックは既存どおり
+- カード分の GET 失敗時は空案内ではなく通信エラー文言を出す（L-002）。成功の空配列だけが 0 件案内
+- 詳細で「全カードに適用」成功後は、開いているカードの選択チェックリストを再取得する（L-039）
+- コピー時の `{{url}}` 置換・成功／失敗フィードバックは既存どおり（L-801）
 
 ### 対象外画面
 
