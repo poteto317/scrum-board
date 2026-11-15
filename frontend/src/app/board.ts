@@ -24,10 +24,11 @@ import {
   CdkDropList,
 } from '@angular/cdk/drag-drop';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { filter, finalize } from 'rxjs';
+import { filter, finalize, firstValueFrom } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { assigneeKind } from './assignee';
+import { cardDetailUrl } from './card-link';
 import {
   affectedColumnIds,
   applyCardDrop,
@@ -46,7 +47,11 @@ import {
 } from './column-order';
 import { textLimit } from './form-validation';
 import { BoardData, Card, Column } from './models';
-import { COMMAND_CARD_MENU_EMPTY, CommandTemplate } from './command-template';
+import {
+  COMMAND_CARD_MENU_EMPTY,
+  CommandTemplate,
+  resolveCommand,
+} from './command-template';
 import { AppOrigin } from './app-origin';
 import { CopyCommandFeedback } from './copy-command-feedback';
 import { CopyLinkFeedback } from './copy-link-feedback';
@@ -205,34 +210,79 @@ export class Board implements OnInit {
     }
     const button = event.currentTarget;
     if (!(button instanceof HTMLElement)) return;
+    const generation = ++this.commandMenuLoadGeneration;
+    const listPromise = firstValueFrom(this.api.listCardCommandTemplatesByNumber(cardNumber));
+
+    // Preserve user activation: write ClipboardItem during the click, resolve text after fetch.
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      const textPromise = listPromise.then(async (res) => {
+        const templates = res?.templates ?? [];
+        if (templates.length !== 1) {
+          throw new Error('not-single');
+        }
+        const origin = await this.appOrigin.resolve();
+        return resolveCommand(templates[0].template, cardDetailUrl(origin, cardNumber));
+      });
+      void navigator.clipboard
+        .write([new ClipboardItem({ 'text/plain': textPromise })])
+        .then(() => {
+          this.zone.run(() => {
+            if (generation !== this.commandMenuLoadGeneration) return;
+            this.commandCopy.announce(true);
+            this.closeCommandMenu();
+          });
+        })
+        .catch(() => {
+          this.zone.run(() => {
+            if (generation !== this.commandMenuLoadGeneration) return;
+            this.openCommandMenuAfterList(cardId, cardNumber, button, generation, listPromise);
+          });
+        });
+      return;
+    }
+
+    this.openCommandMenuAfterList(cardId, cardNumber, button, generation, listPromise);
+  }
+
+  private openCommandMenuAfterList(
+    cardId: number,
+    cardNumber: number,
+    button: HTMLElement,
+    generation: number,
+    listPromise: Promise<{ templates?: CommandTemplate[] }>,
+  ) {
     // Apply .command-menu-open first so hover transform is cleared (it would be the fixed containing block).
     this.commandMenuStyle.set({});
     this.commandMenuTemplates.set([]);
     this.commandMenuError.set('');
     this.commandMenuLoading.set(true);
     this.openCommandCardId.set(cardId);
-    const generation = ++this.commandMenuLoadGeneration;
-    this.api
-      .listCardCommandTemplatesByNumber(cardNumber)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (res) => {
+    void listPromise.then(
+      (res) => {
+        this.zone.run(() => {
           if (generation !== this.commandMenuLoadGeneration || this.openCommandCardId() !== cardId) {
             return;
           }
-          this.commandMenuTemplates.set(res?.templates ?? []);
+          const templates = res?.templates ?? [];
+          this.commandMenuTemplates.set(templates);
           this.commandMenuError.set('');
           this.commandMenuLoading.set(false);
-        },
-        error: (error) => {
+          if (templates.length === 1) {
+            void this.closeMenuAndCopyCommand(templates[0].template, cardNumber);
+          }
+        });
+      },
+      (error) => {
+        this.zone.run(() => {
           if (generation !== this.commandMenuLoadGeneration || this.openCommandCardId() !== cardId) {
             return;
           }
           this.commandMenuTemplates.set([]);
           this.commandMenuError.set(errorMessage(error));
           this.commandMenuLoading.set(false);
-        },
-      });
+        });
+      },
+    );
     afterNextRender(
       () => {
         if (this.openCommandCardId() !== cardId) return;
@@ -275,6 +325,10 @@ export class Board implements OnInit {
   async copyCommand(templateText: string, number: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
+    return this.closeMenuAndCopyCommand(templateText, number);
+  }
+
+  private async closeMenuAndCopyCommand(templateText: string, number: number) {
     this.closeCommandMenu();
     const origin = await this.appOrigin.resolve();
     return this.commandCopy.copyResolved(templateText, number, origin);
