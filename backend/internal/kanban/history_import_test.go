@@ -84,8 +84,19 @@ func TestHistoricalRecordLimits(t *testing.T) {
 		"six changes": {func(v *HistoricalRecord) {
 			v.Changes = []HistoryChange{
 				{Field: "title"}, {Field: "description"}, {Field: "status"},
-				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "assignee"}, {Field: "x"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
+				{Field: "assignee"},
 			}
+		}, true},
+		"seven changes": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{
+				{Field: "title"}, {Field: "description"}, {Field: "status"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
+				{Field: "assignee"}, {Field: "x"},
+			}
+		}, false},
+		"relatedItems not json": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "relatedItems", Before: "[]", After: "not-json"}}
 		}, false},
 		"assignee 60": {func(v *HistoricalRecord) {
 			v.Changes = []HistoryChange{{Field: "assignee", After: long(60)}}
