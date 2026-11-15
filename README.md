@@ -102,7 +102,8 @@ Goの環境変数（ホストで`go run`する場合、ルートの`.env`は自�
 
 | 変数 | ホスト開発の既定値 |
 | --- | --- |
-| `DB_ADDRESS` | `127.0.0.1:3307` |
+| `DB_ADDRESS` | `127.0.0.1:3307`（`DB_SOCKET` 未設定時の TCP 接続先） |
+| `DB_SOCKET` | 空（未設定時は TCP。Cloud SQL などでは例: `/cloudsql/PROJECT:REGION:INSTANCE`） |
 | `DB_USER` | `scrum` |
 | `DB_PASSWORD` | `scrum_dev`（ローカル専用。公開環境では変更必須） |
 | `DB_NAME` | `scrumboard` |
@@ -293,3 +294,149 @@ docker compose start api
 復元記録は「復元した記録」と注記・根拠PRで通常の変更と区別します。バックアップ間の差分は観測時刻であり、正確な操作時刻や途中の全変更を保証しません。作成日時しか分からない場合は初期本文を捏造しません。復元方法とJSON形式は[APIガイド](docs/api.md#過去履歴の取り込み)を参照してください。
 
 バックアップを戻すと履歴もその時点へ戻ります。上記の復元手順で補助表を削除する場合、更新後に記録した履歴も失われます。通常の更新でボリュームやテーブルを初期化する必要はありません。
+
+## 本番へのデータ移行（ローカル → Cloud SQL）
+
+ローカル Compose の MySQL に溜まったカードを Cloud SQL へ載せる手順です。**インポートが終わってから**、DB 内テキストに残っている `http://127.0.0.1:4200` / `http://localhost:4200` を本番オリジンへ置き換えます。
+
+### 1. ローカルからダンプを取得
+
+API を止めてから、既存 README のバックアップ例と同様に `mysqldump` します（`/docker-entrypoint-initdb.d` の再実行は不要です）。
+
+```sh
+mkdir -p backups
+docker compose stop api
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --default-character-set=utf8mb4 -uroot --single-transaction --databases "$MYSQL_DATABASE"' > "backups/scrumboard-cloud-$(date +%Y%m%d-%H%M%S).sql"
+```
+
+終了コードと出力ファイルの先頭（`CREATE DATABASE` など）を確認してから次へ進みます。
+
+### 2. Cloud SQL へインポート
+
+Cloud SQL for MySQL 8 上に、本番と同じ DB 名・ユーザー（例: `scrumboard` / `scrum`）を用意したうえでインポートします。公式の [Cloud SQL への SQL インポート](https://cloud.google.com/sql/docs/mysql/import-export/importing) に従い、GCS 経由または `gcloud sql import sql` でアップロードしてください。インスタンスが起動していること、文字セットは `utf8mb4` であることを確認します。
+
+### 3. オリジン置換 CLI（インポート後・必須）
+
+本番の `PUBLIC_ORIGIN`（末尾スラッシュなし、例: `https://scrum-board-xxxxx.asia-northeast1.run.app`）を **必ず** 設定してから `rewrite-origins` を実行します。未設定・空は更新せず非0終了です。
+
+対象カラム: `cards.title` / `cards.description` / `card_history.note` / `card_history.evidence_url` / `command_templates.template`（`{{url}}` プレースホルダはそのまま。展開済み localhost のみ置換）。
+
+**最初は必ずドライラン**で件数を確認します。
+
+```sh
+cd backend
+export PUBLIC_ORIGIN='https://YOUR-SERVICE.asia-northeast1.run.app'
+# Cloud SQL Auth Proxy または Cloud Shell 経由の接続例（DSN は環境に合わせる）
+export KANBAN_IMPORT_DSN='scrum:YOUR_DB_PASSWORD@tcp(127.0.0.1:3306)/scrumboard?parseTime=true'
+go run ./cmd/rewrite-origins --dry-run
+go run ./cmd/rewrite-origins
+```
+
+`KANBAN_IMPORT_DSN` の代わりに `DB_USER` / `DB_PASSWORD` / `DB_NAME` と、Cloud SQL ユニックスソケットなら `DB_SOCKET=/cloudsql/PROJECT:REGION:INSTANCE` も使えます（API サーバーと同じ規則）。
+
+置換は冪等です（同じ localhost パターンが無ければ更新 0 件で成功）。インポート直後に本番 URL が決まっていない場合は、Cloud Run を一度デプロイして `PUBLIC_ORIGIN` を確定してから CLI を走らせてください。
+
+## 本番デプロイ（GCP: Cloud Run + Cloud SQL）
+
+個人利用向けに **Basic Auth 付き** でスマホから開く構成です。ローカル Compose の既定（`127.0.0.1`・認証なし・`PUBLIC_ORIGIN` 不要）は変えません。本番専用の同居イメージは `deploy/Dockerfile`（nginx + Go API）です。
+
+### 前提
+
+- [Google Cloud SDK（`gcloud`）](https://cloud.google.com/sdk/docs/install) が入り、`gcloud auth login` 済み
+- 課金が有効な GCP プロジェクト（例: `daily-routine-app-8a832`。`GCP_PROJECT` で上書き可）
+- ローカルに Docker（イメージのビルド・push 用）
+
+### 1. API の有効化
+
+プロジェクトで次を有効にします（初回のみ数分かかることがあります）。
+
+```sh
+export GCP_PROJECT=daily-routine-app-8a832   # 任意のプロジェクトへ変更可
+gcloud services enable \
+  run.googleapis.com \
+  sqladmin.googleapis.com \
+  artifactregistry.googleapis.com \
+  servicenetworking.googleapis.com \
+  --project="$GCP_PROJECT"
+```
+
+### 2. Cloud SQL（MySQL 8・最小構成）
+
+小規模利用なら Enterprise エディションの `db-f1-micro` など最小ティアから始めます（新規プロジェクトでは `--edition=enterprise` が必要なことがあります）。**常時起動のためクレジットを継続消費**します。試験後はインスタンス停止または削除でコストを抑えてください（README 末尾「停止・削除」）。
+
+例（パスワードは強いランダム値を自分で生成し、Git やチャットに載せない）:
+
+```sh
+export GCP_REGION=asia-northeast1
+gcloud sql instances create scrumboard-mysql \
+  --database-version=MYSQL_8_4 \
+  --edition=enterprise \
+  --tier=db-f1-micro \
+  --region="$GCP_REGION" \
+  --project="$GCP_PROJECT"
+gcloud sql databases create scrumboard --instance=scrumboard-mysql --project="$GCP_PROJECT"
+gcloud sql users create scrum \
+  --instance=scrumboard-mysql \
+  --password='STRONG_DB_PASSWORD' \
+  --project="$GCP_PROJECT"
+```
+
+接続名は `PROJECT:REGION:scrumboard-mysql` 形式です（`gcloud sql instances describe scrumboard-mysql --format='value(connectionName)'`）。
+
+ローカルデータがある場合は上記「本番へのデータ移行」の dump → インポート → `rewrite-origins` を行います。空の新規 DB なら、初回 API 起動時のマイグレーションと `database/init` 相当のスキーマをインポートするか、一度ローカルからダンプしたスキーマ＋サンプル無し SQL を流します。
+
+### 3. Artifact Registry とイメージのビルド・デプロイ
+
+リポジトリルートで `scripts/deploy-gcp.sh` を使います。必須環境変数が欠けると **即終了** します（値の一覧は `.env.example` のコメント参照）。
+
+```sh
+export GCP_PROJECT=daily-routine-app-8a832
+export GCP_REGION=asia-northeast1
+export CLOUDSQL_INSTANCE="${GCP_PROJECT}:${GCP_REGION}:scrumboard-mysql"
+export DB_USER=scrum
+export DB_PASSWORD='STRONG_DB_PASSWORD'
+export DB_NAME=scrumboard
+export AUTH_USER=kanban
+export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # Secret Manager 推奨
+# 省略可: 未設定ならスクリプトが https://example.com で起動し、デプロイ後に実 URL へ自動更新する
+# export PUBLIC_ORIGIN='https://scrum-board-xxxxx.asia-northeast1.run.app'
+
+./scripts/deploy-gcp.sh
+```
+
+スクリプトは `deploy/Dockerfile` をビルドし、`${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/app:latest` へ push したうえで Cloud Run にデプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
+
+**`PUBLIC_ORIGIN`:** entrypoint は `http://` / `https://` 必須（`placeholder.invalid` は拒否）。未指定時は一時値 `https://example.com` で起動し、`deploy-gcp.sh` がデプロイ後にサービス URL へ自動更新します。リンクコピーと `rewrite-origins` の置換先はこの値と一致させます。
+
+`AUTH_PASSWORD` / `DB_PASSWORD` は **Secret Manager** に置き、`--set-secrets` でマウントする運用を推奨します（リポジトリや Git 履歴に載せない）。`.env` に本番秘密を書かないでください。
+
+任意: `ANTHROPIC_API_KEY` を Cloud Run の環境変数に設定すると、本番でも AI 起票 API が有効になります（未設定なら 503 のまま）。
+
+### 4. 動作確認
+
+```sh
+# Basic Auth あり（200 と JSON）
+curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" "$SERVICE_URL/api/board" | head
+
+# ヘルスチェックは認証なしで 200（nginx の /health。Cloud Run は /healthz を予約するため使わない）
+curl -sS -o /dev/null -w '%{http_code}\n' "$SERVICE_URL/health"
+```
+
+スマホのブラウザーでも同じ URL を開き、Basic Auth を通過してボードが表示されることを確認します（`*.run.app` の URL をブックマーク）。
+
+### 5. 停止・削除（コスト管理）
+
+試験終了後:
+
+```sh
+gcloud run services delete scrum-board --region=asia-northeast1 --project="$GCP_PROJECT" --quiet
+gcloud sql instances patch scrumboard-mysql --activation-policy=NEVER --project="$GCP_PROJECT"
+# 完全に不要なら:
+# gcloud sql instances delete scrumboard-mysql --project="$GCP_PROJECT"
+```
+
+Artifact Registry の古いイメージも容量に応じて削除できます。
+
+### デプロイ試行の記録
+
+実環境での試行結果は `docs/production-deploy-status.md` を参照してください（成功 URL またはブロック理由）。

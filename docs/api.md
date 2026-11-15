@@ -49,6 +49,14 @@ curl --fail-with-body http://127.0.0.1:4200/api/board
 
 応答カードのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
 
+## 公開オリジン（本番リンク用）
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/public-config
+```
+
+応答は `{"publicOrigin":"<PUBLIC_ORIGIN または空文字>"}` です。環境変数 `PUBLIC_ORIGIN` が設定されていればその値（前後空白と末尾 `/` を除去）、未設定なら空文字です。フロントのカードリンク／コマンドの `{{url}}` は、非空ならこのオリジンを優先し、空なら `location.origin` を使います（取得失敗時はコピー失敗）。ローカル Compose の既定では空のままです。
+
 ## リクエストと応答
 
 `PATCH /api/cards/by-number/{number}/status`
