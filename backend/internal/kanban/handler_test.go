@@ -317,6 +317,10 @@ func TestValidation(t *testing.T) {
 		{"bad id", "GET", "/api/cards/no", "", 400},
 		{"empty patch", "PATCH", "/api/cards/1", `{}`, 400},
 		{"null patch", "PATCH", "/api/cards/1", `{"title":null}`, 400},
+		{"related bad kind", "PATCH", "/api/cards/1", `{"relatedItems":[{"kind":"file","url":"https://a.com"}]}`, 400},
+		{"related null", "PATCH", "/api/cards/1", `{"relatedItems":null}`, 400},
+		{"related ftp", "PATCH", "/api/cards/1", `{"relatedItems":[{"kind":"url","url":"ftp://a.com"}]}`, 400},
+		{"related label control", "PATCH", "/api/cards/1", `{"relatedItems":[{"kind":"url","url":"https://a.com","label":"a\nb"}]}`, 400},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
