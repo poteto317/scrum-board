@@ -12,15 +12,23 @@ import (
 )
 
 type memoryRepo struct {
-	columns        []Column
-	cards          map[int64]Card
-	next           int64
-	templates      []CommandTemplate
-	nextTemplateID int64
+	columns           []Column
+	cards             map[int64]Card
+	next              int64
+	templates         []CommandTemplate
+	nextTemplateID    int64
+	cardTemplateIDs   map[int64][]int64
+	defaultTemplateIDs []int64
 }
 
 func fresh() *memoryRepo {
-	return &memoryRepo{columns: []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}}, cards: map[int64]Card{}, next: 1, nextTemplateID: 1}
+	return &memoryRepo{
+		columns:          []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}},
+		cards:            map[int64]Card{},
+		next:             1,
+		nextTemplateID:   1,
+		cardTemplateIDs:  map[int64][]int64{},
+	}
 }
 func (m *memoryRepo) Board(context.Context) (Board, error) {
 	cols := slices.Clone(m.columns)
@@ -107,6 +115,7 @@ func (m *memoryRepo) CreateCard(_ context.Context, in CardInput) (Card, error) {
 	}
 	m.next++
 	m.cards[c.ID] = c
+	m.cardTemplateIDs[c.ID] = append([]int64(nil), m.defaultTemplateIDs...)
 	return c, nil
 }
 func (m *memoryRepo) UpdateCard(ctx context.Context, id int64, p CardPatch) (Card, error) {
@@ -470,7 +479,95 @@ func (m *memoryRepo) DeleteCommandTemplate(_ context.Context, id int64) error {
 			continue
 		}
 		m.templates = append(m.templates[:i], m.templates[i+1:]...)
+		m.defaultTemplateIDs = removeID(m.defaultTemplateIDs, id)
+		for cardID, ids := range m.cardTemplateIDs {
+			m.cardTemplateIDs[cardID] = removeID(ids, id)
+		}
 		return nil
 	}
 	return ErrNotFound
+}
+
+func removeID(ids []int64, id int64) []int64 {
+	out := make([]int64, 0, len(ids))
+	for _, v := range ids {
+		if v != id {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func (m *memoryRepo) catalogByID(id int64) (CommandTemplate, bool) {
+	for _, item := range m.templates {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return CommandTemplate{}, false
+}
+
+func (m *memoryRepo) validateTemplateIDs(ids []int64) error {
+	for _, id := range ids {
+		if _, ok := m.catalogByID(id); !ok {
+			return ErrUnknownCommandTemplateIDs
+		}
+	}
+	return nil
+}
+
+func (m *memoryRepo) ListCardCommandTemplates(_ context.Context, cardID int64) ([]CommandTemplate, error) {
+	if _, ok := m.cards[cardID]; !ok {
+		return nil, ErrNotFound
+	}
+	ids := m.cardTemplateIDs[cardID]
+	list := []CommandTemplate{}
+	for i, id := range ids {
+		item, ok := m.catalogByID(id)
+		if !ok {
+			continue
+		}
+		item.Position = i
+		list = append(list, item)
+	}
+	return list, nil
+}
+
+func (m *memoryRepo) ReplaceCardCommandTemplates(_ context.Context, cardID int64, templateIDs []int64) ([]CommandTemplate, error) {
+	if _, ok := m.cards[cardID]; !ok {
+		return nil, ErrNotFound
+	}
+	ids := dedupeTemplateIDs(templateIDs)
+	if err := m.validateTemplateIDs(ids); err != nil {
+		return nil, err
+	}
+	m.cardTemplateIDs[cardID] = append([]int64(nil), ids...)
+	return m.ListCardCommandTemplates(context.Background(), cardID)
+}
+
+func (m *memoryRepo) ListCommandTemplateDefaults(context.Context) ([]int64, error) {
+	if m.defaultTemplateIDs == nil {
+		return []int64{}, nil
+	}
+	return append([]int64(nil), m.defaultTemplateIDs...), nil
+}
+
+func (m *memoryRepo) ReplaceCommandTemplateDefaults(_ context.Context, templateIDs []int64) ([]int64, error) {
+	ids := dedupeTemplateIDs(templateIDs)
+	if err := m.validateTemplateIDs(ids); err != nil {
+		return nil, err
+	}
+	m.defaultTemplateIDs = append([]int64(nil), ids...)
+	return append([]int64(nil), ids...), nil
+}
+
+func (m *memoryRepo) ApplyCommandTemplatesToAllCards(_ context.Context, templateIDs []int64) error {
+	ids := dedupeTemplateIDs(templateIDs)
+	if err := m.validateTemplateIDs(ids); err != nil {
+		return err
+	}
+	for cardID := range m.cards {
+		m.cardTemplateIDs[cardID] = append([]int64(nil), ids...)
+	}
+	return nil
 }
