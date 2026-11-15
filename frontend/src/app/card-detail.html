@@ -52,12 +52,12 @@
             </button>
             @if (commandMenuOpen()) {
               <ul class="copy-command-menu" role="menu">
-                @if (commands.listError()) {
-                  <li class="copy-command-empty" role="status">{{ commands.listError() }}</li>
-                } @else if (commands.templates().length === 0) {
+                @if (cardCommands.loadError()) {
+                  <li class="copy-command-empty" role="status">{{ cardCommands.loadError() }}</li>
+                } @else if (cardCommands.templates().length === 0) {
                   <li class="copy-command-empty">{{ commandMenuEmpty }}</li>
                 } @else {
-                  @for (command of commands.templates(); track command.id) {
+                  @for (command of cardCommands.templates(); track command.id) {
                     <li role="none">
                       <button
                         type="button"
@@ -170,6 +170,52 @@
             } @else {
               <p class="field-note">未設定。プリセットか自由テキストで設定できます。</p>
             }
+          </div>
+          <div class="card-commands-picker">
+            <div class="section-label">このカードで出すコマンド</div>
+            <p class="field-note">カタログから、このカードのメニューに出すものを選びます。</p>
+            @if (cardCommands.loadError()) {
+              <p class="form-error" role="status">{{ cardCommands.loadError() }}</p>
+            }
+            <ul class="card-commands-checklist">
+              @for (command of commands.templates(); track command.id) {
+                <li>
+                  <label>
+                    <input
+                      type="checkbox"
+                      [checked]="cardCommands.isSelected(command.id)"
+                      [disabled]="
+                        cardCommands.saving() || cardCommands.loading() || !!cardCommands.loadError()
+                      "
+                      (change)="
+                        cardCommands.toggle(command.id, $any($event.target).checked)
+                      "
+                    />
+                    {{ command.name }}
+                  </label>
+                </li>
+              } @empty {
+                <li class="field-note">カタログが空です。「コマンドを管理」から追加できます。</li>
+              }
+            </ul>
+            <div class="form-actions">
+              <button
+                type="button"
+                class="secondary"
+                [disabled]="
+                  cardCommands.saving() ||
+                  cardCommands.loading() ||
+                  !!cardCommands.loadError() ||
+                  !card()
+                "
+                (click)="cardCommands.save()"
+              >
+                {{ cardCommands.saving() ? '保存中…' : 'このカードに保存' }}
+              </button>
+            </div>
+            <p class="command-templates-status" role="status" aria-live="polite">
+              {{ cardCommands.saveMessage() }}
+            </p>
           </div>
           <label for="detail-pr-url">GitHub PR <span class="optional">任意</span></label>
           <div class="pr-add">
@@ -336,7 +382,15 @@
                 </div>
               </form>
             } @else {
-              <span class="command-template-name">{{ command.name }}</span>
+              <label class="command-template-bulk">
+                <input
+                  type="checkbox"
+                  [checked]="commands.isBulkSelected(command.id)"
+                  [disabled]="commands.saving()"
+                  (change)="commands.toggleBulk(command.id, $any($event.target).checked)"
+                />
+                <span class="command-template-name">{{ command.name }}</span>
+              </label>
               <span class="command-template-body">{{ command.template }}</span>
               <div class="command-template-actions">
                 <button
@@ -348,7 +402,7 @@
                 </button>
                 <button
                   type="button"
-                  (click)="commands.delete(command.id)"
+                  (click)="deleteCatalogCommand(command.id)"
                   [disabled]="commands.saving()"
                 >
                   削除
@@ -358,6 +412,24 @@
           </li>
         }
       </ul>
+      <div class="form-actions command-bulk-actions">
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="commands.saving()"
+          (click)="applyCommandsToAllCards()"
+        >
+          全カードに適用
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="commands.saving()"
+          (click)="setCommandDefaults()"
+        >
+          新規の初期にする
+        </button>
+      </div>
       <form
         class="command-create-form"
         [formGroup]="commands.createForm"

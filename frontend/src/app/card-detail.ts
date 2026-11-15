@@ -23,7 +23,8 @@ import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
 import { CardAssignee } from './card-assignee';
 import { CardAutosave } from './card-autosave';
 import { CardPrLinks } from './card-pr-links';
-import { COMMAND_MENU_EMPTY } from './command-template';
+import { COMMAND_CARD_MENU_EMPTY } from './command-template';
+import { CardCommandsSession } from './card-commands-session';
 import { CommandTemplatesSession } from './command-templates-session';
 import { CopyCommandFeedback } from './copy-command-feedback';
 import { CopyLinkFeedback } from './copy-link-feedback';
@@ -33,7 +34,13 @@ import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 @Component({
   selector: 'app-card-detail',
   imports: [ReactiveFormsModule, RouterLink, DatePipe, Modal, CardHistory],
-  providers: [CardAutosave, CardPrLinks, CardAssignee, CommandTemplatesSession],
+  providers: [
+    CardAutosave,
+    CardPrLinks,
+    CardAssignee,
+    CommandTemplatesSession,
+    CardCommandsSession,
+  ],
   templateUrl: './card-detail.html',
   styleUrl: './card-detail.css',
 })
@@ -49,6 +56,7 @@ export class CardDetail implements OnInit {
   readonly prLinks = inject(CardPrLinks);
   readonly assignee = inject(CardAssignee);
   readonly commands = inject(CommandTemplatesSession);
+  readonly cardCommands = inject(CardCommandsSession);
   readonly presets = ASSIGNEE_PRESETS;
   readonly assigneeKind = assigneeKind;
   readonly card = this.autosave.card;
@@ -65,7 +73,7 @@ export class CardDetail implements OnInit {
   readonly copyLinkFeedback = this.linkCopy.message;
   readonly copyCommandFeedback = this.commandCopy.message;
   readonly copyFeedback = this.copyStatus.message;
-  readonly commandMenuEmpty = COMMAND_MENU_EMPTY;
+  readonly commandMenuEmpty = COMMAND_CARD_MENU_EMPTY;
   readonly commandUrlHelp = '{{url}} はこのカードのリンクに置き換わります。';
   readonly commandMenuOpen = signal(false);
   readonly managingCommands = signal(false);
@@ -124,10 +132,15 @@ export class CardDetail implements OnInit {
       .subscribe(({ board, card }) => {
         this.columns.set(board.columns);
         this.autosave.reset({ ...card, prUrls: card.prUrls ?? [], assignee: card.assignee ?? '' });
+        this.cardCommands.load(card.number);
       });
     const stop = startLiveRefresh({
       enabled: () =>
-        !this.loading() && this.routeNumber() > 0 && !this.autosave.hasChanges() && !this.busy(),
+        !this.loading() &&
+        this.routeNumber() > 0 &&
+        !this.autosave.hasChanges() &&
+        !this.cardCommands.isDirty() &&
+        !this.busy(),
       fetch: () => {
         const number = this.routeNumber();
         return forkJoin({
@@ -157,6 +170,7 @@ export class CardDetail implements OnInit {
       this.autosave.saving() ||
       this.prLinks.saving() ||
       this.assignee.saving() ||
+      this.cardCommands.saving() ||
       this.confirmDelete() ||
       this.deleting()
     );
@@ -164,15 +178,22 @@ export class CardDetail implements OnInit {
   /** Saving in flight (excludes delete confirmation UI). */
   savingBusy() {
     return (
-      this.autosave.saving() || this.prLinks.saving() || this.assignee.saving() || this.deleting()
+      this.autosave.saving() ||
+      this.prLinks.saving() ||
+      this.assignee.saving() ||
+      this.cardCommands.saving() ||
+      this.deleting()
     );
   }
   async canLeave(): Promise<boolean> {
     if (this.deleted) return true;
-    if (this.prLinks.saving() || this.assignee.saving()) {
+    if (this.prLinks.saving() || this.assignee.saving() || this.cardCommands.saving()) {
       return window.confirm(
         '保存中です。移動すると保存が中断される可能性があります。移動しますか？',
       );
+    }
+    if (this.cardCommands.isDirty()) {
+      return window.confirm('未保存の変更があります。変更を破棄して移動しますか？');
     }
     if (!this.autosave.hasChanges()) return true;
     if (await this.autosave.settle()) return true;
@@ -182,7 +203,11 @@ export class CardDetail implements OnInit {
   beforeUnload(event: BeforeUnloadEvent) {
     if (
       !this.deleted &&
-      (this.autosave.hasChanges() || this.prLinks.saving() || this.assignee.saving())
+      (this.autosave.hasChanges() ||
+        this.cardCommands.isDirty() ||
+        this.prLinks.saving() ||
+        this.assignee.saving() ||
+        this.cardCommands.saving())
     ) {
       event.preventDefault();
       event.returnValue = '';
@@ -249,6 +274,24 @@ export class CardDetail implements OnInit {
     if (this.commands.saving()) return;
     this.managingCommands.set(false);
     this.commands.cancelEdit();
+  }
+
+  applyCommandsToAllCards() {
+    this.commands.applyToAllCards(undefined, () => {
+      const card = this.card();
+      if (card) this.cardCommands.load(card.number);
+    });
+  }
+
+  setCommandDefaults() {
+    this.commands.setAsDefaults();
+  }
+
+  deleteCatalogCommand(id: number) {
+    this.commands.delete(id, () => {
+      const card = this.card();
+      if (card) this.cardCommands.load(card.number);
+    });
   }
 
   @HostListener('document:click', ['$event'])

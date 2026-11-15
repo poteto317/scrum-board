@@ -24,6 +24,8 @@ describe('CommandTemplatesSession', () => {
     createCommandTemplate: ReturnType<typeof vi.fn>;
     updateCommandTemplate: ReturnType<typeof vi.fn>;
     deleteCommandTemplate: ReturnType<typeof vi.fn>;
+    applyCommandTemplatesToAllCards: ReturnType<typeof vi.fn>;
+    replaceCommandTemplateDefaults: ReturnType<typeof vi.fn>;
   };
   let session: CommandTemplatesSession;
 
@@ -33,6 +35,8 @@ describe('CommandTemplatesSession', () => {
       createCommandTemplate: vi.fn(),
       updateCommandTemplate: vi.fn(),
       deleteCommandTemplate: vi.fn(),
+      applyCommandTemplatesToAllCards: vi.fn(() => of(undefined)),
+      replaceCommandTemplateDefaults: vi.fn(() => of({ templateIds: [] })),
     };
     TestBed.configureTestingModule({
       providers: [CommandTemplatesSession, { provide: Api, useValue: api }],
@@ -252,5 +256,21 @@ describe('CommandTemplatesSession', () => {
     expect(session.templates()).toEqual([existing]);
     expect(session.editingId()).toBe(existing.id);
     expect(session.adminMessage()).toBe('通信に失敗しました。接続を確認して再試行してください。');
+  });
+
+  it('applies to all cards only after confirm accepts', () => {
+    session.bulkSelectedIds.set([existing.id]);
+    session.applyToAllCards(() => false);
+    expect(api.applyCommandTemplatesToAllCards).not.toHaveBeenCalled();
+    session.applyToAllCards(() => true);
+    expect(api.applyCommandTemplatesToAllCards).toHaveBeenCalledWith([existing.id]);
+  });
+
+  it('sets defaults only after confirm accepts', () => {
+    session.bulkSelectedIds.set([existing.id]);
+    session.setAsDefaults(() => false);
+    expect(api.replaceCommandTemplateDefaults).not.toHaveBeenCalled();
+    session.setAsDefaults(() => true);
+    expect(api.replaceCommandTemplateDefaults).toHaveBeenCalledWith([existing.id]);
   });
 });

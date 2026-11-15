@@ -8,7 +8,7 @@ import { Card } from './models';
 import { cardDetailUrl } from './card-link';
 import { COPY_LINK_SUCCESS } from './copy-link-feedback';
 import {
-  COMMAND_MENU_EMPTY,
+  COMMAND_CARD_MENU_EMPTY,
   COPY_COMMAND_FAILURE,
   COPY_COMMAND_SUCCESS,
   resolveCommand,
@@ -35,6 +35,7 @@ describe('CardDetail autosave', () => {
     updateCard: ReturnType<typeof vi.fn>;
     deleteCard: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
+    listCardCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -55,7 +56,7 @@ describe('CardDetail autosave', () => {
       cardByNumber: vi.fn(() => of(card)),
       updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteCard: vi.fn(() => of(undefined)),
-      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })), listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
       imports: [CardDetail],
@@ -344,6 +345,7 @@ describe('CardDetail copy card link', () => {
     updateCard: ReturnType<typeof vi.fn>;
     deleteCard: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
+    listCardCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
     params = new BehaviorSubject(new Map([['number', '3']]));
@@ -358,7 +360,7 @@ describe('CardDetail copy card link', () => {
       cardByNumber: vi.fn(() => of(card)),
       updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteCard: vi.fn(() => of(undefined)),
-      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })), listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
       imports: [CardDetail],
@@ -494,6 +496,11 @@ describe('CardDetail copy command menu and management', () => {
       updateCard: vi.fn(),
       deleteCard: vi.fn(),
       listCommandTemplates: vi.fn(() => of({ templates })),
+      listCardCommandTemplatesByNumber: vi.fn(() => of({ templates })),
+      replaceCardCommandTemplatesByNumber: vi.fn(() => of({ templates })),
+      applyCommandTemplatesToAllCards: vi.fn(() => of(undefined)),
+      replaceCommandTemplateDefaults: vi.fn(() => of({ templateIds: [] })),
+      listCommandTemplateDefaults: vi.fn(() => of({ templateIds: [] })),
       createCommandTemplate: vi.fn(),
       updateCommandTemplate: vi.fn(),
       deleteCommandTemplate: vi.fn(),
@@ -559,6 +566,7 @@ describe('CardDetail copy command menu and management', () => {
     });
     const { f, api, router } = create();
     expect(api.listCommandTemplates).toHaveBeenCalled();
+    expect(api.listCardCommandTemplatesByNumber).toHaveBeenCalled();
     const { menu } = openMenu(f);
     expect(menu.textContent).toContain(template.name);
     (menu.querySelector('button') as HTMLButtonElement).click();
@@ -630,23 +638,36 @@ describe('CardDetail copy command menu and management', () => {
     });
     const { f } = create({}, []);
     const { menu } = openMenu(f);
-    expect(menu.textContent).toContain(COMMAND_MENU_EMPTY);
+    expect(menu.textContent).toContain(COMMAND_CARD_MENU_EMPTY);
     expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
     menu.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(writeText).not.toHaveBeenCalled();
   });
 
+  it('shows the card-empty notice even when the catalog has templates', () => {
+    const { f } = create(
+      {
+        listCommandTemplates: vi.fn(() => of({ templates: [template] })),
+        listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      },
+      [template],
+    );
+    const { menu } = openMenu(f);
+    expect(menu.textContent).toContain(COMMAND_CARD_MENU_EMPTY);
+    expect(menu.textContent).not.toContain(template.name);
+  });
+
   it('shows a load failure instead of the empty-registration notice when listing templates fails', () => {
     const { f } = create({
+      listCardCommandTemplatesByNumber: vi.fn(() => throwError(() => ({ status: 0 }))),
       listCommandTemplates: vi.fn(() => throwError(() => ({ status: 0 }))),
     });
     const { menu } = openMenu(f);
-    expect(menu.textContent).not.toContain(COMMAND_MENU_EMPTY);
-    expect(menu.textContent).toContain('コマンド一覧を読み込めませんでした');
+    expect(menu.textContent).not.toContain(COMMAND_CARD_MENU_EMPTY);
+    expect(menu.textContent).toContain('通信に失敗しました');
     expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
     const dialog = openDialog(f);
     expect(dialog.textContent).toContain('コマンド一覧を読み込めませんでした');
-    expect(dialog.textContent).not.toContain(COMMAND_MENU_EMPTY);
   });
 
   it('closes the command menu on Escape and on an outside click', () => {
@@ -829,7 +850,7 @@ describe('CardDetail IME response handling', () => {
               board: () => of({ columns: [], cards: [] }),
               cardByNumber: () => of(card),
               updateCard: () => pending,
-              listCommandTemplates: vi.fn(() => of({ templates: [] })),
+              listCommandTemplates: vi.fn(() => of({ templates: [] })), listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
             },
           },
           { provide: ActivatedRoute, useValue: { paramMap: of(new Map([['number', '3']])) } },
@@ -868,6 +889,7 @@ describe('CardDetail live refresh', () => {
     updateCard: ReturnType<typeof vi.fn>;
     deleteCard: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
+    listCardCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -888,7 +910,7 @@ describe('CardDetail live refresh', () => {
       cardByNumber: vi.fn(() => of(card)),
       updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteCard: vi.fn(() => of(undefined)),
-      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })), listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
       imports: [CardDetail],
