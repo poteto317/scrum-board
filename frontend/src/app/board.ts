@@ -23,7 +23,6 @@ import {
   CdkDragHandle,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter, finalize, firstValueFrom } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
