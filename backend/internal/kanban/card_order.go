@@ -146,6 +146,9 @@ func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]C
 	if err = attachPRURLs(ctx, tx, cards); err != nil {
 		return nil, err
 	}
+	if err = attachRelatedItems(ctx, tx, cards); err != nil {
+		return nil, err
+	}
 	return cards, nil
 }
 

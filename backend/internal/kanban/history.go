@@ -36,12 +36,36 @@ func insertHistory(ctx context.Context, tx *sql.Tx, id int64, event HistoryEvent
  VALUES(?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id`, id, event.Kind, event.OccurredAt, string(payload), event.Note, event.EvidenceURL, key)
 	return err
 }
+func relatedItemsJSON(items []RelatedItem) string {
+	if items == nil {
+		items = []RelatedItem{}
+	}
+	type hist struct {
+		Kind   string `json:"kind"`
+		Number int64  `json:"number,omitempty"`
+		URL    string `json:"url,omitempty"`
+		Label  string `json:"label,omitempty"`
+	}
+	rows := make([]hist, 0, len(items))
+	for _, it := range items {
+		rows = append(rows, hist{Kind: it.Kind, Number: it.Number, URL: it.URL, Label: it.Label})
+	}
+	payload, err := json.Marshal(rows)
+	if err != nil {
+		return "[]"
+	}
+	return string(payload)
+}
+
 func historyValues(ctx context.Context, tx *sql.Tx, c Card) (map[string]string, error) {
 	var name string
 	if err := tx.QueryRowContext(ctx, "SELECT name FROM board_columns WHERE id=?", c.ColumnID).Scan(&name); err != nil {
 		return nil, err
 	}
-	return map[string]string{"title": c.Title, "description": c.Description, "status": name, "prUrls": prURLsJSON(c.PRURLs), "assignee": c.Assignee}, nil
+	return map[string]string{
+		"title": c.Title, "description": c.Description, "status": name,
+		"prUrls": prURLsJSON(c.PRURLs), "relatedItems": relatedItemsJSON(c.RelatedItems), "assignee": c.Assignee,
+	}, nil
 }
 func appendHistory(ctx context.Context, tx *sql.Tx, before *Card, after Card, kind string) error {
 	values, err := historyValues(ctx, tx, after)
@@ -56,7 +80,7 @@ func appendHistory(ctx context.Context, tx *sql.Tx, before *Card, after Card, ki
 		}
 	}
 	changes := []HistoryChange{}
-	for _, field := range []string{"title", "description", "status", "prUrls", "assignee"} {
+	for _, field := range []string{"title", "description", "status", "prUrls", "relatedItems", "assignee"} {
 		if before == nil || old[field] != values[field] {
 			changes = append(changes, HistoryChange{field, old[field], values[field]})
 		}

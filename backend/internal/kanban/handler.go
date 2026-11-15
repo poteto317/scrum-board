@@ -193,6 +193,11 @@ func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "GitHub PRのURLを入力してください。例: https://github.com/owner/repo/pull/1")
 		return
 	}
+	in.RelatedItems, valid = normalizeRelatedItems(in.RelatedItems)
+	if !valid {
+		invalid(w, "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。")
+		return
+	}
 	in.Title = strings.TrimSpace(in.Title)
 	if !validTitle(in.Title) || !validDescription(in.Description) || in.ColumnID <= 0 {
 		invalid(w, "タイトルは1〜200文字、説明は10000文字以内で入力し、ステータスを選んでください。")
@@ -217,16 +222,34 @@ func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		ColumnID    *int64          `json:"columnId"`
-		Title       *string         `json:"title"`
-		Description *string         `json:"description"`
-		PRURLs      *[]string       `json:"prUrls"`
-		Assignee    json.RawMessage `json:"assignee"`
+		ColumnID     *int64          `json:"columnId"`
+		Title        *string         `json:"title"`
+		Description  *string         `json:"description"`
+		PRURLs       *[]string       `json:"prUrls"`
+		RelatedItems json.RawMessage `json:"relatedItems"`
+		Assignee     json.RawMessage `json:"assignee"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
 	p := CardPatch{ColumnID: body.ColumnID, Title: body.Title, Description: body.Description, PRURLs: body.PRURLs}
+	if len(body.RelatedItems) > 0 {
+		if string(body.RelatedItems) == "null" {
+			invalid(w, "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。")
+			return
+		}
+		var raw []RelatedItem
+		if err := json.Unmarshal(body.RelatedItems, &raw); err != nil {
+			invalid(w, "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。")
+			return
+		}
+		value, valid := normalizeRelatedItems(raw)
+		if !valid {
+			invalid(w, "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。")
+			return
+		}
+		p.RelatedItems = &value
+	}
 	if len(body.Assignee) > 0 {
 		if string(body.Assignee) == "null" {
 			invalid(w, "対応者は60文字以内で、制御文字を含めず入力してください。")
@@ -244,7 +267,7 @@ func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
 		}
 		p.Assignee = &value
 	}
-	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil && p.Assignee == nil {
+	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}
