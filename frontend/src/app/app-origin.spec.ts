@@ -4,6 +4,17 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { describe, expect, it } from 'vitest';
 import { AppOrigin } from './app-origin';
 
+async function flushPublicConfig(
+  http: HttpTestingController,
+  body: object | string,
+  opts?: { status: number; statusText: string },
+) {
+  await Promise.resolve();
+  const req = http.expectOne('/api/public-config');
+  if (opts) req.flush(body, opts);
+  else req.flush(body);
+}
+
 describe('AppOrigin', () => {
   it('uses publicOrigin when the config returns a non-empty value', async () => {
     TestBed.configureTestingModule({
@@ -12,8 +23,8 @@ describe('AppOrigin', () => {
     const origin = TestBed.inject(AppOrigin);
     const http = TestBed.inject(HttpTestingController);
     const pending = origin.resolve();
-    http.expectOne('/api/public-config').flush({ publicOrigin: 'https://board.example/' });
-    await expect(pending).resolves.toEqual({ ok: true, origin: 'https://board.example' });
+    await flushPublicConfig(http, { publicOrigin: 'https://board.example/' });
+    await expect(pending).resolves.toBe('https://board.example');
     http.verify();
   });
 
@@ -24,38 +35,36 @@ describe('AppOrigin', () => {
     const origin = TestBed.inject(AppOrigin);
     const http = TestBed.inject(HttpTestingController);
     const pending = origin.resolve();
-    http.expectOne('/api/public-config').flush({ publicOrigin: '' });
-    const result = await pending;
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.origin).toBe(window.location.origin);
+    await flushPublicConfig(http, { publicOrigin: '' });
+    await expect(pending).resolves.toBe(window.location.origin);
     http.verify();
   });
 
-  it('reports failure when public-config cannot be loaded', async () => {
+  it('falls back to location.origin when public-config cannot be loaded', async () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting(), AppOrigin],
     });
     const origin = TestBed.inject(AppOrigin);
     const http = TestBed.inject(HttpTestingController);
     const pending = origin.resolve();
-    http.expectOne('/api/public-config').flush('nope', { status: 500, statusText: 'err' });
-    await expect(pending).resolves.toEqual({ ok: false });
+    await flushPublicConfig(http, 'nope', { status: 500, statusText: 'err' });
+    await expect(pending).resolves.toBe(window.location.origin);
     http.verify();
   });
 
-  it('retries public-config after a failed load', async () => {
+  it('retries public-config after a failed load and uses the new origin', async () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting(), AppOrigin],
     });
     const origin = TestBed.inject(AppOrigin);
     const http = TestBed.inject(HttpTestingController);
     const failed = origin.resolve();
-    http.expectOne('/api/public-config').flush('nope', { status: 500, statusText: 'err' });
-    await expect(failed).resolves.toEqual({ ok: false });
+    await flushPublicConfig(http, 'nope', { status: 500, statusText: 'err' });
+    await expect(failed).resolves.toBe(window.location.origin);
 
     const retry = origin.resolve();
-    http.expectOne('/api/public-config').flush({ publicOrigin: 'https://retry.example/' });
-    await expect(retry).resolves.toEqual({ ok: true, origin: 'https://retry.example' });
+    await flushPublicConfig(http, { publicOrigin: 'https://retry.example/' });
+    await expect(retry).resolves.toBe('https://retry.example');
     http.verify();
   });
 });
