@@ -308,6 +308,45 @@ curl --fail-with-body --request DELETE \
 
 成功時は HTTP 204 で本文はありません。
 
+## カードごとの表示セット
+
+カタログとは別に、各カードのコピーメニューに出すテンプレートを選びます。未選択のカードのメニューは空です。
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/cards/by-number/3/command-templates
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"templateIds":[1,2]}' \
+  http://127.0.0.1:4200/api/cards/by-number/3/command-templates
+```
+
+- GET/PUT 成功時は HTTP 200 で `{"templates":[...]}`（カード内 `position` 昇順）。
+- 存在しないカードは 404。`templateIds` にカタログに無い id があると 400（部分適用なし）。空配列 `[]` でそのカードを空にできます。重複 id は順序を保って一意化します。
+- Go ServeMux の制約で内部 id パスは置かず、by-number のみです。
+
+## 新規カードの初期セット
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/command-template-defaults
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"templateIds":[1]}' \
+  http://127.0.0.1:4200/api/command-template-defaults
+```
+
+成功時は HTTP 200 で `{"templateIds":[...]}` です。`POST /api/cards`（および refined 作成）の成功時に、この一覧を新しいカードの表示セットへコピーします。あとからデフォルトを変えても既存カードは変わりません。
+
+## 全カードへ適用
+
+```sh
+curl --fail-with-body --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"templateIds":[1,2]}' \
+  http://127.0.0.1:4200/api/command-templates/apply-to-all-cards
+```
+
+成功時は HTTP 204 です。全カードの表示セットを指定した id で**置き換え**ます（マージしません）。空配列で全カードを空にできます。トランザクションで行い、不正 id があれば 400 で何も変わりません。
+
 ## 制約
 
 - `name` と `template` は JSON 文字列だけです。`null`、数値、配列、オブジェクトは 400 です。未知フィールド、不正な JSON、JSON を 2 つ続けた送信も 400（`入力を確認してください。有効なJSONが必要です。` または `JSONは1つだけ送信してください。`）です。

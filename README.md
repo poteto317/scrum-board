@@ -179,6 +179,9 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | POST | `/api/command-templates` | `{name, template}` で追加（201。最大50件。サーバーは文字列保存のみで実行しない） |
 | PATCH | `/api/command-templates/{id}` | `{name?, template?}` の部分更新 |
 | DELETE | `/api/command-templates/{id}` | 削除（204） |
+| GET/PUT | `/api/cards/by-number/{n}/command-templates` | カードの表示セット（PUT は `{templateIds}` で置き換え） |
+| GET/PUT | `/api/command-template-defaults` | 新規カード作成時にコピーする初期 `templateIds` |
+| POST | `/api/command-templates/apply-to-all-cards` | 全カードの表示セットを `{templateIds}` で置き換え（204） |
 | GET | `/api/health` | 起動確認 |
 
 タイトルは1〜200文字、説明は10000文字以内。タイトル・列名の前後の空白は削除します。絵文字を含むUnicode文字数で検証します。空のPATCH、未知のプロパティ、不正なJSONも拒否します。エラー形式は`{"message":"..."}`。不正入力400、未存在404、重複列409、内部エラー500です。
