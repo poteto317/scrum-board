@@ -52,6 +52,7 @@ export class CardCommandsSession {
   }
 
   toggle(id: number, checked: boolean) {
+    this.saveMessage.set('');
     const current = this.selectedIds();
     if (checked) {
       if (!current.includes(id)) this.selectedIds.set([...current, id]);

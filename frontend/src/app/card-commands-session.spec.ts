@@ -65,4 +65,17 @@ describe('CardCommandsSession', () => {
     session.save();
     expect(api.replaceCardCommandTemplatesByNumber).not.toHaveBeenCalled();
   });
+
+  it('marks dirty after toggle and clears the previous save message', () => {
+    const templates = [{ id: 1, name: 'a', template: 'x', position: 0 }];
+    api.listCardCommandTemplatesByNumber.mockReturnValue(of({ templates }));
+    session.load(3);
+    api.replaceCardCommandTemplatesByNumber.mockReturnValue(of({ templates }));
+    session.save();
+    expect(session.saveMessage()).toBe(CARD_COMMANDS_SAVE_SUCCESS);
+    expect(session.isDirty()).toBe(false);
+    session.toggle(1, false);
+    expect(session.isDirty()).toBe(true);
+    expect(session.saveMessage()).toBe('');
+  });
 });
