@@ -19,6 +19,7 @@ function card(id: number, position: number): Card {
     position,
     backlogPosition: position,
     prUrls: [],
+    relatedItems: [],
     assignee: '',
     createdAt: '',
     updatedAt: '',

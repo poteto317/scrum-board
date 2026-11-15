@@ -21,6 +21,7 @@ it('guards real router reuse: rejecting discard retains the old card, then flush
         position: 0,
         backlogPosition: 0,
         prUrls: [],
+        relatedItems: [],
         assignee: '',
         createdAt: '',
         updatedAt: '',
@@ -36,6 +37,7 @@ it('guards real router reuse: rejecting discard retains the old card, then flush
         position: 0,
         backlogPosition: 0,
         prUrls: [],
+        relatedItems: [],
         assignee: '',
         createdAt: '',
         updatedAt: '',
@@ -43,6 +45,7 @@ it('guards real router reuse: rejecting discard retains the old card, then flush
       }),
     ),
     listCommandTemplates: () => of({ templates: [] }),
+    listCardCommandTemplatesByNumber: () => of({ templates: [] }),
   };
   TestBed.configureTestingModule({
     providers: [provideRouter(routes), { provide: Api, useValue: api }],

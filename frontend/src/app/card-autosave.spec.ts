@@ -13,6 +13,7 @@ const initial: Card = {
   position: 0,
   backlogPosition: 0,
   prUrls: [],
+  relatedItems: [],
   assignee: '',
   createdAt: '',
   updatedAt: '',
@@ -217,6 +218,7 @@ describe('side field preservation', () => {
     expect(edit.card()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
+
   it('adopts a server assignee when the local side field was untouched during flush', () => {
     const response = new Subject<Card>();
     const api = {
