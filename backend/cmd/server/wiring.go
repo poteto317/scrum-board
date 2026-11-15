@@ -32,5 +32,6 @@ func buildHandler(repo kanban.Repository, getenv func(string) string, opts ...op
 	if formatter := newFormatter(getenv, opts...); formatter != nil {
 		handlerOpts = append(handlerOpts, kanban.WithCardFormatter(formatter))
 	}
+	handlerOpts = append(handlerOpts, kanban.WithPublicOrigin(getenv("PUBLIC_ORIGIN")))
 	return http.TimeoutHandler(kanban.NewHandler(repo, handlerOpts...), kanban.RequestTimeout, `{"message":"処理がタイムアウトしました。"}`)
 }
