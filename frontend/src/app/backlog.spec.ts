@@ -463,3 +463,64 @@ describe('Backlog live refresh', () => {
     f.destroy();
   });
 });
+
+describe('Backlog add dialog accidental close', () => {
+  it('keeps the add dialog open on backdrop click, omits cancel, and closes via ×', async () => {
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ cards }),
+            board: () => of({ columns, cards }),
+            createCard: vi.fn(),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    try {
+      f.componentInstance.openCard();
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBe('card');
+      const dialog = f.nativeElement.querySelector('dialog.modal-backdrop') as HTMLElement;
+      expect(dialog).not.toBeNull();
+      dialog.click();
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBe('card');
+      const cancel = Array.from(dialog.querySelectorAll('button')).find((b) =>
+        (b.textContent ?? '').includes('キャンセル'),
+      );
+      expect(cancel).toBeUndefined();
+      dialog.dispatchEvent(new Event('cancel', { bubbles: true, cancelable: true }));
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBeNull();
+      f.componentInstance.openCard();
+      f.detectChanges();
+      (f.nativeElement.querySelector('button[aria-label="閉じる"]') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBeNull();
+    } finally {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    }
+  });
+});
