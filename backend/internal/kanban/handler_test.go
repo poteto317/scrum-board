@@ -108,9 +108,13 @@ func (m *memoryRepo) CreateCard(_ context.Context, in CardInput) (Card, error) {
 	if urls == nil {
 		urls = []string{}
 	}
+	related := append([]RelatedItem(nil), in.RelatedItems...)
+	if related == nil {
+		related = []RelatedItem{}
+	}
 	c := Card{
 		Number: m.next, ID: m.next, ColumnID: in.ColumnID,
-		Title: in.Title, Description: in.Description, PRURLs: urls,
+		Title: in.Title, Description: in.Description, PRURLs: urls, RelatedItems: related,
 		Position: m.nextPosition(in.ColumnID), Assignee: in.Assignee, BacklogPosition: maxBacklog + 1,
 	}
 	m.next++
@@ -147,6 +151,13 @@ func (m *memoryRepo) UpdateCard(ctx context.Context, id int64, p CardPatch) (Car
 		if c.PRURLs == nil {
 			c.PRURLs = []string{}
 		}
+	}
+	if p.RelatedItems != nil {
+		c.RelatedItems = append([]RelatedItem(nil), (*p.RelatedItems)...)
+		if c.RelatedItems == nil {
+			c.RelatedItems = []RelatedItem{}
+		}
+		// Bidirectional sync is MySQL-only (integration tests); memory stub stores owner rows only.
 	}
 	if p.Assignee != nil {
 		c.Assignee = *p.Assignee

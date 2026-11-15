@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -19,6 +20,10 @@ func dbError(err error) error {
 	if errors.As(err, &m) {
 		switch m.Number {
 		case 1062:
+			if strings.Contains(m.Message, "card_related_items") ||
+				strings.Contains(m.Message, "uq_card_related_") {
+				return ErrRelatedItem
+			}
 			return ErrDuplicate
 		case 1452:
 			return ErrColumn
@@ -36,6 +41,7 @@ func scanCard(s scanner) (Card, error) {
 		return c, dbError(err)
 	}
 	c.PRURLs = []string{}
+	c.RelatedItems = []RelatedItem{}
 	return c, nil
 }
 
@@ -54,6 +60,9 @@ func loadCard(ctx context.Context, q interface {
 		return c, err
 	}
 	if err = attachPRURL(ctx, q, &c); err != nil {
+		return c, err
+	}
+	if err = attachRelatedItem(ctx, q, &c); err != nil {
 		return c, err
 	}
 	return c, nil
@@ -88,6 +97,9 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	}
 	rows.Close()
 	if err = attachPRURLs(ctx, tx, b.Cards); err != nil {
+		return b, err
+	}
+	if err = attachRelatedItems(ctx, tx, b.Cards); err != nil {
 		return b, err
 	}
 	return b, tx.Commit()
@@ -136,6 +148,13 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if err = replacePRURLs(ctx, tx, id, in.PRURLs); err != nil {
 		return Card{}, err
 	}
+	related := in.RelatedItems
+	if related == nil {
+		related = []RelatedItem{}
+	}
+	if err = applyRelatedItemsPatch(ctx, tx, id, related, time.Now().UTC()); err != nil {
+		return Card{}, err
+	}
 	if err = copyCommandTemplateDefaultsToCard(ctx, tx, id); err != nil {
 		return Card{}, err
 	}
@@ -164,20 +183,28 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 		if err = lockExistingColumn(ctx, tx, *p.ColumnID); err != nil {
 			return Card{}, err
 		}
-	case p.PRURLs != nil:
+	case p.PRURLs != nil, p.RelatedItems != nil:
 		if _, err = lockColumnRows(ctx, tx); err != nil {
 			return Card{}, err
 		}
 	}
-	var lockedID int64
-	if err = tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
-		return Card{}, dbError(err)
+	// relatedItems touches peer card rows: lock owner+peers in id order (never owner-first then peers).
+	if p.RelatedItems != nil {
+		if err = lockCardsForRelatedReplace(ctx, tx, id, *p.RelatedItems); err != nil {
+			return Card{}, err
+		}
+	} else {
+		var lockedID int64
+		if err = tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
+			return Card{}, dbError(err)
+		}
 	}
 	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 	if err != nil {
 		return c, err
 	}
 	before := c
+	now := time.Now().UTC()
 	if p.Title != nil {
 		c.Title = *p.Title
 	}
@@ -198,12 +225,17 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	if p.Assignee != nil {
 		c.Assignee = *p.Assignee
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE cards SET title=?,description=?,column_id=?,position=?,assignee=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.Assignee, time.Now().UTC(), id)
+	_, err = tx.ExecContext(ctx, "UPDATE cards SET title=?,description=?,column_id=?,position=?,assignee=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.Assignee, now, id)
 	if err != nil {
 		return Card{}, dbError(err)
 	}
 	if p.PRURLs != nil {
 		if err = replacePRURLs(ctx, tx, id, *p.PRURLs); err != nil {
+			return Card{}, err
+		}
+	}
+	if p.RelatedItems != nil {
+		if err = applyRelatedItemsPatch(ctx, tx, id, *p.RelatedItems, now); err != nil {
 			return Card{}, err
 		}
 	}

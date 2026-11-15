@@ -33,6 +33,8 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, 400, map[string]string{"message": "コマンドテンプレートは50件までです。"})
 	case errors.Is(err, ErrUnknownCommandTemplateIDs):
 		reply(w, 400, map[string]string{"message": "存在しないコマンドテンプレートが含まれています。"})
+	case errors.Is(err, ErrRelatedItem):
+		reply(w, 400, map[string]string{"message": "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。"})
 	case errors.Is(err, ErrDuplicate):
 		reply(w, 409, map[string]string{"message": "同じ名前の列がすでにあります。"})
 	case errors.Is(err, ErrColumnMismatch):
