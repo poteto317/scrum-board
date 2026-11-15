@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import {
@@ -54,8 +54,14 @@ describe('CardCommandsSession', () => {
   });
 
   it('does not save while loading or after a load error', () => {
-    api.listCardCommandTemplatesByNumber.mockReturnValue(throwError(() => ({ status: 0 })));
+    const pending = new Subject<{ templates: { id: number; name: string; template: string; position: number }[] }>();
+    api.listCardCommandTemplatesByNumber.mockReturnValue(pending);
     session.load(3);
+    expect(session.loading()).toBe(true);
+    session.save();
+    expect(api.replaceCardCommandTemplatesByNumber).not.toHaveBeenCalled();
+    pending.error({ status: 0 });
+    expect(session.loading()).toBe(false);
     session.save();
     expect(api.replaceCardCommandTemplatesByNumber).not.toHaveBeenCalled();
   });
