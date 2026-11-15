@@ -11,8 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"scrumboard/internal/kanban"
+	"scrumboard/internal/mysqlconfig"
 )
 
 func env(key, fallback string) string {
@@ -28,18 +29,7 @@ func main() {
 	}
 }
 func run() error {
-	cfg := mysql.NewConfig()
-	cfg.User = env("DB_USER", "scrum")
-	cfg.Passwd = env("DB_PASSWORD", "scrum_dev")
-	cfg.Net = "tcp"
-	cfg.Addr = env("DB_ADDRESS", "127.0.0.1:3307")
-	cfg.DBName = env("DB_NAME", "scrumboard")
-	cfg.ParseTime = true
-	cfg.Loc = time.UTC
-	cfg.Timeout = 5 * time.Second
-	cfg.ReadTimeout = 10 * time.Second
-	cfg.WriteTimeout = 10 * time.Second
-	cfg.Params = map[string]string{"charset": "utf8mb4"}
+	cfg := mysqlconfig.ForServer(func(k string) string { return os.Getenv(k) })
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		return err
