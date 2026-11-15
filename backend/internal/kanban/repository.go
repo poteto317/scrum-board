@@ -136,6 +136,9 @@ func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, er
 	if err = replacePRURLs(ctx, tx, id, in.PRURLs); err != nil {
 		return Card{}, err
 	}
+	if err = copyCommandTemplateDefaultsToCard(ctx, tx, id); err != nil {
+		return Card{}, err
+	}
 	card, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 	if err != nil {
 		return Card{}, err

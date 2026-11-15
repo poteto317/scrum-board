@@ -76,6 +76,9 @@ func run() error {
 	if err == nil {
 		err = repo.InitializeCommandTemplates(migrationCtx)
 	}
+	if err == nil {
+		err = repo.InitializeCardCommandTemplates(migrationCtx)
+	}
 	migrationCancel()
 	if err != nil {
 		return err
