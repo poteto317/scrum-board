@@ -14,7 +14,7 @@
 
 ## ファイルマップ
 
-| パス | 役割 |
+| パス | 責務 |
 |------|------|
 | `backups/scrumboard-cloud-*.sql` | ローカル dump（gitignore・コミットしない） |
 | `docs/production-deploy-status.md` | 移行 DONE の記録のみ更新 |
@@ -26,7 +26,7 @@
 
 **Steps:**
 
-1. `cd /Users/mash/Desktop/scrum-board`。`gcloud config get-value project` が `daily-routine-app-8a832`。
+1. `cd "$(git rev-parse --show-toplevel)"`。`gcloud config get-value project` が `daily-routine-app-8a832`。
 2. ローカル `GET http://127.0.0.1:4200/api/board` → `cards` 件数 `N` を記録。
 3. Cloud Run から `AUTH_*` / `DB_*` / `PUBLIC_ORIGIN` を取得し `/tmp` mode 600 のみへ（値は表示しない）。**ローカル `.env` には書かない**（L-072）。
 4. `PUBLIC_ORIGIN` が `https://scrum-board-jkcejsb6ka-an.a.run.app` と一致することを確認。不一致なら停止。

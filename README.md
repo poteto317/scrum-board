@@ -315,7 +315,7 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 
 Cloud SQL for MySQL 8 上に、本番と同じ DB 名・ユーザー（例: `scrumboard` / `scrum`）を用意したうえでインポートします。公式の [Cloud SQL への SQL インポート](https://cloud.google.com/sql/docs/mysql/import-export/importing) に従い、GCS 経由または `gcloud sql import sql` でアップロードしてください。インスタンスが起動していること、文字セットは `utf8mb4` であることを確認します。
 
-**カード #42 の実施記録:** 一時的な authorized network + `mysql` クライアント（TCP）でインポートした。手順の正本は `docs/superpowers/specs/2026-11-15-prod-data-deploy-design.md` と `docs/production-deploy-status.md`。GCS は未使用。
+**カード #42 の実施記録:** 一時的な authorized network + `mysql` クライアント（TCP）でインポートした。手順の正本は `docs/superpowers/specs/2026-11-15-prod-data-deploy-design.md`。実施結果は `docs/production-deploy-status.md`。GCS は未使用。
 
 ### 3. オリジン置換 CLI（インポート後・必須）
 
