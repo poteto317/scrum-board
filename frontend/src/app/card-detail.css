@@ -232,14 +232,20 @@ h1 {
 .assignee-clear {
   margin-top: 8px;
 }
-.pr-add {
+.pr-add,
+.related-add {
   display: flex;
   gap: 8px;
   align-items: flex-start;
+  flex-wrap: wrap;
 }
-.pr-add input {
+.pr-add input,
+.related-add input {
   flex: 1;
   min-width: 0;
+}
+.related-add input#detail-related-label {
+  flex: 0.7;
 }
 .pr-list {
   list-style: none;

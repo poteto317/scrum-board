@@ -22,6 +22,7 @@ const card: Card = {
   position: 0,
   backlogPosition: 0,
   prUrls: [],
+  relatedItems: [],
   assignee: '',
   createdAt: '',
   updatedAt: '',
@@ -210,6 +211,35 @@ describe('CardDetail autosave', () => {
     f.detectChanges();
     expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(1);
     expect(f.nativeElement.textContent).toContain('保存失敗');
+  });
+  it('adds and removes related card/URL via immediate PATCH', () => {
+    const related = [{ kind: 'url' as const, url: 'https://example.com/a', label: '仕様' }];
+    api.cardByNumber.mockReturnValue(of({ ...card, relatedItems: related }));
+    api.updateCard.mockReturnValueOnce(
+      of({
+        ...card,
+        relatedItems: [
+          ...related,
+          { kind: 'card', number: 7, title: '他', label: '' },
+        ],
+      }),
+    );
+    api.updateCard.mockReturnValueOnce(of({ ...card, relatedItems: related }));
+    const f = create();
+    const list = () => f.nativeElement.querySelector('[aria-label="関連アイテム"]');
+    expect(list().querySelectorAll('.pr-link')).toHaveLength(1);
+    const input = f.nativeElement.querySelector('#detail-related-draft') as HTMLInputElement;
+    input.value = '7';
+    input.dispatchEvent(new Event('input'));
+    f.nativeElement.querySelector('.related-add button').click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, {
+      relatedItems: [...related, { kind: 'card', number: 7, label: '' }],
+    });
+    expect(list().querySelectorAll('.pr-link')).toHaveLength(2);
+    list().querySelectorAll('.pr-remove')[1].click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, { relatedItems: related });
   });
   it('sets a preset assignee with immediate PATCH', () => {
     api.updateCard.mockReturnValue(of({ ...card, assignee: 'Cursor' }));

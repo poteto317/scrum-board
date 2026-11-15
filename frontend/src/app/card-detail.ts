@@ -23,6 +23,8 @@ import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
 import { CardAssignee } from './card-assignee';
 import { CardAutosave } from './card-autosave';
 import { CardPrLinks } from './card-pr-links';
+import { CardRelatedItems } from './card-related-items';
+import { displayLabel } from './related-item';
 import { COMMAND_CARD_MENU_EMPTY } from './command-template';
 import { CardCommandsSession } from './card-commands-session';
 import { CommandTemplatesSession } from './command-templates-session';
@@ -38,6 +40,7 @@ import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
   providers: [
     CardAutosave,
     CardPrLinks,
+    CardRelatedItems,
     CardAssignee,
     CommandTemplatesSession,
     CardCommandsSession,
@@ -56,7 +59,9 @@ export class CardDetail implements OnInit {
   private readonly changed$ = new Subject<void>();
   readonly autosave = inject(CardAutosave);
   readonly prLinks = inject(CardPrLinks);
+  readonly relatedItems = inject(CardRelatedItems);
   readonly assignee = inject(CardAssignee);
+  readonly relatedDisplayLabel = displayLabel;
   readonly commands = inject(CommandTemplatesSession);
   readonly cardCommands = inject(CardCommandsSession);
   readonly presets = ASSIGNEE_PRESETS;
@@ -88,6 +93,13 @@ export class CardDetail implements OnInit {
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
+    this.relatedItems.bind({
+      card: () => this.card(),
+      applyRelatedSave: (updated) => this.autosave.applyRelatedSave(updated),
+      markRelatedSideDirty: () => this.autosave.markRelatedSideDirty(),
+      onError: (message) => this.error.set(message),
+      cancel$: this.changed$,
+    });
     this.assignee.bind({
       card: () => this.card(),
       applyAssigneeSave: (updated) => this.autosave.applyAssigneeSave(updated),
@@ -114,6 +126,7 @@ export class CardDetail implements OnInit {
           this.changed$.next();
           this.autosave.reset(null);
           this.prLinks.reset();
+          this.relatedItems.reset();
           this.assignee.reset();
           this.deleted = false;
           this.confirmDelete.set(false);
@@ -134,7 +147,12 @@ export class CardDetail implements OnInit {
       )
       .subscribe(({ board, card }) => {
         this.columns.set(board.columns);
-        this.autosave.reset({ ...card, prUrls: card.prUrls ?? [], assignee: card.assignee ?? '' });
+        this.autosave.reset({
+          ...card,
+          prUrls: card.prUrls ?? [],
+          relatedItems: card.relatedItems ?? [],
+          assignee: card.assignee ?? '',
+        });
         this.cardCommands.load(card.number);
       });
     const stop = startLiveRefresh({
@@ -156,7 +174,12 @@ export class CardDetail implements OnInit {
         if (this.autosave.hasChanges() || this.busy()) return;
         this.error.set('');
         this.columns.set(board.columns);
-        const next = { ...card, prUrls: card.prUrls ?? [], assignee: card.assignee ?? '' };
+        const next = {
+          ...card,
+          prUrls: card.prUrls ?? [],
+          relatedItems: card.relatedItems ?? [],
+          assignee: card.assignee ?? '',
+        };
         if (this.card() && sameJson(this.card(), next)) return;
         this.autosave.reset(next);
       },
@@ -172,6 +195,7 @@ export class CardDetail implements OnInit {
     return (
       this.autosave.saving() ||
       this.prLinks.saving() ||
+      this.relatedItems.saving() ||
       this.assignee.saving() ||
       this.cardCommands.saving() ||
       this.confirmDelete() ||
@@ -183,6 +207,7 @@ export class CardDetail implements OnInit {
     return (
       this.autosave.saving() ||
       this.prLinks.saving() ||
+      this.relatedItems.saving() ||
       this.assignee.saving() ||
       this.cardCommands.saving() ||
       this.deleting()
@@ -190,7 +215,12 @@ export class CardDetail implements OnInit {
   }
   async canLeave(): Promise<boolean> {
     if (this.deleted) return true;
-    if (this.prLinks.saving() || this.assignee.saving() || this.cardCommands.saving()) {
+    if (
+      this.prLinks.saving() ||
+      this.relatedItems.saving() ||
+      this.assignee.saving() ||
+      this.cardCommands.saving()
+    ) {
       return window.confirm(
         '保存中です。移動すると保存が中断される可能性があります。移動しますか？',
       );
@@ -209,6 +239,7 @@ export class CardDetail implements OnInit {
       (this.autosave.hasChanges() ||
         this.cardCommands.isDirty() ||
         this.prLinks.saving() ||
+        this.relatedItems.saving() ||
         this.assignee.saving() ||
         this.cardCommands.saving())
     ) {
@@ -221,6 +252,7 @@ export class CardDetail implements OnInit {
       this.deleting() ||
       this.autosave.saving() ||
       this.prLinks.saving() ||
+      this.relatedItems.saving() ||
       this.assignee.saving() ||
       !this.card()
     )

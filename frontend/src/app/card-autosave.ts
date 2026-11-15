@@ -10,7 +10,7 @@ import { errorMessage } from './api-error';
 const fields = ['title', 'description', 'columnId'] as const;
 type Field = (typeof fields)[number];
 /** Card fields updated outside the autosave form; prefer local on form flush. */
-const sideFields = ['prUrls', 'assignee'] as const;
+const sideFields = ['prUrls', 'relatedItems', 'assignee'] as const;
 type SideField = (typeof sideFields)[number];
 
 // Provided by CardDetail: drafts and timers never survive a detail screen.
@@ -79,11 +79,20 @@ export class CardAutosave {
       // Only shield against an in-flight form flush; otherwise the next flush must adopt server.
       if (this.saving()) this.sideDirty.add(key);
       if (key === 'prUrls') next.prUrls = [...(updated.prUrls ?? [])];
+      else if (key === 'relatedItems') next.relatedItems = [...(updated.relatedItems ?? [])];
       else next[key] = (updated[key] as string) ?? '';
     }
     this.card.set(next);
   }
   applyPrSave(updated: Pick<Card, 'prUrls' | 'updatedAt'>) {
+    this.applySideSave(updated);
+  }
+  /** Shield relatedItems from an in-flight title/description flush (L-453). */
+  markRelatedSideDirty() {
+    this.sideDirty.add('relatedItems');
+  }
+  applyRelatedSave(updated: Pick<Card, 'relatedItems' | 'updatedAt'>) {
+    this.sideDirty.add('relatedItems');
     this.applySideSave(updated);
   }
   applyAssigneeSave(updated: Pick<Card, 'assignee' | 'updatedAt'>) {
@@ -167,11 +176,16 @@ export class CardAutosave {
         // Prefer local side fields touched during this request (including set→clear).
         // Untouched fields adopt the server value so agent updates are kept (L-781).
         const local = this.card();
-        const merged: Card = { ...card, prUrls: [...(card.prUrls ?? [])] };
+        const merged: Card = {
+          ...card,
+          prUrls: [...(card.prUrls ?? [])],
+          relatedItems: [...(card.relatedItems ?? [])],
+        };
         if (local) {
           for (const key of sideFields) {
             if (!this.sideDirty.has(key)) continue;
             if (key === 'prUrls') merged.prUrls = [...(local.prUrls ?? [])];
+            else if (key === 'relatedItems') merged.relatedItems = [...(local.relatedItems ?? [])];
             else merged[key] = local[key];
             this.sideDirty.delete(key);
           }

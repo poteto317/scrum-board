@@ -269,6 +269,64 @@
               </li>
             }
           </ul>
+          <label for="detail-related-draft">関連 <span class="optional">任意</span></label>
+          <div class="related-add">
+            <input
+              id="detail-related-draft"
+              type="text"
+              [formControl]="relatedItems.draft"
+              placeholder="カード番号または https://…"
+              aria-describedby="related-note related-label-note"
+              (keydown.enter)="$event.preventDefault(); relatedItems.add()"
+            />
+            <input
+              id="detail-related-label"
+              type="text"
+              [formControl]="relatedItems.labelDraft"
+              placeholder="表示名（任意）"
+              aria-describedby="related-label-note"
+              (keydown.enter)="$event.preventDefault(); relatedItems.add()"
+            />
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="relatedItems.saving() || !card()"
+              (click)="relatedItems.add()"
+            >
+              追加
+            </button>
+          </div>
+          <p id="related-note" class="field-note">
+            他カードの番号、または外部の http(s) URL。カード同士は双方向に付きます。
+          </p>
+          <p id="related-label-note" class="field-note">表示名は任意（空ならタイトル／ホスト名）。</p>
+          <ul class="pr-list" aria-label="関連アイテム">
+            @for (item of card()!.relatedItems; track item.kind + ':' + (item.number || item.url)) {
+              <li class="pr-item">
+                @if (item.kind === 'card') {
+                  <a class="pr-link" [routerLink]="['/cards', item.number]"
+                    >TASK-{{ item.number }} · {{ relatedDisplayLabel(item) }}</a
+                  >
+                } @else {
+                  <a
+                    class="pr-link"
+                    [href]="item.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >{{ relatedDisplayLabel(item) }} ↗<span class="pr-link-url">{{ item.url }}</span></a
+                  >
+                }
+                <button
+                  type="button"
+                  class="secondary pr-remove"
+                  [disabled]="relatedItems.saving()"
+                  (click)="relatedItems.remove(item)"
+                >
+                  削除
+                </button>
+              </li>
+            }
+          </ul>
           <div class="timestamps">
             <span>作成日時</span><time>{{ card()!.createdAt | date: 'yyyy/MM/dd HH:mm' }}</time
             ><span>更新日時</span><time>{{ card()!.updatedAt | date: 'yyyy/MM/dd HH:mm' }}</time>
