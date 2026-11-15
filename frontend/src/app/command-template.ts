@@ -5,7 +5,8 @@ export type CommandTemplate = {
   position: number;
 };
 
-export const COMMAND_MENU_EMPTY = 'コマンドが未登録です。詳細画面で追加できます。';
+export const COMMAND_CARD_MENU_EMPTY =
+  'このカードにコマンドがありません。詳細画面で選べます。';
 export const COPY_COMMAND_SUCCESS = 'コマンドをコピーしました';
 export const COPY_COMMAND_FAILURE = 'コマンドをコピーできませんでした';
 

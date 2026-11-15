@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  COMMAND_MENU_EMPTY,
+  COMMAND_CARD_MENU_EMPTY,
   COPY_COMMAND_FAILURE,
   COPY_COMMAND_SUCCESS,
   resolveCommand,
@@ -16,7 +16,9 @@ describe('resolveCommand', () => {
   });
 
   it('exports the empty-menu and copy messages', () => {
-    expect(COMMAND_MENU_EMPTY).toBe('コマンドが未登録です。詳細画面で追加できます。');
+    expect(COMMAND_CARD_MENU_EMPTY).toBe(
+      'このカードにコマンドがありません。詳細画面で選べます。',
+    );
     expect(COPY_COMMAND_SUCCESS).toBe('コマンドをコピーしました');
     expect(COPY_COMMAND_FAILURE).toBe('コマンドをコピーできませんでした');
   });

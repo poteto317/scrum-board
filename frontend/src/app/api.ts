@@ -56,4 +56,26 @@ export class Api {
   deleteCommandTemplate(id: number) {
     return this.http.delete<void>(`/api/command-templates/${id}`);
   }
+  listCardCommandTemplatesByNumber(number: number) {
+    return this.http.get<{ templates: CommandTemplate[] }>(
+      `/api/cards/by-number/${number}/command-templates`,
+    );
+  }
+  replaceCardCommandTemplatesByNumber(number: number, templateIds: number[]) {
+    return this.http.put<{ templates: CommandTemplate[] }>(
+      `/api/cards/by-number/${number}/command-templates`,
+      { templateIds },
+    );
+  }
+  listCommandTemplateDefaults() {
+    return this.http.get<{ templateIds: number[] }>('/api/command-template-defaults');
+  }
+  replaceCommandTemplateDefaults(templateIds: number[]) {
+    return this.http.put<{ templateIds: number[] }>('/api/command-template-defaults', {
+      templateIds,
+    });
+  }
+  applyCommandTemplatesToAllCards(templateIds: number[]) {
+    return this.http.post<void>('/api/command-templates/apply-to-all-cards', { templateIds });
+  }
 }

@@ -150,6 +150,35 @@ describe('Api', () => {
     expect(req.request.method).toBe('DELETE');
     req.flush(null);
   });
+  it('lists card command templates by number', () => {
+    api.listCardCommandTemplatesByNumber(3).subscribe();
+    const req = http.expectOne('/api/cards/by-number/3/command-templates');
+    expect(req.request.method).toBe('GET');
+    req.flush({ templates: [] });
+  });
+  it('replaces card command templates by number', () => {
+    api.replaceCardCommandTemplatesByNumber(3, [1, 2]).subscribe();
+    const req = http.expectOne('/api/cards/by-number/3/command-templates');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ templateIds: [1, 2] });
+    req.flush({ templates: [] });
+  });
+  it('gets and puts command template defaults', () => {
+    api.listCommandTemplateDefaults().subscribe();
+    http.expectOne('/api/command-template-defaults').flush({ templateIds: [1] });
+    api.replaceCommandTemplateDefaults([2]).subscribe();
+    const req = http.expectOne('/api/command-template-defaults');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ templateIds: [2] });
+    req.flush({ templateIds: [2] });
+  });
+  it('applies command templates to all cards', () => {
+    api.applyCommandTemplatesToAllCards([1]).subscribe();
+    const req = http.expectOne('/api/command-templates/apply-to-all-cards');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ templateIds: [1] });
+    req.flush(null);
+  });
 });
 
 it('requests history by public number and an optional event cursor', () => {
