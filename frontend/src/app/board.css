@@ -442,6 +442,11 @@ h1 {
   /* Hover translateY on a later card paints above this one; lift the open menu's card. */
   z-index: 3;
 }
+/* transform on an ancestor becomes the containing block for position:fixed descendants. */
+.task-card.command-menu-open,
+.task-card.command-menu-open:hover {
+  transform: none;
+}
 .copy-command-menu {
   position: absolute;
   z-index: 6;

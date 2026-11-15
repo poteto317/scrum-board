@@ -196,40 +196,53 @@ export class Board implements OnInit {
     event.stopPropagation();
     const opening = this.openCommandCardId() !== cardId;
     if (!opening) {
-      this.openCommandCardId.set(null);
-      this.commandMenuStyle.set({});
+      this.closeCommandMenu();
       return;
     }
     const button = event.currentTarget;
     if (!(button instanceof HTMLElement)) return;
+    // Apply .command-menu-open first so hover transform is cleared (it would be the fixed containing block).
+    this.commandMenuStyle.set({});
+    this.openCommandCardId.set(cardId);
+    afterNextRender(
+      () => {
+        if (this.openCommandCardId() !== cardId) return;
+        this.commandMenuStyle.set(this.fixedCommandMenuStyle(button));
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private fixedCommandMenuStyle(button: HTMLElement): Record<string, string> {
     const rect = button.getBoundingClientRect();
     const menuMax = 240;
     const gap = 4;
     const spaceBelow = window.innerHeight - rect.bottom - gap;
     const openUp = spaceBelow < menuMax && rect.top > spaceBelow;
-    this.commandMenuStyle.set(
-      openUp
-        ? {
-            top: 'auto',
-            bottom: `${Math.max(8, window.innerHeight - rect.top + gap)}px`,
-            left: 'auto',
-            right: `${Math.max(8, window.innerWidth - rect.right)}px`,
-          }
-        : {
-            top: `${rect.bottom + gap}px`,
-            bottom: 'auto',
-            left: 'auto',
-            right: `${Math.max(8, window.innerWidth - rect.right)}px`,
-          },
-    );
-    this.openCommandCardId.set(cardId);
+    return openUp
+      ? {
+          top: 'auto',
+          bottom: `${Math.max(8, window.innerHeight - rect.top + gap)}px`,
+          left: 'auto',
+          right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+        }
+      : {
+          top: `${rect.bottom + gap}px`,
+          bottom: 'auto',
+          left: 'auto',
+          right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+        };
+  }
+
+  private closeCommandMenu() {
+    this.openCommandCardId.set(null);
+    this.commandMenuStyle.set({});
   }
 
   copyCommand(templateText: string, number: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
-    this.openCommandCardId.set(null);
-    this.commandMenuStyle.set({});
+    this.closeCommandMenu();
     return this.commandCopy.copyResolved(templateText, number);
   }
 
@@ -237,14 +250,19 @@ export class Board implements OnInit {
   closeCommandMenuFromPointer(event: Event) {
     const target = event.target;
     if (target instanceof Element && target.closest('.copy-command')) return;
-    this.openCommandCardId.set(null);
-    this.commandMenuStyle.set({});
+    this.closeCommandMenu();
   }
 
   @HostListener('document:keydown.escape')
   closeCommandMenuFromKeyboard() {
-    this.openCommandCardId.set(null);
-    this.commandMenuStyle.set({});
+    this.closeCommandMenu();
+  }
+
+  @HostListener('window:resize')
+  @HostListener('window:scroll')
+  closeCommandMenuOnViewportChange() {
+    if (this.openCommandCardId() === null) return;
+    this.closeCommandMenu();
   }
 
   load() {
