@@ -47,6 +47,7 @@ import {
 import { textLimit } from './form-validation';
 import { BoardData, Card, Column } from './models';
 import { COMMAND_CARD_MENU_EMPTY, CommandTemplate } from './command-template';
+import { AppOrigin } from './app-origin';
 import { CopyCommandFeedback } from './copy-command-feedback';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { LatestCopyFeedback } from './latest-copy-feedback';
@@ -72,6 +73,7 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 export class Board implements OnInit {
   readonly assigneeKind = assigneeKind;
   private readonly api = inject(Api);
+  private readonly appOrigin = inject(AppOrigin);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly injector = inject(Injector);
@@ -188,8 +190,13 @@ export class Board implements OnInit {
     return this.api.board().pipe(filter(() => this.data() === requestedFor));
   }
 
-  copyCardLink(number: number) {
-    return this.linkCopy.copyCardNumber(number);
+  async copyCardLink(number: number) {
+    const resolved = await this.appOrigin.resolve();
+    if (!resolved.ok) {
+      this.linkCopy.failOrigin();
+      return;
+    }
+    return this.linkCopy.copyCardNumber(number, resolved.origin);
   }
 
   toggleCommandMenu(cardId: number, cardNumber: number, event: Event) {
@@ -269,11 +276,16 @@ export class Board implements OnInit {
     this.commandMenuLoading.set(false);
   }
 
-  copyCommand(templateText: string, number: number, event: Event) {
+  async copyCommand(templateText: string, number: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
     this.closeCommandMenu();
-    return this.commandCopy.copyResolved(templateText, number);
+    const resolved = await this.appOrigin.resolve();
+    if (!resolved.ok) {
+      this.commandCopy.failOrigin();
+      return;
+    }
+    return this.commandCopy.copyResolved(templateText, number, resolved.origin);
   }
 
   @HostListener('document:click', ['$event'])

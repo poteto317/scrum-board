@@ -50,6 +50,12 @@ describe('CopyLinkFeedback', () => {
     expect(feedback.message()).toBe(COPY_LINK_FAILURE);
   });
 
+  it('sets failure message when public origin cannot be loaded', () => {
+    vi.useFakeTimers();
+    feedback.failOrigin();
+    expect(feedback.message()).toBe(COPY_LINK_FAILURE);
+  });
+
   it('does not update after destroy while copy is in flight', async () => {
     let resolveWrite!: () => void;
     Object.defineProperty(navigator, 'clipboard', {
