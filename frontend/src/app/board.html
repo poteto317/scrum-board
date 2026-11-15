@@ -159,7 +159,7 @@
                         [attr.aria-label]="
                           'TASK-' + card.number.toString().padStart(3, '0') + ' のコマンド'
                         "
-                        (click)="toggleCommandMenu(card.id, $event)"
+                        (click)="toggleCommandMenu(card.id, card.number, $event)"
                       >
                         <svg
                           class="copy-command-icon"
@@ -179,14 +179,14 @@
                       </button>
                       @if (openCommandCardId() === card.id) {
                         <ul class="copy-command-menu" role="menu" [ngStyle]="commandMenuStyle()">
-                          @if (commands.listError()) {
+                          @if (commandMenuError()) {
                             <li class="copy-command-empty" role="status">
-                              {{ commands.listError() }}
+                              {{ commandMenuError() }}
                             </li>
-                          } @else if (commands.templates().length === 0) {
+                          } @else if (commandMenuTemplates().length === 0) {
                             <li class="copy-command-empty">{{ commandMenuEmpty }}</li>
                           } @else {
-                            @for (command of commands.templates(); track command.id) {
+                            @for (command of commandMenuTemplates(); track command.id) {
                               <li role="none">
                                 <button
                                   type="button"
