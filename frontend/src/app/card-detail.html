@@ -216,7 +216,13 @@
               </button>
             </div>
             <p class="command-templates-status" role="status" aria-live="polite">
-              {{ cardCommands.saveMessage() }}
+              @if (cardCommands.saving()) {
+                保存中…
+              } @else if (cardCommands.saveMessage()) {
+                {{ cardCommands.saveMessage() }}
+              } @else if (cardCommands.isDirty()) {
+                未保存の変更があります。
+              }
             </p>
           </div>
           <label for="detail-pr-url">GitHub PR <span class="optional">任意</span></label>
