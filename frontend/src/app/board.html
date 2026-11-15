@@ -295,7 +295,6 @@
     appModal
     class="modal-backdrop"
     aria-labelledby="modal-title"
-    (click)="close()"
     (cancel)="$event.preventDefault(); close()"
   >
     <section
@@ -322,9 +321,7 @@
             <p class="form-error" role="alert">{{ formError() }}</p>
           }
           <div class="form-actions">
-            <button class="secondary" type="button" (click)="close()" [disabled]="saving()">
-              キャンセル</button
-            ><button class="primary" type="submit" [disabled]="saving()">
+            <button class="primary" type="submit" [disabled]="saving()">
               {{ saving() ? '追加中…' : '列を追加' }}
             </button>
           </div>
@@ -355,9 +352,7 @@
             <p class="form-error" role="alert">{{ formError() }}</p>
           }
           <div class="form-actions">
-            <button class="secondary" type="button" (click)="close()" [disabled]="saving()">
-              キャンセル</button
-            ><button class="primary" type="submit" [disabled]="saving()">
+            <button class="primary" type="submit" [disabled]="saving()">
               {{ saving() ? '追加中…' : 'アイテムを追加' }}
             </button>
           </div>

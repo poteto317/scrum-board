@@ -1791,3 +1791,104 @@ describe('Board live refresh', () => {
     f.destroy();
   });
 });
+
+describe('Board add dialog accidental close', () => {
+  function stubDialog() {
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    return () => {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    };
+  }
+
+  async function mountBoard() {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () =>
+              of({
+                columns: [
+                  { id: 1, name: 'Todo', position: 0 },
+                  { id: 2, name: 'Doing', position: 1 },
+                ],
+                cards: [],
+              }),
+            listCommandTemplates: () => of({ templates: [] }),
+            listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    return f;
+  }
+
+  it('keeps the card add dialog open on backdrop click, omits cancel, and closes via ×', async () => {
+    const restore = stubDialog();
+    try {
+      const f = await mountBoard();
+      f.componentInstance.openCard(1);
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBe('card');
+      const dialog = f.nativeElement.querySelector('dialog.modal-backdrop') as HTMLElement;
+      expect(dialog).not.toBeNull();
+      dialog.click();
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBe('card');
+      const cancel = Array.from(dialog.querySelectorAll('button')).find((b) =>
+        (b.textContent ?? '').includes('キャンセル'),
+      );
+      expect(cancel).toBeUndefined();
+      dialog.dispatchEvent(new Event('cancel', { bubbles: true, cancelable: true }));
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBeNull();
+      f.componentInstance.openCard(1);
+      f.detectChanges();
+      (f.nativeElement.querySelector('button[aria-label="閉じる"]') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it('keeps the column add dialog open on backdrop click and omits cancel', async () => {
+    const restore = stubDialog();
+    try {
+      const f = await mountBoard();
+      f.componentInstance.openColumn();
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBe('column');
+      const dialog = f.nativeElement.querySelector('dialog.modal-backdrop') as HTMLElement;
+      dialog.click();
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBe('column');
+      const cancel = Array.from(dialog.querySelectorAll('button')).find((b) =>
+        (b.textContent ?? '').includes('キャンセル'),
+      );
+      expect(cancel).toBeUndefined();
+      f.componentInstance.close();
+      f.detectChanges();
+      f.destroy();
+    } finally {
+      restore();
+    }
+  });
+});
