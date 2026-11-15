@@ -99,12 +99,8 @@ export class CardDetail implements OnInit {
   async copyCardLink(): Promise<void> {
     const card = this.card();
     if (!card) return;
-    const resolved = await this.appOrigin.resolve();
-    if (!resolved.ok) {
-      this.linkCopy.failOrigin();
-      return;
-    }
-    return this.linkCopy.copyCardNumber(card.number, resolved.origin);
+    const origin = await this.appOrigin.resolve();
+    return this.linkCopy.copyCardNumber(card.number, origin);
   }
 
   ngOnInit() {
@@ -267,12 +263,8 @@ export class CardDetail implements OnInit {
     const current = this.card();
     if (!current) return;
     this.commandMenuOpen.set(false);
-    const resolved = await this.appOrigin.resolve();
-    if (!resolved.ok) {
-      this.commandCopy.failOrigin();
-      return;
-    }
-    return this.commandCopy.copyResolved(templateText, current.number, resolved.origin);
+    const origin = await this.appOrigin.resolve();
+    return this.commandCopy.copyResolved(templateText, current.number, origin);
   }
 
   openCommandManager() {

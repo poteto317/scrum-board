@@ -7,32 +7,31 @@ import { effectivePublicOrigin, normalizePublicOrigin } from './public-origin';
 @Injectable({ providedIn: 'root' })
 export class AppOrigin {
   private readonly api = inject(Api);
-  private load?: Promise<'ready' | 'error'>;
+  private load?: Promise<void>;
   private publicOrigin = '';
 
-  /** Prefer configured public origin; empty config uses location.origin. Load failure → ok false. */
-  async resolve(): Promise<{ ok: true; origin: string } | { ok: false }> {
-    const status = await this.ensureLoaded();
-    if (status === 'error') return { ok: false };
-    return {
-      ok: true,
-      origin: effectivePublicOrigin(
-        this.publicOrigin,
-        typeof window !== 'undefined' ? window.location.origin : '',
-      ),
-    };
+  /**
+   * Prefer configured public origin; empty or failed config uses location.origin.
+   * Load failures are not cached so the next resolve() retries GET /api/public-config.
+   */
+  async resolve(): Promise<string> {
+    await this.ensureLoaded();
+    return effectivePublicOrigin(
+      this.publicOrigin,
+      typeof window !== 'undefined' ? window.location.origin : '',
+    );
   }
 
-  private ensureLoaded(): Promise<'ready' | 'error'> {
+  private ensureLoaded(): Promise<void> {
     if (!this.load) {
-      this.load = firstValueFrom(this.api.publicConfig())
+      this.load = Promise.resolve()
+        .then(() => firstValueFrom(this.api.publicConfig()))
         .then((res) => {
           this.publicOrigin = normalizePublicOrigin(res?.publicOrigin ?? '');
-          return 'ready' as const;
         })
         .catch(() => {
+          this.publicOrigin = '';
           this.load = undefined;
-          return 'error' as const;
         });
     }
     return this.load;

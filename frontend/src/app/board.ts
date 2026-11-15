@@ -191,12 +191,8 @@ export class Board implements OnInit {
   }
 
   async copyCardLink(number: number) {
-    const resolved = await this.appOrigin.resolve();
-    if (!resolved.ok) {
-      this.linkCopy.failOrigin();
-      return;
-    }
-    return this.linkCopy.copyCardNumber(number, resolved.origin);
+    const origin = await this.appOrigin.resolve();
+    return this.linkCopy.copyCardNumber(number, origin);
   }
 
   toggleCommandMenu(cardId: number, cardNumber: number, event: Event) {
@@ -280,12 +276,8 @@ export class Board implements OnInit {
     event.preventDefault();
     event.stopPropagation();
     this.closeCommandMenu();
-    const resolved = await this.appOrigin.resolve();
-    if (!resolved.ok) {
-      this.commandCopy.failOrigin();
-      return;
-    }
-    return this.commandCopy.copyResolved(templateText, number, resolved.origin);
+    const origin = await this.appOrigin.resolve();
+    return this.commandCopy.copyResolved(templateText, number, origin);
   }
 
   @HostListener('document:click', ['$event'])
