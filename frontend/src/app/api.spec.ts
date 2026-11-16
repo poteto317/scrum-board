@@ -208,6 +208,15 @@ describe('Api', () => {
     expect(req.request.body).toEqual({ templateIds: [1] });
     req.flush(null);
   });
+  it('gets and puts list filter', () => {
+    api.listFilter().subscribe();
+    http.expectOne('/api/list-filter').flush({ query: '', statusIds: [] });
+    api.putListFilter({ query: 'x', statusIds: [1] }).subscribe();
+    const req = http.expectOne('/api/list-filter');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ query: 'x', statusIds: [1] });
+    req.flush({ query: 'x', statusIds: [1] });
+  });
 });
 
 it('requests history by public number and an optional event cursor', () => {
