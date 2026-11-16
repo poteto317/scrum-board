@@ -1,0 +1,40 @@
+<section class="list-filter" aria-label="一覧フィルタ">
+  <label class="list-filter-query">
+    <span class="sr-only">テキストで絞り込み</span>
+    <input
+      type="search"
+      name="list-filter-query"
+      placeholder="タイトル・説明で検索"
+      maxlength="200"
+      [value]="session.filter().query"
+      (input)="onQueryInput($event)"
+      autocomplete="off"
+    />
+  </label>
+  <fieldset class="list-filter-statuses">
+    <legend class="sr-only">ステータスで絞り込み</legend>
+    @for (column of columns(); track column.id) {
+      <label class="list-filter-status">
+        <input
+          type="checkbox"
+          [checked]="statusChecked(column.id)"
+          (change)="onStatusToggle(column.id)"
+        />
+        {{ column.name }}
+      </label>
+    }
+  </fieldset>
+  <button type="button" class="secondary" (click)="clear()">クリア</button>
+  @if (countLabel()) {
+    <span class="list-filter-count">{{ countLabel() }}</span>
+  }
+  @if (session.loadError()) {
+    <p class="list-filter-error" role="alert">
+      {{ session.loadError() }}
+      <button type="button" class="secondary" (click)="retryLoad()">再試行</button>
+    </p>
+  }
+  @if (session.saveError()) {
+    <p class="list-filter-error" role="alert">{{ session.saveError() }}</p>
+  }
+</section>

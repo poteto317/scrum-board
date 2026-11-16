@@ -1,0 +1,45 @@
+.list-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.list-filter-query input {
+  min-width: 200px;
+  max-width: 320px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font: inherit;
+  background: #fff;
+}
+.list-filter-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.list-filter-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.list-filter-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+.list-filter-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: #8a2f2f;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

@@ -86,6 +86,11 @@ h1 {
   margin: 0 8px;
   color: #c0c4bd;
 }
+.board-list-filter {
+  display: block;
+  padding: 12px 0 4px;
+  border-bottom: 1px solid var(--line);
+}
 .board-scroll {
   overflow-x: auto;
   overscroll-behavior-x: contain;

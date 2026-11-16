@@ -11,7 +11,7 @@
     <div class="active-tab">
       <span class="board-icon" aria-hidden="true">▥</span> かんばんボード
     </div>
-    <span class="toolbar-count">{{ data().items.length }} アイテム</span>
+    <span class="toolbar-count">{{ filteredItemCount() }} アイテム</span>
     <label
       class="layout-toggle"
       [class.layout-toggle-disabled]="!canToggleCardLayout()"
@@ -34,6 +34,7 @@
       >{{ done() }} 完了 <span>／</span> {{ data().columns.length }} ステータス</span
     >
   </section>
+  <app-list-filter-bar class="board-list-filter" [columns]="data().columns" />
   @if (loading()) {
     <div class="state-panel" role="status">
       <span class="spinner"></span>ボードを読み込んでいます…
