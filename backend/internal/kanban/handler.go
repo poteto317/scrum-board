@@ -71,6 +71,8 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/items/by-number/{number}/command-templates", h.listItemCommandTemplatesByNumber)
 	mux.HandleFunc("PUT /api/items/by-number/{number}/command-templates", h.replaceItemCommandTemplatesByNumber)
 	mux.HandleFunc("POST /api/pr-titles", h.batchPRTitles)
+	mux.HandleFunc("GET /api/list-filter", h.getListFilter)
+	mux.HandleFunc("PUT /api/list-filter", h.putListFilter)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
