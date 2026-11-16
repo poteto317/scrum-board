@@ -4,11 +4,12 @@ import { Observable, finalize, takeUntil } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
+import { moveIndex } from './list-reorder';
 import { Card, RelatedItem } from './models';
 import { parseRelatedDraft, sameRelatedItem } from './related-item';
 import { textLimit } from './form-validation';
 
-/** Immediate add/remove for card.relatedItems — separate from title/description autosave. */
+/** Immediate add/remove/reorder for card.relatedItems — separate from title/description autosave. */
 @Injectable()
 export class CardRelatedItems {
   private readonly api = inject(Api);
@@ -83,7 +84,21 @@ export class CardRelatedItems {
     this.save(next);
   }
 
-  private save(relatedItems: RelatedItem[], onSuccess?: () => void) {
+  reorder(from: number, to: number) {
+    const card = this.current();
+    if (!card || this.saving()) return;
+    const previous = [...(card.relatedItems ?? [])];
+    const next = moveIndex(previous, from, to);
+    if (next === previous) return;
+    this.apply({ relatedItems: next, updatedAt: card.updatedAt });
+    this.save(next, undefined, previous);
+  }
+
+  move(index: number, delta: number) {
+    this.reorder(index, index + delta);
+  }
+
+  private save(relatedItems: RelatedItem[], onSuccess?: () => void, previous?: RelatedItem[]) {
     const card = this.current();
     if (!card || !this.cancel$) return;
     this.saving.set(true);
@@ -104,7 +119,15 @@ export class CardRelatedItems {
           });
           onSuccess?.();
         },
-        error: (error) => this.reportError(errorMessage(error)),
+        error: (error) => {
+          if (previous) {
+            this.apply({
+              relatedItems: previous,
+              updatedAt: this.current()?.updatedAt ?? card.updatedAt,
+            });
+          }
+          this.reportError(errorMessage(error));
+        },
       });
   }
 }
