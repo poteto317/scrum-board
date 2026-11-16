@@ -85,6 +85,9 @@ func run() error {
 	if err == nil {
 		err = repo.InitializeItemCommandTemplates(migrationCtx)
 	}
+	if err == nil {
+		err = repo.InitializeListFilter(migrationCtx)
+	}
 	migrationCancel()
 	if err != nil {
 		return err

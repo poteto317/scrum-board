@@ -21,6 +21,7 @@ type memoryRepo struct {
 	defaultTemplateIDs []int64
 	settings           BoardSettings
 	settingsFail       error
+	listFilter         *ListFilter
 }
 
 func fresh() *memoryRepo {
@@ -663,4 +664,35 @@ func (m *memoryRepo) ApplyCommandTemplatesToAllItems(_ context.Context, template
 		m.cardTemplateIDs[cardID] = append([]int64(nil), ids...)
 	}
 	return nil
+}
+
+func (m *memoryRepo) GetListFilter(context.Context) (ListFilter, error) {
+	if m.listFilter == nil {
+		return emptyListFilter(), nil
+	}
+	out := *m.listFilter
+	if out.StatusIDs == nil {
+		out.StatusIDs = []int64{}
+	} else {
+		out.StatusIDs = append([]int64(nil), out.StatusIDs...)
+	}
+	return out, nil
+}
+
+func (m *memoryRepo) PutListFilter(_ context.Context, in ListFilter) (ListFilter, error) {
+	known := make(map[int64]struct{}, len(m.columns))
+	for _, c := range m.columns {
+		known[c.ID] = struct{}{}
+	}
+	out := ListFilter{
+		Query:     strings.TrimSpace(in.Query),
+		StatusIDs: normalizeStatusIDs(in.StatusIDs, known),
+	}
+	if out.StatusIDs == nil {
+		out.StatusIDs = []int64{}
+	}
+	cp := out
+	cp.StatusIDs = append([]int64(nil), out.StatusIDs...)
+	m.listFilter = &cp
+	return out, nil
 }

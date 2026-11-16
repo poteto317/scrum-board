@@ -43,6 +43,7 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"item_command_templates", "card_command_templates",
 		"command_template_defaults",
 		"command_templates",
+		"workspace_list_filter",
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
@@ -89,6 +90,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeItemCommandTemplates(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeListFilter(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	return db
