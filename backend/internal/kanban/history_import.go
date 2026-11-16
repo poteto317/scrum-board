@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -23,6 +24,41 @@ type HistoricalRecord struct {
 	Changes     []HistoryChange `json:"changes"`
 	Note        string          `json:"note"`
 	EvidenceURL string          `json:"evidenceUrl"`
+}
+
+// UnmarshalJSON accepts itemId, and cardId as a legacy alias for reviewed manifests.
+func (v *HistoricalRecord) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Number      int64           `json:"number"`
+		ItemID      int64           `json:"itemId"`
+		CardID      int64           `json:"cardId"`
+		CreatedAt   time.Time       `json:"createdAt"`
+		Key         string          `json:"key"`
+		OccurredAt  time.Time       `json:"occurredAt"`
+		Changes     []HistoryChange `json:"changes"`
+		Note        string          `json:"note"`
+		EvidenceURL string          `json:"evidenceUrl"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	itemID := raw.ItemID
+	if itemID == 0 {
+		itemID = raw.CardID
+	}
+	*v = HistoricalRecord{
+		Number:      raw.Number,
+		ItemID:      itemID,
+		CreatedAt:   raw.CreatedAt,
+		Key:         raw.Key,
+		OccurredAt:  raw.OccurredAt,
+		Changes:     raw.Changes,
+		Note:        raw.Note,
+		EvidenceURL: raw.EvidenceURL,
+	}
+	return nil
 }
 
 var importKey = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,128}$`)
