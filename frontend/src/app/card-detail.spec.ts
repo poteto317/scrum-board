@@ -293,6 +293,18 @@ describe('CardDetail autosave', () => {
     f.componentInstance.onListDragEnded();
     expect(f.componentInstance.listDragging()).toBe(false);
   });
+  it('clears listDragging when navigating to another card', () => {
+    const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
+    const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
+    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
+    const f = create();
+    f.componentInstance.onListDragStarted();
+    expect(f.componentInstance.listDragging()).toBe(true);
+    api.cardByNumber.mockReturnValue(of({ ...card, number: 4, id: 19, prUrls: [] }));
+    params.next(new Map([['number', '4']]));
+    f.detectChanges();
+    expect(f.componentInstance.listDragging()).toBe(false);
+  });
   it('adds and removes related card/URL via immediate PATCH', () => {
     const related = [{ kind: 'url' as const, url: 'https://example.com/a', label: '仕様' }];
     api.cardByNumber.mockReturnValue(of({ ...card, relatedItems: related }));
