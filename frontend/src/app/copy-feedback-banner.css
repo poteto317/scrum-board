@@ -1,0 +1,43 @@
+:host {
+  display: contents;
+}
+
+.copy-feedback-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(28rem, calc(100vw - 32px));
+  margin-inline: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  box-shadow: 0 8px 28px #10241022;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.copy-feedback-banner--ok {
+  background: var(--feedback-ok-bg);
+  color: var(--feedback-ok-ink);
+  border-color: color-mix(in srgb, var(--feedback-ok-ink) 18%, transparent);
+}
+
+.copy-feedback-banner--error {
+  background: var(--feedback-error-bg);
+  color: var(--feedback-error-ink);
+  border-color: color-mix(in srgb, var(--feedback-error-ink) 18%, transparent);
+}
+
+.copy-feedback-banner__icon {
+  flex-shrink: 0;
+}
+
+.copy-feedback-banner__text {
+  min-width: 0;
+}
