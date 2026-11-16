@@ -6,14 +6,14 @@
 
 - Todo / Doing / Doneから始める単一ボード
 - 任意のステータス列を末尾へ追加（同名不可・1〜60文字）
-- カードの追加（追加ダイアログにステータス選択は無く常に Todo）、詳細表示、編集、削除
+- アイテムの追加（追加ダイアログにステータス選択は無く常に Todo）、詳細表示、編集、削除
 - 詳細画面でステータスを選択して移動（移動先列の末尾へ）
-- ボード上でカード左端中央のハンドル（`⋮⋮`）をドラッグ＆ドロップ（または上下矢印キー）し、列内の並べ替えと別ステータスへの移動（カード本文のクリックは詳細へ遷移、右上のボタンでリンクをコピー）
-- カードは列内に縦積み（列ごとの縦スクロールは無く、長い列はページを縦スクロール）。列が増えたらボード内で横スクロール
-- ボードは5秒ごとに最新の状態へ自動で更新（カードや列のドラッグ中・保存中・追加モーダル表示中は更新しません）
+- ボード上でアイテム左端中央のハンドル（`⋮⋮`）をドラッグ＆ドロップ（または上下矢印キー）し、列内の並べ替えと別ステータスへの移動（アイテム本文のクリックは詳細へ遷移、右上のボタンでリンクをコピー）
+- アイテムは列内に縦積み（列ごとの縦スクロールは無く、長い列はページを縦スクロール）。列が増えたらボード内で横スクロール
+- ボードは5秒ごとに最新の状態へ自動で更新（アイテムや列のドラッグ中・保存中・追加モーダル表示中は更新しません）
 - プロダクトバックログ（全ステータスの優先順位リスト。ドラッグ／キーボードで並び替え、バックログからも新規追加・常に Todo）
 - MySQLへの永続化
-- APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのカードを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[使い方](docs/api.md#aiで整えてカードを起票する)）
+- APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのアイテムを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[使い方](docs/api.md#aiで整えてアイテムを起票する)）
 
 ## 最短で起動（Docker）
 
@@ -45,7 +45,7 @@ docker compose down          # コンテナを削除。データボリューム�
 
 MySQLのデータはComposeの名前付きボリューム`mysql_data`に保存します。`database/init/001_schema.sql`は**空のデータボリュームの初回起動時だけ**実行され、再起動時にサンプルは増えません。SQLファイルの編集は既存DBへ自動反映されません。今後のスキーマ変更ではバージョン管理したマイグレーションを追加してください。
 
-完全に初期化する必要がある場合だけ `docker compose down -v` を使用します。これは保存したカードと列もすべて削除します。既存ボリュームがある状態で`.env`のDBパスワードを書き換えても、MySQLのユーザーパスワードは変わりません。
+完全に初期化する必要がある場合だけ `docker compose down -v` を使用します。これは保存したアイテムと列もすべて削除します。既存ボリュームがある状態で`.env`のDBパスワードを書き換えても、MySQLのユーザーパスワードは変わりません。
 
 ポートが競合する場合は`.env`の`WEB_PORT`、`API_PORT`、`MYSQL_PORT`を変更してください。画面のコンテナ間通信はポート変更の影響を受けません。
 
@@ -121,8 +121,8 @@ frontend/src/app/
   api.ts               HttpClientによるAPIアクセス
   api-error.ts         通信失敗の表示文言
   form-validation.ts   Unicode対応のフォーム入力検証
-  board.ts/html/css     ボード・列追加・カード追加
-  card-detail.*        詳細・編集・ステータス変更・削除
+  board.ts/html/css     ボード・列追加・アイテム追加
+  item-detail.*        詳細・編集・ステータス変更・削除
   modal.ts             native dialogのフォーカス管理
   app.routes.ts        画面のルーティング
 backend/
@@ -134,12 +134,12 @@ backend/
     handler.go         各エンドポイントの処理
     http_transport.go  JSONの受け取り・ID解析・HTTP応答
     validation.go      タイトル・説明・列名の入力検証
-    status_handler.go  タスク番号と列名による状態変更（PATCH /api/cards/by-number/{number}/status）
+    status_handler.go  タスク番号と列名による状態変更（PATCH /api/items/by-number/{number}/status）
     assignee*.go       対応者ラベルの正規化・専用PATCH・起動時マイグレーション
     repository.go      プレースホルダー付きSQL、更新トランザクション
     history*.go        変更履歴の追記・移行・ページング・復元
-    refined*.go        AIで整えてTodoに起票するAPI（POST /api/cards/refined）とテスト
-    numbering.go       タスク番号表の作成・既存カードの採番（API起動時に実行）
+    refined*.go        AIで整えてTodoに起票するAPI（POST /api/items/refined）とテスト
+    numbering.go       タスク番号表の作成・既存アイテムの採番（API起動時に実行）
     handler_test.go    DBに依存しないAPIテスト
     status_handler_test.go         状態変更APIのDBに依存しないテスト
     assignee_handler_test.go       対応者APIのDBに依存しないテスト
@@ -152,7 +152,7 @@ backend/
 
 1. `models.ts`と`model.go`で画面とAPIの共通データを読む。
 2. `board.ts`のSignalsと`computed`で一覧表示の状態を追う。
-3. `card-detail.ts`のReactive Formsと`api.ts`で、入力→HTTP→画面更新を追う。
+3. `item-detail.ts`のReactive Formsと`api.ts`で、入力→HTTP→画面更新を追う。
 4. `handler.go`→`Repository`→`repository.go`でGo側の処理を追う。
 5. SQLの外部キー・一意制約とGoのエラー応答の関係を見る。
 
@@ -164,30 +164,30 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 
 | Method | Path | 内容 |
 | --- | --- | --- |
-| GET | `/api/board` | `{columns: [...], cards: [...]}` |
+| GET | `/api/board` | `{columns: [...], items: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
-| POST | `/api/cards` | `{title, description, columnId, prUrls?, assignee?}`でカード追加 |
-| PUT | `/api/cards/order` | `{columns:[{columnId, cardIds}]}`でカードの列内並べ替え・列間移動（[詳細](docs/api.md#カードの並び替え列間移動)） |
-| POST | `/api/cards/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてカードを起票する)） |
-| GET | `/api/cards/{id}` | 内部IDによるカード詳細 |
-| GET | `/api/cards/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
-| GET | `/api/cards/by-number/{number}` | タスク番号によるカード詳細 |
-| PATCH | `/api/cards/by-number/{number}/status` | `{status}`（列名）でステータスだけ変更 |
-| PATCH | `/api/cards/by-number/{number}/assignee` | `{assignee}`（対応者ラベル）だけ変更 |
-| PATCH | `/api/cards/{id}` | `{title?, description?, columnId?, prUrls?, assignee?}`で部分更新 |
-| DELETE | `/api/cards/{id}` | 削除（204） |
+| POST | `/api/items` | `{title, description, columnId, prUrls?, assignee?}`でアイテム追加 |
+| PUT | `/api/items/order` | `{columns:[{columnId, itemIds}]}`でアイテムの列内並べ替え・列間移動（[詳細](docs/api.md#アイテムの並び替え列間移動)） |
+| POST | `/api/items/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてアイテムを起票する)） |
+| GET | `/api/items/{id}` | 内部IDによるアイテム詳細 |
+| GET | `/api/items/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
+| GET | `/api/items/by-number/{number}` | タスク番号によるアイテム詳細 |
+| PATCH | `/api/items/by-number/{number}/status` | `{status}`（列名）でステータスだけ変更 |
+| PATCH | `/api/items/by-number/{number}/assignee` | `{assignee}`（対応者ラベル）だけ変更 |
+| PATCH | `/api/items/{id}` | `{title?, description?, columnId?, prUrls?, assignee?}`で部分更新 |
+| DELETE | `/api/items/{id}` | 削除（204） |
 | GET | `/api/command-templates` | `{templates:[...]}`（`position` 昇順。[詳細](docs/api.md#コマンドテンプレート)） |
 | POST | `/api/command-templates` | `{name, template}` で追加（201。最大50件。サーバーは文字列保存のみで実行しない） |
 | PATCH | `/api/command-templates/{id}` | `{name?, template?}` の部分更新 |
 | DELETE | `/api/command-templates/{id}` | 削除（204） |
-| GET/PUT | `/api/cards/by-number/{n}/command-templates` | カードの表示セット（PUT は `{templateIds}` で置き換え） |
-| GET/PUT | `/api/command-template-defaults` | 新規カード作成時にコピーする初期 `templateIds` |
-| POST | `/api/command-templates/apply-to-all-cards` | 全カードの表示セットを `{templateIds}` で置き換え（204） |
+| GET/PUT | `/api/items/by-number/{n}/command-templates` | アイテムの表示セット（PUT は `{templateIds}` で置き換え） |
+| GET/PUT | `/api/command-template-defaults` | 新規アイテム作成時にコピーする初期 `templateIds` |
+| POST | `/api/command-templates/apply-to-all-items` | 全アイテムの表示セットを `{templateIds}` で置き換え（204） |
 | GET | `/api/health` | 起動確認 |
 
 タイトルは1〜200文字、説明は10000文字以内。タイトル・列名の前後の空白は削除します。絵文字を含むUnicode文字数で検証します。空のPATCH、未知のプロパティ、不正なJSONも拒否します。エラー形式は`{"message":"..."}`。不正入力400、未存在404、重複列409、内部エラー500です。
 
-列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のカードは`position`・ID順で、`GET /api/board`もこの順です。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます。ドラッグ&ドロップは`PUT /api/cards/order`で保存し、`cards.position`はAPI起動時に自動で追加されます。
+列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のアイテムは`position`・ID順で、`GET /api/board`もこの順です。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます。ドラッグ&ドロップは`PUT /api/items/order`で保存し、`cards.position`はAPI起動時に自動で追加されます。
 
 ## 検証
 
@@ -203,7 +203,7 @@ npm test -- --watch=false
 npm run build
 ```
 
-smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複列、不正入力、削除後の404を確認します。テストカードは削除しますが、追加列`Review`は再利用できるよう残します。削除したタスク番号は再利用しないため、実行のたびに番号が1つ消費されます。普段使いのスタック（既定のポート8080 / 4200）では実行せず、プロジェクト名とポートを変えた使い捨てのスタックに対して、プロジェクトルートから実行してください。
+smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複列、不正入力、削除後の404を確認します。テストアイテムは削除しますが、追加列`Review`は再利用できるよう残します。削除したタスク番号は再利用しないため、実行のたびに番号が1つ消費されます。普段使いのスタック（既定のポート8080 / 4200）では実行せず、プロジェクト名とポートを変えた使い捨てのスタックに対して、プロジェクトルートから実行してください。
 
 ```sh
 MYSQL_PORT=3317 API_PORT=8081 WEB_PORT=4201 docker compose -p scrumboard-smoke up -d --build
@@ -213,13 +213,13 @@ API_URL=http://127.0.0.1:4201 python3 scripts/smoke.py
 docker compose -p scrumboard-smoke down -v
 ```
 
-`-p scrumboard-smoke` のスタックは専用のデータボリュームを持つため、`down -v` は使い捨て側だけを削除します。`-p` を付け忘れると普段使いのデータボリュームを削除するので、必ず付けてください。初期サンプルカードを削除・移動した状態などでは、初期サンプルを前提とする検査に注意してください。
+`-p scrumboard-smoke` のスタックは専用のデータボリュームを持つため、`down -v` は使い捨て側だけを削除します。`-p` を付け忘れると普段使いのデータボリュームを削除するので、必ず付けてください。初期サンプルアイテムを削除・移動した状態などでは、初期サンプルを前提とする検査に注意してください。
 
 ## 今後の拡張とMVPの範囲
 
 今回はローカル学習用・単一ボード・認証なしの構成です。公開用の認証、権限管理、複数ボード、スプリント、担当者、期限、リアルタイム共同編集は含みません。各サービスはホストのループバックアドレスにだけ公開します。
 
-カード数に業務上の上限は設けていません。一覧は一括取得なので、大規模データに進む段階でページングや仮想スクロールを追加できます。同時編集は最後の保存が優先です。
+アイテム数に業務上の上限は設けていません。一覧は一括取得なので、大規模データに進む段階でページングや仮想スクロールを追加できます。同時編集は最後の保存が優先です。
 
 拡張の例:
 
@@ -235,11 +235,11 @@ APIへ直接、不正なUTF-8や片側だけのサロゲートエスケープを
 
 ## タスク番号と既存DBの移行
 
-画面の `TASK-001` などはAPIの `number` を表示します。`number` は詳細URLにも使い、`id` は内部の識別子として更新・削除に使用します。例として `id: 18, number: 3` のカードは `/cards/3` で `TASK-003` と表示されます。画面は `GET /api/cards/by-number/3` で取得した内部IDを使って保存・削除します。
+画面の `ITEM-001` などはAPIの `number` を表示します。`number` は詳細URLにも使い、`id` は内部の識別子として更新・削除に使用します。例として `id: 18, number: 3` のアイテムは `/items/3` で `ITEM-003` と表示されます。画面は `GET /api/items/by-number/3` で取得した内部IDを使って保存・削除します。
 
-API起動時に `card_numbers` と `card_number_sequence` を冪等に作成し、未採番カードを作成日時・内部ID順で採番します。既存カードのID・本文・ステータス・日時は書き換えません。サンプルだけのDBではサンプルが1、その後の最初の作成が2になります。作成失敗は番号を消費せず、削除した番号は再利用しません。再起動・編集・ステータス移動でも一度発行した番号を維持します。
+API起動時に `card_numbers` と `card_number_sequence` を冪等に作成し、未採番アイテムを作成日時・内部ID順で採番します。既存アイテムのID・本文・ステータス・日時は書き換えません。サンプルだけのDBではサンプルが1、その後の最初の作成が2になります。作成失敗は番号を消費せず、削除した番号は再利用しません。再起動・編集・ステータス移動でも一度発行した番号を維持します。
 
-既存データのある環境では、APIを止めてバックアップを取得してから更新してください。移行はAPI公開前に実行され、失敗した場合は起動を中止します。旧版と新版のAPIを混在させず、新版が採番を終えてから公開します。バックフィルと新規採番は同じカウンター行をロックし、トランザクションで番号とカードを一緒に確定します。初期SQLの再実行やデータボリュームの削除は不要です。
+既存データのある環境では、APIを止めてバックアップを取得してから更新してください。移行はAPI公開前に実行され、失敗した場合は起動を中止します。旧版と新版のAPIを混在させず、新版が採番を終えてから公開します。バックフィルと新規採番は同じカウンター行をロックし、トランザクションで番号とアイテムを一緒に確定します。初期SQLの再実行やデータボリュームの削除は不要です。
 
 旧版へコードを戻しても `cards` 本体は維持できますが、旧画面のURLと番号表示は内部ID方式へ戻ります。番号表の削除・再作成は番号の同一性を失うため行わないでください。
 
@@ -262,15 +262,15 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 
 ダンプの終了コードとSQLファイルが正常であることを確認してから `docker compose up -d --build api web` で更新します。ダンプに失敗した場合は更新せず `docker compose start api` で元のAPIを再開してください。UTF-8の文字列を照合するSQLクライアントにも `--default-character-set=utf8mb4` を指定します。
 
-画面URLは表示番号として解釈します。旧画面URLを内部IDとして推測するフォールバックは行いません。例えば `/cards/18` はタスク番号18のカードを表し、内部ID18のカードを意味しません。
+画面URLは表示番号として解釈します。旧画面URLを内部IDとして推測するフォールバックは行いません。例えば `/items/18` はタスク番号18のアイテムを表し、内部ID18のアイテムを意味しません。
 
-### カードとGitHub PRの紐付け
+### アイテムとGitHub PRの紐付け
 
-カード詳細のプロパティでGitHub PRのURLを追加・削除・並べ替え（ドラッグまたは上下ボタン）できます。1カードに複数URLを登録でき（件数上限なし）、削除で解除します。APIからは `prUrls` 配列の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。関連アイテムも同様に並べ替えできます。
+アイテム詳細のプロパティでGitHub PRのURLを追加・削除・並べ替え（ドラッグまたは上下ボタン）できます。1アイテムに複数URLを登録でき（件数上限なし）、削除で解除します。APIからは `prUrls` 配列の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。関連アイテムも同様に並べ替えできます。
 
-URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します（1カード複数行）。既存のカード・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。起動時に旧スキーマ（1カード1行）から自動移行します。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
+URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します（1アイテム複数行）。既存のアイテム・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。起動時に旧スキーマ（1アイテム1行）から自動移行します。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
 
-更新前のバックアップから復元する場合は、ダンプに含まれない補助表が取り残されないよう、復元の前にAPIを止めて補助表を削除してください。取り残された行は、復元で戻ったカードやその後に作ったカードと内部IDが重なり、別のカードにPR URLや番号が付くおそれがあります。更新後に保存したPR URLは失われ、番号は次のAPI起動時に作成日時・内部ID順で採番し直されます。
+更新前のバックアップから復元する場合は、ダンプに含まれない補助表が取り残されないよう、復元の前にAPIを止めて補助表を削除してください。取り残された行は、復元で戻ったアイテムやその後に作ったアイテムと内部IDが重なり、別のアイテムにPR URLや番号が付くおそれがあります。更新後に保存したPR URLは失われ、番号は次のAPI起動時に作成日時・内部ID順で採番し直されます。
 
 ```sh
 docker compose stop api
@@ -281,15 +281,15 @@ docker compose start api
 
 ### 詳細の自動保存
 
-カード詳細には保存ボタンがありません。タイトル・説明は入力が600ms止まると自動保存し、入力し続けても最大2秒ごとに保存します。入力欄を離れたときとステータス変更は即時保存します。GitHub PRの追加・削除は操作のたびに即時保存します。日本語変換中の本文は確定まで送信しません。
+アイテム詳細には保存ボタンがありません。タイトル・説明は入力が600ms止まると自動保存し、入力し続けても最大2秒ごとに保存します。入力欄を離れたときとステータス変更は即時保存します。GitHub PRの追加・削除は操作のたびに即時保存します。日本語変換中の本文は確定まで送信しません。
 
 保存中も編集を続けられ、変更した有効な項目だけを順番にPATCHします。不正入力はそのまま残し、他の有効な項目は保存します。通信失敗では入力を保持し「再試行」を表示します。アプリ内の移動では保存完了を待ち、不正入力や失敗が残れば破棄確認します。リロード・タブ終了でも未保存時はブラウザーの標準確認を使います。未保存の入力をオフラインで永続化する機能は含みません。
 
 ### 変更履歴
 
-詳細画面の「変更履歴」から、作成とタイトル・説明・ステータス・PR URLの変更前後を確認できます。自動保存とAPI更新のどちらも同じトランザクションで履歴を残し、値が変わらない再送では増えません。50件ずつ追加表示します。カードを削除すると、そのカードの履歴も削除されます。
+詳細画面の「変更履歴」から、作成とタイトル・説明・ステータス・PR URLの変更前後を確認できます。自動保存とAPI更新のどちらも同じトランザクションで履歴を残し、値が変わらない再送では増えません。50件ずつ追加表示します。アイテムを削除すると、そのアイテムの履歴も削除されます。
 
-起動時の `backend/internal/kanban/history_migration.go` が補助表 `card_history` を準備し、履歴のない既存カードには「履歴機能導入時の状態」を一度だけ保存します。過去の初期値を推定するものではありません。過去記録の復元は `backend/cmd/import-history` と `history_import.go`、画面は `frontend/src/app/card-history.*` を参照してください。
+起動時の `backend/internal/kanban/history_migration.go` が補助表 `card_history` を準備し、履歴のない既存アイテムには「履歴機能導入時の状態」を一度だけ保存します。過去の初期値を推定するものではありません。過去記録の復元は `backend/cmd/import-history` と `history_import.go`、画面は `frontend/src/app/item-history.*` を参照してください。
 
 復元記録は「復元した記録」と注記・根拠PRで通常の変更と区別します。バックアップ間の差分は観測時刻であり、正確な操作時刻や途中の全変更を保証しません。作成日時しか分からない場合は初期本文を捏造しません。復元方法とJSON形式は[APIガイド](docs/api.md#過去履歴の取り込み)を参照してください。
 
@@ -297,7 +297,7 @@ docker compose start api
 
 ## 本番へのデータ移行（ローカル → Cloud SQL）
 
-ローカル Compose の MySQL に溜まったカードを Cloud SQL へ載せる手順です。**インポートが終わってから**、DB 内テキストに残っている `http://127.0.0.1:4200` / `http://localhost:4200` を本番オリジンへ置き換えます。
+ローカル Compose の MySQL に溜まったアイテムを Cloud SQL へ載せる手順です。**インポートが終わってから**、DB 内テキストに残っている `http://127.0.0.1:4200` / `http://localhost:4200` を本番オリジンへ置き換えます。
 
 ### 1. ローカルからダンプを取得
 
@@ -315,7 +315,7 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 
 Cloud SQL for MySQL 8 上に、本番と同じ DB 名・ユーザー（例: `scrumboard` / `scrum`）を用意したうえでインポートします。公式の [Cloud SQL への SQL インポート](https://cloud.google.com/sql/docs/mysql/import-export/importing) に従い、GCS 経由または `gcloud sql import sql` でアップロードしてください。インスタンスが起動していること、文字セットは `utf8mb4` であることを確認します。
 
-**カード #42 の実施記録:** 一時的な authorized network + `mysql` クライアント（TCP）でインポートした。手順の正本は `docs/superpowers/specs/2026-11-15-prod-data-deploy-design.md`。実施結果は `docs/production-deploy-status.md`。GCS は未使用。
+**アイテム #42 の実施記録:** 一時的な authorized network + `mysql` クライアント（TCP）でインポートした。手順の正本は `docs/superpowers/specs/2026-11-15-prod-data-deploy-design.md`。実施結果は `docs/production-deploy-status.md`。GCS は未使用。
 
 ### 3. オリジン置換 CLI（インポート後・必須）
 
