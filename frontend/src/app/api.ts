@@ -1,7 +1,23 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CommandTemplate } from './command-template';
-import { BoardData, Item, ItemInput, Column, HistoryPage } from './models';
+import { ItemOrderColumn } from './item-order';
+import {
+  BoardData,
+  BoardSettings,
+  CardLayout,
+  Item,
+  ItemInput,
+  Column,
+  HistoryPage,
+} from './models';
+
+export type { ItemOrderColumn };
+
+export type BoardSettingsPatchResponse = {
+  settings: BoardSettings;
+  items?: Item[];
+};
 
 @Injectable({ providedIn: 'root' })
 export class Api {
@@ -11,6 +27,11 @@ export class Api {
   }
   board() {
     return this.http.get<BoardData>('/api/board');
+  }
+  patchBoardSettings(body: { cardLayout: CardLayout }) {
+    return this.http.patch<BoardSettingsPatchResponse>('/api/board/settings', {
+      cardLayout: body.cardLayout,
+    });
   }
   itemByNumber(number: number) {
     return this.http.get<Item>(`/api/items/by-number/${number}`);
@@ -29,7 +50,7 @@ export class Api {
   reorderColumns(columnIds: number[]) {
     return this.http.put<{ columns: Column[] }>('/api/columns/order', { columnIds });
   }
-  reorderItems(columns: { columnId: number; itemIds: number[] }[]) {
+  reorderItems(columns: ItemOrderColumn[]) {
     return this.http.put<{ items: Item[] }>('/api/items/order', { columns });
   }
   backlog() {

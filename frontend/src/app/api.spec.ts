@@ -80,6 +80,35 @@ describe('Api', () => {
     req.flush(payload);
     expect(result).toEqual(payload);
   });
+  it('sends PUT /api/items/order with optional offsetYs', () => {
+    const columns = [{ columnId: 1, itemIds: [2, 1], offsetYs: [40, 10] }];
+    api.reorderItems(columns).subscribe();
+    const req = http.expectOne('/api/items/order');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ columns });
+    req.flush({ items: [] });
+  });
+  it('patches board settings with cardLayout only', () => {
+    let result: unknown;
+    api.patchBoardSettings({ cardLayout: 'free' }).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/board/settings');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ cardLayout: 'free' });
+    const payload = { settings: { cardLayout: 'free' } };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
+  it('accepts pack settings responses that include items', () => {
+    let result: unknown;
+    api.patchBoardSettings({ cardLayout: 'pack' }).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/board/settings');
+    const payload = {
+      settings: { cardLayout: 'pack' },
+      items: [{ id: 1, number: 1, columnId: 1, title: 'a', position: 0, offsetY: 12 }],
+    };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
   it('fetches backlog cards', () => {
     let result: unknown;
     api.backlog().subscribe((res) => (result = res));
