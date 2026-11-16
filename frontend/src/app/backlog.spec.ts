@@ -4,10 +4,10 @@ import { of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Backlog } from './backlog';
-import { Card, Column } from './models';
+import { Item, Column } from './models';
 import { TODO_COLUMN_MISSING } from './todo-column';
 
-function makeCards(): Card[] {
+function makeCards(): Item[] {
   return [
     {
       id: 1,
@@ -141,8 +141,8 @@ describe('Backlog reordering', () => {
         {
           provide: Api,
           useValue: {
-            backlog: () => of({ cards }),
-            board: () => of({ columns, cards }),
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
           },
         },
       ],
@@ -161,7 +161,7 @@ describe('Backlog reordering', () => {
     const columns = makeColumns();
     const reorderBacklog = vi.fn((ids: number[]) =>
       of({
-        cards: ids.map((id, backlogPosition) => ({
+        items: ids.map((id, backlogPosition) => ({
           ...cards.find((c) => c.id === id)!,
           backlogPosition,
         })),
@@ -174,8 +174,8 @@ describe('Backlog reordering', () => {
         {
           provide: Api,
           useValue: {
-            backlog: () => of({ cards }),
-            board: () => of({ columns, cards }),
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
             reorderBacklog,
           },
         },
@@ -194,7 +194,7 @@ describe('Backlog reordering', () => {
     const zones = f.nativeElement.querySelectorAll('.backlog-drag-zone') as NodeListOf<HTMLElement>;
     dispatchDragEvent(zones[3], 'dragstart', { clientY: 230 });
     f.detectChanges();
-    expect(f.componentInstance.draggingCardId()).toBe(9);
+    expect(f.componentInstance.draggingItemId()).toBe(9);
     // row1 midpoint is 100; below midpoint keeps insertion slot 1
     dispatchDragEvent(scrollRegion, 'dragover', { clientY: 99 });
     f.detectChanges();
@@ -210,7 +210,7 @@ describe('Backlog reordering', () => {
     const columns = makeColumns();
     const reorderBacklog = vi.fn((ids: number[]) =>
       of({
-        cards: ids.map((id, backlogPosition) => ({
+        items: ids.map((id, backlogPosition) => ({
           ...cards.find((c) => c.id === id)!,
           backlogPosition,
         })),
@@ -223,8 +223,8 @@ describe('Backlog reordering', () => {
         {
           provide: Api,
           useValue: {
-            backlog: () => of({ cards }),
-            board: () => of({ columns, cards }),
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
             reorderBacklog,
           },
         },
@@ -241,7 +241,7 @@ describe('Backlog reordering', () => {
     f.detectChanges();
     expect(reorderBacklog).toHaveBeenCalledWith([1, 3, 2, 9]);
 
-    f.componentInstance.cards.set([cards[0]]);
+    f.componentInstance.items.set([cards[0]]);
     f.detectChanges();
     expect(f.componentInstance.canReorder()).toBe(false);
     const singleZone = f.nativeElement.querySelector('.backlog-drag-zone') as HTMLElement;
@@ -253,7 +253,7 @@ describe('Backlog reordering', () => {
   it('rolls back optimistic order on save failure and shows reload on conflict', async () => {
     const cards = makeCards();
     const columns = makeColumns();
-    const fail = new Subject<{ cards: Card[] }>();
+    const fail = new Subject<{ items: Item[] }>();
     const reorderBacklog = vi.fn(() => fail);
     TestBed.configureTestingModule({
       imports: [Backlog],
@@ -262,8 +262,8 @@ describe('Backlog reordering', () => {
         {
           provide: Api,
           useValue: {
-            backlog: () => of({ cards }),
-            board: () => of({ columns, cards }),
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
             reorderBacklog,
           },
         },
@@ -277,10 +277,10 @@ describe('Backlog reordering', () => {
     );
     handles[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }));
     f.detectChanges();
-    expect(f.componentInstance.cards().map((c) => c.id)).toEqual([2, 1, 3, 9]);
+    expect(f.componentInstance.items().map((c) => c.id)).toEqual([2, 1, 3, 9]);
     fail.error({ status: 409, error: { message: '構成が変更されています' } });
     f.detectChanges();
-    expect(f.componentInstance.cards().map((c) => c.id)).toEqual([1, 2, 3, 9]);
+    expect(f.componentInstance.items().map((c) => c.id)).toEqual([1, 2, 3, 9]);
     expect(f.componentInstance.reorderConflict()).toBe(true);
     expect(f.nativeElement.querySelector('.reorder-reload')).not.toBeNull();
     expect(f.nativeElement.querySelector('.reorder-dismiss')).toBeNull();
@@ -289,7 +289,7 @@ describe('Backlog reordering', () => {
   it('creates a card from the backlog modal always in Todo without a status select', async () => {
     const cards = makeCards().slice(0, 1);
     const columns = makeColumns();
-    const created: Card = {
+    const created: Item = {
       id: 10,
       number: 10,
       columnId: 1,
@@ -303,7 +303,7 @@ describe('Backlog reordering', () => {
       createdAt: '',
       updatedAt: '',
     };
-    const createCard = vi.fn(() => of(created));
+    const createItem = vi.fn(() => of(created));
     TestBed.configureTestingModule({
       imports: [Backlog],
       providers: [
@@ -311,9 +311,9 @@ describe('Backlog reordering', () => {
         {
           provide: Api,
           useValue: {
-            backlog: () => of({ cards }),
-            board: () => of({ columns, cards }),
-            createCard,
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
+            createItem,
           },
         },
       ],
@@ -334,17 +334,17 @@ describe('Backlog reordering', () => {
       this.open = false;
     };
     try {
-      f.componentInstance.openCard();
+      f.componentInstance.openItem();
       f.detectChanges();
       expect(f.nativeElement.querySelector('#backlog-card-status')).toBeNull();
-      f.componentInstance.cardForm.setValue({
+      f.componentInstance.itemForm.setValue({
         title: 'New',
         description: 'd',
       });
-      f.componentInstance.addCard();
+      f.componentInstance.addItem();
       f.detectChanges();
-      expect(createCard).toHaveBeenCalledWith({ title: 'New', description: 'd', columnId: 1 });
-      expect(f.componentInstance.cards().at(-1)?.id).toBe(10);
+      expect(createItem).toHaveBeenCalledWith({ title: 'New', description: 'd', columnId: 1 });
+      expect(f.componentInstance.items().at(-1)?.id).toBe(10);
       expect(f.componentInstance.modal()).toBeNull();
     } finally {
       proto.showModal = origShowModal;
@@ -353,7 +353,7 @@ describe('Backlog reordering', () => {
   });
 
   it('does not create from the backlog when Todo column is missing', async () => {
-    const createCard = vi.fn();
+    const createItem = vi.fn();
     TestBed.configureTestingModule({
       imports: [Backlog],
       providers: [
@@ -361,9 +361,9 @@ describe('Backlog reordering', () => {
         {
           provide: Api,
           useValue: {
-            backlog: () => of({ cards: [] }),
-            board: () => of({ columns: [{ id: 2, name: 'Doing', position: 0 }], cards: [] }),
-            createCard,
+            backlog: () => of({ items: [] }),
+            board: () => of({ columns: [{ id: 2, name: 'Doing', position: 0 }], items: [] }),
+            createItem,
           },
         },
       ],
@@ -371,14 +371,14 @@ describe('Backlog reordering', () => {
     const f = TestBed.createComponent(Backlog);
     f.detectChanges();
     await f.whenStable();
-    f.componentInstance.openCard();
-    f.componentInstance.cardForm.setValue({ title: 'x', description: '' });
-    f.componentInstance.addCard();
-    expect(createCard).not.toHaveBeenCalled();
+    f.componentInstance.openItem();
+    f.componentInstance.itemForm.setValue({ title: 'x', description: '' });
+    f.componentInstance.addItem();
+    expect(createItem).not.toHaveBeenCalled();
     expect(f.componentInstance.formError()).toBe(TODO_COLUMN_MISSING);
   });
 
-  it('disables the add-card button and blocks openCard when initial load fails or columns are empty', async () => {
+  it('disables the add-card button and blocks openItem when initial load fails or columns are empty', async () => {
     TestBed.configureTestingModule({
       imports: [Backlog],
       providers: [
@@ -399,13 +399,13 @@ describe('Backlog reordering', () => {
       '.page-heading button.primary',
     ) as HTMLButtonElement;
     expect(addButton.disabled).toBe(true);
-    f.componentInstance.openCard();
+    f.componentInstance.openItem();
     expect(f.componentInstance.modal()).toBeNull();
 
     f.componentInstance.error.set('');
     f.detectChanges();
     expect(addButton.disabled).toBe(true);
-    f.componentInstance.openCard();
+    f.componentInstance.openItem();
     expect(f.componentInstance.modal()).toBeNull();
   });
 });
@@ -422,9 +422,9 @@ describe('Backlog live refresh', () => {
     const cards = makeCards();
     const columns = makeColumns();
     const api = {
-      backlog: vi.fn(() => of({ cards })),
-      board: vi.fn(() => of({ columns, cards: [] })),
-      createCard: vi.fn(),
+      backlog: vi.fn(() => of({ items: cards })),
+      board: vi.fn(() => of({ columns, items: [] })),
+      createItem: vi.fn(),
       reorderBacklog: vi.fn(),
     };
     TestBed.configureTestingModule({
@@ -436,11 +436,11 @@ describe('Backlog live refresh', () => {
     expect(f.componentInstance.loading()).toBe(false);
 
     const next = [...cards, { ...cards[0], id: 50, number: 50, title: 'Polled' }];
-    api.backlog.mockReturnValue(of({ cards: next }));
+    api.backlog.mockReturnValue(of({ items: next }));
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.componentInstance.loading()).toBe(false);
     expect(f.componentInstance.error()).toBe('');
-    expect(f.componentInstance.cards().some((c) => c.number === 50)).toBe(true);
+    expect(f.componentInstance.items().some((c) => c.number === 50)).toBe(true);
     f.destroy();
   });
 
@@ -449,9 +449,9 @@ describe('Backlog live refresh', () => {
     const cards = makeCards();
     const columns = makeColumns();
     const api = {
-      backlog: vi.fn(() => of({ cards })),
-      board: vi.fn(() => of({ columns, cards: [] })),
-      createCard: vi.fn(),
+      backlog: vi.fn(() => of({ items: cards })),
+      board: vi.fn(() => of({ columns, items: [] })),
+      createItem: vi.fn(),
       reorderBacklog: vi.fn(),
     };
     TestBed.configureTestingModule({
@@ -461,10 +461,10 @@ describe('Backlog live refresh', () => {
     const f = TestBed.createComponent(Backlog);
     f.detectChanges();
     f.componentInstance.reordering.set(true);
-    const before = f.componentInstance.cards().length;
-    api.backlog.mockReturnValue(of({ cards: [] }));
+    const before = f.componentInstance.items().length;
+    api.backlog.mockReturnValue(of({ items: [] }));
     await vi.advanceTimersByTimeAsync(5000);
-    expect(f.componentInstance.cards()).toHaveLength(before);
+    expect(f.componentInstance.items()).toHaveLength(before);
     f.destroy();
   });
 });
@@ -482,9 +482,9 @@ describe('Backlog add dialog accidental close', () => {
         {
           provide: Api,
           useValue: {
-            backlog: () => of({ cards }),
-            board: () => of({ columns, cards }),
-            createCard: vi.fn(),
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
+            createItem: vi.fn(),
           },
         },
       ],
@@ -505,16 +505,16 @@ describe('Backlog add dialog accidental close', () => {
       this.open = false;
     };
     try {
-      f.componentInstance.openCard();
+      f.componentInstance.openItem();
       f.detectChanges();
-      expect(f.componentInstance.modal()).toBe('card');
-      f.componentInstance.cardForm.setValue({ title: '下書き', description: '残る' });
+      expect(f.componentInstance.modal()).toBe('item');
+      f.componentInstance.itemForm.setValue({ title: '下書き', description: '残る' });
       const dialog = f.nativeElement.querySelector('dialog.modal-backdrop') as HTMLElement;
       expect(dialog).not.toBeNull();
       dialog.click();
       f.detectChanges();
-      expect(f.componentInstance.modal()).toBe('card');
-      expect(f.componentInstance.cardForm.getRawValue()).toEqual({
+      expect(f.componentInstance.modal()).toBe('item');
+      expect(f.componentInstance.itemForm.getRawValue()).toEqual({
         title: '下書き',
         description: '残る',
       });
@@ -525,7 +525,7 @@ describe('Backlog add dialog accidental close', () => {
       dialog.dispatchEvent(new Event('cancel', { bubbles: true, cancelable: true }));
       f.detectChanges();
       expect(f.componentInstance.modal()).toBeNull();
-      f.componentInstance.openCard();
+      f.componentInstance.openItem();
       f.detectChanges();
       (f.nativeElement.querySelector('button[aria-label="閉じる"]') as HTMLButtonElement).click();
       f.detectChanges();

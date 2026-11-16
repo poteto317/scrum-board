@@ -4,13 +4,13 @@ import { of, Subject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
-import { BoardData, Card } from './models';
+import { BoardData, Item } from './models';
 
 // The board polls every 5 seconds (live-refresh.ts). CDK reports previousIndex / currentIndex against the list
-// as it was when the drag began, so a poll that swaps the board's data mid-drag makes onCardDrop move the wrong card.
+// as it was when the drag began, so a poll that swaps the board's data mid-drag makes onItemDrop move the wrong card.
 const POLL_MS = 5000;
 
-function card(id: number, position: number, title: string): Card {
+function card(id: number, position: number, title: string): Item {
   return {
     id,
     number: id,
@@ -33,8 +33,8 @@ const C = card(3, 2, 'C');
 const D = card(4, 3, 'D');
 const E = card(5, 4, 'E');
 
-function todoBoard(cards: Card[]): BoardData {
-  return { columns: [{ id: 1, name: 'Todo', position: 0 }], cards };
+function todoBoard(items: Item[]): BoardData {
+  return { columns: [{ id: 1, name: 'Todo', position: 0 }], items };
 }
 
 /** The positions as the server renumbers them after a card is deleted elsewhere. */
@@ -42,7 +42,7 @@ function withoutA(): BoardData {
   return todoBoard([B, C, D, E].map((c, position) => ({ ...c, position })));
 }
 
-async function setup(reorderCards: ReturnType<typeof vi.fn> = vi.fn()) {
+async function setup(reorderItems: ReturnType<typeof vi.fn> = vi.fn()) {
   vi.useFakeTimers();
   const board = vi.fn(() => of(todoBoard([A, B, C, D, E])));
   TestBed.configureTestingModule({
@@ -53,7 +53,7 @@ async function setup(reorderCards: ReturnType<typeof vi.fn> = vi.fn()) {
         provide: Api,
         useValue: {
           board,
-          reorderCards,
+          reorderItems,
           reorderColumns: vi.fn(),
           listCommandTemplates: () => of({ templates: [] }),
         },
@@ -63,7 +63,7 @@ async function setup(reorderCards: ReturnType<typeof vi.fn> = vi.fn()) {
   const f = TestBed.createComponent(Board);
   f.detectChanges();
   await f.whenStable();
-  return { f, board, reorderCards, component: f.componentInstance };
+  return { f, board, reorderItems, component: f.componentInstance };
 }
 
 function titles(component: Board): string[] {
@@ -95,7 +95,7 @@ function grab(f: { nativeElement: HTMLElement }, cardId: number) {
 }
 
 /** What CDK sends to (cdkDropListDropped) for a card dragged from `previousIndex` to `currentIndex` in Todo. */
-function dropEvent(dragged: Card, previousIndex: number, currentIndex: number) {
+function dropEvent(dragged: Item, previousIndex: number, currentIndex: number) {
   return {
     previousContainer: { id: 'card-list-1' },
     container: { id: 'card-list-1' },
@@ -130,7 +130,7 @@ describe('Board live refresh while a card is dragged', () => {
     grab(f, B.id);
     board.mockReturnValue(of(withoutA()));
     // The pointer is released, but the preview is still settling into place (CDK ends the drag up to 300ms later).
-    component.onCardDragReleased();
+    component.onItemDragReleased();
 
     await vi.advanceTimersByTimeAsync(POLL_MS);
 
@@ -151,17 +151,17 @@ describe('Board live refresh while a card is dragged', () => {
   });
 
   it('moves the card that was picked up, using the indexes CDK reports, after a poll during the drag', async () => {
-    const reorderCards = vi.fn(() => new Subject<{ cards: Card[] }>());
-    const { f, board, component } = await setup(reorderCards);
+    const reorderItems = vi.fn(() => new Subject<{ items: Item[] }>());
+    const { f, board, component } = await setup(reorderItems);
     grab(f, B.id);
     board.mockReturnValue(of(withoutA())); // A was deleted elsewhere
     await vi.advanceTimersByTimeAsync(POLL_MS * 2);
 
     // CDK ends the drag and then drops, one straight after the other: B (index 1) goes to the end (index 4).
-    component.onCardDragEnded();
-    component.onCardDrop(dropEvent(B, 1, 4), 1);
+    component.onItemDragEnded();
+    component.onItemDrop(dropEvent(B, 1, 4), 1);
 
-    expect(reorderCards).toHaveBeenCalledWith([{ columnId: 1, cardIds: [1, 3, 4, 5, 2] }]);
+    expect(reorderItems).toHaveBeenCalledWith([{ columnId: 1, itemIds: [1, 3, 4, 5, 2] }]);
     f.destroy();
   });
 
@@ -172,8 +172,8 @@ describe('Board live refresh while a card is dragged', () => {
     await vi.advanceTimersByTimeAsync(POLL_MS);
     expect(titles(component)).toEqual(['A', 'B', 'C', 'D', 'E']);
 
-    component.onCardDragEnded();
-    component.onCardDrop(dropEvent(B, 1, 1), 1); // no-op drop: nothing is saved
+    component.onItemDragEnded();
+    component.onItemDrop(dropEvent(B, 1, 1), 1); // no-op drop: nothing is saved
     await vi.advanceTimersByTimeAsync(POLL_MS);
 
     expect(titles(component)).toEqual(['B', 'C', 'D', 'E']);
@@ -195,24 +195,24 @@ describe('Board live refresh while a card is dragged', () => {
   });
 
   it('saves nothing when the card CDK reports is not the one at its previous index', async () => {
-    const reorderCards = vi.fn(() => of({ cards: [] }));
-    const { f, component } = await setup(reorderCards);
+    const reorderItems = vi.fn(() => of({ items: [] }));
+    const { f, component } = await setup(reorderItems);
 
     // The list was swapped under the drag: index 1 now holds C, not the dragged B.
     component.data.set(todoBoard([A, C, D, E].map((c, position) => ({ ...c, position }))));
-    component.onCardDrop(dropEvent(B, 1, 3), 1);
+    component.onItemDrop(dropEvent(B, 1, 3), 1);
 
-    expect(reorderCards).not.toHaveBeenCalled();
+    expect(reorderItems).not.toHaveBeenCalled();
     expect(titles(component)).toEqual(['A', 'C', 'D', 'E']);
     expect(component.reordering()).toBe(false);
     f.destroy();
   });
 
   it('saves nothing when the drop carries no card', async () => {
-    const reorderCards = vi.fn(() => of({ cards: [] }));
-    const { f, component } = await setup(reorderCards);
+    const reorderItems = vi.fn(() => of({ items: [] }));
+    const { f, component } = await setup(reorderItems);
 
-    component.onCardDrop(
+    component.onItemDrop(
       {
         previousContainer: { id: 'card-list-1' },
         container: { id: 'card-list-1' },
@@ -223,14 +223,14 @@ describe('Board live refresh while a card is dragged', () => {
       1,
     );
 
-    expect(reorderCards).not.toHaveBeenCalled();
+    expect(reorderItems).not.toHaveBeenCalled();
     f.destroy();
   });
 
   it('does not poll while a move is being saved, and adopts the answer of the save afterwards', async () => {
-    const saving = new Subject<{ cards: Card[] }>();
+    const saving = new Subject<{ items: Item[] }>();
     const { f, board, component } = await setup(vi.fn(() => saving));
-    component.onCardDrop(dropEvent(B, 1, 4), 1);
+    component.onItemDrop(dropEvent(B, 1, 4), 1);
     expect(component.reordering()).toBe(true);
     board.mockReturnValue(of(withoutA()));
 
@@ -239,7 +239,7 @@ describe('Board live refresh while a card is dragged', () => {
     expect(titles(component)).toEqual(['A', 'C', 'D', 'E', 'B']);
 
     saving.next({
-      cards: [A, C, D, E, B].map((c, position) => ({ ...c, position })),
+      items: [A, C, D, E, B].map((c, position) => ({ ...c, position })),
     });
     saving.complete();
     expect(titles(component)).toEqual(['A', 'C', 'D', 'E', 'B']);
@@ -247,15 +247,15 @@ describe('Board live refresh while a card is dragged', () => {
   });
 
   it('does not let a poll that started before a save overwrite the saved order when it answers late', async () => {
-    const reorderCards = vi.fn(() =>
-      of({ cards: [B, A, C, D, E].map((c, position) => ({ ...c, position })) }),
+    const reorderItems = vi.fn(() =>
+      of({ items: [B, A, C, D, E].map((c, position) => ({ ...c, position })) }),
     );
-    const { f, board, component } = await setup(reorderCards);
+    const { f, board, component } = await setup(reorderItems);
     const slow = new Subject<BoardData>();
     board.mockReturnValue(slow.asObservable());
     await vi.advanceTimersByTimeAsync(POLL_MS); // the request goes out, with the old order ...
 
-    component.onCardKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }), 1, 0); // ... A moves down, saved ...
+    component.onItemKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }), 1, 0); // ... A moves down, saved ...
     expect(titles(component)).toEqual(['B', 'A', 'C', 'D', 'E']);
     expect(component.reordering()).toBe(false);
     slow.next(todoBoard([A, B, C, D, E])); // ... and then the old answer arrives.

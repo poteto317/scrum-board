@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
 import { CommandTemplatesSession } from './command-templates-session';
-import { cardDetailUrl } from './card-link';
+import { itemDetailUrl } from './item-link';
 import { COPY_LINK_SUCCESS } from './copy-link-feedback';
 import {
-  COMMAND_CARD_MENU_EMPTY,
+  COMMAND_ITEM_MENU_EMPTY,
   COPY_COMMAND_FAILURE,
   COPY_COMMAND_SUCCESS,
   resolveCommand,
@@ -20,8 +20,8 @@ describe('Board create requests', () => {
   it('freezes card inputs while creating and retains them on failure', () => {
     const pending = new Subject<never>();
     const api = {
-      createCard: vi.fn(() => pending),
-      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+      createItem: vi.fn(() => pending),
+      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       providers: [CommandTemplatesSession, { provide: Api, useValue: api }],
@@ -32,25 +32,25 @@ describe('Board create requests', () => {
         { id: 1, name: 'Todo', position: 0 },
         { id: 2, name: 'Doing', position: 1 },
       ],
-      cards: [],
+      items: [],
     });
-    board.cardForm.setValue({ title: '保存するタイトル', description: '本文' });
-    board.addCard();
-    board.addCard();
-    expect(api.createCard).toHaveBeenCalledTimes(1);
-    expect(api.createCard).toHaveBeenCalledWith({
+    board.itemForm.setValue({ title: '保存するタイトル', description: '本文' });
+    board.addItem();
+    board.addItem();
+    expect(api.createItem).toHaveBeenCalledTimes(1);
+    expect(api.createItem).toHaveBeenCalledWith({
       title: '保存するタイトル',
       description: '本文',
       columnId: 1,
     });
-    expect(board.cardForm.disabled).toBe(true);
+    expect(board.itemForm.disabled).toBe(true);
     pending.error({ error: { message: '失敗' } });
-    expect(board.cardForm.enabled).toBe(true);
-    expect(board.cardForm.controls.title.value).toBe('保存するタイトル');
+    expect(board.itemForm.enabled).toBe(true);
+    expect(board.itemForm.controls.title.value).toBe('保存するタイトル');
     expect(board.formError()).toBe('失敗');
   });
   it('always creates in Todo even when opened from another column', () => {
-    const createCard = vi.fn(() =>
+    const createItem = vi.fn(() =>
       of({
         id: 9,
         number: 9,
@@ -71,7 +71,7 @@ describe('Board create requests', () => {
         CommandTemplatesSession,
         {
           provide: Api,
-          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -81,19 +81,19 @@ describe('Board create requests', () => {
         { id: 1, name: 'Todo', position: 0 },
         { id: 2, name: 'Doing', position: 1 },
       ],
-      cards: [],
+      items: [],
     });
-    board.openCard(2);
-    board.cardForm.setValue({ title: 'from doing', description: '' });
-    board.addCard();
-    expect(createCard).toHaveBeenCalledWith({
+    board.openItem(2);
+    board.itemForm.setValue({ title: 'from doing', description: '' });
+    board.addItem();
+    expect(createItem).toHaveBeenCalledWith({
       title: 'from doing',
       description: '',
       columnId: 1,
     });
   });
   it('creates in an empty Todo column', () => {
-    const createCard = vi.fn(() =>
+    const createItem = vi.fn(() =>
       of({
         id: 1,
         number: 1,
@@ -114,32 +114,32 @@ describe('Board create requests', () => {
         CommandTemplatesSession,
         {
           provide: Api,
-          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
     const board = TestBed.runInInjectionContext(() => new Board());
-    board.data.set({ columns: [{ id: 1, name: 'Todo', position: 0 }], cards: [] });
-    board.cardForm.setValue({ title: 'first', description: '' });
-    board.addCard();
-    expect(createCard).toHaveBeenCalledWith({ title: 'first', description: '', columnId: 1 });
+    board.data.set({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] });
+    board.itemForm.setValue({ title: 'first', description: '' });
+    board.addItem();
+    expect(createItem).toHaveBeenCalledWith({ title: 'first', description: '', columnId: 1 });
   });
   it('does not create when Todo column is missing', () => {
-    const createCard = vi.fn();
+    const createItem = vi.fn();
     TestBed.configureTestingModule({
       providers: [
         CommandTemplatesSession,
         {
           provide: Api,
-          useValue: { createCard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
     const board = TestBed.runInInjectionContext(() => new Board());
-    board.data.set({ columns: [{ id: 2, name: 'Doing', position: 0 }], cards: [] });
-    board.cardForm.setValue({ title: 'x', description: '' });
-    board.addCard();
-    expect(createCard).not.toHaveBeenCalled();
+    board.data.set({ columns: [{ id: 2, name: 'Doing', position: 0 }], items: [] });
+    board.itemForm.setValue({ title: 'x', description: '' });
+    board.addItem();
+    expect(createItem).not.toHaveBeenCalled();
     expect(board.formError()).toBe(TODO_COLUMN_MISSING);
   });
   it('omits the status select from the card modal', async () => {
@@ -156,9 +156,9 @@ describe('Board create requests', () => {
                   { id: 1, name: 'Todo', position: 0 },
                   { id: 2, name: 'Doing', position: 1 },
                 ],
-                cards: [],
+                items: [],
               }),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -179,7 +179,7 @@ describe('Board create requests', () => {
       this.open = false;
     };
     try {
-      f.componentInstance.openCard(2);
+      f.componentInstance.openItem(2);
       f.detectChanges();
       expect(f.nativeElement.querySelector('#card-status')).toBeNull();
       f.componentInstance.close();
@@ -193,7 +193,7 @@ describe('Board create requests', () => {
     const pending = new Subject<never>();
     const api = {
       createColumn: vi.fn(() => pending),
-      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       providers: [CommandTemplatesSession, { provide: Api, useValue: api }],
@@ -211,7 +211,7 @@ describe('Board create requests', () => {
 const singleCardBoard = (assignee = '') =>
   of({
     columns: [{ id: 1, name: 'Todo', position: 0 }],
-    cards: [
+    items: [
       {
         id: 17,
         number: 2,
@@ -239,7 +239,7 @@ describe('Board assignee chip', () => {
           provide: Api,
           useValue: {
             board: () => singleCardBoard('Cursor'),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -259,7 +259,7 @@ describe('Board assignee chip', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -279,7 +279,7 @@ describe('Board task numbers', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -290,24 +290,24 @@ describe('Board task numbers', () => {
     expect(card.tagName.toLowerCase()).toBe('article');
     expect(f.nativeElement.querySelector('.card-arrow')).toBeNull();
     const link: HTMLAnchorElement = card.querySelector('.task-card-body') as HTMLAnchorElement;
-    expect(link.textContent).toContain('TASK-002');
+    expect(link.textContent).toContain('ITEM-002');
     // A real link keeps "open in new tab", "copy link" and the status-bar URL working.
     expect(link.tagName).toBe('A');
-    expect(link.getAttribute('href')).toBe('/cards/2');
+    expect(link.getAttribute('href')).toBe('/items/2');
     expect(link.getAttribute('role')).toBeNull();
     // The accessible name of the link stays the card's own text; the drag handle carries the move label and help.
     expect(link.getAttribute('aria-label')).toBeNull();
     expect(link.getAttribute('aria-describedby')).toBeNull();
     const handle = card.querySelector('.card-drag-handle') as HTMLButtonElement;
     expect(handle.getAttribute('aria-label')).toBe(
-      'TASK-002 Taskを移動（ドラッグまたは上下矢印キー）',
+      'ITEM-002 Taskを移動（ドラッグまたは上下矢印キー）',
     );
     const helpId = handle.getAttribute('aria-describedby') as string;
     expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ドラッグ');
     expect(f.nativeElement.querySelector(`#${helpId}`)?.textContent).toContain('ステータス');
     const copyBtn = f.nativeElement.querySelector('.copy-card-link');
     expect(copyBtn).not.toBeNull();
-    expect(copyBtn.getAttribute('aria-label')).toBe('TASK-002 のリンクをコピー');
+    expect(copyBtn.getAttribute('aria-label')).toBe('ITEM-002 のリンクをコピー');
   });
 });
 
@@ -321,7 +321,7 @@ describe('Board copy card link', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -356,7 +356,7 @@ describe('Board copy card link', () => {
     copyBtn.click();
     await vi.waitUntil(() => f.componentInstance.copyLinkAnnouncement() !== '');
     f.detectChanges();
-    expect(writeText).toHaveBeenCalledWith(cardDetailUrl(window.location.origin, 2));
+    expect(writeText).toHaveBeenCalledWith(itemDetailUrl(window.location.origin, 2));
     expect(navigateSpy).not.toHaveBeenCalled();
     const live = f.nativeElement.querySelector('.copy-link-live');
     expect(live).not.toBeNull();
@@ -403,7 +403,7 @@ describe('Board copy command menu', () => {
 
   const create = async (
     templates: { id: number; name: string; template: string; position: number }[],
-    listCardCommandTemplatesByNumber = vi.fn(() => of({ templates })),
+    listItemCommandTemplatesByNumber = vi.fn(() => of({ templates })),
   ) => {
     TestBed.configureTestingModule({
       imports: [Board],
@@ -411,7 +411,7 @@ describe('Board copy command menu', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCardCommandTemplatesByNumber },
+          useValue: { board: singleCardBoard, listItemCommandTemplatesByNumber },
         },
       ],
     });
@@ -419,7 +419,7 @@ describe('Board copy command menu', () => {
     f.detectChanges();
     await f.whenStable();
     f.detectChanges();
-    return { f, listCardCommandTemplatesByNumber };
+    return { f, listItemCommandTemplatesByNumber };
   };
 
   const openMenu = async (f: {
@@ -449,7 +449,7 @@ describe('Board copy command menu', () => {
       configurable: true,
       value: { writeText },
     });
-    const { f, listCardCommandTemplatesByNumber } = await create([template]);
+    const { f, listItemCommandTemplatesByNumber } = await create([template]);
     const router = TestBed.inject(Router);
     const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     const button = f.nativeElement.querySelector(
@@ -460,7 +460,7 @@ describe('Board copy command menu', () => {
     f.detectChanges();
     await f.whenStable();
     f.detectChanges();
-    expect(listCardCommandTemplatesByNumber).toHaveBeenCalled();
+    expect(listItemCommandTemplatesByNumber).toHaveBeenCalled();
     await vi.waitUntil(() => {
       f.detectChanges();
       return (f.nativeElement.querySelector('.copy-link-live')?.textContent ?? '').includes(
@@ -468,7 +468,7 @@ describe('Board copy command menu', () => {
       );
     });
     expect(writeText).toHaveBeenCalledWith(
-      resolveCommand(template.template, cardDetailUrl(window.location.origin, 2)),
+      resolveCommand(template.template, itemDetailUrl(window.location.origin, 2)),
     );
     expect(navigateSpy).not.toHaveBeenCalled();
     expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
@@ -485,9 +485,9 @@ describe('Board copy command menu', () => {
       value: { writeText },
     });
     const second = { id: 8, name: 'echo', template: 'echo {{url}}', position: 1 };
-    const { f, listCardCommandTemplatesByNumber } = await create([template, second]);
+    const { f, listItemCommandTemplatesByNumber } = await create([template, second]);
     const { menu } = await openMenu(f);
-    expect(listCardCommandTemplatesByNumber).toHaveBeenCalled();
+    expect(listItemCommandTemplatesByNumber).toHaveBeenCalled();
     expect(menu.textContent).toContain(template.name);
     expect(menu.textContent).toContain(second.name);
     (menu.querySelector('button') as HTMLButtonElement).click();
@@ -498,7 +498,7 @@ describe('Board copy command menu', () => {
       );
     });
     expect(writeText).toHaveBeenCalledWith(
-      resolveCommand(template.template, cardDetailUrl(window.location.origin, 2)),
+      resolveCommand(template.template, itemDetailUrl(window.location.origin, 2)),
     );
   });
 
@@ -535,7 +535,7 @@ describe('Board copy command menu', () => {
     });
     const { f } = await create([]);
     const { menu } = await openMenu(f);
-    expect(menu.textContent).toContain(COMMAND_CARD_MENU_EMPTY);
+    expect(menu.textContent).toContain(COMMAND_ITEM_MENU_EMPTY);
     expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
     menu.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(writeText).not.toHaveBeenCalled();
@@ -547,7 +547,7 @@ describe('Board copy command menu', () => {
       vi.fn(() => throwError(() => ({ status: 404 }))),
     );
     const { menu } = await openMenu(f);
-    expect(menu.textContent).not.toContain(COMMAND_CARD_MENU_EMPTY);
+    expect(menu.textContent).not.toContain(COMMAND_ITEM_MENU_EMPTY);
     expect(menu.textContent).toContain('通信に失敗しました');
     expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
   });
@@ -642,7 +642,7 @@ describe('Board copy command menu', () => {
 function sampleBoard(columns: Column[]): BoardData {
   return {
     columns: columns.map((c) => ({ ...c })),
-    cards: [
+    items: [
       {
         id: 1,
         number: 1,
@@ -737,7 +737,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -822,7 +822,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -877,7 +877,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -940,7 +940,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -999,7 +999,7 @@ describe('Board column reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board, reorderColumns, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { board, reorderColumns, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -1076,7 +1076,7 @@ describe('Board column reordering', () => {
           useValue: {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1114,7 +1114,7 @@ describe('Board column reordering', () => {
         new KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true }),
       );
       expect(reorderColumns).toHaveBeenCalledTimes(1); // the save really is in flight
-      f.componentInstance.modal.set('card');
+      f.componentInstance.modal.set('item');
       f.detectChanges();
       const titleInput = f.nativeElement.querySelector('#card-title') as HTMLInputElement;
       titleInput.focus();
@@ -1138,7 +1138,7 @@ describe('Board card reordering', () => {
   function twoCardBoard(): BoardData {
     return {
       columns: makeColumns().slice(0, 2),
-      cards: [
+      items: [
         {
           id: 1,
           number: 1,
@@ -1186,12 +1186,12 @@ describe('Board card reordering', () => {
   }
 
   it('reorders within a column via drop and persists', async () => {
-    const reorderCards = vi.fn(() =>
+    const reorderItems = vi.fn(() =>
       of({
-        cards: [
-          { ...twoCardBoard().cards[1], position: 0 },
-          { ...twoCardBoard().cards[0], position: 1 },
-          twoCardBoard().cards[2],
+        items: [
+          { ...twoCardBoard().items[1], position: 0 },
+          { ...twoCardBoard().items[0], position: 1 },
+          twoCardBoard().items[2],
         ],
       }),
     );
@@ -1203,9 +1203,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(twoCardBoard()),
-            reorderCards,
+            reorderItems,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1213,22 +1213,22 @@ describe('Board card reordering', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    f.componentInstance.onCardDrop(
+    f.componentInstance.onItemDrop(
       {
         previousContainer: { id: 'card-list-1' },
         container: { id: 'card-list-1' },
         previousIndex: 0,
         currentIndex: 1,
-        item: { data: twoCardBoard().cards[0] },
+        item: { data: twoCardBoard().items[0] },
       } as never,
       1,
     );
-    expect(reorderCards).toHaveBeenCalledWith([{ columnId: 1, cardIds: [2, 1] }]);
+    expect(reorderItems).toHaveBeenCalledWith([{ columnId: 1, itemIds: [2, 1] }]);
   });
 
   it('skips API for no-op drops and rolls back on failure', async () => {
     const err = Object.assign(new Error('conflict'), { status: 409 });
-    const reorderCards = vi.fn(() => throwError(() => err));
+    const reorderItems = vi.fn(() => throwError(() => err));
     const initial = twoCardBoard();
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1238,9 +1238,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(initial),
-            reorderCards,
+            reorderItems,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1248,37 +1248,37 @@ describe('Board card reordering', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    f.componentInstance.onCardDrop(
+    f.componentInstance.onItemDrop(
       {
         previousContainer: { id: 'card-list-1' },
         container: { id: 'card-list-1' },
         previousIndex: 0,
         currentIndex: 0,
-        item: { data: initial.cards[0] },
+        item: { data: initial.items[0] },
       } as never,
       1,
     );
-    expect(reorderCards).not.toHaveBeenCalled();
+    expect(reorderItems).not.toHaveBeenCalled();
 
-    f.componentInstance.onCardDrop(
+    f.componentInstance.onItemDrop(
       {
         previousContainer: { id: 'card-list-1' },
         container: { id: 'card-list-2' },
         previousIndex: 0,
         currentIndex: 0,
-        item: { data: initial.cards[0] },
+        item: { data: initial.items[0] },
       } as never,
       2,
     );
-    expect(reorderCards).toHaveBeenCalled();
+    expect(reorderItems).toHaveBeenCalled();
     expect(f.componentInstance.reorderConflict()).toBe(true);
-    expect(f.componentInstance.data().cards.map((c) => c.columnId)).toEqual(
-      initial.cards.map((c) => c.columnId),
+    expect(f.componentInstance.data().items.map((c) => c.columnId)).toEqual(
+      initial.items.map((c) => c.columnId),
     );
   });
 
   it('moves within a column with ArrowDown (focus is covered in board-card-reorder-state.spec.ts)', async () => {
-    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    const reorderItems = vi.fn(() => of({ items: twoCardBoard().items }));
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [
@@ -1287,9 +1287,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(twoCardBoard()),
-            reorderCards,
+            reorderItems,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1297,18 +1297,18 @@ describe('Board card reordering', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    f.componentInstance.onCardKeydown(
+    f.componentInstance.onItemKeydown(
       new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }),
       1,
       0,
     );
-    expect(reorderCards).toHaveBeenCalledWith([{ columnId: 1, cardIds: [2, 1] }]);
+    expect(reorderItems).toHaveBeenCalledWith([{ columnId: 1, itemIds: [2, 1] }]);
   });
 
   it('drops into an empty column', async () => {
     const boardData: BoardData = {
       columns: makeColumns().slice(0, 2),
-      cards: [
+      items: [
         {
           id: 1,
           number: 1,
@@ -1325,8 +1325,8 @@ describe('Board card reordering', () => {
         },
       ],
     };
-    const reorderCards = vi.fn(() =>
-      of({ cards: [{ ...boardData.cards[0], columnId: 2, position: 0 }] }),
+    const reorderItems = vi.fn(() =>
+      of({ items: [{ ...boardData.items[0], columnId: 2, position: 0 }] }),
     );
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1336,9 +1336,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(boardData),
-            reorderCards,
+            reorderItems,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1346,19 +1346,19 @@ describe('Board card reordering', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    f.componentInstance.onCardDrop(
+    f.componentInstance.onItemDrop(
       {
         previousContainer: { id: 'card-list-1' },
         container: { id: 'card-list-2' },
         previousIndex: 0,
         currentIndex: 0,
-        item: { data: boardData.cards[0] },
+        item: { data: boardData.items[0] },
       } as never,
       2,
     );
-    expect(reorderCards).toHaveBeenCalledWith([
-      { columnId: 1, cardIds: [] },
-      { columnId: 2, cardIds: [1] },
+    expect(reorderItems).toHaveBeenCalledWith([
+      { columnId: 1, itemIds: [] },
+      { columnId: 2, itemIds: [1] },
     ]);
   });
 
@@ -1372,9 +1372,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(twoCardBoard()),
-            reorderCards: vi.fn(),
+            reorderItems: vi.fn(),
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1386,17 +1386,17 @@ describe('Board card reordering', () => {
     (board as unknown as { router: { navigate: typeof navigate } }).router = {
       navigate,
     } as never;
-    board.onCardClick(new MouseEvent('click', { cancelable: true }), twoCardBoard().cards[0]);
-    expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
+    board.onItemClick(new MouseEvent('click', { cancelable: true }), twoCardBoard().items[0]);
+    expect(navigate).toHaveBeenCalledWith(['/items', 1]);
   });
 
   it('announces the new position so consecutive moves read differently', async () => {
     // The server answers with the order it was given, as the real API does.
-    const reorderCards = vi.fn((columns: { columnId: number; cardIds: number[] }[]) => {
-      const byId = new Map(twoCardBoard().cards.map((c) => [c.id, c]));
+    const reorderItems = vi.fn((columns: { columnId: number; itemIds: number[] }[]) => {
+      const byId = new Map(twoCardBoard().items.map((c) => [c.id, c]));
       return of({
-        cards: columns.flatMap((col) =>
-          col.cardIds.map((id, position) => ({
+        items: columns.flatMap((col) =>
+          col.itemIds.map((id, position) => ({
             ...byId.get(id)!,
             columnId: col.columnId,
             position,
@@ -1413,9 +1413,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(twoCardBoard()),
-            reorderCards,
+            reorderItems,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1425,7 +1425,7 @@ describe('Board card reordering', () => {
     await f.whenStable();
     const board = f.componentInstance;
     const press = (key: string, index: number) =>
-      board.onCardKeydown(new KeyboardEvent('keydown', { key, cancelable: true }), 1, index);
+      board.onItemKeydown(new KeyboardEvent('keydown', { key, cancelable: true }), 1, index);
     press('ArrowDown', 0);
     const first = board.reorderAnnouncement();
     expect(first).toContain('2番目');
@@ -1437,9 +1437,9 @@ describe('Board card reordering', () => {
 
   it('announces the destination column and position after a cross-column drop', async () => {
     const boardData = twoCardBoard();
-    const reorderCards = vi.fn(() =>
+    const reorderItems = vi.fn(() =>
       of({
-        cards: boardData.cards.map((c) => (c.id === 1 ? { ...c, columnId: 2, position: 0 } : c)),
+        items: boardData.items.map((c) => (c.id === 1 ? { ...c, columnId: 2, position: 0 } : c)),
       }),
     );
     TestBed.configureTestingModule({
@@ -1450,9 +1450,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(boardData),
-            reorderCards,
+            reorderItems,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1460,19 +1460,19 @@ describe('Board card reordering', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    f.componentInstance.onCardDrop(
+    f.componentInstance.onItemDrop(
       {
         previousContainer: { id: 'card-list-1' },
         container: { id: 'card-list-2' },
         previousIndex: 0,
         currentIndex: 0,
-        item: { data: boardData.cards[0] },
+        item: { data: boardData.items[0] },
       } as never,
       2,
     );
     const name = boardData.columns.find((c) => c.id === 2)?.name;
     expect(f.componentInstance.reorderAnnouncement()).toBe(
-      `${boardData.cards[0].title}を${name}の1番目へ移動しました`,
+      `${boardData.items[0].title}を${name}の1番目へ移動しました`,
     );
   });
 
@@ -1486,9 +1486,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(twoCardBoard()),
-            reorderCards: vi.fn(),
+            reorderItems: vi.fn(),
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1500,7 +1500,7 @@ describe('Board card reordering', () => {
     (board as unknown as { router: { navigate: typeof navigate } }).router = {
       navigate,
     } as never;
-    const card = twoCardBoard().cards[0];
+    const card = twoCardBoard().items[0];
     for (const init of [
       { ctrlKey: true },
       { metaKey: true },
@@ -1509,19 +1509,19 @@ describe('Board card reordering', () => {
       { button: 1 },
     ]) {
       const ev = new MouseEvent('click', { cancelable: true, ...init });
-      board.onCardClick(ev, card);
+      board.onItemClick(ev, card);
       expect(ev.defaultPrevented).toBe(false);
     }
     expect(navigate).not.toHaveBeenCalled();
 
     const plain = new MouseEvent('click', { cancelable: true });
-    board.onCardClick(plain, card);
+    board.onItemClick(plain, card);
     expect(plain.defaultPrevented).toBe(true);
-    expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
+    expect(navigate).toHaveBeenCalledWith(['/items', 1]);
   });
 
   it('keeps browser and assistive shortcuts that use modifier keys', async () => {
-    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    const reorderItems = vi.fn(() => of({ items: twoCardBoard().items }));
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [
@@ -1530,9 +1530,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(twoCardBoard()),
-            reorderCards,
+            reorderItems,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1547,19 +1547,19 @@ describe('Board card reordering', () => {
       { shiftKey: true },
     ]) {
       const ev = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true, ...init });
-      f.componentInstance.onCardKeydown(ev, 1, 0);
+      f.componentInstance.onItemKeydown(ev, 1, 0);
       expect(ev.defaultPrevented).toBe(false);
     }
-    expect(reorderCards).not.toHaveBeenCalled();
+    expect(reorderItems).not.toHaveBeenCalled();
 
     const plain = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true });
-    f.componentInstance.onCardKeydown(plain, 1, 0);
+    f.componentInstance.onItemKeydown(plain, 1, 0);
     expect(plain.defaultPrevented).toBe(true);
-    expect(reorderCards).toHaveBeenCalledTimes(1);
+    expect(reorderItems).toHaveBeenCalledTimes(1);
   });
 
   it('ignores keys other than the up and down arrows, and arrows that have nowhere to go', async () => {
-    const reorderCards = vi.fn(() => of({ cards: twoCardBoard().cards }));
+    const reorderItems = vi.fn(() => of({ items: twoCardBoard().items }));
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [
@@ -1568,9 +1568,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(twoCardBoard()),
-            reorderCards,
+            reorderItems,
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1580,7 +1580,7 @@ describe('Board card reordering', () => {
     await f.whenStable();
     const press = (key: string, columnId: number, index: number) => {
       const ev = new KeyboardEvent('keydown', { key, cancelable: true });
-      f.componentInstance.onCardKeydown(ev, columnId, index);
+      f.componentInstance.onItemKeydown(ev, columnId, index);
       return ev;
     };
 
@@ -1596,11 +1596,11 @@ describe('Board card reordering', () => {
     // A column of one card has no neighbours at all.
     expect(press('ArrowUp', 2, 0).defaultPrevented).toBe(false);
     expect(press('ArrowDown', 2, 0).defaultPrevented).toBe(false);
-    expect(reorderCards).not.toHaveBeenCalled();
+    expect(reorderItems).not.toHaveBeenCalled();
 
     // The same keys on a card that can move are taken and saved.
     expect(press('ArrowUp', 1, 1).defaultPrevented).toBe(true);
-    expect(reorderCards).toHaveBeenCalledTimes(1);
+    expect(reorderItems).toHaveBeenCalledTimes(1);
   });
 
   it('describes card dragging differently while reordering is unavailable', async () => {
@@ -1612,9 +1612,9 @@ describe('Board card reordering', () => {
           provide: Api,
           useValue: {
             board: () => of(twoCardBoard()),
-            reorderCards: () => new Subject(),
+            reorderItems: () => new Subject(),
             reorderColumns: vi.fn(),
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1627,19 +1627,19 @@ describe('Board card reordering', () => {
         '#' + f.nativeElement.querySelector('.card-drag-handle').getAttribute('aria-describedby'),
       )?.textContent as string;
     expect(help()).toContain('上下矢印');
-    f.componentInstance.onCardKeydown(
+    f.componentInstance.onItemKeydown(
       new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }),
       1,
       0,
     );
     f.detectChanges();
-    expect(f.componentInstance.canReorderCards()).toBe(false);
+    expect(f.componentInstance.canReorderItems()).toBe(false);
     expect(help()).toContain('保存中');
   });
 });
 
 // Fixtures elsewhere give every card number === id, which cannot tell the two apart. Here they differ and
-// even cross over: card 1 is TASK-002, card 2 is TASK-003 and card 3 is TASK-001.
+// even cross over: card 1 is ITEM-002, card 2 is ITEM-003 and card 3 is ITEM-001.
 describe('Board card identity', () => {
   const crossed = (): BoardData => {
     const base = {
@@ -1653,7 +1653,7 @@ describe('Board card identity', () => {
     };
     return {
       columns: makeColumns().slice(0, 2),
-      cards: [
+      items: [
         { ...base, id: 1, number: 2, columnId: 1, title: 'A', position: 0 },
         { ...base, id: 2, number: 3, columnId: 1, title: 'B', position: 1 },
         { ...base, id: 3, number: 1, columnId: 2, title: 'C', position: 0 },
@@ -1661,7 +1661,7 @@ describe('Board card identity', () => {
     };
   };
 
-  async function render(reorderCards: ReturnType<typeof vi.fn> = vi.fn()) {
+  async function render(reorderItems: ReturnType<typeof vi.fn> = vi.fn()) {
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [
@@ -1670,8 +1670,8 @@ describe('Board card identity', () => {
           provide: Api,
           useValue: {
             board: () => of(crossed()),
-            reorderCards,
-            listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            reorderItems,
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1690,14 +1690,14 @@ describe('Board card identity', () => {
     const { f, links } = await render();
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     expect(links().map((a) => a.getAttribute('href'))).toEqual([
-      '/cards/2',
-      '/cards/3',
-      '/cards/1',
+      '/items/2',
+      '/items/3',
+      '/items/1',
     ]);
     expect(links().map((a) => a.textContent)).toEqual([
-      expect.stringContaining('TASK-002'),
-      expect.stringContaining('TASK-003'),
-      expect.stringContaining('TASK-001'),
+      expect.stringContaining('ITEM-002'),
+      expect.stringContaining('ITEM-003'),
+      expect.stringContaining('ITEM-001'),
     ]);
 
     const [a, b, c] = links();
@@ -1707,22 +1707,22 @@ describe('Board card identity', () => {
       expect(ev.defaultPrevented).toBe(true);
     }
     expect(navigate.mock.calls.map(([commands]) => commands)).toEqual([
-      ['/cards', 2],
-      ['/cards', 3],
-      ['/cards', 1],
+      ['/items', 2],
+      ['/items', 3],
+      ['/items', 1],
     ]);
     f.destroy();
   });
 
   it('puts focus back on the moved card by its row id, not by its public number', async () => {
     const answer = [
-      { ...crossed().cards[0], position: 1 },
-      { ...crossed().cards[1], position: 0 },
-      crossed().cards[2],
+      { ...crossed().items[0], position: 1 },
+      { ...crossed().items[1], position: 0 },
+      crossed().items[2],
     ];
-    const { f, handles } = await render(vi.fn(() => of({ cards: answer })));
+    const { f, handles } = await render(vi.fn(() => of({ items: answer })));
 
-    // Card A (id 1, TASK-002) moves down. Number 2 is card B's id, so a lookup by number lands on B.
+    // Item A (id 1, ITEM-002) moves down. Number 2 is card B's id, so a lookup by number lands on B.
     handles()[0].dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
     );
@@ -1731,7 +1731,7 @@ describe('Board card identity', () => {
     const active = document.activeElement as HTMLElement;
     expect(active.classList.contains('card-drag-handle')).toBe(true);
     expect(active.closest('[data-card-id]')?.getAttribute('data-card-id')).toBe('1');
-    expect(active.getAttribute('aria-label')).toContain('TASK-002');
+    expect(active.getAttribute('aria-label')).toContain('ITEM-002');
     f.destroy();
   });
 });
@@ -1748,7 +1748,7 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1757,12 +1757,12 @@ describe('Board live refresh', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     expect(f.componentInstance.loading()).toBe(false);
-    expect(f.componentInstance.data().cards).toHaveLength(1);
+    expect(f.componentInstance.data().items).toHaveLength(1);
 
     const polled: BoardData = {
       columns: initial.columns,
-      cards: [
-        ...initial.cards,
+      items: [
+        ...initial.items,
         {
           id: 99,
           number: 99,
@@ -1783,7 +1783,7 @@ describe('Board live refresh', () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.componentInstance.loading()).toBe(false);
     expect(f.componentInstance.error()).toBe('');
-    expect(f.componentInstance.data().cards.map((c) => c.number)).toContain(99);
+    expect(f.componentInstance.data().items.map((c) => c.number)).toContain(99);
     f.destroy();
   });
 
@@ -1792,7 +1792,7 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1801,10 +1801,10 @@ describe('Board live refresh', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     f.componentInstance.reordering.set(true);
-    const before = f.componentInstance.data().cards.length;
-    api.board.mockReturnValue(of({ ...initial, cards: [] }));
+    const before = f.componentInstance.data().items.length;
+    api.board.mockReturnValue(of({ ...initial, items: [] }));
     await vi.advanceTimersByTimeAsync(5000);
-    expect(f.componentInstance.data().cards).toHaveLength(before);
+    expect(f.componentInstance.data().items).toHaveLength(before);
     f.destroy();
   });
 
@@ -1818,7 +1818,7 @@ describe('Board live refresh', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board, listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }) } },
+        { provide: Api, useValue: { board, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) } },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -1827,7 +1827,7 @@ describe('Board live refresh', () => {
     boardImpl = () => of(initial);
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.componentInstance.error()).toBe('');
-    expect(f.componentInstance.data().cards).toHaveLength(1);
+    expect(f.componentInstance.data().items).toHaveLength(1);
     f.destroy();
   });
 
@@ -1836,7 +1836,7 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1845,10 +1845,10 @@ describe('Board live refresh', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     f.componentInstance.draggingColumnId.set(1);
-    const before = f.componentInstance.data().cards.length;
-    api.board.mockReturnValue(of({ ...initial, cards: [] }));
+    const before = f.componentInstance.data().items.length;
+    api.board.mockReturnValue(of({ ...initial, items: [] }));
     await vi.advanceTimersByTimeAsync(5000);
-    expect(f.componentInstance.data().cards).toHaveLength(before);
+    expect(f.componentInstance.data().items).toHaveLength(before);
     f.destroy();
   });
 
@@ -1858,7 +1858,7 @@ describe('Board live refresh', () => {
     const slow = new Subject<BoardData>();
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }), listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -1869,10 +1869,10 @@ describe('Board live refresh', () => {
     api.board.mockReturnValue(slow.asObservable());
     await vi.advanceTimersByTimeAsync(5000);
     f.componentInstance.reordering.set(true);
-    const before = f.componentInstance.data().cards.length;
-    slow.next({ ...initial, cards: [] });
+    const before = f.componentInstance.data().items.length;
+    slow.next({ ...initial, items: [] });
     slow.complete();
-    expect(f.componentInstance.data().cards).toHaveLength(before);
+    expect(f.componentInstance.data().items).toHaveLength(before);
     f.destroy();
   });
 });
@@ -1913,10 +1913,10 @@ describe('Board add dialog accidental close', () => {
                   { id: 1, name: 'Todo', position: 0 },
                   { id: 2, name: 'Doing', position: 1 },
                 ],
-                cards: [],
+                items: [],
               }),
             listCommandTemplates: () => of({ templates: [] }),
-            listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
           },
         },
       ],
@@ -1931,16 +1931,16 @@ describe('Board add dialog accidental close', () => {
     const restore = stubDialog();
     try {
       const f = await mountBoard();
-      f.componentInstance.openCard(1);
+      f.componentInstance.openItem(1);
       f.detectChanges();
-      expect(f.componentInstance.modal()).toBe('card');
-      f.componentInstance.cardForm.setValue({ title: '下書き', description: '残る' });
+      expect(f.componentInstance.modal()).toBe('item');
+      f.componentInstance.itemForm.setValue({ title: '下書き', description: '残る' });
       const dialog = f.nativeElement.querySelector('dialog.modal-backdrop') as HTMLElement;
       expect(dialog).not.toBeNull();
       dialog.click();
       f.detectChanges();
-      expect(f.componentInstance.modal()).toBe('card');
-      expect(f.componentInstance.cardForm.getRawValue()).toEqual({
+      expect(f.componentInstance.modal()).toBe('item');
+      expect(f.componentInstance.itemForm.getRawValue()).toEqual({
         title: '下書き',
         description: '残る',
       });
@@ -1951,7 +1951,7 @@ describe('Board add dialog accidental close', () => {
       dialog.dispatchEvent(new Event('cancel', { bubbles: true, cancelable: true }));
       f.detectChanges();
       expect(f.componentInstance.modal()).toBeNull();
-      f.componentInstance.openCard(1);
+      f.componentInstance.openItem(1);
       f.detectChanges();
       (f.nativeElement.querySelector('button[aria-label="閉じる"]') as HTMLButtonElement).click();
       f.detectChanges();

@@ -27,17 +27,17 @@ import { filter, finalize, firstValueFrom } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { assigneeKind } from './assignee';
-import { cardDetailUrl } from './card-link';
+import { itemDetailUrl } from './item-link';
 import {
   affectedColumnIds,
-  applyCardDrop,
-  buildCardOrderPayload,
-  CARD_AUTO_SCROLL_INTERVAL_MS,
-  CARD_DRAG_THRESHOLD_PX,
-  CARD_TOUCH_DRAG_DELAY_MS,
+  applyItemDrop,
+  buildItemOrderPayload,
+  ITEM_AUTO_SCROLL_INTERVAL_MS,
+  ITEM_DRAG_THRESHOLD_PX,
+  ITEM_TOUCH_DRAG_DELAY_MS,
   columnIdFromDropListId,
   dropListIdForColumn,
-} from './card-order';
+} from './item-order';
 import {
   computeAutoScrollDelta,
   computeDropSlot,
@@ -45,9 +45,10 @@ import {
   targetColumnIndex,
 } from './column-order';
 import { textLimit } from './form-validation';
-import { BoardData, Card, Column } from './models';
+import { formatItemNumber } from './item-number';
+import { BoardData, Item, Column } from './models';
 import {
-  COMMAND_CARD_MENU_EMPTY,
+  COMMAND_ITEM_MENU_EMPTY,
   CommandTemplate,
   resolveCommand,
 } from './command-template';
@@ -68,13 +69,14 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
     {
       provide: CDK_DRAG_CONFIG,
       useValue: {
-        dragStartThreshold: CARD_DRAG_THRESHOLD_PX,
-        dragStartDelay: { touch: CARD_TOUCH_DRAG_DELAY_MS, mouse: 0 },
+        dragStartThreshold: ITEM_DRAG_THRESHOLD_PX,
+        dragStartDelay: { touch: ITEM_TOUCH_DRAG_DELAY_MS, mouse: 0 },
       },
     },
   ],
 })
 export class Board implements OnInit {
+  readonly formatItemNumber = formatItemNumber;
   readonly assigneeKind = assigneeKind;
   private readonly api = inject(Api);
   private readonly appOrigin = inject(AppOrigin);
@@ -86,7 +88,7 @@ export class Board implements OnInit {
   private readonly boardScroll = viewChild<ElementRef<HTMLElement>>('boardScroll');
   private readonly columnsContainer = viewChild<ElementRef<HTMLElement>>('columnsContainer');
 
-  readonly data = signal<BoardData>({ columns: [], cards: [] });
+  readonly data = signal<BoardData>({ columns: [], items: [] });
   readonly loading = signal(true);
   readonly error = signal('');
   readonly saving = signal(false);
@@ -106,8 +108,8 @@ export class Board implements OnInit {
   readonly copyLinkAnnouncement = this.linkCopy.message;
   readonly copyCommandAnnouncement = this.commandCopy.message;
   readonly copyFeedback = this.copyStatus.message;
-  readonly commandMenuEmpty = COMMAND_CARD_MENU_EMPTY;
-  readonly openCommandCardId = signal<number | null>(null);
+  readonly commandMenuEmpty = COMMAND_ITEM_MENU_EMPTY;
+  readonly openCommandItemId = signal<number | null>(null);
   readonly commandMenuTemplates = signal<CommandTemplate[]>([]);
   readonly commandMenuError = signal('');
   readonly commandMenuLoading = signal(false);
@@ -120,9 +122,9 @@ export class Board implements OnInit {
    * settled (up to ~300ms after the pointer was let go) and just before the drop. CDK reports the drop's indexes
    * against the list as it was when the drag began, so the board must not be replaced while this is set.
    */
-  readonly draggingCardId = signal<number | null>(null);
+  readonly draggingItemId = signal<number | null>(null);
   readonly dropSlot = signal<number | null>(null);
-  readonly modal = signal<'column' | 'card' | null>(null);
+  readonly modal = signal<'column' | 'item' | null>(null);
   readonly formError = signal('');
   readonly canReorder = computed(
     () =>
@@ -132,21 +134,21 @@ export class Board implements OnInit {
       this.modal() === null &&
       this.data().columns.length > 1,
   );
-  readonly canReorderCards = computed(
+  readonly canReorderItems = computed(
     () => !this.loading() && !this.saving() && !this.reordering() && this.modal() === null,
   );
   readonly dropListIds = computed(() => this.data().columns.map((c) => this.dropListId(c.id)));
   readonly columnForm = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [textLimit(60, true)] }),
   });
-  readonly cardForm = new FormGroup({
+  readonly itemForm = new FormGroup({
     title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
   });
   readonly grouped = computed(() => {
-    const groups = new Map<number, BoardData['cards']>();
+    const groups = new Map<number, BoardData['items']>();
     for (const column of this.data().columns) groups.set(column.id, []);
-    for (const card of this.data().cards) groups.get(card.columnId)?.push(card);
+    for (const card of this.data().items) groups.get(card.columnId)?.push(card);
     for (const [, list] of groups) {
       list.sort((a, b) => a.position - b.position || a.id - b.id);
     }
@@ -160,7 +162,7 @@ export class Board implements OnInit {
   }
   readonly done = computed(() => {
     const id = this.data().columns.find((c) => c.name === 'Done')?.id;
-    return this.data().cards.filter((c) => c.columnId === id).length;
+    return this.data().items.filter((c) => c.columnId === id).length;
   });
 
   ngOnInit() {
@@ -172,7 +174,7 @@ export class Board implements OnInit {
         !this.saving() &&
         this.modal() === null &&
         this.draggingColumnId() === null &&
-        this.draggingCardId() === null,
+        this.draggingItemId() === null,
       fetch: () => this.pollBoard(),
       apply: (d) => {
         this.error.set('');
@@ -194,15 +196,15 @@ export class Board implements OnInit {
     return this.api.board().pipe(filter(() => this.data() === requestedFor));
   }
 
-  async copyCardLink(number: number) {
+  async copyItemLink(number: number) {
     const origin = await this.appOrigin.resolve();
-    return this.linkCopy.copyCardNumber(number, origin);
+    return this.linkCopy.copyItemNumber(number, origin);
   }
 
   toggleCommandMenu(cardId: number, cardNumber: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
-    const opening = this.openCommandCardId() !== cardId;
+    const opening = this.openCommandItemId() !== cardId;
     if (!opening) {
       this.closeCommandMenu();
       return;
@@ -210,7 +212,7 @@ export class Board implements OnInit {
     const button = event.currentTarget;
     if (!(button instanceof HTMLElement)) return;
     const generation = ++this.commandMenuLoadGeneration;
-    const listPromise = firstValueFrom(this.api.listCardCommandTemplatesByNumber(cardNumber));
+    const listPromise = firstValueFrom(this.api.listItemCommandTemplatesByNumber(cardNumber));
 
     // Preserve user activation: write ClipboardItem during the click, resolve text after fetch.
     if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
@@ -220,7 +222,7 @@ export class Board implements OnInit {
           throw new Error('not-single');
         }
         const origin = await this.appOrigin.resolve();
-        return resolveCommand(templates[0].template, cardDetailUrl(origin, cardNumber));
+        return resolveCommand(templates[0].template, itemDetailUrl(origin, cardNumber));
       });
       void navigator.clipboard
         .write([new ClipboardItem({ 'text/plain': textPromise })])
@@ -255,11 +257,11 @@ export class Board implements OnInit {
     this.commandMenuTemplates.set([]);
     this.commandMenuError.set('');
     this.commandMenuLoading.set(true);
-    this.openCommandCardId.set(cardId);
+    this.openCommandItemId.set(cardId);
     void listPromise.then(
       (res) => {
         this.zone.run(() => {
-          if (generation !== this.commandMenuLoadGeneration || this.openCommandCardId() !== cardId) {
+          if (generation !== this.commandMenuLoadGeneration || this.openCommandItemId() !== cardId) {
             return;
           }
           const templates = res?.templates ?? [];
@@ -273,7 +275,7 @@ export class Board implements OnInit {
       },
       (error) => {
         this.zone.run(() => {
-          if (generation !== this.commandMenuLoadGeneration || this.openCommandCardId() !== cardId) {
+          if (generation !== this.commandMenuLoadGeneration || this.openCommandItemId() !== cardId) {
             return;
           }
           this.commandMenuTemplates.set([]);
@@ -284,7 +286,7 @@ export class Board implements OnInit {
     );
     afterNextRender(
       () => {
-        if (this.openCommandCardId() !== cardId) return;
+        if (this.openCommandItemId() !== cardId) return;
         this.commandMenuStyle.set(this.fixedCommandMenuStyle(button));
       },
       { injector: this.injector },
@@ -314,7 +316,7 @@ export class Board implements OnInit {
 
   private closeCommandMenu() {
     this.commandMenuLoadGeneration++;
-    this.openCommandCardId.set(null);
+    this.openCommandItemId.set(null);
     this.commandMenuStyle.set({});
     this.commandMenuTemplates.set([]);
     this.commandMenuError.set('');
@@ -348,7 +350,7 @@ export class Board implements OnInit {
   @HostListener('window:resize')
   @HostListener('window:scroll')
   closeCommandMenuOnViewportChange() {
-    if (this.openCommandCardId() === null) return;
+    if (this.openCommandItemId() === null) return;
     this.closeCommandMenu();
   }
 
@@ -370,11 +372,11 @@ export class Board implements OnInit {
     this.modal.set('column');
   }
 
-  openCard(_columnId?: number) {
+  openItem(_columnId?: number) {
     if (this.reordering()) return;
-    this.cardForm.reset({ title: '', description: '' });
+    this.itemForm.reset({ title: '', description: '' });
     this.formError.set('');
-    this.modal.set('card');
+    this.modal.set('item');
   }
 
   close() {
@@ -412,9 +414,9 @@ export class Board implements OnInit {
       });
   }
 
-  addCard() {
-    if (this.cardForm.invalid || this.saving() || this.reordering()) {
-      this.cardForm.markAllAsTouched();
+  addItem() {
+    if (this.itemForm.invalid || this.saving() || this.reordering()) {
+      this.itemForm.markAllAsTouched();
       return;
     }
     const todoId = todoColumnId(this.data().columns);
@@ -424,19 +426,19 @@ export class Board implements OnInit {
     }
     this.saving.set(true);
     this.formError.set('');
-    const value = this.cardForm.getRawValue();
-    this.cardForm.disable({ emitEvent: false });
+    const value = this.itemForm.getRawValue();
+    this.itemForm.disable({ emitEvent: false });
     this.api
-      .createCard({ ...value, title: value.title.trim(), columnId: todoId })
+      .createItem({ ...value, title: value.title.trim(), columnId: todoId })
       .pipe(
         finalize(() => {
           this.saving.set(false);
-          this.cardForm.enable({ emitEvent: false });
+          this.itemForm.enable({ emitEvent: false });
         }),
       )
       .subscribe({
         next: (card) => {
-          this.data.update((d) => ({ ...d, cards: [...d.cards, card] }));
+          this.data.update((d) => ({ ...d, items: [...d.items, card] }));
           this.modal.set(null);
         },
         error: (e) => this.formError.set(errorMessage(e)),
@@ -448,31 +450,31 @@ export class Board implements OnInit {
    * document vertically. It runs on every pointer move and, like a column drag's repeating dragover, keeps going on a
    * timer while the pointer rests at an edge.
    */
-  onCardDragMoved(event: { pointerPosition: { x: number; y: number } }) {
+  onItemDragMoved(event: { pointerPosition: { x: number; y: number } }) {
     this.dragPointer = event.pointerPosition;
     this.dragMovedSinceTick = true;
     this.autoScrollAt(event.pointerPosition);
   }
 
-  onCardDragStarted(card: Card) {
-    this.draggingCardId.set(card.id);
+  onItemDragStarted(card: Item) {
+    this.draggingItemId.set(card.id);
     this.stopAutoScrollTimer();
     this.dragMovedSinceTick = false;
     this.autoScrollTimer = setInterval(() => {
       // A move in this interval already scrolled; only a resting pointer needs the timer.
       if (!this.dragMovedSinceTick && this.dragPointer) this.autoScrollAt(this.dragPointer);
       this.dragMovedSinceTick = false;
-    }, CARD_AUTO_SCROLL_INTERVAL_MS);
+    }, ITEM_AUTO_SCROLL_INTERVAL_MS);
   }
 
   /** The pointer was let go: CDK reports the end only after the preview has settled (up to ~300ms), too late to keep scrolling. */
-  onCardDragReleased() {
+  onItemDragReleased() {
     this.stopAutoScrollTimer();
   }
 
   /** CDK emits this and then the drop, one straight after the other, so no poll can run in between. */
-  onCardDragEnded() {
-    this.draggingCardId.set(null);
+  onItemDragEnded() {
+    this.draggingItemId.set(null);
     this.stopAutoScrollTimer();
     this.dragPointer = null;
   }
@@ -494,35 +496,35 @@ export class Board implements OnInit {
   }
 
   /** Real URL of a card, so the browser's own link features (new tab, copy link, status bar) keep working. */
-  cardHref(card: Card): string {
-    return this.location.prepareExternalUrl(`/cards/${card.number}`);
+  itemHref(card: Item): string {
+    return this.location.prepareExternalUrl(`/items/${card.number}`);
   }
 
-  onCardClick(event: MouseEvent, card: Card) {
+  onItemClick(event: MouseEvent, card: Item) {
     // Ctrl/Cmd/Shift/Alt-click and non-primary buttons are the browser's: let the href do its job.
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
       return;
     }
     event.preventDefault();
-    void this.router.navigate(['/cards', card.number]);
+    void this.router.navigate(['/items', card.number]);
   }
 
   /**
    * Bound on the card's drag handle only (not the article, link, or copy button), so arrow keys pressed on the link
    * or copy button never move the card. Enter on the link is its native click; only the arrow keys are handled here.
    */
-  onCardKeydown(event: KeyboardEvent, columnId: number, index: number) {
+  onItemKeydown(event: KeyboardEvent, columnId: number, index: number) {
     const list = this.grouped().get(columnId) ?? [];
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-    if (!this.canReorderCards()) return;
+    if (!this.canReorderItems()) return;
     const toIndex = event.key === 'ArrowUp' ? index - 1 : index + 1;
     if (toIndex < 0 || toIndex >= list.length) return;
     event.preventDefault();
     const movedId = list[index].id;
-    const next = applyCardDrop(this.data().cards, columnId, columnId, index, toIndex);
+    const next = applyItemDrop(this.data().items, columnId, columnId, index, toIndex);
     if (!next) return;
-    this.persistCardOrder(
+    this.persistItemOrder(
       next,
       [columnId],
       `${list[index].title}を${toIndex + 1}番目に移動しました`,
@@ -530,18 +532,18 @@ export class Board implements OnInit {
     );
   }
 
-  onCardDrop(event: CdkDragDrop<Card[]>, columnId: number) {
+  onItemDrop(event: CdkDragDrop<Item[]>, columnId: number) {
     this.stopAutoScrollTimer();
-    if (!this.canReorderCards()) return;
+    if (!this.canReorderItems()) return;
     const previousColumnId = columnIdFromDropListId(event.previousContainer.id);
     if (previousColumnId === null) return;
     // CDK's indexes refer to the list as it was when the drag began; if the card there is not the dragged one, the
     // list changed underneath the drag and the indexes would move some other card.
-    const dragged = event.item.data as Card | undefined;
+    const dragged = event.item.data as Item | undefined;
     const source = this.grouped().get(previousColumnId) ?? [];
     if (!dragged || source[event.previousIndex]?.id !== dragged.id) return;
-    const next = applyCardDrop(
-      this.data().cards,
+    const next = applyItemDrop(
+      this.data().items,
       previousColumnId,
       columnId,
       event.previousIndex,
@@ -550,43 +552,43 @@ export class Board implements OnInit {
     if (!next) return;
     const title = dragged.title;
     const columnName = this.data().columns.find((c) => c.id === columnId)?.name ?? '';
-    this.persistCardOrder(
+    this.persistItemOrder(
       next,
       affectedColumnIds(previousColumnId, columnId),
       `${title}を${columnName}の${event.currentIndex + 1}番目へ移動しました`,
     );
   }
 
-  private persistCardOrder(
-    nextCards: Card[],
+  private persistItemOrder(
+    nextCards: Item[],
     columnIds: number[],
     announcement: string,
     focusCardId?: number,
   ) {
     if (this.reordering()) return;
-    const previous = this.data().cards;
+    const previous = this.data().items;
     const restoreFocus = () => {
       if (focusCardId !== undefined) this.focusCardAfterRender(focusCardId);
     };
     this.reordering.set(true);
     this.reorderError.set('');
     this.reorderConflict.set(false);
-    this.data.update((d) => ({ ...d, cards: nextCards }));
+    this.data.update((d) => ({ ...d, items: nextCards }));
     restoreFocus();
     this.api
-      .reorderCards(buildCardOrderPayload(nextCards, columnIds))
+      .reorderItems(buildItemOrderPayload(nextCards, columnIds))
       .pipe(finalize(() => this.reordering.set(false)))
       .subscribe({
         next: (res) => {
-          this.data.update((d) => ({ ...d, cards: res.cards }));
+          this.data.update((d) => ({ ...d, items: res.items }));
           this.reorderAnnouncement.set(announcement);
           restoreFocus();
         },
         error: (e) => {
-          this.data.update((d) => ({ ...d, cards: previous }));
+          this.data.update((d) => ({ ...d, items: previous }));
           this.reorderError.set(errorMessage(e));
           this.reorderConflict.set((e as { status?: number } | null)?.status === 409);
-          this.reorderAnnouncement.set('カードの移動を保存できませんでした');
+          this.reorderAnnouncement.set('アイテムの移動を保存できませんでした');
           restoreFocus();
         },
       });

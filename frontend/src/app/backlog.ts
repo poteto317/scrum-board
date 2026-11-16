@@ -17,9 +17,10 @@ import { RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
-import { computeAutoScrollDelta, computeDropSlot, moveCard, targetIndex } from './backlog-order';
+import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
 import { textLimit } from './form-validation';
-import { Card, Column } from './models';
+import { formatItemNumber } from './item-number';
+import { Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
@@ -30,6 +31,7 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
   styleUrl: './backlog.css',
 })
 export class Backlog implements OnInit {
+  readonly formatItemNumber = formatItemNumber;
   private readonly api = inject(Api);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
@@ -37,7 +39,7 @@ export class Backlog implements OnInit {
   private readonly backlogScroll = viewChild<ElementRef<HTMLElement>>('backlogScroll');
   private readonly listContainer = viewChild<ElementRef<HTMLElement>>('listContainer');
 
-  readonly cards = signal<Card[]>([]);
+  readonly items = signal<Item[]>([]);
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
   readonly error = signal('');
@@ -46,9 +48,9 @@ export class Backlog implements OnInit {
   readonly reorderError = signal('');
   readonly reorderConflict = signal(false);
   readonly reorderAnnouncement = signal('');
-  readonly draggingCardId = signal<number | null>(null);
+  readonly draggingItemId = signal<number | null>(null);
   readonly dropSlot = signal<number | null>(null);
-  readonly modal = signal<'card' | null>(null);
+  readonly modal = signal<'item' | null>(null);
   readonly formError = signal('');
   readonly canReorder = computed(
     () =>
@@ -56,14 +58,14 @@ export class Backlog implements OnInit {
       !this.saving() &&
       !this.reordering() &&
       this.modal() === null &&
-      this.cards().length > 1,
+      this.items().length > 1,
   );
   readonly columnName = computed(() => {
     const map = new Map<number, string>();
     for (const column of this.columns()) map.set(column.id, column.name);
     return map;
   });
-  readonly cardForm = new FormGroup({
+  readonly itemForm = new FormGroup({
     title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
   });
@@ -76,11 +78,11 @@ export class Backlog implements OnInit {
         !this.reordering() &&
         !this.saving() &&
         this.modal() === null &&
-        this.draggingCardId() === null,
+        this.draggingItemId() === null,
       fetch: () => forkJoin({ backlog: this.api.backlog(), board: this.api.board() }),
       apply: ({ backlog, board }) => {
         this.error.set('');
-        if (!sameJson(this.cards(), backlog.cards)) this.cards.set(backlog.cards);
+        if (!sameJson(this.items(), backlog.items)) this.items.set(backlog.items);
         if (!sameJson(this.columns(), board.columns)) this.columns.set(board.columns);
       },
       ...zoneAwareTimers(this.zone),
@@ -97,7 +99,7 @@ export class Backlog implements OnInit {
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: ({ backlog, board }) => {
-          this.cards.set(backlog.cards);
+          this.items.set(backlog.items);
           this.columns.set(board.columns);
         },
         error: (e) => this.error.set(errorMessage(e)),
@@ -108,7 +110,7 @@ export class Backlog implements OnInit {
     return this.columnName().get(columnId) ?? '不明';
   }
 
-  openCard() {
+  openItem() {
     if (
       this.loading() ||
       this.reordering() ||
@@ -118,9 +120,9 @@ export class Backlog implements OnInit {
     ) {
       return;
     }
-    this.cardForm.reset({ title: '', description: '' });
+    this.itemForm.reset({ title: '', description: '' });
     this.formError.set('');
-    this.modal.set('card');
+    this.modal.set('item');
   }
 
   close() {
@@ -132,9 +134,9 @@ export class Backlog implements OnInit {
     this.reorderError.set('');
   }
 
-  addCard() {
-    if (this.cardForm.invalid || this.saving()) {
-      this.cardForm.markAllAsTouched();
+  addItem() {
+    if (this.itemForm.invalid || this.saving()) {
+      this.itemForm.markAllAsTouched();
       return;
     }
     const todoId = todoColumnId(this.columns());
@@ -144,32 +146,32 @@ export class Backlog implements OnInit {
     }
     this.saving.set(true);
     this.formError.set('');
-    const value = this.cardForm.getRawValue();
-    this.cardForm.disable({ emitEvent: false });
+    const value = this.itemForm.getRawValue();
+    this.itemForm.disable({ emitEvent: false });
     this.api
-      .createCard({ ...value, title: value.title.trim(), columnId: todoId })
+      .createItem({ ...value, title: value.title.trim(), columnId: todoId })
       .pipe(
         finalize(() => {
           this.saving.set(false);
-          this.cardForm.enable({ emitEvent: false });
+          this.itemForm.enable({ emitEvent: false });
         }),
       )
       .subscribe({
         next: (card) => {
-          this.cards.update((list) => [...list, card]);
+          this.items.update((list) => [...list, card]);
           this.modal.set(null);
         },
         error: (e) => this.formError.set(errorMessage(e)),
       });
   }
 
-  onCardDragStart(event: DragEvent, card: Card, rowEl: HTMLElement) {
+  onItemDragStart(event: DragEvent, card: Item, rowEl: HTMLElement) {
     const target = event.target instanceof Element ? event.target : null;
     if (!this.canReorder() || !target || target.closest('.backlog-detail-link')) {
       event.preventDefault();
       return;
     }
-    this.draggingCardId.set(card.id);
+    this.draggingItemId.set(card.id);
     this.dropSlot.set(null);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
@@ -184,7 +186,7 @@ export class Backlog implements OnInit {
   }
 
   onListDragOver(event: DragEvent) {
-    const draggingId = this.draggingCardId();
+    const draggingId = this.draggingItemId();
     if (draggingId === null) return;
     event.preventDefault();
     if (event.dataTransfer) {
@@ -198,7 +200,7 @@ export class Backlog implements OnInit {
     }
     const slot = this.computeSlotFromPointer(event.clientY);
     if (slot === null) return;
-    const cards = this.cards();
+    const cards = this.items();
     const fromIndex = cards.findIndex((c) => c.id === draggingId);
     const to = targetIndex(fromIndex, slot, cards.length);
     this.dropSlot.set(to === null ? null : slot);
@@ -213,13 +215,13 @@ export class Backlog implements OnInit {
   }
 
   onListDrop(event: DragEvent) {
-    const draggingId = this.draggingCardId();
+    const draggingId = this.draggingItemId();
     if (draggingId === null) return;
     event.preventDefault();
     const slot = this.dropSlot() ?? this.computeSlotFromPointer(event.clientY);
     this.resetDragState();
     if (slot === null || !this.canReorder()) return;
-    const cards = this.cards();
+    const cards = this.items();
     const fromIndex = cards.findIndex((c) => c.id === draggingId);
     const toIndex = targetIndex(fromIndex, slot, cards.length);
     if (toIndex !== null) {
@@ -227,13 +229,13 @@ export class Backlog implements OnInit {
     }
   }
 
-  onCardDragEnd() {
+  onItemDragEnd() {
     this.resetDragState();
   }
 
   onHandleKeydown(event: KeyboardEvent, cardIndex: number) {
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-    const cards = this.cards();
+    const cards = this.items();
     if (!this.canReorder() || cardIndex < 0 || cardIndex >= cards.length) return;
     const toIndex = event.key === 'ArrowUp' ? cardIndex - 1 : cardIndex + 1;
     if (toIndex < 0 || toIndex >= cards.length) return;
@@ -252,12 +254,12 @@ export class Backlog implements OnInit {
   }
 
   private resetDragState() {
-    this.draggingCardId.set(null);
+    this.draggingItemId.set(null);
     this.dropSlot.set(null);
   }
 
   private applyReorder(fromIndex: number, toIndex: number, focusCardId?: number) {
-    const previous = this.cards();
+    const previous = this.items();
     if (
       this.reordering() ||
       fromIndex < 0 ||
@@ -268,7 +270,7 @@ export class Backlog implements OnInit {
     ) {
       return;
     }
-    const next = moveCard(previous, fromIndex, toIndex);
+    const next = moveItem(previous, fromIndex, toIndex);
     const moved = next[toIndex];
     const restoreFocus = () => {
       if (focusCardId !== undefined) this.focusHandleAfterRender(focusCardId);
@@ -276,7 +278,7 @@ export class Backlog implements OnInit {
     this.reordering.set(true);
     this.reorderError.set('');
     this.reorderConflict.set(false);
-    this.cards.set(next);
+    this.items.set(next);
     restoreFocus();
 
     this.api
@@ -284,12 +286,12 @@ export class Backlog implements OnInit {
       .pipe(finalize(() => this.reordering.set(false)))
       .subscribe({
         next: (res) => {
-          this.cards.set(res.cards);
-          this.reorderAnnouncement.set(`TASK-${moved.number} を${toIndex + 1}番目に移動しました`);
+          this.items.set(res.items);
+          this.reorderAnnouncement.set(`${formatItemNumber(moved.number)} を${toIndex + 1}番目に移動しました`);
           restoreFocus();
         },
         error: (e) => {
-          this.cards.set(previous);
+          this.items.set(previous);
           this.reorderError.set(errorMessage(e));
           this.reorderConflict.set((e as { status?: number } | null)?.status === 409);
           this.reorderAnnouncement.set('バックログの移動を保存できませんでした');

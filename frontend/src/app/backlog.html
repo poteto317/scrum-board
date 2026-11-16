@@ -6,12 +6,12 @@
     <div>
       <p class="eyebrow">PRODUCT BACKLOG</p>
       <h1>優先順位リスト<span class="heading-dot">.</span></h1>
-      <p>全ステータスのカードを上から優先度順に並べます。</p>
+      <p>全ステータスのアイテムを上から優先度順に並べます。</p>
     </div>
     <button
       class="primary"
       type="button"
-      (click)="openCard()"
+      (click)="openItem()"
       [disabled]="loading() || reordering() || saving() || !!error() || columns().length === 0"
     >
       アイテムを追加
@@ -48,32 +48,32 @@
       (dragleave)="onListDragLeave($event)"
       (drop)="onListDrop($event)"
     >
-      @if (cards().length === 0) {
+      @if (items().length === 0) {
         <div class="state-panel empty">
           まだアイテムがありません。「アイテムを追加」から始めましょう。
         </div>
       } @else {
         <ul class="backlog-list" #listContainer role="list">
-          @for (card of cards(); track card.id; let i = $index) {
+          @for (card of items(); track card.id; let i = $index) {
             <li
               #row
               class="backlog-row"
               [attr.data-card-id]="card.id"
-              [class.dragging]="draggingCardId() === card.id"
+              [class.dragging]="draggingItemId() === card.id"
               [class.drop-before]="dropSlot() === i"
-              [class.drop-after]="dropSlot() === cards().length && i === cards().length - 1"
+              [class.drop-after]="dropSlot() === items().length && i === items().length - 1"
             >
               <div
                 class="backlog-drag-zone"
                 [attr.draggable]="canReorder() ? 'true' : null"
-                (dragstart)="onCardDragStart($event, card, row)"
-                (dragend)="onCardDragEnd()"
+                (dragstart)="onItemDragStart($event, card, row)"
+                (dragend)="onItemDragEnd()"
               >
                 <button
                   type="button"
                   class="backlog-drag-handle"
                   [attr.aria-label]="
-                    'TASK-' + card.number + ' を移動（ドラッグまたは上下矢印キー）'
+                    formatItemNumber(card.number) + ' を移動（ドラッグまたは上下矢印キー）'
                   "
                   [attr.aria-disabled]="!canReorder() || reordering() ? 'true' : null"
                   (keydown)="onHandleKeydown($event, i)"
@@ -81,12 +81,12 @@
                   ⋮⋮
                 </button>
                 <span class="backlog-rank" aria-hidden="true">{{ i + 1 }}</span>
-                <span class="backlog-number">TASK-{{ card.number }}</span>
+                <span class="backlog-number">{{ formatItemNumber(card.number) }}</span>
                 <span class="backlog-title">{{ card.title }}</span>
                 <span class="backlog-status">{{ statusName(card.columnId) }}</span>
                 <a
                   class="backlog-detail-link"
-                  [routerLink]="['/cards', card.number]"
+                  [routerLink]="['/items', card.number]"
                   draggable="false"
                   >詳細</a
                 >
@@ -104,7 +104,7 @@
     </footer>
   }
 </main>
-@if (modal() === 'card') {
+@if (modal() === 'item') {
   <dialog
     appModal
     class="modal-backdrop"
@@ -123,7 +123,7 @@
           ×
         </button>
       </header>
-      <form [formGroup]="cardForm" (ngSubmit)="addCard()">
+      <form [formGroup]="itemForm" (ngSubmit)="addItem()">
         <label for="backlog-card-title">タイトル <span class="required">必須</span></label
         ><input
           id="backlog-card-title"
@@ -131,7 +131,7 @@
           placeholder="何に取り組みますか？"
           autofocus
         />
-        @if (cardForm.controls.title.touched && cardForm.controls.title.invalid) {
+        @if (itemForm.controls.title.touched && itemForm.controls.title.invalid) {
           <p class="form-error">タイトルを1〜200文字で入力してください。</p>
         }
         <label for="backlog-card-description">説明 <span class="optional">任意</span></label
@@ -141,7 +141,7 @@
           rows="4"
           placeholder="タスクの背景や、完了の条件など"
         ></textarea>
-        @if (cardForm.controls.description.invalid) {
+        @if (itemForm.controls.description.invalid) {
           <p class="form-error">説明は10000文字以内で入力してください。</p>
         }
         @if (formError()) {

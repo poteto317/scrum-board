@@ -11,7 +11,7 @@
     <div class="active-tab">
       <span class="board-icon" aria-hidden="true">▥</span> かんばんボード
     </div>
-    <span class="toolbar-count">{{ data().cards.length }} アイテム</span
+    <span class="toolbar-count">{{ data().items.length }} アイテム</span
     ><span class="board-summary"
       >{{ done() }} 完了 <span>／</span> {{ data().columns.length }} ステータス</span
     >
@@ -28,10 +28,10 @@
   } @else {
     <div class="sr-only" aria-live="polite">{{ reorderAnnouncement() }}</div>
     <p id="card-drag-help" class="sr-only">
-      @if (canReorderCards()) {
-        左端のハンドルをドラッグして別の位置やステータスへ移動できます。ハンドルで上下矢印キーを押すと列内を移動できます。キーボードだけで別ステータスへ移す場合は、カードを開いてステータスを変更してください。
+      @if (canReorderItems()) {
+        左端のハンドルをドラッグして別の位置やステータスへ移動できます。ハンドルで上下矢印キーを押すと列内を移動できます。キーボードだけで別ステータスへ移す場合は、アイテムを開いてステータスを変更してください。
       } @else {
-        保存中などのため、いまはカードを移動できません。
+        保存中などのため、いまはアイテムを移動できません。
       }
     </p>
     <div class="sr-only copy-link-live" aria-live="polite">
@@ -100,9 +100,9 @@
               <button
                 class="icon-button"
                 draggable="false"
-                (click)="openCard(column.id)"
+                (click)="openItem(column.id)"
                 [disabled]="reordering()"
-                [attr.aria-label]="column.name + 'にカードを追加'"
+                [attr.aria-label]="column.name + 'にアイテムを追加'"
               >
                 ＋
               </button>
@@ -113,38 +113,37 @@
               [id]="dropListId(column.id)"
               [cdkDropListData]="grouped().get(column.id) || []"
               [cdkDropListConnectedTo]="connectedLists(column.id)"
-              [cdkDropListDisabled]="!canReorderCards()"
+              [cdkDropListDisabled]="!canReorderItems()"
               [cdkDropListAutoScrollDisabled]="true"
-              (cdkDropListDropped)="onCardDrop($event, column.id)"
+              (cdkDropListDropped)="onItemDrop($event, column.id)"
             >
               @for (card of grouped().get(column.id) || []; track card.id; let cardIndex = $index) {
                 <article
                   class="task-card"
-                  [class.command-menu-open]="openCommandCardId() === card.id"
+                  [class.command-menu-open]="openCommandItemId() === card.id"
                   cdkDrag
                   [attr.data-card-id]="card.id"
                   [cdkDragData]="card"
-                  [cdkDragDisabled]="!canReorderCards()"
-                  (cdkDragStarted)="onCardDragStarted(card)"
-                  (cdkDragMoved)="onCardDragMoved($event)"
-                  (cdkDragReleased)="onCardDragReleased()"
-                  (cdkDragEnded)="onCardDragEnded()"
+                  [cdkDragDisabled]="!canReorderItems()"
+                  (cdkDragStarted)="onItemDragStarted(card)"
+                  (cdkDragMoved)="onItemDragMoved($event)"
+                  (cdkDragReleased)="onItemDragReleased()"
+                  (cdkDragEnded)="onItemDragEnded()"
                 >
                   <button
                     type="button"
                     class="card-drag-handle"
                     cdkDragHandle
-                    [cdkDragHandleDisabled]="!canReorderCards()"
-                    [attr.aria-disabled]="!canReorderCards()"
+                    [cdkDragHandleDisabled]="!canReorderItems()"
+                    [attr.aria-disabled]="!canReorderItems()"
                     [attr.aria-label]="
-                      'TASK-' +
-                      card.number.toString().padStart(3, '0') +
+                      formatItemNumber(card.number) +
                       ' ' +
                       card.title +
                       'を移動（ドラッグまたは上下矢印キー）'
                     "
                     aria-describedby="card-drag-help"
-                    (keydown)="onCardKeydown($event, column.id, cardIndex)"
+                    (keydown)="onItemKeydown($event, column.id, cardIndex)"
                   >
                     <span aria-hidden="true">⋮⋮</span>
                   </button>
@@ -155,9 +154,9 @@
                         class="copy-command-button icon-button"
                         draggable="false"
                         aria-haspopup="menu"
-                        [attr.aria-expanded]="openCommandCardId() === card.id ? 'true' : 'false'"
+                        [attr.aria-expanded]="openCommandItemId() === card.id ? 'true' : 'false'"
                         [attr.aria-label]="
-                          'TASK-' + card.number.toString().padStart(3, '0') + ' のコマンド'
+                          formatItemNumber(card.number) + ' のコマンド'
                         "
                         (click)="toggleCommandMenu(card.id, card.number, $event)"
                       >
@@ -177,7 +176,7 @@
                           <line x1="12" y1="19" x2="20" y2="19" />
                         </svg>
                       </button>
-                      @if (openCommandCardId() === card.id) {
+                      @if (openCommandItemId() === card.id) {
                         <ul class="copy-command-menu" role="menu" [ngStyle]="commandMenuStyle()">
                           @if (commandMenuError()) {
                             <li class="copy-command-empty" role="status">
@@ -208,9 +207,9 @@
                       class="copy-card-link icon-button"
                       draggable="false"
                       [attr.aria-label]="
-                        'TASK-' + card.number.toString().padStart(3, '0') + ' のリンクをコピー'
+                        formatItemNumber(card.number) + ' のリンクをコピー'
                       "
-                      (click)="copyCardLink(card.number)"
+                      (click)="copyItemLink(card.number)"
                     >
                       <svg
                         class="copy-link-icon"
@@ -231,11 +230,11 @@
                   </div>
                   <a
                     class="task-card-body"
-                    [attr.href]="cardHref(card)"
-                    (click)="onCardClick($event, card)"
+                    [attr.href]="itemHref(card)"
+                    (click)="onItemClick($event, card)"
                     ><span class="card-topline"
                       ><span class="card-id"
-                        >TASK-{{ card.number.toString().padStart(3, '0') }}</span
+                        >{{ formatItemNumber(card.number) }}</span
                       ></span
                     >
                     <h3>{{ card.title }}</h3>
@@ -272,7 +271,7 @@
                 </div>
               }
             </div>
-            <button class="add-card" (click)="openCard(column.id)" [disabled]="reordering()">
+            <button class="add-card" (click)="openItem(column.id)" [disabled]="reordering()">
               <span aria-hidden="true">＋</span> アイテムを追加
             </button>
           </section>
@@ -285,7 +284,7 @@
     <footer class="board-footer">
       <span
         ><span class="tip-icon" aria-hidden="true">i</span>
-        列の見出しはドラッグまたは左右矢印キー、カード左端のハンドルはドラッグまたは上下矢印キーで並び替えられます。</span
+        列の見出しはドラッグまたは左右矢印キー、アイテム左端のハンドルはドラッグまたは上下矢印キーで並び替えられます。</span
       ><span class="footer-note">少しずつ、よりよいチームへ。</span>
     </footer>
   }
@@ -327,7 +326,7 @@
           </div>
         </form>
       } @else {
-        <form [formGroup]="cardForm" (ngSubmit)="addCard()">
+        <form [formGroup]="itemForm" (ngSubmit)="addItem()">
           <label for="card-title">タイトル <span class="required">必須</span></label
           ><input
             id="card-title"
@@ -335,7 +334,7 @@
             placeholder="何に取り組みますか？"
             autofocus
           />
-          @if (cardForm.controls.title.touched && cardForm.controls.title.invalid) {
+          @if (itemForm.controls.title.touched && itemForm.controls.title.invalid) {
             <p class="form-error">タイトルを1〜200文字で入力してください。</p>
           }
           <label for="card-description">説明 <span class="optional">任意</span></label
@@ -345,7 +344,7 @@
             rows="4"
             placeholder="タスクの背景や、完了の条件など"
           ></textarea>
-          @if (cardForm.controls.description.invalid) {
+          @if (itemForm.controls.description.invalid) {
             <p class="form-error">説明は10000文字以内で入力してください。</p>
           }
           @if (formError()) {
