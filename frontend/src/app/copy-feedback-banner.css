@@ -22,6 +22,16 @@
   line-height: 1.4;
 }
 
+/* Keep the live region mounted; hide only when empty so SR announces updates. */
+.copy-feedback-banner--hidden {
+  visibility: hidden;
+  pointer-events: none;
+  box-shadow: none;
+  border-color: transparent;
+  background: transparent;
+  color: transparent;
+}
+
 .copy-feedback-banner--ok {
   background: var(--feedback-ok-bg);
   color: var(--feedback-ok-ink);
