@@ -18,9 +18,13 @@ describe('CopyFeedbackBanner', () => {
     return f;
   };
 
-  it('does not render when message is empty', () => {
+  it('keeps the live region mounted when message is empty', () => {
     const f = create('');
-    expect(f.nativeElement.querySelector('.copy-feedback-banner')).toBeNull();
+    const banner = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(banner.classList.contains('copy-feedback-banner--hidden')).toBe(true);
+    expect(banner.getAttribute('role')).toBe('status');
+    expect(banner.getAttribute('aria-live')).toBe('polite');
   });
 
   it('renders success class and icon', () => {
