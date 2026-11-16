@@ -23,27 +23,27 @@ def call(method, path, body=None, expected=200):
 board = call('GET', '/api/board')
 assert [c['name'] for c in board['columns'][:3]] == ['Todo', 'Doing', 'Done']
 assert sum(c['title'] == 'ドラッグ＆ドロップでカードの移動・並べ替えを実装する'
-           for c in board['cards']) == 1
+           for c in board['items']) == 1
 name = 'Review'
 column = next((c for c in board['columns'] if c['name'] == name), None)
 if column is None:
     column = call('POST', '/api/columns', {'name': name}, 201)
 call('POST', '/api/columns', {'name': name}, 409)
-card = call('POST', '/api/cards', {'title': '  動作確認 🧪  ',
+card = call('POST', '/api/items', {'title': '  動作確認 🧪  ',
             'description': '実際のMySQLでCRUDを確認', 'columnId': 1}, 201)
-path = f"/api/cards/{card['id']}"
-status_path = f"/api/cards/by-number/{card['number']}/status"
-assignee_path = f"/api/cards/by-number/{card['number']}/assignee"
-history_path = f"/api/cards/by-number/{card['number']}/history"
+path = f"/api/items/{card['id']}"
+status_path = f"/api/items/by-number/{card['number']}/status"
+assignee_path = f"/api/items/by-number/{card['number']}/assignee"
+history_path = f"/api/items/by-number/{card['number']}/history"
 try:
     assert isinstance(card['number'], int) and card['number'] > 0
-    assert call('GET', f"/api/cards/by-number/{card['number']}")['id'] == card['id']
+    assert call('GET', f"/api/items/by-number/{card['number']}")['id'] == card['id']
     assert card['title'] == '動作確認 🧪'
     pr_url = 'https://github.com/poteto317/scrum-board/pull/2'
     pr_url2 = 'https://github.com/poteto317/scrum-board/pull/3'
     linked = call('PATCH', path, {'prUrls': ['  ' + pr_url + '  ', pr_url2]})
     assert linked['prUrls'] == [pr_url, pr_url2]
-    assert next(c for c in call('GET', '/api/board')['cards'] if c['id'] == card['id'])['prUrls'] == [pr_url, pr_url2]
+    assert next(c for c in call('GET', '/api/board')['items'] if c['id'] == card['id'])['prUrls'] == [pr_url, pr_url2]
     call('PATCH', path, {'prUrls': ['https://github.com.evil/a/b/pull/1'], 'title': 'must not change'}, 400)
     assert call('GET', path) == linked
     events = call('GET', history_path)['events']
@@ -82,7 +82,7 @@ try:
     assert call('GET', path)['columnId'] == column['id']
     call('PATCH', path, {'title': '　 '}, 400)
     call('PATCH', path, {'description': 'あ' * 10001}, 400)
-    call('POST', '/api/cards', {'columnId': 1, 'title': 'あ' * 201}, 400)
+    call('POST', '/api/items', {'columnId': 1, 'title': 'あ' * 201}, 400)
     call('POST', '/api/columns', {'name': ' '}, 400)
     unchanged = call('PATCH', path, {'columnId': column['id']})
     assert unchanged['columnId'] == column['id']
@@ -94,5 +94,5 @@ call('GET', history_path, expected=404)
 call('GET', path, expected=404)
 call('PATCH', status_path, {'status': 'Done'}, expected=404)
 call('PATCH', assignee_path, {'assignee': 'Cursor'}, expected=404)
-call('GET', f"/api/cards/by-number/{card['number']}", expected=404)
+call('GET', f"/api/items/by-number/{card['number']}", expected=404)
 print('PASS: deletion and 404; sample appears exactly once')
