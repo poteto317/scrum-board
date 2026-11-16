@@ -2309,6 +2309,7 @@ describe('Board list filter', () => {
     ];
     const boardData: BoardData = {
       columns: cols,
+      settings: { cardLayout: 'pack' },
       items: [
         {
           id: 1,
@@ -2318,6 +2319,7 @@ describe('Board list filter', () => {
           description: 'one',
           position: 0,
           backlogPosition: 0,
+          offsetY: 0,
           prUrls: [],
           relatedItems: [],
           assignee: '',
@@ -2332,6 +2334,7 @@ describe('Board list filter', () => {
           description: 'two',
           position: 1,
           backlogPosition: 1,
+          offsetY: 0,
           prUrls: [],
           relatedItems: [],
           assignee: '',
