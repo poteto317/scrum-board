@@ -5,6 +5,10 @@
   --muted: #87907f;
   --accent: #486b45;
   --line: #e3e7dc;
+  --feedback-ok-bg: #e7f3e8;
+  --feedback-ok-ink: #2f5d35;
+  --feedback-error-bg: #f8e8e6;
+  --feedback-error-ink: #8a3b32;
   font-family:
     Inter,
     -apple-system,
