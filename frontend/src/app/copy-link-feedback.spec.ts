@@ -27,7 +27,7 @@ describe('CopyLinkFeedback', () => {
     vi.restoreAllMocks();
   });
 
-  it('sets success message then clears after 2s', async () => {
+  it('sets success message then clears after 3s', async () => {
     vi.useFakeTimers();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -36,7 +36,7 @@ describe('CopyLinkFeedback', () => {
     await feedback.copyItemNumber(27, 'http://127.0.0.1:4200');
     expect(feedback.message()).toBe(COPY_LINK_SUCCESS);
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://127.0.0.1:4200/items/27');
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(3000);
     expect(feedback.message()).toBe('');
   });
 
