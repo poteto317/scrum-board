@@ -1,9 +1,15 @@
+import { ApplicationRef } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Backlog } from './backlog';
+import {
+  readBacklogScroll,
+  readReturnTo,
+  saveBacklogScroll,
+} from './list-scroll-session';
 import { Item, Column } from './models';
 import { TODO_COLUMN_MISSING } from './todo-column';
 
@@ -466,6 +472,190 @@ describe('Backlog live refresh', () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.componentInstance.items()).toHaveLength(before);
     f.destroy();
+  });
+});
+
+describe('Backlog scroll save and restore', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    sessionStorage.clear();
+  });
+
+  it('saves backlog scroll and returnTo on detail click', async () => {
+    sessionStorage.clear();
+    const cards = makeCards();
+    const columns = makeColumns();
+    const navigate = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const backlog = f.componentInstance;
+    (backlog as unknown as { router: { navigate: typeof navigate } }).router = {
+      navigate,
+    } as never;
+
+    const scrollEl = f.nativeElement.querySelector('.backlog-scroll') as HTMLElement;
+    scrollEl.scrollTop = 90;
+    scrollEl.scrollLeft = 12;
+
+    const card = cards[0];
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }]) {
+      backlog.onDetailClick(new MouseEvent('click', { cancelable: true, ...init }), card);
+    }
+    expect(readBacklogScroll()).toBeNull();
+    expect(readReturnTo()).toBeNull();
+
+    backlog.onDetailClick(new MouseEvent('click', { cancelable: true }), card);
+    expect(readBacklogScroll()).toEqual({ scrollTop: 90, scrollLeft: 12 });
+    expect(readReturnTo()).toBe('/backlog');
+    expect(navigate).toHaveBeenCalledWith(['/items', 1]);
+  });
+
+  it('restores backlog scroll once after render when saved', async () => {
+    sessionStorage.clear();
+    saveBacklogScroll({ scrollTop: 70, scrollLeft: 25 });
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    TestBed.inject(ApplicationRef).tick();
+    f.detectChanges();
+    await f.whenStable();
+
+    const scrollEl = f.nativeElement.querySelector('.backlog-scroll') as HTMLElement;
+    expect(scrollEl.scrollTop).toBe(70);
+    expect(scrollEl.scrollLeft).toBe(25);
+    expect(readBacklogScroll()).toBeNull();
+  });
+
+  it('does not re-restore backlog scroll after a second load', async () => {
+    sessionStorage.clear();
+    saveBacklogScroll({ scrollTop: 70, scrollLeft: 25 });
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    TestBed.inject(ApplicationRef).tick();
+    f.detectChanges();
+    await f.whenStable();
+
+    const scrollEl = f.nativeElement.querySelector('.backlog-scroll') as HTMLElement;
+    expect(scrollEl.scrollTop).toBe(70);
+
+    saveBacklogScroll({ scrollTop: 70, scrollLeft: 25 });
+    scrollEl.scrollTop = 18;
+    scrollEl.scrollLeft = 4;
+    f.componentInstance.load();
+    f.detectChanges();
+    await f.whenStable();
+    TestBed.inject(ApplicationRef).tick();
+    f.detectChanges();
+    await f.whenStable();
+
+    expect(scrollEl.scrollTop).toBe(18);
+    expect(scrollEl.scrollLeft).toBe(4);
+  });
+
+  it('skips backlog scroll restore when user scrolls before flush', async () => {
+    sessionStorage.clear();
+    saveBacklogScroll({ scrollTop: 70, scrollLeft: 25 });
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+
+    const scrollEl = f.nativeElement.querySelector('.backlog-scroll') as HTMLElement;
+    scrollEl.scrollTop = 22;
+    scrollEl.scrollLeft = 6;
+    TestBed.inject(ApplicationRef).tick();
+    f.detectChanges();
+    await f.whenStable();
+
+    expect(scrollEl.scrollTop).toBe(22);
+    expect(scrollEl.scrollLeft).toBe(6);
+  });
+
+  it('does not apply stale backlog scroll restore after destroy', async () => {
+    sessionStorage.clear();
+    saveBacklogScroll({ scrollTop: 70, scrollLeft: 25 });
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    // Schedule restore without flushing afterNextRender, then destroy so generation advances.
+    f.componentInstance.ngOnInit();
+    f.destroy();
+    TestBed.inject(ApplicationRef).tick();
+
+    // Host never painted .backlog-scroll; restore must no-op (not throw).
+    expect(f.nativeElement.querySelector('.backlog-scroll')).toBeNull();
   });
 });
 

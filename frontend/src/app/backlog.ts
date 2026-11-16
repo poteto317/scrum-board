@@ -12,14 +12,26 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { Location } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
+import { itemAppPath } from './item-link';
+import {
+  scheduleScrollRestore,
+} from './list-scroll-restore';
+import { isUnmodifiedPrimaryClick } from './primary-click';
+import {
+  clearBacklogScroll,
+  readBacklogScroll,
+  saveBacklogScroll,
+  saveReturnTo,
+} from './list-scroll-session';
 import { Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
@@ -33,11 +45,15 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 export class Backlog implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   private readonly api = inject(Api);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly zone = inject(NgZone);
   private readonly backlogScroll = viewChild<ElementRef<HTMLElement>>('backlogScroll');
   private readonly listContainer = viewChild<ElementRef<HTMLElement>>('listContainer');
+  private scrollRestoreGeneration = 0;
+  private scrollRestoreAttempted = false;
 
   readonly items = signal<Item[]>([]);
   readonly columns = signal<Column[]>([]);
@@ -72,6 +88,9 @@ export class Backlog implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.destroyRef.onDestroy(() => {
+      this.scrollRestoreGeneration++;
+    });
     const stop = startLiveRefresh({
       enabled: () =>
         !this.loading() &&
@@ -90,6 +109,38 @@ export class Backlog implements OnInit {
     this.destroyRef.onDestroy(stop);
   }
 
+  private scheduleBacklogScrollRestore() {
+    if (this.scrollRestoreAttempted) return;
+    const saved = readBacklogScroll();
+    if (!saved) return;
+    this.scrollRestoreAttempted = true;
+    const generation = ++this.scrollRestoreGeneration;
+    // Baseline at schedule time — not saved values (mount is 0, saved is not).
+    scheduleScrollRestore({
+      shouldApply: () =>
+        generation === this.scrollRestoreGeneration && !this.destroyRef.destroyed,
+      injector: this.injector,
+      captureBaseline: () => {
+        const el = this.backlogScroll()?.nativeElement;
+        return [el?.scrollTop ?? 0, el?.scrollLeft ?? 0];
+      },
+      readCurrent: () => {
+        const elNow = this.backlogScroll()?.nativeElement;
+        if (!elNow) return [null, null];
+        return [elNow.scrollTop, elNow.scrollLeft];
+      },
+      targets: [saved.scrollTop, saved.scrollLeft],
+      apply: ([scrollTop, scrollLeft]) => {
+        const elNow = this.backlogScroll()?.nativeElement;
+        if (elNow) {
+          elNow.scrollTop = scrollTop;
+          elNow.scrollLeft = scrollLeft;
+        }
+        clearBacklogScroll();
+      },
+    });
+  }
+
   load() {
     this.loading.set(true);
     this.error.set('');
@@ -101,9 +152,31 @@ export class Backlog implements OnInit {
         next: ({ backlog, board }) => {
           this.items.set(backlog.items);
           this.columns.set(board.columns);
+          // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
+          // (not the loading-only first paint).
+          this.scheduleBacklogScrollRestore();
         },
         error: (e) => this.error.set(errorMessage(e)),
       });
+  }
+
+  /** Real URL so modifier-clicks / copy-link keep working via href. */
+  itemHref(card: Item): string {
+    return this.location.prepareExternalUrl(itemAppPath(card.number));
+  }
+
+  onDetailClick(event: MouseEvent, card: Item) {
+    if (!isUnmodifiedPrimaryClick(event)) {
+      return;
+    }
+    event.preventDefault();
+    const el = this.backlogScroll()?.nativeElement;
+    saveBacklogScroll({
+      scrollTop: el?.scrollTop ?? 0,
+      scrollLeft: el?.scrollLeft ?? 0,
+    });
+    saveReturnTo('/backlog');
+    void this.router.navigate(['/items', card.number]);
   }
 
   statusName(columnId: number): string {
