@@ -18,7 +18,8 @@ const (
 	prTitleMaxConcurrent = 8
 	prTitleUserAgent     = "scrum-board-kanban"
 	githubPullAPIBase    = "https://api.github.com/repos/"
-	maxPRTitleBatch      = 50
+	// Shared cap: POST /api/pr-titles body size and attachPRTitles enrichment.
+	maxPRTitleBatch = 50
 )
 
 func pullNumberFromPRURL(url string) (string, bool) {
@@ -70,14 +71,21 @@ type cacheTitleEntry struct {
 	expiry time.Time
 }
 
-// NewPRTitleResolver builds a resolver. rt nil uses DefaultTransport. GITHUB_TOKEN is read once from the environment.
-func NewPRTitleResolver(rt http.RoundTripper) *PRTitleResolver {
+// NewPRTitleResolver builds a resolver. rt nil uses DefaultTransport.
+// token empty falls back to GITHUB_TOKEN env (tests); production should pass getenv from wiring.
+func NewPRTitleResolver(rt http.RoundTripper, token ...string) *PRTitleResolver {
 	if rt == nil {
 		rt = http.DefaultTransport
 	}
+	tok := ""
+	if len(token) > 0 {
+		tok = strings.TrimSpace(token[0])
+	} else {
+		tok = strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
+	}
 	return &PRTitleResolver{
 		client: &http.Client{Timeout: prTitleAPITimeout, Transport: rt},
-		token:  strings.TrimSpace(os.Getenv("GITHUB_TOKEN")),
+		token:  tok,
 		cache:  make(map[string]cacheTitleEntry),
 		slots:  make(chan struct{}, prTitleMaxConcurrent),
 	}

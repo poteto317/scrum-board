@@ -33,6 +33,9 @@ func buildHandler(repo kanban.Repository, getenv func(string) string, opts ...op
 		handlerOpts = append(handlerOpts, kanban.WithItemFormatter(formatter))
 	}
 	handlerOpts = append(handlerOpts, kanban.WithPublicOrigin(getenv("PUBLIC_ORIGIN")))
-	handlerOpts = append(handlerOpts, kanban.WithPRTitleResolver(kanban.NewPRTitleResolver(nil)))
+	handlerOpts = append(
+		handlerOpts,
+		kanban.WithPRTitleResolver(kanban.NewPRTitleResolver(nil, getenv("GITHUB_TOKEN"))),
+	)
 	return http.TimeoutHandler(kanban.NewHandler(repo, handlerOpts...), kanban.RequestTimeout, `{"message":"処理がタイムアウトしました。"}`)
 }
