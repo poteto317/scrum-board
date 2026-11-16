@@ -178,14 +178,21 @@ func attachPRTitles(ctx context.Context, r *PRTitleResolver, item *Item) {
 		return
 	}
 	titles := make([]string, len(item.PRURLs))
+	limit := len(item.PRURLs)
+	if limit > maxPRTitleBatch {
+		limit = maxPRTitleBatch
+	}
 	var wg sync.WaitGroup
-	for i, u := range item.PRURLs {
+	for i := 0; i < limit; i++ {
 		wg.Add(1)
 		go func(i int, u string) {
 			defer wg.Done()
 			titles[i] = ResolvePRTitleLabel(ctx, r, u)
-		}(i, u)
+		}(i, item.PRURLs[i])
 	}
 	wg.Wait()
+	for i := limit; i < len(item.PRURLs); i++ {
+		titles[i] = FallbackPRTitle(item.PRURLs[i])
+	}
 	item.PRTitles = titles
 }

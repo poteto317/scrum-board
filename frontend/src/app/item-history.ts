@@ -16,6 +16,7 @@ import { HistoryLinkValue } from './history-link-value';
 import { validPrUrl } from './pr-url';
 
 const PR_TITLE_BATCH = 50;
+const PR_TITLE_MAX_URLS = 100;
 
 @Component({
   selector: 'app-item-history',
@@ -126,7 +127,7 @@ export class ItemHistory implements OnChanges {
   }
 
   private resolvePrTitles(generation: number) {
-    const list = missingPrTitleUrls(this.events(), this.prTitleMap());
+    const list = missingPrTitleUrls(this.events(), this.prTitleMap()).slice(0, PR_TITLE_MAX_URLS);
     if (!list.length) return;
     const chunks: string[][] = [];
     for (let i = 0; i < list.length; i += PR_TITLE_BATCH) {
