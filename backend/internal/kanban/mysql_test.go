@@ -41,6 +41,8 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"item_pr_links__new", "card_pr_links__new", "item_pr_links", "card_pr_links",
 		"item_related_items", "card_related_items",
 		"item_command_templates", "card_command_templates",
+		"command_template_defaults",
+		"command_templates",
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
@@ -70,6 +72,16 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).prepareHistory(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	repo := MySQLRepository{DB: db}
+	if err = repo.InitializeNumbers(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeCommandTemplates(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeItemCommandTemplates(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	return db

@@ -47,6 +47,10 @@ func run() error {
 	repo := kanban.MySQLRepository{DB: db}
 	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	err = repo.RenameCardTablesToItems(migrationCtx)
+	// L-791: rename columns before Initialize* so CREATE IF NOT EXISTS / app SQL see item_* names.
+	if err == nil {
+		err = repo.RenameCardColumnsToItems(migrationCtx)
+	}
 	if err == nil {
 		err = repo.InitializeItemPositions(migrationCtx)
 	}
