@@ -55,6 +55,12 @@ func run() error {
 		err = repo.InitializeItemPositions(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeItemOffsetY(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeBoardSettings(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeBacklogPositions(migrationCtx)
 	}
 	if err == nil {
