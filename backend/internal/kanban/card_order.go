@@ -71,10 +71,10 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 			}
 			// updated_at is the card's edit time: only a status change moves it. A card that merely
 			// shifts position keeps it (and its history revision) as it was.
-			query := "UPDATE cards SET column_id=?, position=?, updated_at=updated_at WHERE id=?"
+			query := "UPDATE items SET column_id=?, position=?, updated_at=updated_at WHERE id=?"
 			args := []any{order.ColumnID, pos, cardID}
 			if columnChanged {
-				query = "UPDATE cards SET column_id=?, position=?, updated_at=? WHERE id=?"
+				query = "UPDATE items SET column_id=?, position=?, updated_at=? WHERE id=?"
 				args = []any{order.ColumnID, pos, now, cardID}
 			}
 			if _, err = tx.ExecContext(ctx, query, args...); err != nil {
@@ -103,14 +103,14 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 }
 
 // lockCardsInColumns reads and locks every card in the given columns. ORDER BY only sorts the result: InnoDB
-// locks rows in the order the chosen index is scanned (cards_column_position for a large table, the primary key
+// locks rows in the order the chosen index is scanned (items_column_position for a large table, the primary key
 // for a tiny one), so the lock order is not guaranteed. Callers are serialized by the all-columns lock
 // (lockColumnRows / lockExistingColumn) taken first, which is what keeps concurrent writers from deadlocking.
 func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]Item, error) {
 	if len(columnIDs) == 0 {
 		return nil, ErrItemOrder
 	}
-	query := "SELECT id FROM cards WHERE column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
+	query := "SELECT id FROM items WHERE column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
 	args := make([]any, len(columnIDs))
 	for i, id := range columnIDs {
 		args[i] = id
@@ -142,7 +142,7 @@ func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]I
 		cards = append(cards, c)
 	}
 	// PR URLs are read in a separate query (not joined) so one card is never returned once per PR and
-	// card_pr_links rows are never locked on behalf of a reorder.
+	// item_pr_links rows are never locked on behalf of a reorder.
 	if err = attachPRURLs(ctx, tx, cards); err != nil {
 		return nil, err
 	}

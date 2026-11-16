@@ -12,11 +12,11 @@ func (r MySQLRepository) History(ctx context.Context, number, before int64) (His
 	if err != nil {
 		return page, err
 	}
-	query := "SELECT id,kind,occurred_at,recorded_at,changes,note,evidence_url FROM card_history WHERE card_id=?"
+	query := "SELECT id,kind,occurred_at,recorded_at,changes,note,evidence_url FROM item_history WHERE card_id=?"
 	args := []any{c.ID}
 	if before > 0 {
 		var at time.Time
-		if err = r.DB.QueryRowContext(ctx, "SELECT occurred_at FROM card_history WHERE id=? AND card_id=?", before, c.ID).Scan(&at); err != nil {
+		if err = r.DB.QueryRowContext(ctx, "SELECT occurred_at FROM item_history WHERE id=? AND card_id=?", before, c.ID).Scan(&at); err != nil {
 			return page, dbError(err)
 		}
 		query += " AND (occurred_at<? OR (occurred_at=? AND id<?))"

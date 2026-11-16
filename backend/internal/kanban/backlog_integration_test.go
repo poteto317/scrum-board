@@ -130,7 +130,7 @@ func TestMySQLBacklogBackfillAllZeroPreservesUpdatedAt(t *testing.T) {
 		}
 	}
 	// Force the ALTER-DEFAULT-0 path: every card shares backlog_position=0.
-	if _, err := db.ExecContext(ctx, "UPDATE cards SET backlog_position=0, updated_at=updated_at"); err != nil {
+	if _, err := db.ExecContext(ctx, "UPDATE items SET backlog_position=0, updated_at=updated_at"); err != nil {
 		t.Fatal(err)
 	}
 	before, err := r.Backlog(ctx)
@@ -162,7 +162,7 @@ func TestMySQLBacklogBackfillAllZeroPreservesUpdatedAt(t *testing.T) {
 			t.Fatalf("updated_at changed for id=%d: before=%v after=%v", c.ID, updatedBefore[c.ID], c.UpdatedAt)
 		}
 	}
-	rows, err := db.QueryContext(ctx, "SELECT id FROM cards ORDER BY created_at,id")
+	rows, err := db.QueryContext(ctx, "SELECT id FROM items ORDER BY created_at,id")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ func TestMySQLStatusChange(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	mustInit(t, r)
-	if _, err := db.Exec("ALTER TABLE cards AUTO_INCREMENT=22"); err != nil {
+	if _, err := db.Exec("ALTER TABLE items AUTO_INCREMENT=22"); err != nil {
 		t.Fatal(err)
 	}
 	original, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "AI status task", Description: "preserve description"})
@@ -80,7 +80,7 @@ func TestMySQLStatusChange(t *testing.T) {
 		t.Fatal("unrelated card changed", err)
 	}
 	var next int64
-	if err = db.QueryRow("SELECT next_number FROM card_number_sequence WHERE singleton=1").Scan(&next); err != nil || next != 3 {
+	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&next); err != nil || next != 3 {
 		t.Fatalf("status consumed a number: %d %v", next, err)
 	}
 }

@@ -37,10 +37,10 @@ func TestMySQLRefinedItemFailureWritesNothingAndKeepsTheNumber(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	mustInit(t, r)
 	count := func() (cards, next int) {
-		if err := db.QueryRow("SELECT COUNT(*) FROM cards").Scan(&cards); err != nil {
+		if err := db.QueryRow("SELECT COUNT(*) FROM items").Scan(&cards); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.QueryRow("SELECT next_number FROM card_number_sequence WHERE singleton=1").Scan(&next); err != nil {
+		if err := db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&next); err != nil {
 			t.Fatal(err)
 		}
 		return

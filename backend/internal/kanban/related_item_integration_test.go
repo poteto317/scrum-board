@@ -116,7 +116,7 @@ func TestMySQLRelatedItemsMigratesLegacyCardKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = db.ExecContext(ctx,
-		`INSERT INTO card_related_items (card_id, position, kind, related_card_id, url, label) VALUES (?, 0, 'card', ?, NULL, '')`,
+		`INSERT INTO item_related_items (card_id, position, kind, related_card_id, url, label) VALUES (?, 0, 'card', ?, NULL, '')`,
 		a.ID, b.ID,
 	); err != nil {
 		t.Fatal(err)
@@ -127,7 +127,7 @@ func TestMySQLRelatedItemsMigratesLegacyCardKind(t *testing.T) {
 	}
 	var kind string
 	if err = db.QueryRowContext(ctx,
-		`SELECT kind FROM card_related_items WHERE card_id=? AND position=0`, a.ID,
+		`SELECT kind FROM item_related_items WHERE card_id=? AND position=0`, a.ID,
 	).Scan(&kind); err != nil || kind != "item" {
 		t.Fatalf("kind after migrate: %q %v", kind, err)
 	}

@@ -40,7 +40,7 @@ func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([
 		return nil, ErrBacklogMismatch
 	}
 	for pos, id := range cardIDs {
-		if _, err = tx.ExecContext(ctx, "UPDATE cards SET backlog_position=?, updated_at=updated_at WHERE id=?", pos, id); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE items SET backlog_position=?, updated_at=updated_at WHERE id=?", pos, id); err != nil {
 			return nil, err
 		}
 	}
@@ -63,7 +63,7 @@ func nextBacklogPosition(ctx context.Context, tx *sql.Tx) (int, error) {
 		return 0, nil
 	}
 	var maxPos int
-	err = tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(backlog_position), -1) FROM cards").Scan(&maxPos)
+	err = tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(backlog_position), -1) FROM items").Scan(&maxPos)
 	if err != nil {
 		return 0, err
 	}
@@ -71,7 +71,7 @@ func nextBacklogPosition(ctx context.Context, tx *sql.Tx) (int, error) {
 }
 
 func lockAllCards(ctx context.Context, tx *sql.Tx) ([]int64, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM cards ORDER BY id FOR UPDATE")
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items ORDER BY id FOR UPDATE")
 	if err != nil {
 		return nil, err
 	}

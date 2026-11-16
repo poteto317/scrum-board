@@ -71,7 +71,7 @@ func (r MySQLRepository) ApplyCommandTemplatesToAllItems(ctx context.Context, te
 	if err = validateTemplateIDsTx(ctx, tx, ids); err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM cards")
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items")
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (r MySQLRepository) ApplyCommandTemplatesToAllItems(ctx context.Context, te
 
 func (r MySQLRepository) ensureCardExists(ctx context.Context, cardID int64) error {
 	var id int64
-	err := r.DB.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=?", cardID).Scan(&id)
+	err := r.DB.QueryRowContext(ctx, "SELECT id FROM items WHERE id=?", cardID).Scan(&id)
 	if err == sql.ErrNoRows {
 		return ErrNotFound
 	}
@@ -106,7 +106,7 @@ func (r MySQLRepository) ensureCardExists(ctx context.Context, cardID int64) err
 
 func ensureCardExistsTx(ctx context.Context, tx *sql.Tx, cardID int64) error {
 	var id int64
-	err := tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=?", cardID).Scan(&id)
+	err := tx.QueryRowContext(ctx, "SELECT id FROM items WHERE id=?", cardID).Scan(&id)
 	if err == sql.ErrNoRows {
 		return ErrNotFound
 	}
@@ -131,11 +131,11 @@ func validateTemplateIDsTx(ctx context.Context, tx *sql.Tx, ids []int64) error {
 }
 
 func replaceCardCommandTemplatesTx(ctx context.Context, tx *sql.Tx, cardID int64, ids []int64) error {
-	if _, err := tx.ExecContext(ctx, "DELETE FROM card_command_templates WHERE card_id=?", cardID); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM item_command_templates WHERE card_id=?", cardID); err != nil {
 		return err
 	}
 	for i, templateID := range ids {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO card_command_templates(card_id, template_id, position) VALUES(?,?,?)", cardID, templateID, i); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO item_command_templates(card_id, template_id, position) VALUES(?,?,?)", cardID, templateID, i); err != nil {
 			return err
 		}
 	}
@@ -168,7 +168,7 @@ type cardCommandQuerier interface {
 
 func listCardCommandTemplates(ctx context.Context, q cardCommandQuerier, cardID int64) ([]CommandTemplate, error) {
 	rows, err := q.QueryContext(ctx, `SELECT t.id, t.name, t.template, c.position
-FROM card_command_templates c
+FROM item_command_templates c
 JOIN command_templates t ON t.id = c.template_id
 WHERE c.card_id=?
 ORDER BY c.position ASC, t.id ASC`, cardID)

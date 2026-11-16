@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// A database from before both drag & drop (no cards.position) and multiple PR links (card_pr_links keyed by
+// A database from before both drag & drop (no cards.position) and multiple PR links (item_pr_links keyed by
 // card_id only) goes through the startup initializers in the order cmd/server/main.go runs them. Each is
 // idempotent, so booting twice changes nothing, and no step may touch the legacy PR table before it is migrated.
 func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
@@ -18,21 +18,21 @@ func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
 			t.Fatalf("%s: %v", q, err)
 		}
 	}
-	exec("DROP TABLE card_pr_links")
-	exec("DROP TABLE IF EXISTS card_history")
+	exec("DROP TABLE item_pr_links")
+	exec("DROP TABLE IF EXISTS item_history")
 	exec("DROP TABLE IF EXISTS hidden_history")
-	exec("DROP TABLE IF EXISTS card_numbers")
-	exec("DROP TABLE IF EXISTS card_number_sequence")
-	exec("ALTER TABLE cards ADD INDEX cards_column (column_id), DROP INDEX cards_column_position, DROP COLUMN position")
-	exec("DELETE FROM cards")
-	exec("INSERT INTO cards(id,column_id,title,description,created_at) VALUES (10,1,'older','','2026-01-01 00:00:00'),(11,1,'linked','','2026-01-02 00:00:00'),(12,1,'newer','','2026-01-03 00:00:00')")
-	exec(`CREATE TABLE card_pr_links (
+	exec("DROP TABLE IF EXISTS item_numbers")
+	exec("DROP TABLE IF EXISTS item_number_sequence")
+	exec("ALTER TABLE items ADD INDEX cards_column (column_id), DROP INDEX items_column_position, DROP COLUMN position")
+	exec("DELETE FROM items")
+	exec("INSERT INTO items(id,column_id,title,description,created_at) VALUES (10,1,'older','','2026-01-01 00:00:00'),(11,1,'linked','','2026-01-02 00:00:00'),(12,1,'newer','','2026-01-03 00:00:00')")
+	exec(`CREATE TABLE item_pr_links (
  card_id BIGINT NOT NULL PRIMARY KEY,
  pr_url VARCHAR(2048) NOT NULL,
- CONSTRAINT fk_card_pr_links_card FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+ CONSTRAINT fk_item_pr_links_card FOREIGN KEY(card_id) REFERENCES items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`)
 	kept := "https://github.com/poteto317/scrum-board/pull/99"
-	exec("INSERT INTO card_pr_links(card_id,pr_url) VALUES (11,?)", kept)
+	exec("INSERT INTO item_pr_links(card_id,pr_url) VALUES (11,?)", kept)
 
 	r := MySQLRepository{DB: db}
 	boot := func() {

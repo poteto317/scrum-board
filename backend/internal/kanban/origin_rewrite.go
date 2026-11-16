@@ -26,10 +26,10 @@ type originRewriteColumn struct {
 }
 
 var originRewriteColumns = []originRewriteColumn{
-	{table: "cards", column: "description"},
-	{table: "cards", column: "title"},
-	{table: "card_history", column: "note"},
-	{table: "card_history", column: "evidence_url"},
+	{table: "items", column: "description"},
+	{table: "items", column: "title"},
+	{table: "item_history", column: "note"},
+	{table: "item_history", column: "evidence_url"},
 	{table: "command_templates", column: "template"},
 }
 
