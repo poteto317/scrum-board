@@ -46,6 +46,7 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
+		"board_settings",
 		"board_columns",
 	} {
 		if _, err = db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
@@ -60,6 +61,12 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeItemPositions(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeItemOffsetY(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeBoardSettings(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeBacklogPositions(t.Context()); err != nil {

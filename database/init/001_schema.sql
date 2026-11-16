@@ -12,6 +12,7 @@ CREATE TABLE items (
  title VARCHAR(200) NOT NULL,
  description TEXT NOT NULL,
  position INT NOT NULL DEFAULT 0,
+ offset_y INT NOT NULL DEFAULT 0,
  backlog_position INT NOT NULL DEFAULT 0,
  assignee VARCHAR(60) NOT NULL DEFAULT '',
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -20,6 +21,11 @@ CREATE TABLE items (
  INDEX items_column_position (column_id, position, id),
  INDEX items_backlog_position (backlog_position, id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE TABLE board_settings (
+ setting_key VARCHAR(64) PRIMARY KEY,
+ setting_value VARCHAR(255) NOT NULL
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+INSERT INTO board_settings(setting_key, setting_value) VALUES ('card_layout', 'pack');
 -- IDs are used as the final sort key, so later columns naturally append.
 INSERT INTO board_columns(id,name) VALUES (1,'Todo'),(2,'Doing'),(3,'Done');
 INSERT INTO items(column_id,title,description) VALUES
