@@ -268,6 +268,22 @@ curl --fail-with-body --request PATCH \
 - HTTP 400: `cardLayout` 欠落・不正値、未知フィールド、不正 JSON。
 - HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。
 
+# 一覧フィルタ（ボード／バックログ共有）
+
+`GET` / `PUT /api/list-filter` で、かんばんとプロダクトバックログが共有する絞り込み状態を読み書きします。Basic Auth 共有のワークスペース共通 1 件です。一覧 API 自体は絞らず、クライアントが `query`（タイトル／説明の部分一致）と `statusIds`（列 ID の複数選択。空配列＝全列）で表示を絞ります。
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/list-filter
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"query":"ログイン","statusIds":[1,2]}' \
+  http://127.0.0.1:4200/api/list-filter
+```
+
+- 応答は常に `{ "query": string, "statusIds": number[] }`（行が無い GET は空フィルタ）。
+- PUT: `query` は trim 後 200 文字以内。`statusIds` は正の整数配列（重複除去、存在しない列 ID は無視、最大 64 要素）。未知トップレベルキーや null フィールドは 400。
+- 壊れた DB の JSON は GET で空フィルタを返すが、行を空で上書きしない。
+
 # プロダクトバックログ
 
 全アイテムを `backlog_position` 昇順（同値は `id` 昇順）で返します。ステータス（列）に関係なく Done も含みます。

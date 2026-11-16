@@ -12,7 +12,7 @@
   border-radius: 6px;
   padding: 7px 10px;
   font: inherit;
-  background: #fff;
+  background: var(--paper);
 }
 .list-filter-statuses {
   display: flex;
@@ -38,7 +38,7 @@
   flex-basis: 100%;
   margin: 0;
   font-size: 13px;
-  color: #8a2f2f;
+  color: var(--feedback-error-ink);
   display: flex;
   align-items: center;
   gap: 8px;
