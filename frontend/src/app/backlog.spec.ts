@@ -153,7 +153,9 @@ describe('Backlog reordering', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -187,7 +189,9 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
             reorderBacklog,
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -236,7 +240,9 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
             reorderBacklog,
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -275,7 +281,9 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
             reorderBacklog,
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -325,7 +333,9 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
             createItem,
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -375,7 +385,9 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: [] }),
             board: () => of({ columns: [{ id: 2, name: 'Doing', position: 0 }], items: [] }),
             createItem,
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -399,7 +411,9 @@ describe('Backlog reordering', () => {
           useValue: {
             backlog: () => throwError(() => ({ status: 500, error: { message: '失敗' } })),
             board: () => throwError(() => ({ status: 500, error: { message: '失敗' } })),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -437,6 +451,8 @@ describe('Backlog live refresh', () => {
       board: vi.fn(() => of({ columns, items: [] })),
       createItem: vi.fn(),
       reorderBacklog: vi.fn(),
+      listFilter: () => of({ query: '', statusIds: [] }),
+      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Backlog],
@@ -464,6 +480,8 @@ describe('Backlog live refresh', () => {
       board: vi.fn(() => of({ columns, items: [] })),
       createItem: vi.fn(),
       reorderBacklog: vi.fn(),
+      listFilter: () => of({ query: '', statusIds: [] }),
+      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Backlog],
@@ -500,7 +518,9 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -543,7 +563,9 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -574,7 +596,9 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -616,7 +640,9 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -662,7 +688,9 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -693,7 +721,9 @@ describe('Backlog add dialog accidental close', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards }),
             createItem: vi.fn(),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -742,5 +772,47 @@ describe('Backlog add dialog accidental close', () => {
       proto.showModal = origShowModal;
       proto.close = origClose;
     }
+  });
+});
+
+describe('Backlog list filter', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  it('filters rows and clear restores; reorder disabled while active', async () => {
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards }),
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.list-filter')).not.toBeNull();
+    expect(f.componentInstance.filteredItems().length).toBe(4);
+    expect(f.componentInstance.canReorder()).toBe(true);
+    f.componentInstance.listFilter.setQuery('A');
+    f.detectChanges();
+    expect(f.componentInstance.filteredItems().map((c) => c.title)).toEqual(['A']);
+    expect(f.componentInstance.canReorder()).toBe(false);
+    f.componentInstance.listFilter.clear();
+    f.detectChanges();
+    expect(f.componentInstance.filteredItems().length).toBe(4);
+    expect(f.componentInstance.canReorder()).toBe(true);
   });
 });

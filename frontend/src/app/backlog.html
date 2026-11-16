@@ -17,6 +17,11 @@
       アイテムを追加
     </button>
   </div>
+  <app-list-filter-bar
+    class="backlog-list-filter"
+    [columns]="columns()"
+    [countLabel]="filteredItems().length + ' / ' + items().length + ' 件'"
+  />
   @if (loading()) {
     <div class="state-panel" role="status">読み込み中…</div>
   } @else if (error()) {
@@ -52,16 +57,18 @@
         <div class="state-panel empty">
           まだアイテムがありません。「アイテムを追加」から始めましょう。
         </div>
+      } @else if (filteredItems().length === 0) {
+        <div class="state-panel empty">条件に一致するアイテムはありません。</div>
       } @else {
         <ul class="backlog-list" #listContainer role="list">
-          @for (card of items(); track card.id; let i = $index) {
+          @for (card of filteredItems(); track card.id; let i = $index) {
             <li
               #row
               class="backlog-row"
               [attr.data-card-id]="card.id"
               [class.dragging]="draggingItemId() === card.id"
               [class.drop-before]="dropSlot() === i"
-              [class.drop-after]="dropSlot() === items().length && i === items().length - 1"
+              [class.drop-after]="dropSlot() === filteredItems().length && i === filteredItems().length - 1"
             >
               <div
                 class="backlog-drag-zone"

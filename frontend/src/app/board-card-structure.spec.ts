@@ -45,6 +45,8 @@ async function setup() {
           board: () => of(board()),
           reorderItems,
           listCommandTemplates: () => of({ templates: [] }),
+          listFilter: () => of({ query: '', statusIds: [] }),
+          putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
       },
     ],

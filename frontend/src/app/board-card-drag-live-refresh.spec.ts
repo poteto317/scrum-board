@@ -62,6 +62,8 @@ async function setup(reorderItems: ReturnType<typeof vi.fn> = vi.fn()) {
           reorderItems,
           reorderColumns: vi.fn(),
           listCommandTemplates: () => of({ templates: [] }),
+          listFilter: () => of({ query: '', statusIds: [] }),
+          putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
       },
     ],

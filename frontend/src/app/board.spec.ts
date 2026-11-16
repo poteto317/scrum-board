@@ -173,7 +173,9 @@ describe('Board create requests', () => {
                 items: [],
               }),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -255,7 +257,9 @@ describe('Board assignee chip', () => {
           useValue: {
             board: () => singleCardBoard('Cursor'),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -274,7 +278,10 @@ describe('Board assignee chip', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listFilter: () => of({ query: '', statusIds: [] }),
+ putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -294,7 +301,10 @@ describe('Board task numbers', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listFilter: () => of({ query: '', statusIds: [] }),
+ putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -336,7 +346,10 @@ describe('Board copy card link', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listFilter: () => of({ query: '', statusIds: [] }),
+ putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -429,7 +442,10 @@ describe('Board copy command menu', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board: singleCardBoard, listItemCommandTemplatesByNumber },
+          useValue: { board: singleCardBoard, listItemCommandTemplatesByNumber,
+ listFilter: () => of({ query: '', statusIds: [] }),
+ putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -760,7 +776,9 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -845,7 +863,9 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -900,7 +920,9 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -963,7 +985,9 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1021,7 +1045,10 @@ describe('Board column reordering', () => {
         provideRouter([]),
         {
           provide: Api,
-          useValue: { board, reorderColumns, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { board, reorderColumns, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listFilter: () => of({ query: '', statusIds: [] }),
+ putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1099,7 +1126,9 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1231,7 +1260,9 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1266,7 +1297,9 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1315,7 +1348,9 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1365,7 +1400,9 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1401,7 +1438,9 @@ describe('Board card reordering', () => {
             reorderItems: vi.fn(),
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1442,7 +1481,9 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1479,7 +1520,9 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1515,7 +1558,9 @@ describe('Board card reordering', () => {
             reorderItems: vi.fn(),
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1561,7 +1606,9 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1608,7 +1655,9 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1641,7 +1690,9 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1688,7 +1739,9 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1736,7 +1789,9 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1762,7 +1817,9 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1800,7 +1857,9 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1844,7 +1903,9 @@ describe('Board card reordering', () => {
             reorderItems: () => new Subject(),
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1902,7 +1963,9 @@ describe('Board card identity', () => {
             board: () => of(crossed()),
             reorderItems,
             listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -1978,7 +2041,10 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }),
+      listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listFilter: () => of({ query: '', statusIds: [] }),
+      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -2023,7 +2089,10 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }),
+      listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listFilter: () => of({ query: '', statusIds: [] }),
+      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -2049,7 +2118,10 @@ describe('Board live refresh', () => {
       imports: [Board],
       providers: [
         provideRouter([]),
-        { provide: Api, useValue: { board, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) } },
+        { provide: Api, useValue: { board, listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listFilter: () => of({ query: '', statusIds: [] }),
+ putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        } },
       ],
     });
     const f = TestBed.createComponent(Board);
@@ -2067,7 +2139,10 @@ describe('Board live refresh', () => {
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }),
+      listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listFilter: () => of({ query: '', statusIds: [] }),
+      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -2089,7 +2164,10 @@ describe('Board live refresh', () => {
     const slow = new Subject<ReturnType<typeof sampleBoard>>();
     const api = {
       board: vi.fn(() => of(initial)),
-      listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }),
+      listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listFilter: () => of({ query: '', statusIds: [] }),
+      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -2148,7 +2226,9 @@ describe('Board add dialog accidental close', () => {
               }),
             listCommandTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });
@@ -2213,5 +2293,96 @@ describe('Board add dialog accidental close', () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe('Board list filter', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  it('hides non-matching cards and clear restores them; DnD stays available when inactive', async () => {
+    const cols: Column[] = [
+      { id: 1, name: 'Todo', position: 0 },
+      { id: 2, name: 'Doing', position: 1 },
+    ];
+    const boardData: BoardData = {
+      columns: cols,
+      items: [
+        {
+          id: 1,
+          number: 1,
+          columnId: 1,
+          title: 'Alpha',
+          description: 'one',
+          position: 0,
+          backlogPosition: 0,
+          prUrls: [],
+          relatedItems: [],
+          assignee: '',
+          createdAt: '',
+          updatedAt: '',
+        },
+        {
+          id: 2,
+          number: 2,
+          columnId: 1,
+          title: 'Beta',
+          description: 'two',
+          position: 1,
+          backlogPosition: 1,
+          prUrls: [],
+          relatedItems: [],
+          assignee: '',
+          createdAt: '',
+          updatedAt: '',
+        },
+      ],
+    };
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(boardData),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.list-filter')).not.toBeNull();
+    expect(f.componentInstance.filteredItemCount()).toBe(2);
+    expect(f.componentInstance.canReorderItems()).toBe(true);
+    f.componentInstance.listFilter.setQuery('alpha');
+    f.detectChanges();
+    expect(f.componentInstance.filteredItemCount()).toBe(1);
+    expect(f.nativeElement.textContent).toContain('Alpha');
+    expect(f.nativeElement.textContent).not.toContain('Beta');
+    expect(f.componentInstance.canReorderItems()).toBe(false);
+    f.componentInstance.listFilter.clear();
+    f.detectChanges();
+    expect(f.componentInstance.filteredItemCount()).toBe(2);
+    expect(f.componentInstance.canReorderItems()).toBe(true);
+
+    f.componentInstance.listFilter.toggleStatus(2);
+    f.detectChanges();
+    expect(f.componentInstance.filteredItemCount()).toBe(0);
+    f.componentInstance.listFilter.clear();
+    f.componentInstance.listFilter.setQuery('Beta');
+    f.componentInstance.listFilter.toggleStatus(1);
+    f.detectChanges();
+    expect(f.componentInstance.filteredItemCount()).toBe(1);
+    expect(f.nativeElement.textContent).toContain('Beta');
+    expect(f.componentInstance.canReorderItems()).toBe(false);
   });
 });

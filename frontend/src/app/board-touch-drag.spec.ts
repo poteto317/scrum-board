@@ -54,7 +54,9 @@ describe('Board card drag start', () => {
             board: () => of(board),
             reorderItems: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
-          },
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+        },
         },
       ],
     });

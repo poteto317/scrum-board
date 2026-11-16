@@ -80,6 +80,9 @@ import {
   saveBoardScroll,
   saveReturnTo,
 } from './list-scroll-session';
+import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-filter';
+import { ListFilterBar } from './list-filter-bar';
+import { ListFilterSession } from './list-filter-session';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
@@ -93,6 +96,7 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
     CdkDragHandle,
     NgStyle,
     CopyFeedbackBanner,
+    ListFilterBar,
   ],
   templateUrl: './board.html',
   styleUrl: './board.css',
@@ -116,6 +120,7 @@ export class Board implements OnInit {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly zone = inject(NgZone);
+  readonly listFilter = inject(ListFilterSession);
   private readonly boardScroll = viewChild<ElementRef<HTMLElement>>('boardScroll');
   private readonly columnsContainer = viewChild<ElementRef<HTMLElement>>('columnsContainer');
   private scrollRestoreGeneration = 0;
@@ -174,6 +179,12 @@ export class Board implements OnInit {
       this.modal() === null &&
       this.data().columns.length > 1,
   );
+  readonly filterActive = computed(() =>
+    listFilterActive(
+      this.appliedFilter(),
+      this.data().columns.map((c) => c.id),
+    ),
+  );
   readonly canReorderItems = computed(
     () =>
       !this.loading() &&
@@ -181,7 +192,8 @@ export class Board implements OnInit {
       !this.reordering() &&
       !this.layoutSwitching() &&
       !this.settingsSaving() &&
-      this.modal() === null,
+      this.modal() === null &&
+      !this.filterActive(),
   );
   readonly cardLayout = computed(() =>
     this.data().settings.cardLayout === 'free' ? 'free' : 'pack',
@@ -210,15 +222,30 @@ export class Board implements OnInit {
     title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
   });
+  readonly appliedFilter = computed(() =>
+    appliedListFilter(
+      this.listFilter.filter(),
+      this.data().columns.map((c) => c.id),
+    ),
+  );
   readonly grouped = computed(() => {
     const free = this.isFreeLayout();
+    const filter = this.appliedFilter();
     const groups = new Map<number, Item[]>();
     for (const column of this.data().columns) groups.set(column.id, []);
-    for (const card of this.data().items) groups.get(card.columnId)?.push(card);
+    for (const card of this.data().items) {
+      if (!itemMatchesFilter(card, filter)) continue;
+      groups.get(card.columnId)?.push(card);
+    }
     for (const [columnId, list] of groups) {
       groups.set(columnId, sortColumnItems(list, free));
     }
     return groups;
+  });
+  readonly filteredItemCount = computed(() => {
+    let n = 0;
+    for (const list of this.grouped().values()) n += list.length;
+    return n;
   });
   dropListId(columnId: number) {
     return dropListIdForColumn(columnId);
@@ -231,11 +258,12 @@ export class Board implements OnInit {
   }
   readonly done = computed(() => {
     const id = this.data().columns.find((c) => c.name === 'Done')?.id;
-    return this.data().items.filter((c) => c.columnId === id).length;
+    return this.grouped().get(id ?? -1)?.length ?? 0;
   });
 
   ngOnInit() {
     this.load();
+    this.listFilter.load();
     this.destroyRef.onDestroy(() => {
       this.scrollRestoreGeneration++;
     });

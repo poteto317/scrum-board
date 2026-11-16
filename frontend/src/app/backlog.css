@@ -33,6 +33,10 @@
   gap: 20px;
   margin: 37px 0 28px;
 }
+.backlog-list-filter {
+  display: block;
+  margin: -12px 0 20px;
+}
 .eyebrow {
   color: var(--accent);
   font-size: 10px;

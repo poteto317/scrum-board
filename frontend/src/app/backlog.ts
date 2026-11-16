@@ -32,13 +32,16 @@ import {
   saveBacklogScroll,
   saveReturnTo,
 } from './list-scroll-session';
+import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-filter';
+import { ListFilterBar } from './list-filter-bar';
+import { ListFilterSession } from './list-filter-session';
 import { Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
   selector: 'app-backlog',
-  imports: [ReactiveFormsModule, RouterLink, Modal],
+  imports: [ReactiveFormsModule, RouterLink, Modal, ListFilterBar],
   templateUrl: './backlog.html',
   styleUrl: './backlog.css',
 })
@@ -50,6 +53,7 @@ export class Backlog implements OnInit {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly zone = inject(NgZone);
+  readonly listFilter = inject(ListFilterSession);
   private readonly backlogScroll = viewChild<ElementRef<HTMLElement>>('backlogScroll');
   private readonly listContainer = viewChild<ElementRef<HTMLElement>>('listContainer');
   private scrollRestoreGeneration = 0;
@@ -68,13 +72,30 @@ export class Backlog implements OnInit {
   readonly dropSlot = signal<number | null>(null);
   readonly modal = signal<'item' | null>(null);
   readonly formError = signal('');
+  readonly appliedFilter = computed(() =>
+    appliedListFilter(
+      this.listFilter.filter(),
+      this.columns().map((c) => c.id),
+    ),
+  );
+  readonly filteredItems = computed(() => {
+    const filter = this.appliedFilter();
+    return this.items().filter((card) => itemMatchesFilter(card, filter));
+  });
+  readonly filterActive = computed(() =>
+    listFilterActive(
+      this.appliedFilter(),
+      this.columns().map((c) => c.id),
+    ),
+  );
   readonly canReorder = computed(
     () =>
       !this.loading() &&
       !this.saving() &&
       !this.reordering() &&
       this.modal() === null &&
-      this.items().length > 1,
+      this.filteredItems().length > 1 &&
+      !this.filterActive(),
   );
   readonly columnName = computed(() => {
     const map = new Map<number, string>();
@@ -88,6 +109,7 @@ export class Backlog implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.listFilter.load();
     this.destroyRef.onDestroy(() => {
       this.scrollRestoreGeneration++;
     });
