@@ -333,7 +333,7 @@ func TestDeleteItemMySQL(t *testing.T) {
 		t.Fatalf("second delete want ErrNotFound, got %v", err)
 	}
 	var rest int
-	if err := r.DB.QueryRow("SELECT (SELECT COUNT(*) FROM card_history WHERE card_id=?)+(SELECT COUNT(*) FROM card_numbers WHERE card_id=?)", a.ID, a.ID).Scan(&rest); err != nil || rest != 0 {
+	if err := r.DB.QueryRow("SELECT (SELECT COUNT(*) FROM item_history WHERE card_id=?)+(SELECT COUNT(*) FROM item_numbers WHERE card_id=?)", a.ID, a.ID).Scan(&rest); err != nil || rest != 0 {
 		t.Fatalf("history/number cascade: %d %v", rest, err)
 	}
 }
@@ -423,7 +423,7 @@ func TestCardWritersQueueOnTheAllColumnsLockMySQL(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = probe.ExecContext(ctx, "SELECT id FROM cards FOR UPDATE NOWAIT"); err != nil {
+			if _, err = probe.ExecContext(ctx, "SELECT id FROM items FOR UPDATE NOWAIT"); err != nil {
 				probe.Rollback()
 				t.Fatalf("%s holds a card lock while it waits for the all-columns lock: %v", name, err)
 			}

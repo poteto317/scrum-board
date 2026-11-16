@@ -7,7 +7,7 @@ import (
 )
 
 // A card with several PR links must reach every board-facing read once, with all of its links in registration
-// order, however the card was moved: the card list is not allowed to be joined to card_pr_links (one row per PR).
+// order, however the card was moved: the card list is not allowed to be joined to item_pr_links (one row per PR).
 func newLinkedBoard(t *testing.T) (r MySQLRepository, two, three, none Item) {
 	t.Helper()
 	r, _, _ = newOrderedBoard(t)

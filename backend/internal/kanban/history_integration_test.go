@@ -88,27 +88,27 @@ func TestMySQLHistory(t *testing.T) {
 	}
 	// Breaking only the history table must roll back the preceding card UPDATE.
 	saved, _ := r.GetItem(ctx, c.ID)
-	if _, err = db.Exec("RENAME TABLE card_history TO hidden_history"); err != nil {
+	if _, err = db.Exec("RENAME TABLE item_history TO hidden_history"); err != nil {
 		t.Fatal(err)
 	}
 	// Never leave the renamed table behind: it keeps a foreign key to cards and would break every later reset.
-	t.Cleanup(func() { _, _ = db.Exec("RENAME TABLE hidden_history TO card_history") })
+	t.Cleanup(func() { _, _ = db.Exec("RENAME TABLE hidden_history TO item_history") })
 	var nextBefore int64
-	if err = db.QueryRow("SELECT next_number FROM card_number_sequence WHERE singleton=1").Scan(&nextBefore); err != nil {
+	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&nextBefore); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = r.CreateItem(ctx, ItemInput{Title: "must not exist", ColumnID: 1}); err == nil {
 		t.Fatal("create must roll back when history fails")
 	}
 	var nextAfter int64
-	if err = db.QueryRow("SELECT next_number FROM card_number_sequence WHERE singleton=1").Scan(&nextAfter); err != nil || nextAfter != nextBefore {
+	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&nextAfter); err != nil || nextAfter != nextBefore {
 		t.Fatal("failed history consumed number", err)
 	}
 	bad := "must rollback"
 	if _, err = r.UpdateItem(ctx, c.ID, ItemPatch{Title: &bad}); err == nil {
 		t.Fatal("history failure must reject update")
 	}
-	if _, err = db.Exec("RENAME TABLE hidden_history TO card_history"); err != nil {
+	if _, err = db.Exec("RENAME TABLE hidden_history TO item_history"); err != nil {
 		t.Fatal(err)
 	}
 	current, _ := r.GetItem(ctx, c.ID)
@@ -227,7 +227,7 @@ func TestMySQLHistoryParallelAndConflictingImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT COUNT(*) FROM card_history WHERE card_id=1").Scan(&count); err != nil || count != 0 {
+	if err = db.QueryRow("SELECT COUNT(*) FROM item_history WHERE card_id=1").Scan(&count); err != nil || count != 0 {
 		t.Fatal("history cascade", count, err)
 	}
 }
@@ -315,7 +315,7 @@ func TestMySQLConcurrentImportRejectsConflict(t *testing.T) {
 	}
 	defer blocker.Rollback()
 	var id int64
-	if err = blocker.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", second.ID).Scan(&id); err != nil {
+	if err = blocker.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? FOR UPDATE", second.ID).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	a := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: first.CreatedAt, Key: "batch-a-first", OccurredAt: first.CreatedAt, Note: "A"}
@@ -331,7 +331,7 @@ func TestMySQLConcurrentImportRejectsConflict(t *testing.T) {
 	ready := false
 	for i := 0; i < 200; i++ {
 		var count int
-		if err = probe.QueryRowContext(ctx, "SELECT COUNT(*) FROM card_history WHERE card_id=1 AND event_key='batch-a-first'").Scan(&count); err != nil {
+		if err = probe.QueryRowContext(ctx, "SELECT COUNT(*) FROM item_history WHERE card_id=1 AND event_key='batch-a-first'").Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count == 1 {
@@ -353,7 +353,7 @@ func TestMySQLConcurrentImportRejectsConflict(t *testing.T) {
 		t.Fatal("concurrent key conflict was silently ignored")
 	}
 	var count int
-	if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM card_history WHERE event_key='batch-a-first'").Scan(&count); err != nil || count != 0 {
+	if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM item_history WHERE event_key='batch-a-first'").Scan(&count); err != nil || count != 0 {
 		t.Fatal("partial batch committed", count, err)
 	}
 }
@@ -408,7 +408,7 @@ func TestMySQLImportWaitsForCardBeforeNumberOnDelete(t *testing.T) {
 	}
 	defer blocker.Rollback()
 	var id int64
-	if err = blocker.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", second.ID).Scan(&id); err != nil {
+	if err = blocker.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? FOR UPDATE", second.ID).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	a := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: first.CreatedAt, Key: "before-delete", OccurredAt: first.CreatedAt, Note: "first"}
@@ -423,7 +423,7 @@ func TestMySQLImportWaitsForCardBeforeNumberOnDelete(t *testing.T) {
 	ready := false
 	for i := 0; i < 200; i++ {
 		var count int
-		if err = probe.QueryRowContext(ctx, "SELECT COUNT(*) FROM card_history WHERE event_key='before-delete'").Scan(&count); err != nil {
+		if err = probe.QueryRowContext(ctx, "SELECT COUNT(*) FROM item_history WHERE event_key='before-delete'").Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count > 0 {
@@ -437,7 +437,7 @@ func TestMySQLImportWaitsForCardBeforeNumberOnDelete(t *testing.T) {
 	}
 	// The second card remains locked while the importer reaches its next statement.
 	time.Sleep(50 * time.Millisecond)
-	if _, err = blocker.ExecContext(ctx, "DELETE FROM cards WHERE id=?", second.ID); err != nil {
+	if _, err = blocker.ExecContext(ctx, "DELETE FROM items WHERE id=?", second.ID); err != nil {
 		t.Fatal("delete deadlocked with import", err)
 	}
 	if err = blocker.Commit(); err != nil {
@@ -540,7 +540,7 @@ func TestMySQLImportKeyConflictChecksEveryStoredField(t *testing.T) {
 	var baseline HistoricalRecord
 	var payload []byte
 	baseline.Number, baseline.ItemID, baseline.CreatedAt, baseline.Key = first.Number, first.ID, first.CreatedAt, "baseline-v1"
-	if err = r.DB.QueryRow("SELECT occurred_at,changes,note,evidence_url FROM card_history WHERE card_id=1 AND event_key='baseline-v1'").Scan(&baseline.OccurredAt, &payload, &baseline.Note, &baseline.EvidenceURL); err != nil {
+	if err = r.DB.QueryRow("SELECT occurred_at,changes,note,evidence_url FROM item_history WHERE card_id=1 AND event_key='baseline-v1'").Scan(&baseline.OccurredAt, &payload, &baseline.Note, &baseline.EvidenceURL); err != nil {
 		t.Fatal("seed card must have a baseline event:", err)
 	}
 	if err = json.Unmarshal(payload, &baseline.Changes); err != nil {

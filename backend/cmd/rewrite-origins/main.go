@@ -18,7 +18,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: rewrite-origins [--dry-run]
 
 Replaces http://127.0.0.1:4200 and http://localhost:4200 (optional trailing slash)
-in cards.description, cards.title, card_history.note, card_history.evidence_url,
+in cards.description, cards.title, item_history.note, item_history.evidence_url,
 and command_templates.template with PUBLIC_ORIGIN (trailing slash stripped).
 
 Environment:

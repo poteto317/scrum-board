@@ -7,30 +7,30 @@ import (
 
 // pr_url is ASCII: GitHub PR URLs are ASCII-only, and utf8mb4 VARCHAR(2048)
 // cannot sit in a UNIQUE index (max key length 3072 bytes).
-const cardPRLinksDDL = `CREATE TABLE card_pr_links (
+const cardPRLinksDDL = `CREATE TABLE item_pr_links (
  card_id BIGINT NOT NULL,
  position INT NOT NULL,
  pr_url VARCHAR(2048) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
  PRIMARY KEY (card_id, position),
  UNIQUE KEY uq_card_pr_url (card_id, pr_url),
- CONSTRAINT fk_card_pr_links_card FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+ CONSTRAINT fk_item_pr_links_card FOREIGN KEY(card_id) REFERENCES items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`
 
-const cardPRLinksNewDDL = `CREATE TABLE card_pr_links__new (
+const cardPRLinksNewDDL = `CREATE TABLE item_pr_links__new (
  card_id BIGINT NOT NULL,
  position INT NOT NULL,
  pr_url VARCHAR(2048) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
  PRIMARY KEY (card_id, position),
  UNIQUE KEY uq_card_pr_url (card_id, pr_url),
- CONSTRAINT fk_card_pr_links_card_new FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+ CONSTRAINT fk_item_pr_links_card_new FOREIGN KEY(card_id) REFERENCES items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`
 
 func replacePRURLs(ctx context.Context, tx *sql.Tx, cardID int64, urls []string) error {
-	if _, err := tx.ExecContext(ctx, "DELETE FROM card_pr_links WHERE card_id=?", cardID); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM item_pr_links WHERE card_id=?", cardID); err != nil {
 		return err
 	}
 	for i, url := range urls {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO card_pr_links(card_id,position,pr_url) VALUES(?,?,?)", cardID, i, url); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO item_pr_links(card_id,position,pr_url) VALUES(?,?,?)", cardID, i, url); err != nil {
 			return err
 		}
 	}
@@ -61,7 +61,7 @@ func attachPRURLs(ctx context.Context, q queryable, cards []Item) error {
 		}
 		placeholders = append(placeholders, '?')
 	}
-	rows, err := q.QueryContext(ctx, "SELECT card_id, pr_url FROM card_pr_links WHERE card_id IN ("+string(placeholders)+") ORDER BY card_id, position", ids...)
+	rows, err := q.QueryContext(ctx, "SELECT card_id, pr_url FROM item_pr_links WHERE card_id IN ("+string(placeholders)+") ORDER BY card_id, position", ids...)
 	if err != nil {
 		return err
 	}

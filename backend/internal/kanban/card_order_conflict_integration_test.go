@@ -10,7 +10,7 @@ import (
 // boardSnapshot is everything a rejected reorder must leave untouched: card placement, updated_at and history.
 func boardSnapshot(t *testing.T, r MySQLRepository) string {
 	t.Helper()
-	rows, err := r.DB.Query("SELECT id,column_id,position,updated_at FROM cards ORDER BY id")
+	rows, err := r.DB.Query("SELECT id,column_id,position,updated_at FROM items ORDER BY id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func boardSnapshot(t *testing.T, r MySQLRepository) string {
 		t.Fatal(err)
 	}
 	var n, maxID int64
-	if err = r.DB.QueryRow("SELECT COUNT(*), COALESCE(MAX(id),0) FROM card_history").Scan(&n, &maxID); err != nil {
+	if err = r.DB.QueryRow("SELECT COUNT(*), COALESCE(MAX(id),0) FROM item_history").Scan(&n, &maxID); err != nil {
 		t.Fatal(err)
 	}
 	return out + fmt.Sprintf("history rows=%d max=%d\n", n, maxID)

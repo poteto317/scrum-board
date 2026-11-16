@@ -18,18 +18,18 @@ func TestMySQLPRLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Simulate the existing database before multi-PR was deployed (single-URL schema).
-	if _, err = db.Exec("DROP TABLE card_pr_links"); err != nil {
+	if _, err = db.Exec("DROP TABLE item_pr_links"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec(`CREATE TABLE card_pr_links (
+	if _, err = db.Exec(`CREATE TABLE item_pr_links (
  card_id BIGINT NOT NULL PRIMARY KEY,
  pr_url VARCHAR(2048) NOT NULL,
- CONSTRAINT fk_card_pr_links_card FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+ CONSTRAINT fk_item_pr_links_card FOREIGN KEY(card_id) REFERENCES items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`); err != nil {
 		t.Fatal(err)
 	}
 	kept := "https://github.com/poteto317/scrum-board/pull/99"
-	if _, err = db.Exec(`INSERT INTO card_pr_links(card_id,pr_url) VALUES(1,?)`, kept); err != nil {
+	if _, err = db.Exec(`INSERT INTO item_pr_links(card_id,pr_url) VALUES(1,?)`, kept); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -47,7 +47,7 @@ func TestMySQLPRLinks(t *testing.T) {
 	}
 	var n int
 	if err = db.QueryRow(`SELECT COUNT(*) FROM information_schema.columns
- WHERE table_schema = DATABASE() AND table_name='card_pr_links' AND column_name='position'`).Scan(&n); err != nil || n != 1 {
+ WHERE table_schema = DATABASE() AND table_name='item_pr_links' AND column_name='position'`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("position column missing: %d %v", n, err)
 	}
 	url := "https://github.com/poteto317/scrum-board/pull/2"
@@ -108,7 +108,7 @@ func TestMySQLPRLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT COUNT(*) FROM card_pr_links WHERE card_id=?", created.ID).Scan(&count); err != nil || count != 0 {
+	if err = db.QueryRow("SELECT COUNT(*) FROM item_pr_links WHERE card_id=?", created.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("cascade: %d %v", count, err)
 	}
 }
@@ -123,7 +123,7 @@ func TestMySQLPRLinksMigrateRecoversNewOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Simulate DROP succeeded but RENAME failed: only __new remains.
-	if _, err := db.Exec("RENAME TABLE card_pr_links TO card_pr_links__new"); err != nil {
+	if _, err := db.Exec("RENAME TABLE item_pr_links TO item_pr_links__new"); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.InitializePRLinks(ctx); err != nil {
@@ -135,7 +135,7 @@ func TestMySQLPRLinksMigrateRecoversNewOnly(t *testing.T) {
 	}
 	var n int
 	if err = db.QueryRow(`SELECT COUNT(*) FROM information_schema.tables
- WHERE table_schema = DATABASE() AND table_name='card_pr_links__new'`).Scan(&n); err != nil || n != 0 {
+ WHERE table_schema = DATABASE() AND table_name='item_pr_links__new'`).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("__new leftover: %d %v", n, err)
 	}
 }

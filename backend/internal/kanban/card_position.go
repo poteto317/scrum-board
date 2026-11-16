@@ -12,12 +12,12 @@ func (r MySQLRepository) InitializeItemPositions(ctx context.Context) error {
 	var count int
 	err := r.DB.QueryRowContext(ctx, `
 SELECT COUNT(*) FROM information_schema.COLUMNS
- WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cards' AND COLUMN_NAME = 'position'`).Scan(&count)
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'items' AND COLUMN_NAME = 'position'`).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("check cards.position: %w", err)
 	}
 	if count == 0 {
-		if _, err = r.DB.ExecContext(ctx, "ALTER TABLE cards ADD COLUMN position INT NOT NULL DEFAULT 0"); err != nil {
+		if _, err = r.DB.ExecContext(ctx, "ALTER TABLE items ADD COLUMN position INT NOT NULL DEFAULT 0"); err != nil {
 			return fmt.Errorf("add cards.position: %w", err)
 		}
 	}
@@ -27,13 +27,13 @@ SELECT COUNT(*) FROM information_schema.COLUMNS
 	var idx int
 	err = r.DB.QueryRowContext(ctx, `
 SELECT COUNT(*) FROM information_schema.STATISTICS
- WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cards' AND INDEX_NAME = 'cards_column_position'`).Scan(&idx)
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'items' AND INDEX_NAME = 'items_column_position'`).Scan(&idx)
 	if err != nil {
-		return fmt.Errorf("check cards_column_position: %w", err)
+		return fmt.Errorf("check items_column_position: %w", err)
 	}
 	if idx == 0 {
-		if _, err = r.DB.ExecContext(ctx, "ALTER TABLE cards ADD INDEX cards_column_position (column_id, position, id)"); err != nil {
-			return fmt.Errorf("add cards_column_position: %w", err)
+		if _, err = r.DB.ExecContext(ctx, "ALTER TABLE items ADD INDEX items_column_position (column_id, position, id)"); err != nil {
+			return fmt.Errorf("add items_column_position: %w", err)
 		}
 	}
 	return nil
@@ -41,7 +41,7 @@ SELECT COUNT(*) FROM information_schema.STATISTICS
 
 func backfillIdenticalColumnPositions(ctx context.Context, db *sql.DB) error {
 	rows, err := db.QueryContext(ctx, `
-SELECT column_id FROM cards
+SELECT column_id FROM items
  GROUP BY column_id
 HAVING COUNT(*) >= 2 AND COUNT(DISTINCT position) = 1`)
 	if err != nil {
@@ -76,7 +76,7 @@ func backfillColumnByCreatedAt(ctx context.Context, db *sql.DB, columnID int64) 
 		return err
 	}
 	defer tx.Rollback()
-	cardRows, err := tx.QueryContext(ctx, "SELECT id,position FROM cards WHERE column_id=? ORDER BY created_at,id FOR UPDATE", columnID)
+	cardRows, err := tx.QueryContext(ctx, "SELECT id,position FROM items WHERE column_id=? ORDER BY created_at,id FOR UPDATE", columnID)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func backfillColumnByCreatedAt(ctx context.Context, db *sql.DB, columnID int64) 
 		return tx.Commit()
 	}
 	for pos, id := range ids {
-		if _, err = tx.ExecContext(ctx, "UPDATE cards SET position=?, updated_at=updated_at WHERE id=?", pos, id); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE items SET position=?, updated_at=updated_at WHERE id=?", pos, id); err != nil {
 			return err
 		}
 	}
@@ -125,7 +125,7 @@ func lockExistingColumn(ctx context.Context, tx *sql.Tx, columnID int64) error {
 }
 
 func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID int64) (int, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT id,position FROM cards WHERE column_id=? ORDER BY id FOR UPDATE", columnID)
+	rows, err := tx.QueryContext(ctx, "SELECT id,position FROM items WHERE column_id=? ORDER BY id FOR UPDATE", columnID)
 	if err != nil {
 		return 0, err
 	}
@@ -148,7 +148,7 @@ func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID int64) (int, err
 }
 
 func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID int64) error {
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM cards WHERE column_id=? ORDER BY position,id FOR UPDATE", columnID)
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE column_id=? ORDER BY position,id FOR UPDATE", columnID)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID int64) err
 	rows.Close()
 	// Closing a gap is not an edit of the remaining cards, so their updated_at stays as it was.
 	for pos, id := range ids {
-		if _, err = tx.ExecContext(ctx, "UPDATE cards SET position=?, updated_at=updated_at WHERE id=? AND position<>?", pos, id, pos); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE items SET position=?, updated_at=updated_at WHERE id=? AND position<>?", pos, id, pos); err != nil {
 			return err
 		}
 	}

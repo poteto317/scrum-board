@@ -37,7 +37,7 @@ func importVsCardWriter(t *testing.T, writer string) {
 		}
 		col1 = append(col1, c)
 	}
-	for i := 0; i < 300; i++ { // enough rows that the optimizer scans cards_column_position instead of the PK
+	for i := 0; i < 300; i++ { // enough rows that the optimizer scans items_column_position instead of the PK
 		if _, err := r.CreateItem(ctx, ItemInput{ColumnID: 2, Title: "other"}); err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +59,7 @@ func importVsCardWriter(t *testing.T, writer string) {
 	}
 	defer blocker.Rollback()
 	var id int64
-	if err = blocker.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", hi.ID).Scan(&id); err != nil {
+	if err = blocker.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? FOR UPDATE", hi.ID).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	orig := make([]int64, 0, len(col1))

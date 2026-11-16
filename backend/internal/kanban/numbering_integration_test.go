@@ -43,8 +43,8 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 		id      int64
 		minutes int
 	}{{40, 3}, {50, 1}, {51, 1}} {
-		if _, err := db.Exec(`INSERT INTO cards(id,column_id,title,description,created_at,updated_at)
- SELECT ?,1,'unnumbered','',DATE_ADD(created_at,INTERVAL ? MINUTE),DATE_ADD(created_at,INTERVAL ? MINUTE) FROM cards WHERE id=1`, c.id, c.minutes, c.minutes); err != nil {
+		if _, err := db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at)
+ SELECT ?,1,'unnumbered','',DATE_ADD(created_at,INTERVAL ? MINUTE),DATE_ADD(created_at,INTERVAL ? MINUTE) FROM items WHERE id=1`, c.id, c.minutes, c.minutes); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -59,23 +59,23 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 		t.Fatalf("number after backfill: %+v %v", created, err)
 	}
 	// A counter behind the highest issued number must never hand out an issued number again.
-	if _, err = db.Exec("UPDATE card_number_sequence SET next_number=2 WHERE singleton=1"); err != nil {
+	if _, err = db.Exec("UPDATE item_number_sequence SET next_number=2 WHERE singleton=1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec(`INSERT INTO cards(id,column_id,title,description,created_at,updated_at)
- SELECT 60,1,'behind counter','',created_at,updated_at FROM cards WHERE id=1`); err != nil {
+	if _, err = db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at)
+ SELECT 60,1,'behind counter','',created_at,updated_at FROM items WHERE id=1`); err != nil {
 		t.Fatal(err)
 	}
 	mustInit(t, r)
 	if c, err := r.GetItem(ctx, 60); err != nil || c.Number != 6 {
 		t.Fatalf("stale counter reused a number: %+v %v", c, err)
 	}
-	if _, err = db.Exec("UPDATE card_number_sequence SET next_number=1 WHERE singleton=1"); err != nil {
+	if _, err = db.Exec("UPDATE item_number_sequence SET next_number=1 WHERE singleton=1"); err != nil {
 		t.Fatal(err)
 	}
 	mustInit(t, r)
 	var next int64
-	if err = db.QueryRow("SELECT next_number FROM card_number_sequence WHERE singleton=1").Scan(&next); err != nil || next != 7 {
+	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&next); err != nil || next != 7 {
 		t.Fatalf("counter not repaired: %d %v", next, err)
 	}
 }
@@ -84,8 +84,8 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	for _, id := range []int64{17, 18} {
-		_, err := db.Exec(`INSERT INTO cards(id,column_id,title,description,created_at,updated_at)
- SELECT ?,1,?, 'keep description',DATE_ADD(created_at,INTERVAL 1 MINUTE),DATE_ADD(created_at,INTERVAL 1 MINUTE) FROM cards WHERE id=1`, id, "legacy title")
+		_, err := db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at)
+ SELECT ?,1,?, 'keep description',DATE_ADD(created_at,INTERVAL 1 MINUTE),DATE_ADD(created_at,INTERVAL 1 MINUTE) FROM items WHERE id=1`, id, "legacy title")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 		CreatedAt, UpdatedAt time.Time
 	}
 	before := map[int64]original{}
-	rows, err := db.Query("SELECT id,column_id,title,description,created_at,updated_at FROM cards")
+	rows, err := db.Query("SELECT id,column_id,title,description,created_at,updated_at FROM items")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,17 +140,17 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 		t.Fatalf("wrong failure %v", err)
 	}
 	// A failure after the cards INSERT must roll the card and number back together.
-	if _, err = db.Exec(`ALTER TABLE card_numbers ADD CONSTRAINT reject_new_number CHECK (task_number <= 3)`); err != nil {
+	if _, err = db.Exec(`ALTER TABLE item_numbers ADD CONSTRAINT reject_new_number CHECK (task_number <= 3)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "must roll back"}); err == nil {
 		t.Fatal("expected check constraint failure")
 	}
-	if _, err = db.Exec("ALTER TABLE card_numbers DROP CHECK reject_new_number"); err != nil {
+	if _, err = db.Exec("ALTER TABLE item_numbers DROP CHECK reject_new_number"); err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT COUNT(*) FROM cards").Scan(&count); err != nil || count != 3 {
+	if err = db.QueryRow("SELECT COUNT(*) FROM items").Scan(&count); err != nil || count != 3 {
 		t.Fatalf("failed create left card: %d %v", count, err)
 	}
 	c, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "number four"})

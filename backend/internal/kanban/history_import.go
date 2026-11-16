@@ -162,12 +162,12 @@ func (r MySQLRepository) ImportHistory(ctx context.Context, records []Historical
 		v.OccurredAt = v.OccurredAt.Truncate(time.Microsecond)
 		var id int64
 		var created time.Time
-		err = tx.QueryRowContext(ctx, "SELECT id,created_at FROM cards WHERE id=? FOR UPDATE", v.ItemID).Scan(&id, &created)
+		err = tx.QueryRowContext(ctx, "SELECT id,created_at FROM items WHERE id=? FOR UPDATE", v.ItemID).Scan(&id, &created)
 		if err != nil {
 			return dbError(err)
 		}
 		var number int64
-		if err = tx.QueryRowContext(ctx, "SELECT task_number FROM card_numbers WHERE card_id=?", id).Scan(&number); err != nil {
+		if err = tx.QueryRowContext(ctx, "SELECT task_number FROM item_numbers WHERE card_id=?", id).Scan(&number); err != nil {
 			return dbError(err)
 		}
 		if number != v.Number || !created.Equal(v.CreatedAt) {
@@ -179,7 +179,7 @@ func (r MySQLRepository) ImportHistory(ctx context.Context, records []Historical
 		}
 		var existing HistoryEvent
 		var payload []byte
-		err = tx.QueryRowContext(ctx, "SELECT kind,occurred_at,changes,note,evidence_url FROM card_history WHERE card_id=? AND event_key=?", id, v.Key).Scan(&existing.Kind, &existing.OccurredAt, &payload, &existing.Note, &existing.EvidenceURL)
+		err = tx.QueryRowContext(ctx, "SELECT kind,occurred_at,changes,note,evidence_url FROM item_history WHERE card_id=? AND event_key=?", id, v.Key).Scan(&existing.Kind, &existing.OccurredAt, &payload, &existing.Note, &existing.EvidenceURL)
 		if err == nil {
 			if err = json.Unmarshal(payload, &existing.Changes); err != nil {
 				return err

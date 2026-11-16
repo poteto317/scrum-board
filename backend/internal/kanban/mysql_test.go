@@ -35,7 +35,17 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 	}
 	t.Cleanup(func() { db.Close() })
 	db.SetMaxOpenConns(12)
-	for _, table := range []string{"hidden_history", "card_history", "card_pr_links", "card_numbers", "card_number_sequence", "cards", "board_columns"} {
+	for _, table := range []string{
+		"hidden_history",
+		"item_history", "card_history",
+		"item_pr_links__new", "card_pr_links__new", "item_pr_links", "card_pr_links",
+		"item_related_items", "card_related_items",
+		"item_command_templates", "card_command_templates",
+		"item_numbers", "card_numbers",
+		"item_number_sequence", "card_number_sequence",
+		"items", "cards",
+		"board_columns",
+	} {
 		if _, err = db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
 			t.Fatal(err)
 		}
