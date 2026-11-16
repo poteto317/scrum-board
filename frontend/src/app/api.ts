@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CommandTemplate } from './command-template';
 import { ItemOrderColumn } from './item-order';
+import { ListFilter } from './list-filter';
 import {
   BoardData,
   BoardSettings,
@@ -104,5 +105,11 @@ export class Api {
   }
   applyCommandTemplatesToAllItems(templateIds: number[]) {
     return this.http.post<void>('/api/command-templates/apply-to-all-items', { templateIds });
+  }
+  listFilter() {
+    return this.http.get<ListFilter>('/api/list-filter');
+  }
+  putListFilter(filter: ListFilter) {
+    return this.http.put<ListFilter>('/api/list-filter', filter);
   }
 }
