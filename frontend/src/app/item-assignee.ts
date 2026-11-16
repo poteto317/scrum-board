@@ -5,27 +5,27 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { validAssignee } from './assignee';
-import { Card } from './models';
+import { Item } from './models';
 
 /** Immediate assignee PATCH — separate from title/description autosave. */
 @Injectable()
-export class CardAssignee {
+export class ItemAssignee {
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
   readonly saving = signal(false);
   readonly draft = new FormControl('', { nonNullable: true });
   private cancel$?: Observable<unknown>;
-  private apply!: (updated: Pick<Card, 'assignee' | 'updatedAt'>) => void;
+  private apply!: (updated: Pick<Item, 'assignee' | 'updatedAt'>) => void;
   private reportError!: (message: string) => void;
-  private current!: () => Card | null;
+  private current!: () => Item | null;
 
   bind(opts: {
-    card: () => Card | null;
-    applyAssigneeSave: (updated: Pick<Card, 'assignee' | 'updatedAt'>) => void;
+    item: () => Item | null;
+    applyAssigneeSave: (updated: Pick<Item, 'assignee' | 'updatedAt'>) => void;
     onError: (message: string) => void;
     cancel$: Observable<unknown>;
   }) {
-    this.current = opts.card;
+    this.current = opts.item;
     this.apply = opts.applyAssigneeSave;
     this.reportError = opts.onError;
     this.cancel$ = opts.cancel$;
@@ -73,7 +73,7 @@ export class CardAssignee {
     this.reportError('');
     const draftAtSend = this.draft.value;
     this.api
-      .updateCard(card.id, { assignee })
+      .updateItem(card.id, { assignee })
       .pipe(
         takeUntil(this.cancel$),
         takeUntilDestroyed(this.destroyRef),

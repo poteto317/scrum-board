@@ -3,22 +3,22 @@ import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
-import { Card, CardInput } from './models';
+import { Item, ItemInput } from './models';
 import { textLimit } from './form-validation';
 import { errorMessage } from './api-error';
 
 const fields = ['title', 'description', 'columnId'] as const;
 type Field = (typeof fields)[number];
-/** Card fields updated outside the autosave form; prefer local on form flush. */
+/** Item fields updated outside the autosave form; prefer local on form flush. */
 const sideFields = ['prUrls', 'relatedItems', 'assignee'] as const;
 type SideField = (typeof sideFields)[number];
 
-// Provided by CardDetail: drafts and timers never survive a detail screen.
+// Provided by ItemDetail: drafts and timers never survive a detail screen.
 @Injectable()
-export class CardAutosave {
+export class ItemAutosave {
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
-  readonly card = signal<Card | null>(null);
+  readonly item = signal<Item | null>(null);
   readonly saving = signal(false);
   readonly error = signal('');
   readonly changed = signal(false);
@@ -48,29 +48,29 @@ export class CardAutosave {
     });
     this.destroyRef.onDestroy(() => this.cancel());
   }
-  reset(card: Card | null) {
+  reset(item: Item | null) {
     this.cancel();
-    this.card.set(card);
+    this.item.set(item);
     this.composing.clear();
     this.retryFields.clear();
     this.sideDirty.clear();
     this.error.set('');
     this.changed.set(false);
-    if (card)
+    if (item)
       this.form.reset(
         {
-          title: card.title,
-          description: card.description,
-          columnId: card.columnId,
+          title: item.title,
+          description: item.description,
+          columnId: item.columnId,
         },
         { emitEvent: false },
       );
   }
   /** Merge immediate side-field saves without touching form drafts. */
-  applySideSave(updated: Partial<Pick<Card, SideField | 'updatedAt'>>) {
-    const card = this.card();
+  applySideSave(updated: Partial<Pick<Item, SideField | 'updatedAt'>>) {
+    const card = this.item();
     if (!card) return;
-    const next: Card = {
+    const next: Item = {
       ...card,
       updatedAt: updated.updatedAt || card.updatedAt,
     };
@@ -83,9 +83,9 @@ export class CardAutosave {
       else if (key === 'relatedItems') next.relatedItems = [...(updated.relatedItems ?? [])];
       else next[key] = (updated[key] as string) ?? '';
     }
-    this.card.set(next);
+    this.item.set(next);
   }
-  applyPrSave(updated: Pick<Card, 'prUrls' | 'updatedAt'>) {
+  applyPrSave(updated: Pick<Item, 'prUrls' | 'updatedAt'>) {
     this.sideDirty.add('prUrls');
     this.applySideSave(updated);
   }
@@ -97,11 +97,11 @@ export class CardAutosave {
   markRelatedSideDirty() {
     this.sideDirty.add('relatedItems');
   }
-  applyRelatedSave(updated: Pick<Card, 'relatedItems' | 'updatedAt'>) {
+  applyRelatedSave(updated: Pick<Item, 'relatedItems' | 'updatedAt'>) {
     this.sideDirty.add('relatedItems');
     this.applySideSave(updated);
   }
-  applyAssigneeSave(updated: Pick<Card, 'assignee' | 'updatedAt'>) {
+  applyAssigneeSave(updated: Pick<Item, 'assignee' | 'updatedAt'>) {
     this.applySideSave(updated);
   }
   private value(field: Field) {
@@ -111,11 +111,11 @@ export class CardAutosave {
   hasChanges(): boolean {
     // Even a reverted draft must wait for an earlier in-flight write to settle.
     if (this.saving() || this.retryFields.size || this.composing.size) return true;
-    const card = this.card();
+    const card = this.item();
     return !!card && fields.some((field) => this.value(field) !== card[field]);
   }
-  private patch(): Partial<CardInput> {
-    const card = this.card();
+  private patch(): Partial<ItemInput> {
+    const card = this.item();
     const patch: Record<string, string | number> = {};
     if (card)
       for (const field of fields) {
@@ -136,7 +136,7 @@ export class CardAutosave {
     }
   }
   private schedule() {
-    if (!this.card()) return;
+    if (!this.item()) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), 600);
     this.maxTimer ??= setTimeout(() => this.flush(), 2000);
@@ -149,7 +149,7 @@ export class CardAutosave {
   }
   flush() {
     this.clearTimers();
-    if (this.saving() || !this.card()) return;
+    if (this.saving() || !this.item()) return;
     const patch = this.patch();
     if (!Object.keys(patch).length) {
       this.resolveWaiters();
@@ -157,11 +157,11 @@ export class CardAutosave {
     }
     const snapshot = this.form.getRawValue();
     const edits = { ...this.edits };
-    const confirmed = this.card()!;
+    const confirmed = this.item()!;
     const generation = this.generation;
     this.saving.set(true);
     this.error.set('');
-    this.request = this.api.updateCard(this.card()!.id, patch).subscribe({
+    this.request = this.api.updateItem(this.item()!.id, patch).subscribe({
       next: (card) => {
         if (generation !== this.generation) return;
         for (const field of fields) {
@@ -181,8 +181,8 @@ export class CardAutosave {
         }
         // Prefer local side fields touched during this request (including set→clear).
         // Untouched fields adopt the server value so agent updates are kept (L-781).
-        const local = this.card();
-        const merged: Card = {
+        const local = this.item();
+        const merged: Item = {
           ...card,
           prUrls: [...(card.prUrls ?? [])],
           relatedItems: [...(card.relatedItems ?? [])],
@@ -196,7 +196,7 @@ export class CardAutosave {
             this.sideDirty.delete(key);
           }
         }
-        this.card.set(merged);
+        this.item.set(merged);
       },
       error: (error) => {
         if (generation !== this.generation) return;

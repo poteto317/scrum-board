@@ -5,13 +5,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { moveIndex } from './list-reorder';
-import { Card, RelatedItem } from './models';
+import { Item, RelatedItem } from './models';
 import { parseRelatedDraft, sameRelatedItem } from './related-item';
 import { textLimit } from './form-validation';
 
 /** Immediate add/remove/reorder for card.relatedItems — separate from title/description autosave. */
 @Injectable()
-export class CardRelatedItems {
+export class ItemRelatedItems {
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
   readonly saving = signal(false);
@@ -21,19 +21,19 @@ export class CardRelatedItems {
     validators: [textLimit(120)],
   });
   private cancel$?: Observable<unknown>;
-  private apply!: (updated: Pick<Card, 'relatedItems' | 'updatedAt'>) => void;
+  private apply!: (updated: Pick<Item, 'relatedItems' | 'updatedAt'>) => void;
   private markDirty!: () => void;
   private reportError!: (message: string) => void;
-  private current!: () => Card | null;
+  private current!: () => Item | null;
 
   bind(opts: {
-    card: () => Card | null;
-    applyRelatedSave: (updated: Pick<Card, 'relatedItems' | 'updatedAt'>) => void;
+    item: () => Item | null;
+    applyRelatedSave: (updated: Pick<Item, 'relatedItems' | 'updatedAt'>) => void;
     markRelatedSideDirty: () => void;
     onError: (message: string) => void;
     cancel$: Observable<unknown>;
   }) {
-    this.current = opts.card;
+    this.current = opts.item;
     this.apply = opts.applyRelatedSave;
     this.markDirty = opts.markRelatedSideDirty;
     this.reportError = opts.onError;
@@ -54,17 +54,17 @@ export class CardRelatedItems {
     if (this.labelDraft.invalid) return;
     const parsed = parseRelatedDraft(this.draft.value);
     if (parsed.kind === 'invalid') {
-      this.reportError('カード番号（正の整数）または http(s) URL を入力してください。');
+      this.reportError('アイテム番号（正の整数）または http(s) URL を入力してください。');
       return;
     }
-    if (parsed.kind === 'card' && parsed.number === card.number) {
-      this.reportError('自分自身のカードは関連に追加できません。');
+    if (parsed.kind === 'item' && parsed.number === card.number) {
+      this.reportError('自分自身のアイテムは関連に追加できません。');
       return;
     }
     const label = this.labelDraft.value.trim();
     const item: RelatedItem =
-      parsed.kind === 'card'
-        ? { kind: 'card', number: parsed.number, label }
+      parsed.kind === 'item'
+        ? { kind: 'item', number: parsed.number, label }
         : { kind: 'url', url: parsed.url, label };
     const existing = card.relatedItems ?? [];
     if (existing.some((row) => sameRelatedItem(row, item))) {
@@ -105,7 +105,7 @@ export class CardRelatedItems {
     this.markDirty();
     this.reportError('');
     this.api
-      .updateCard(card.id, { relatedItems })
+      .updateItem(card.id, { relatedItems })
       .pipe(
         takeUntil(this.cancel$),
         takeUntilDestroyed(this.destroyRef),

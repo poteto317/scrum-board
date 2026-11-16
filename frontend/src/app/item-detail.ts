@@ -1,4 +1,5 @@
-import { CardHistory } from './card-history';
+import { formatItemNumber } from './item-number';
+import { ItemHistory } from './item-history';
 import { Modal } from './modal';
 import { Component, DestroyRef, HostListener, inject, NgZone, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
@@ -21,13 +22,13 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
-import { CardAssignee } from './card-assignee';
-import { CardAutosave } from './card-autosave';
-import { CardPrLinks } from './card-pr-links';
-import { CardRelatedItems } from './card-related-items';
+import { ItemAssignee } from './item-assignee';
+import { ItemAutosave } from './item-autosave';
+import { ItemPrLinks } from './item-pr-links';
+import { ItemRelatedItems } from './item-related-items';
 import { displayLabel } from './related-item';
-import { COMMAND_CARD_MENU_EMPTY } from './command-template';
-import { CardCommandsSession } from './card-commands-session';
+import { COMMAND_ITEM_MENU_EMPTY } from './command-template';
+import { ItemCommandsSession } from './item-commands-session';
 import { CommandTemplatesSession } from './command-templates-session';
 import { AppOrigin } from './app-origin';
 import { CopyCommandFeedback } from './copy-command-feedback';
@@ -36,29 +37,30 @@ import { LatestCopyFeedback } from './latest-copy-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 
 @Component({
-  selector: 'app-card-detail',
+  selector: 'app-item-detail',
   imports: [
     ReactiveFormsModule,
     RouterLink,
     DatePipe,
     Modal,
-    CardHistory,
+    ItemHistory,
     CdkDropList,
     CdkDrag,
     CdkDragHandle,
   ],
   providers: [
-    CardAutosave,
-    CardPrLinks,
-    CardRelatedItems,
-    CardAssignee,
+    ItemAutosave,
+    ItemPrLinks,
+    ItemRelatedItems,
+    ItemAssignee,
     CommandTemplatesSession,
-    CardCommandsSession,
+    ItemCommandsSession,
   ],
-  templateUrl: './card-detail.html',
-  styleUrl: './card-detail.css',
+  templateUrl: './item-detail.html',
+  styleUrl: './item-detail.css',
 })
-export class CardDetail implements OnInit {
+export class ItemDetail implements OnInit {
+  readonly formatItemNumber = formatItemNumber;
   private readonly api = inject(Api);
   private readonly appOrigin = inject(AppOrigin);
   private readonly route = inject(ActivatedRoute);
@@ -67,16 +69,16 @@ export class CardDetail implements OnInit {
   private readonly zone = inject(NgZone);
   private readonly reload$ = new Subject<void>();
   private readonly changed$ = new Subject<void>();
-  readonly autosave = inject(CardAutosave);
-  readonly prLinks = inject(CardPrLinks);
-  readonly relatedItems = inject(CardRelatedItems);
-  readonly assignee = inject(CardAssignee);
+  readonly autosave = inject(ItemAutosave);
+  readonly prLinks = inject(ItemPrLinks);
+  readonly relatedItems = inject(ItemRelatedItems);
+  readonly assignee = inject(ItemAssignee);
   readonly relatedDisplayLabel = displayLabel;
   readonly commands = inject(CommandTemplatesSession);
-  readonly cardCommands = inject(CardCommandsSession);
+  readonly itemCommands = inject(ItemCommandsSession);
   readonly presets = ASSIGNEE_PRESETS;
   readonly assigneeKind = assigneeKind;
-  readonly card = this.autosave.card;
+  readonly item = this.autosave.item;
   readonly form = this.autosave.form;
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
@@ -90,8 +92,8 @@ export class CardDetail implements OnInit {
   readonly copyLinkFeedback = this.linkCopy.message;
   readonly copyCommandFeedback = this.commandCopy.message;
   readonly copyFeedback = this.copyStatus.message;
-  readonly commandMenuEmpty = COMMAND_CARD_MENU_EMPTY;
-  readonly commandUrlHelp = '{{url}} はこのカードのリンクに置き換わります。';
+  readonly commandMenuEmpty = COMMAND_ITEM_MENU_EMPTY;
+  readonly commandUrlHelp = '{{url}} はこのアイテムのリンクに置き換わります。';
   readonly commandMenuOpen = signal(false);
   readonly managingCommands = signal(false);
   /** True while a PR/related list item is being dragged (pause live refresh). */
@@ -100,32 +102,32 @@ export class CardDetail implements OnInit {
 
   constructor() {
     this.prLinks.bind({
-      card: () => this.card(),
+      item: () => this.item(),
       applyPrSave: (updated) => this.autosave.applyPrSave(updated),
       markPrSideDirty: () => this.autosave.markPrSideDirty(),
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
     this.relatedItems.bind({
-      card: () => this.card(),
+      item: () => this.item(),
       applyRelatedSave: (updated) => this.autosave.applyRelatedSave(updated),
       markRelatedSideDirty: () => this.autosave.markRelatedSideDirty(),
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
     this.assignee.bind({
-      card: () => this.card(),
+      item: () => this.item(),
       applyAssigneeSave: (updated) => this.autosave.applyAssigneeSave(updated),
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
   }
 
-  async copyCardLink(): Promise<void> {
-    const card = this.card();
+  async copyItemLink(): Promise<void> {
+    const card = this.item();
     if (!card) return;
     const origin = await this.appOrigin.resolve();
-    return this.linkCopy.copyCardNumber(card.number, origin);
+    return this.linkCopy.copyItemNumber(card.number, origin);
   }
 
   ngOnInit() {
@@ -148,7 +150,7 @@ export class CardDetail implements OnInit {
           this.error.set('');
           return forkJoin({
             board: this.api.board(),
-            card: this.api.cardByNumber(Number(params.get('number'))),
+            card: this.api.itemByNumber(Number(params.get('number'))),
           }).pipe(
             catchError((error) => {
               this.error.set(errorMessage(error));
@@ -167,21 +169,21 @@ export class CardDetail implements OnInit {
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
         });
-        this.cardCommands.load(card.number);
+        this.itemCommands.load(card.number);
       });
     const stop = startLiveRefresh({
       enabled: () =>
         !this.loading() &&
         this.routeNumber() > 0 &&
         !this.autosave.hasChanges() &&
-        !this.cardCommands.isDirty() &&
+        !this.itemCommands.isDirty() &&
         !this.listDragging() &&
         !this.busy(),
       fetch: () => {
         const number = this.routeNumber();
         return forkJoin({
           board: this.api.board(),
-          card: this.api.cardByNumber(number),
+          card: this.api.itemByNumber(number),
         });
       },
       apply: ({ board, card }) => {
@@ -195,7 +197,7 @@ export class CardDetail implements OnInit {
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
         };
-        if (this.card() && sameJson(this.card(), next)) return;
+        if (this.item() && sameJson(this.item(), next)) return;
         this.autosave.reset(next);
       },
       ...zoneAwareTimers(this.zone),
@@ -212,7 +214,7 @@ export class CardDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
-      this.cardCommands.saving() ||
+      this.itemCommands.saving() ||
       this.confirmDelete() ||
       this.deleting()
     );
@@ -224,7 +226,7 @@ export class CardDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
-      this.cardCommands.saving() ||
+      this.itemCommands.saving() ||
       this.deleting()
     );
   }
@@ -234,13 +236,13 @@ export class CardDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
-      this.cardCommands.saving()
+      this.itemCommands.saving()
     ) {
       return window.confirm(
         '保存中です。移動すると保存が中断される可能性があります。移動しますか？',
       );
     }
-    if (this.cardCommands.isDirty()) {
+    if (this.itemCommands.isDirty()) {
       return window.confirm('未保存の変更があります。変更を破棄して移動しますか？');
     }
     if (!this.autosave.hasChanges()) return true;
@@ -252,11 +254,11 @@ export class CardDetail implements OnInit {
     if (
       !this.deleted &&
       (this.autosave.hasChanges() ||
-        this.cardCommands.isDirty() ||
+        this.itemCommands.isDirty() ||
         this.prLinks.saving() ||
         this.relatedItems.saving() ||
         this.assignee.saving() ||
-        this.cardCommands.saving())
+        this.itemCommands.saving())
     ) {
       event.preventDefault();
       event.returnValue = '';
@@ -269,7 +271,7 @@ export class CardDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
-      !this.card()
+      !this.item()
     )
       return;
     this.autosave.cancel();
@@ -277,7 +279,7 @@ export class CardDetail implements OnInit {
     this.deleting.set(true);
     this.error.set('');
     this.api
-      .deleteCard(this.card()!.id)
+      .deleteItem(this.item()!.id)
       .pipe(
         takeUntil(this.changed$),
         takeUntilDestroyed(this.destroyRef),
@@ -302,11 +304,11 @@ export class CardDetail implements OnInit {
     event.preventDefault();
     event.stopPropagation();
     // Loading / load failure: toggle menu so the existing status rows show (spec).
-    if (this.cardCommands.loading() || this.cardCommands.loadError()) {
+    if (this.itemCommands.loading() || this.itemCommands.loadError()) {
       this.commandMenuOpen.update((open) => !open);
       return;
     }
-    const templates = this.cardCommands.templates();
+    const templates = this.itemCommands.templates();
     if (templates.length === 1) {
       void this.copyCommand(templates[0].template, event);
       return;
@@ -317,7 +319,7 @@ export class CardDetail implements OnInit {
   async copyCommand(templateText: string, event: Event) {
     event.preventDefault();
     event.stopPropagation();
-    const current = this.card();
+    const current = this.item();
     if (!current) return;
     this.commandMenuOpen.set(false);
     const origin = await this.appOrigin.resolve();
@@ -337,10 +339,10 @@ export class CardDetail implements OnInit {
     this.commands.cancelEdit();
   }
 
-  applyCommandsToAllCards() {
-    this.commands.applyToAllCards(undefined, () => {
-      const card = this.card();
-      if (card) this.cardCommands.load(card.number);
+  applyCommandsToAllItems() {
+    this.commands.applyToAllItems(undefined, () => {
+      const card = this.item();
+      if (card) this.itemCommands.load(card.number);
     });
   }
 
@@ -350,8 +352,8 @@ export class CardDetail implements OnInit {
 
   deleteCatalogCommand(id: number) {
     this.commands.delete(id, () => {
-      const card = this.card();
-      if (card) this.cardCommands.load(card.number);
+      const card = this.item();
+      if (card) this.itemCommands.load(card.number);
     });
   }
 

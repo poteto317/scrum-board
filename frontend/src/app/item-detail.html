@@ -4,7 +4,7 @@
     <div class="state-panel" role="status">
       <span class="spinner"></span>アイテムを読み込んでいます…
     </div>
-  } @else if (!card()) {
+  } @else if (!item()) {
     <div class="state-panel" role="alert">
       <p>{{ error() }}</p>
       <button class="secondary" (click)="load()">再試行</button>
@@ -12,7 +12,7 @@
   } @else {
     <section class="detail-heading">
       <div class="detail-heading-main">
-        <div class="eyebrow">TASK-{{ card()!.number.toString().padStart(3, '0') }}</div>
+        <div class="eyebrow">{{ formatItemNumber(item()!.number) }}</div>
         <h1>アイテムの詳細</h1>
         <p>取り組むことを明確にして、次のステップへ。</p>
       </div>
@@ -22,7 +22,7 @@
             type="button"
             class="copy-card-link icon-button"
             aria-label="リンクをコピー"
-            (click)="copyCardLink()"
+            (click)="copyItemLink()"
           >
             <svg
               class="copy-link-icon"
@@ -52,14 +52,14 @@
             </button>
             @if (commandMenuOpen()) {
               <ul class="copy-command-menu" role="menu">
-                @if (cardCommands.loadError()) {
-                  <li class="copy-command-empty" role="status">{{ cardCommands.loadError() }}</li>
-                } @else if (cardCommands.loading()) {
+                @if (itemCommands.loadError()) {
+                  <li class="copy-command-empty" role="status">{{ itemCommands.loadError() }}</li>
+                } @else if (itemCommands.loading()) {
                   <li class="copy-command-empty" role="status">読み込み中…</li>
-                } @else if (cardCommands.templates().length === 0) {
+                } @else if (itemCommands.templates().length === 0) {
                   <li class="copy-command-empty">{{ commandMenuEmpty }}</li>
                 } @else {
-                  @for (command of cardCommands.templates(); track command.id) {
+                  @for (command of itemCommands.templates(); track command.id) {
                     <li role="none">
                       <button
                         type="button"
@@ -131,9 +131,9 @@
                   type="button"
                   class="assignee-chip"
                   [attr.data-assignee]="assigneeKind(name)"
-                  [attr.aria-pressed]="card()!.assignee === name"
-                  [class.selected]="card()!.assignee === name"
-                  [disabled]="assignee.saving() || !card()"
+                  [attr.aria-pressed]="item()!.assignee === name"
+                  [class.selected]="item()!.assignee === name"
+                  [disabled]="assignee.saving() || !item()"
                   (click)="assignee.selectPreset(name)"
                 >
                   {{ name }}
@@ -153,13 +153,13 @@
               <button
                 type="button"
                 class="secondary"
-                [disabled]="assignee.saving() || !card()"
+                [disabled]="assignee.saving() || !item()"
                 (click)="assignee.applyDraft()"
               >
                 適用
               </button>
             </div>
-            @if (card()!.assignee) {
+            @if (item()!.assignee) {
               <button
                 type="button"
                 class="secondary assignee-clear"
@@ -168,16 +168,16 @@
               >
                 クリア
               </button>
-              <p class="field-note">現在: {{ card()!.assignee }}</p>
+              <p class="field-note">現在: {{ item()!.assignee }}</p>
             } @else {
               <p class="field-note">未設定。プリセットか自由テキストで設定できます。</p>
             }
           </div>
           <div class="card-commands-picker">
-            <div class="section-label">このカードで出すコマンド</div>
-            <p class="field-note">カタログから、このカードのメニューに出すものを選びます。</p>
-            @if (cardCommands.loadError()) {
-              <p class="form-error" role="status">{{ cardCommands.loadError() }}</p>
+            <div class="section-label">このアイテムで出すコマンド</div>
+            <p class="field-note">カタログから、このアイテムのメニューに出すものを選びます。</p>
+            @if (itemCommands.loadError()) {
+              <p class="form-error" role="status">{{ itemCommands.loadError() }}</p>
             }
             <ul class="card-commands-checklist">
               @for (command of commands.templates(); track command.id) {
@@ -185,12 +185,12 @@
                   <label>
                     <input
                       type="checkbox"
-                      [checked]="cardCommands.isSelected(command.id)"
+                      [checked]="itemCommands.isSelected(command.id)"
                       [disabled]="
-                        cardCommands.saving() || cardCommands.loading() || !!cardCommands.loadError()
+                        itemCommands.saving() || itemCommands.loading() || !!itemCommands.loadError()
                       "
                       (change)="
-                        cardCommands.toggle(command.id, $any($event.target).checked)
+                        itemCommands.toggle(command.id, $any($event.target).checked)
                       "
                     />
                     {{ command.name }}
@@ -205,22 +205,22 @@
                 type="button"
                 class="secondary"
                 [disabled]="
-                  cardCommands.saving() ||
-                  cardCommands.loading() ||
-                  !!cardCommands.loadError() ||
-                  !card()
+                  itemCommands.saving() ||
+                  itemCommands.loading() ||
+                  !!itemCommands.loadError() ||
+                  !item()
                 "
-                (click)="cardCommands.save()"
+                (click)="itemCommands.save()"
               >
-                {{ cardCommands.saving() ? '保存中…' : 'このカードに保存' }}
+                {{ itemCommands.saving() ? '保存中…' : 'このアイテムに保存' }}
               </button>
             </div>
             <p class="command-templates-status" role="status" aria-live="polite">
-              @if (cardCommands.saving()) {
+              @if (itemCommands.saving()) {
                 保存中…
-              } @else if (cardCommands.saveMessage()) {
-                {{ cardCommands.saveMessage() }}
-              } @else if (cardCommands.isDirty()) {
+              } @else if (itemCommands.saveMessage()) {
+                {{ itemCommands.saveMessage() }}
+              } @else if (itemCommands.isDirty()) {
                 未保存の変更があります。
               }
             </p>
@@ -238,7 +238,7 @@
             <button
               type="button"
               class="secondary"
-              [disabled]="prLinks.saving() || !card()"
+              [disabled]="prLinks.saving() || !item()"
               (click)="prLinks.add()"
             >
               追加
@@ -256,20 +256,20 @@
             class="pr-list"
             aria-label="紐付けたGitHub PR"
             cdkDropList
-            [cdkDropListData]="card()!.prUrls"
-            [cdkDropListDisabled]="prLinks.saving() || card()!.prUrls.length < 2"
+            [cdkDropListData]="item()!.prUrls"
+            [cdkDropListDisabled]="prLinks.saving() || item()!.prUrls.length < 2"
             (cdkDropListDropped)="onPrDrop($event)"
           >
-            @for (url of card()!.prUrls; track url; let i = $index; let first = $first; let last = $last) {
+            @for (url of item()!.prUrls; track url; let i = $index; let first = $first; let last = $last) {
               <li
                 class="pr-item"
                 cdkDrag
-                [cdkDragDisabled]="prLinks.saving() || card()!.prUrls.length < 2"
+                [cdkDragDisabled]="prLinks.saving() || item()!.prUrls.length < 2"
                 (cdkDragStarted)="onListDragStarted()"
                 (cdkDragEnded)="onListDragEnded()"
               >
                 <div class="pr-item-row">
-                  @if (card()!.prUrls.length > 1) {
+                  @if (item()!.prUrls.length > 1) {
                     <button
                       type="button"
                       class="card-drag-handle"
@@ -286,7 +286,7 @@
                   >
                 </div>
                 <div class="pr-item-actions">
-                  @if (card()!.prUrls.length > 1) {
+                  @if (item()!.prUrls.length > 1) {
                     <button
                       type="button"
                       class="secondary pr-move"
@@ -324,7 +324,7 @@
               id="detail-related-draft"
               type="text"
               [formControl]="relatedItems.draft"
-              placeholder="カード番号または https://…"
+              placeholder="アイテム番号または https://…"
               aria-describedby="related-note related-label-note"
               (keydown.enter)="$event.preventDefault(); relatedItems.add()"
             />
@@ -339,27 +339,27 @@
             <button
               type="button"
               class="secondary"
-              [disabled]="relatedItems.saving() || !card()"
+              [disabled]="relatedItems.saving() || !item()"
               (click)="relatedItems.add()"
             >
               追加
             </button>
           </div>
           <p id="related-note" class="field-note">
-            他カードの番号、または外部の http(s) URL。カード同士は双方向。並べ替え可。
+            他アイテムの番号、または外部の http(s) URL。アイテム同士は双方向。並べ替え可。
           </p>
           <p id="related-label-note" class="field-note">表示名は任意（空ならタイトル／ホスト名）。</p>
           <ul
             class="pr-list"
             aria-label="関連アイテム"
             cdkDropList
-            [cdkDropListData]="card()!.relatedItems"
-            [cdkDropListDisabled]="relatedItems.saving() || card()!.relatedItems.length < 2"
+            [cdkDropListData]="item()!.relatedItems"
+            [cdkDropListDisabled]="relatedItems.saving() || item()!.relatedItems.length < 2"
             (cdkDropListDropped)="onRelatedDrop($event)"
           >
             @for (
-              item of card()!.relatedItems;
-              track item.kind + ':' + (item.number || item.url);
+              related of item()!.relatedItems;
+              track related.kind + ':' + (related.number || related.url);
               let i = $index;
               let first = $first;
               let last = $last
@@ -367,44 +367,44 @@
               <li
                 class="pr-item"
                 cdkDrag
-                [cdkDragDisabled]="relatedItems.saving() || card()!.relatedItems.length < 2"
+                [cdkDragDisabled]="relatedItems.saving() || item()!.relatedItems.length < 2"
                 (cdkDragStarted)="onListDragStarted()"
                 (cdkDragEnded)="onListDragEnded()"
               >
                 <div class="pr-item-row">
-                  @if (card()!.relatedItems.length > 1) {
+                  @if (item()!.relatedItems.length > 1) {
                     <button
                       type="button"
                       class="card-drag-handle"
                       cdkDragHandle
                       [cdkDragHandleDisabled]="relatedItems.saving()"
                       [attr.aria-disabled]="relatedItems.saving()"
-                      [attr.aria-label]="'関連を並び替え: ' + relatedDisplayLabel(item)"
+                      [attr.aria-label]="'関連を並び替え: ' + relatedDisplayLabel(related)"
                     >
                       <span aria-hidden="true">⋮⋮</span>
                     </button>
                   }
-                  @if (item.kind === 'card') {
-                    <a class="pr-link" [routerLink]="['/cards', item.number]"
-                      >TASK-{{ item.number }} · {{ relatedDisplayLabel(item) }}</a
+                  @if (related.kind === 'item') {
+                    <a class="pr-link" [routerLink]="['/items', related.number]"
+                      >{{ formatItemNumber(related.number!) }} · {{ relatedDisplayLabel(related) }}</a
                     >
                   } @else {
                     <a
                       class="pr-link"
-                      [href]="item.url"
+                      [href]="related.url"
                       target="_blank"
                       rel="noopener noreferrer"
-                      >{{ relatedDisplayLabel(item) }} ↗<span class="pr-link-url">{{ item.url }}</span></a
+                      >{{ relatedDisplayLabel(related) }} ↗<span class="pr-link-url">{{ related.url }}</span></a
                     >
                   }
                 </div>
                 <div class="pr-item-actions">
-                  @if (card()!.relatedItems.length > 1) {
+                  @if (item()!.relatedItems.length > 1) {
                     <button
                       type="button"
                       class="secondary pr-move"
                       [disabled]="relatedItems.saving() || first"
-                      [attr.aria-label]="'1つ上へ: ' + relatedDisplayLabel(item)"
+                      [attr.aria-label]="'1つ上へ: ' + relatedDisplayLabel(related)"
                       (click)="relatedItems.move(i, -1)"
                     >
                       上へ
@@ -413,7 +413,7 @@
                       type="button"
                       class="secondary pr-move"
                       [disabled]="relatedItems.saving() || last"
-                      [attr.aria-label]="'1つ下へ: ' + relatedDisplayLabel(item)"
+                      [attr.aria-label]="'1つ下へ: ' + relatedDisplayLabel(related)"
                       (click)="relatedItems.move(i, 1)"
                     >
                       下へ
@@ -423,7 +423,7 @@
                     type="button"
                     class="secondary pr-remove"
                     [disabled]="relatedItems.saving()"
-                    (click)="relatedItems.remove(item)"
+                    (click)="relatedItems.remove(related)"
                   >
                     削除
                   </button>
@@ -432,8 +432,8 @@
             }
           </ul>
           <div class="timestamps">
-            <span>作成日時</span><time>{{ card()!.createdAt | date: 'yyyy/MM/dd HH:mm' }}</time
-            ><span>更新日時</span><time>{{ card()!.updatedAt | date: 'yyyy/MM/dd HH:mm' }}</time>
+            <span>作成日時</span><time>{{ item()!.createdAt | date: 'yyyy/MM/dd HH:mm' }}</time
+            ><span>更新日時</span><time>{{ item()!.updatedAt | date: 'yyyy/MM/dd HH:mm' }}</time>
           </div>
         </section>
         <div class="detail-tip">
@@ -473,7 +473,7 @@
         </div>
       </div>
     </form>
-    <app-card-history [number]="card()!.number" [revision]="card()!.updatedAt" />
+    <app-item-history [number]="item()!.number" [revision]="item()!.updatedAt" />
   }
 </main>
 @if (confirmDelete()) {
@@ -485,7 +485,7 @@
   >
     <section class="modal">
       <h2 id="delete-title">アイテムを削除しますか？</h2>
-      <p class="delete-copy">「{{ card()?.title }}」を削除します。この操作は取り消せません。</p>
+      <p class="delete-copy">「{{ item()?.title }}」を削除します。この操作は取り消せません。</p>
       <div class="form-actions">
         <button class="secondary" (click)="confirmDelete.set(false)" [disabled]="savingBusy()">
           キャンセル</button
@@ -587,9 +587,9 @@
           type="button"
           class="secondary"
           [disabled]="commands.saving()"
-          (click)="applyCommandsToAllCards()"
+          (click)="applyCommandsToAllItems()"
         >
-          全カードに適用
+          全アイテムに適用
         </button>
         <button
           type="button"

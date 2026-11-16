@@ -5,13 +5,13 @@ import { of } from 'rxjs';
 import { describe, it, expect, vi } from 'vitest';
 import { routes } from './app.routes';
 import { Api } from './api';
-import { CardDetail } from './card-detail';
+import { ItemDetail } from './item-detail';
 
 it('guards real router reuse: rejecting discard retains the old card, then flushes before leaving', async () => {
   const api = {
     history: vi.fn(() => of({ events: [], nextBefore: 0 })),
-    board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], cards: [] })),
-    cardByNumber: vi.fn((number: number) =>
+    board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
+    itemByNumber: vi.fn((number: number) =>
       of({
         id: number + 20,
         number,
@@ -27,7 +27,7 @@ it('guards real router reuse: rejecting discard retains the old card, then flush
         updatedAt: '',
       }),
     ),
-    updateCard: vi.fn((_id, patch) =>
+    updateItem: vi.fn((_id, patch) =>
       of({
         id: 23,
         number: 3,
@@ -45,23 +45,23 @@ it('guards real router reuse: rejecting discard retains the old card, then flush
       }),
     ),
     listCommandTemplates: () => of({ templates: [] }),
-    listCardCommandTemplatesByNumber: () => of({ templates: [] }),
+    listItemCommandTemplatesByNumber: () => of({ templates: [] }),
   };
   TestBed.configureTestingModule({
     providers: [provideRouter(routes), { provide: Api, useValue: api }],
   });
   const harness = await RouterTestingHarness.create();
-  const detail = await harness.navigateByUrl('/cards/3', CardDetail);
+  const detail = await harness.navigateByUrl('/items/3', ItemDetail);
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   try {
     detail.form.controls.title.setValue('');
-    await harness.navigateByUrl('/cards/7');
-    expect(detail.card()?.number).toBe(3);
-    expect(api.cardByNumber).not.toHaveBeenCalledWith(7);
+    await harness.navigateByUrl('/items/7');
+    expect(detail.item()?.number).toBe(3);
+    expect(api.itemByNumber).not.toHaveBeenCalledWith(7);
     detail.form.controls.title.setValue('Before navigation');
-    const next = await harness.navigateByUrl('/cards/7', CardDetail);
-    expect(api.updateCard).toHaveBeenCalledWith(23, { title: 'Before navigation' });
-    expect(next.card()?.number).toBe(7);
+    const next = await harness.navigateByUrl('/items/7', ItemDetail);
+    expect(api.updateItem).toHaveBeenCalledWith(23, { title: 'Before navigation' });
+    expect(next.item()?.number).toBe(7);
   } finally {
     confirm.mockRestore();
   }

@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { CardAutosave } from './card-autosave';
+import { ItemAutosave } from './item-autosave';
 import { Api } from './api';
-import { Card, CardInput } from './models';
-const initial: Card = {
+import { Item, ItemInput } from './models';
+const initial: Item = {
   id: 27,
   number: 12,
   columnId: 1,
@@ -18,24 +18,24 @@ const initial: Card = {
   createdAt: '',
   updatedAt: '',
 };
-describe('CardAutosave', () => {
-  let edit: CardAutosave;
-  let requests: { patch: Partial<CardInput>; response: Subject<Card> }[];
-  let api: { updateCard: ReturnType<typeof vi.fn> };
-  let stored: Card;
+describe('ItemAutosave', () => {
+  let edit: ItemAutosave;
+  let requests: { patch: Partial<ItemInput>; response: Subject<Item> }[];
+  let api: { updateItem: ReturnType<typeof vi.fn> };
+  let stored: Item;
   beforeEach(() => {
     vi.useFakeTimers();
     requests = [];
     stored = { ...initial };
     api = {
-      updateCard: vi.fn((_id: number, patch: Partial<CardInput>) => {
-        const response = new Subject<Card>();
+      updateItem: vi.fn((_id: number, patch: Partial<ItemInput>) => {
+        const response = new Subject<Item>();
         requests.push({ patch, response });
         return response;
       }),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
   });
   afterEach(() => {
@@ -54,14 +54,14 @@ describe('CardAutosave', () => {
     vi.advanceTimersByTime(599);
     expect(requests).toHaveLength(0);
     vi.advanceTimersByTime(1);
-    expect(api.updateCard).toHaveBeenCalledWith(27, { title: '新しいタイトル' });
+    expect(api.updateItem).toHaveBeenCalledWith(27, { title: '新しいタイトル' });
     finish(0);
     expect(edit.hasChanges()).toBe(false);
   });
   it('keeps a trailing space that the server trims instead of rewriting the field', () => {
     edit.form.controls.title.setValue('hello ');
     vi.advanceTimersByTime(600);
-    expect(api.updateCard).toHaveBeenCalledWith(27, { title: 'hello' });
+    expect(api.updateItem).toHaveBeenCalledWith(27, { title: 'hello' });
     finish(0);
     // The user may keep typing after the pause; the saved response must not eat the space.
     expect(edit.form.controls.title.value).toBe('hello ');
@@ -118,13 +118,13 @@ describe('CardAutosave', () => {
     edit.flush();
     requests[0].response.error({ error: { message: '通信失敗' } });
     expect(edit.error()).toBe('通信失敗');
-    edit.reset({ ...initial, id: 99, number: 40, title: '別カード' });
+    edit.reset({ ...initial, id: 99, number: 40, title: '別アイテム' });
     expect(edit.error()).toBe('');
     expect(edit.hasChanges()).toBe(false);
     edit.form.controls.title.setValue('送信中のタイトル');
     edit.flush();
     expect(edit.saving()).toBe(true);
-    edit.reset({ ...initial, id: 100, number: 41, title: 'さらに別のカード' });
+    edit.reset({ ...initial, id: 100, number: 41, title: 'さらに別のアイテム' });
     expect(edit.saving()).toBe(false);
     expect(edit.hasChanges()).toBe(false);
   });
@@ -163,28 +163,28 @@ describe('CardAutosave', () => {
   it('resets timers and ignores old route responses', () => {
     edit.form.controls.title.setValue('古い送信');
     edit.flush();
-    edit.reset({ ...initial, id: 99, number: 40, title: '別カード' });
+    edit.reset({ ...initial, id: 99, number: 40, title: '別アイテム' });
     requests[0].response.next({ ...initial, title: '古い応答' });
     requests[0].response.complete();
     vi.advanceTimersByTime(2500);
-    expect(edit.card()?.id).toBe(99);
-    expect(edit.form.controls.title.value).toBe('別カード');
+    expect(edit.item()?.id).toBe(99);
+    expect(edit.form.controls.title.value).toBe('別アイテム');
     expect(requests).toHaveLength(1);
   });
 });
 
 describe('uncertain write failure', () => {
   it('retries the latest value even when it equals the last confirmed value', () => {
-    const responses: Subject<Card>[] = [];
+    const responses: Subject<Item>[] = [];
     const api = {
-      updateCard: vi.fn(() => {
-        const response = new Subject<Card>();
+      updateItem: vi.fn(() => {
+        const response = new Subject<Item>();
         responses.push(response);
         return response;
       }),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.form.controls.title.setValue('結果不明の書込');
     edit.flush();
@@ -192,7 +192,7 @@ describe('uncertain write failure', () => {
     responses[0].error({ status: 0 });
     expect(edit.hasChanges()).toBe(true);
     edit.flush();
-    expect(api.updateCard).toHaveBeenLastCalledWith(27, { title: initial.title });
+    expect(api.updateItem).toHaveBeenLastCalledWith(27, { title: initial.title });
     responses[1].next(initial);
     responses[1].complete();
     expect(edit.hasChanges()).toBe(false);
@@ -202,29 +202,29 @@ describe('uncertain write failure', () => {
 
 describe('side field preservation', () => {
   it('keeps a local assignee changed during an in-flight form flush', () => {
-    const response = new Subject<Card>();
+    const response = new Subject<Item>();
     const api = {
-      updateCard: vi.fn(() => response),
+      updateItem: vi.fn(() => response),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.form.controls.title.setValue('編集');
     edit.flush();
     edit.applyAssigneeSave({ assignee: 'Cursor', updatedAt: '2026-11-14T12:00:00Z' });
     response.next({ ...initial, title: '編集', assignee: '' });
     response.complete();
-    expect(edit.card()?.assignee).toBe('Cursor');
-    expect(edit.card()?.title).toBe('編集');
+    expect(edit.item()?.assignee).toBe('Cursor');
+    expect(edit.item()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
   it('keeps local relatedItems when marked dirty during an in-flight form flush', () => {
-    const response = new Subject<Card>();
+    const response = new Subject<Item>();
     const api = {
-      updateCard: vi.fn(() => response),
+      updateItem: vi.fn(() => response),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.form.controls.title.setValue('編集');
     edit.flush();
@@ -235,17 +235,17 @@ describe('side field preservation', () => {
     });
     response.next({ ...initial, title: '編集', relatedItems: [] });
     response.complete();
-    expect(edit.card()?.relatedItems).toEqual([{ kind: 'url', url: 'https://example.com', label: '' }]);
-    expect(edit.card()?.title).toBe('編集');
+    expect(edit.item()?.relatedItems).toEqual([{ kind: 'url', url: 'https://example.com', label: '' }]);
+    expect(edit.item()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
   it('keeps local prUrls when marked dirty during an in-flight form flush', () => {
-    const response = new Subject<Card>();
+    const response = new Subject<Item>();
     const api = {
-      updateCard: vi.fn(() => response),
+      updateItem: vi.fn(() => response),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.form.controls.title.setValue('編集');
     edit.flush();
@@ -256,49 +256,49 @@ describe('side field preservation', () => {
     });
     response.next({ ...initial, title: '編集', prUrls: [] });
     response.complete();
-    expect(edit.card()?.prUrls).toEqual(['https://github.com/poteto317/scrum-board/pull/9']);
-    expect(edit.card()?.title).toBe('編集');
+    expect(edit.item()?.prUrls).toEqual(['https://github.com/poteto317/scrum-board/pull/9']);
+    expect(edit.item()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
   it('adopts a server assignee when the local side field was untouched during flush', () => {
-    const response = new Subject<Card>();
+    const response = new Subject<Item>();
     const api = {
-      updateCard: vi.fn(() => response),
+      updateItem: vi.fn(() => response),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.form.controls.title.setValue('編集');
     edit.flush();
     response.next({ ...initial, title: '編集', assignee: 'Claude' });
     response.complete();
-    expect(edit.card()?.assignee).toBe('Claude');
+    expect(edit.item()?.assignee).toBe('Claude');
     TestBed.resetTestingModule();
   });
   it('does not keep a pre-flush assignee over a later server update on the next flush', () => {
-    const first = new Subject<Card>();
-    const second = new Subject<Card>();
+    const first = new Subject<Item>();
+    const second = new Subject<Item>();
     const api = {
-      updateCard: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second),
+      updateItem: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.applyAssigneeSave({ assignee: 'Cursor', updatedAt: 't0' });
     edit.form.controls.title.setValue('編集');
     edit.flush();
     first.next({ ...initial, title: '編集', assignee: 'Claude' });
     first.complete();
-    expect(edit.card()?.assignee).toBe('Claude');
+    expect(edit.item()?.assignee).toBe('Claude');
     TestBed.resetTestingModule();
   });
   it('keeps a set-then-cleared assignee over a stale in-flight form response', () => {
-    const response = new Subject<Card>();
+    const response = new Subject<Item>();
     const api = {
-      updateCard: vi.fn(() => response),
+      updateItem: vi.fn(() => response),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.form.controls.title.setValue('編集');
     edit.flush();
@@ -306,43 +306,43 @@ describe('side field preservation', () => {
     edit.applyAssigneeSave({ assignee: '', updatedAt: 't2' });
     response.next({ ...initial, title: '編集', assignee: 'Cursor' });
     response.complete();
-    expect(edit.card()?.assignee).toBe('');
+    expect(edit.item()?.assignee).toBe('');
     TestBed.resetTestingModule();
   });
 });
 
 describe('server changes to untouched fields', () => {
   it('adopts server-only changes without sending the old form value back', () => {
-    const response = new Subject<Card>();
+    const response = new Subject<Item>();
     const api = {
-      updateCard: vi
+      updateItem: vi
         .fn()
         .mockReturnValueOnce(response)
-        .mockImplementation(() => new Subject<Card>()),
+        .mockImplementation(() => new Subject<Item>()),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.form.controls.title.setValue('編集');
     edit.flush();
     response.next({ ...initial, title: '編集', columnId: 2 });
     response.complete();
-    expect(api.updateCard).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
     expect(edit.form.controls.columnId.value).toBe(2);
     expect(edit.hasChanges()).toBe(false);
     TestBed.resetTestingModule();
   });
   it('preserves a deliberately reverted unsent field instead of adopting a remote change', () => {
-    const responses: Subject<Card>[] = [];
+    const responses: Subject<Item>[] = [];
     const api = {
-      updateCard: vi.fn(() => {
-        const response = new Subject<Card>();
+      updateItem: vi.fn(() => {
+        const response = new Subject<Item>();
         responses.push(response);
         return response;
       }),
     };
-    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
-    const edit = TestBed.inject(CardAutosave);
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
     edit.reset(initial);
     edit.form.controls.title.setValue('編集');
     edit.flush();
@@ -350,7 +350,7 @@ describe('server changes to untouched fields', () => {
     edit.form.controls.columnId.setValue(1);
     responses[0].next({ ...initial, title: '編集', columnId: 2 });
     responses[0].complete();
-    expect(api.updateCard).toHaveBeenLastCalledWith(27, { columnId: 1 });
+    expect(api.updateItem).toHaveBeenLastCalledWith(27, { columnId: 1 });
     TestBed.resetTestingModule();
   });
 });

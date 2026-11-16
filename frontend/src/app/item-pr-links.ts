@@ -5,30 +5,30 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { moveIndex } from './list-reorder';
-import { Card } from './models';
+import { Item } from './models';
 import { prUrlValidator } from './pr-url';
 
 /** Immediate add/remove/reorder for card.prUrls — separate from title/description autosave. */
 @Injectable()
-export class CardPrLinks {
+export class ItemPrLinks {
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
   readonly saving = signal(false);
   readonly draft = new FormControl('', { nonNullable: true, validators: [prUrlValidator] });
   private cancel$?: Observable<unknown>;
-  private apply!: (updated: Pick<Card, 'prUrls' | 'updatedAt'>) => void;
+  private apply!: (updated: Pick<Item, 'prUrls' | 'updatedAt'>) => void;
   private markDirty!: () => void;
   private reportError!: (message: string) => void;
-  private current!: () => Card | null;
+  private current!: () => Item | null;
 
   bind(opts: {
-    card: () => Card | null;
-    applyPrSave: (updated: Pick<Card, 'prUrls' | 'updatedAt'>) => void;
+    item: () => Item | null;
+    applyPrSave: (updated: Pick<Item, 'prUrls' | 'updatedAt'>) => void;
     markPrSideDirty: () => void;
     onError: (message: string) => void;
     cancel$: Observable<unknown>;
   }) {
-    this.current = opts.card;
+    this.current = opts.item;
     this.apply = opts.applyPrSave;
     this.markDirty = opts.markPrSideDirty;
     this.reportError = opts.onError;
@@ -80,7 +80,7 @@ export class CardPrLinks {
     this.markDirty();
     this.reportError('');
     this.api
-      .updateCard(card.id, { prUrls })
+      .updateItem(card.id, { prUrls })
       .pipe(
         takeUntil(this.cancel$),
         takeUntilDestroyed(this.destroyRef),

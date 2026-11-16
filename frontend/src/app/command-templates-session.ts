@@ -10,14 +10,14 @@ export const COMMAND_LIST_LOAD_FAILURE = 'コマンド一覧を読み込めま�
 export const COMMAND_CREATE_SUCCESS = 'コマンドを追加しました';
 export const COMMAND_UPDATE_SUCCESS = 'コマンドを更新しました';
 export const COMMAND_DELETE_SUCCESS = 'コマンドを削除しました';
-export const COMMAND_APPLY_ALL_SUCCESS = '全カードのコマンド表示を置き換えました';
-export const COMMAND_DEFAULTS_SUCCESS = '新規カードの初期コマンドを更新しました';
+export const COMMAND_APPLY_ALL_SUCCESS = '全アイテムのコマンド表示を置き換えました';
+export const COMMAND_DEFAULTS_SUCCESS = '新規アイテムの初期コマンドを更新しました';
 export const COMMAND_APPLY_ALL_CONFIRM =
-  'チェックしたコマンドで、すべてのカードの表示セットを置き換えます。よろしいですか？';
+  'チェックしたコマンドで、すべてのアイテムの表示セットを置き換えます。よろしいですか？';
 export const COMMAND_DEFAULTS_CONFIRM =
-  'チェックしたコマンドを新規カードの初期セットにします。既存カードは変わりません。よろしいですか？';
+  'チェックしたコマンドを新規アイテムの初期セットにします。既存アイテムは変わりません。よろしいですか？';
 
-/** Catalog list and admin CRUD for card detail (menus use per-card links). */
+/** Catalog list and admin CRUD for item detail (menus use per-item links). */
 @Injectable()
 export class CommandTemplatesSession {
   private readonly api = inject(Api);
@@ -144,7 +144,7 @@ export class CommandTemplatesSession {
     return this.bulkSelectedIds().includes(id);
   }
 
-  applyToAllCards(
+  applyToAllItems(
     confirmFn: (message: string) => boolean = (m) => window.confirm(m),
     onSuccess?: () => void,
   ) {
@@ -154,7 +154,7 @@ export class CommandTemplatesSession {
     this.adminMessage.set('');
     const ids = this.bulkSelectedIds();
     this.api
-      .applyCommandTemplatesToAllCards(ids)
+      .applyCommandTemplatesToAllItems(ids)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.saving.set(false)),
