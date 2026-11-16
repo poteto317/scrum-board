@@ -1,5 +1,5 @@
 <main class="detail-page">
-  <a class="back-link" routerLink="/">← ボードに戻る</a>
+  <a class="back-link" [attr.href]="backLinkHref()" (click)="onBackClick($event)">{{ backLinkLabel() }}</a>
   @if (loading()) {
     <div class="state-panel" role="status">
       <span class="spinner"></span>アイテムを読み込んでいます…
@@ -476,7 +476,7 @@
             [disabled]="savingBusy()"
           >
             アイテムを削除</button
-          ><a class="secondary" routerLink="/">ボードに戻る</a>
+          ><a class="secondary" [attr.href]="backLinkHref()" (click)="onBackClick($event)">{{ backLinkLabel() }}</a>
         </div>
       </div>
     </form>
