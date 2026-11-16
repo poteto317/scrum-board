@@ -27,7 +27,7 @@ import { filter, finalize, firstValueFrom } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { assigneeKind } from './assignee';
-import { itemDetailUrl } from './item-link';
+import { itemAppPath, itemDetailUrl } from './item-link';
 import {
   affectedColumnIds,
   applyItemDrop,
@@ -58,6 +58,16 @@ import { CopyFeedbackBanner } from './copy-feedback-banner';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { LatestCopyFeedback } from './latest-copy-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
+import {
+  scheduleScrollRestore,
+} from './list-scroll-restore';
+import { isUnmodifiedPrimaryClick } from './primary-click';
+import {
+  clearBoardScroll,
+  readBoardScroll,
+  saveBoardScroll,
+  saveReturnTo,
+} from './list-scroll-session';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
@@ -96,6 +106,8 @@ export class Board implements OnInit {
   private readonly zone = inject(NgZone);
   private readonly boardScroll = viewChild<ElementRef<HTMLElement>>('boardScroll');
   private readonly columnsContainer = viewChild<ElementRef<HTMLElement>>('columnsContainer');
+  private scrollRestoreGeneration = 0;
+  private scrollRestoreAttempted = false;
 
   readonly data = signal<BoardData>({ columns: [], items: [] });
   readonly loading = signal(true);
@@ -177,6 +189,9 @@ export class Board implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.destroyRef.onDestroy(() => {
+      this.scrollRestoreGeneration++;
+    });
     const stop = startLiveRefresh({
       enabled: () =>
         !this.loading() &&
@@ -194,6 +209,41 @@ export class Board implements OnInit {
       ...zoneAwareTimers(this.zone),
     });
     this.destroyRef.onDestroy(stop);
+  }
+
+  private scheduleBoardScrollRestore() {
+    if (this.scrollRestoreAttempted) return;
+    const saved = readBoardScroll();
+    if (!saved) return;
+    this.scrollRestoreAttempted = true;
+    const generation = ++this.scrollRestoreGeneration;
+    // Baseline at schedule time — not saved values (mount is 0, saved is not).
+    scheduleScrollRestore({
+      shouldApply: () =>
+        generation === this.scrollRestoreGeneration && !this.destroyRef.destroyed,
+      injector: this.injector,
+      captureBaseline: () => {
+        const page = pageScrollElement();
+        const boardEl = this.boardScroll()?.nativeElement;
+        return [page?.scrollTop ?? 0, boardEl?.scrollLeft ?? 0];
+      },
+      readCurrent: () => {
+        const pageNow = pageScrollElement();
+        const boardNow = this.boardScroll()?.nativeElement;
+        return [
+          pageNow ? pageNow.scrollTop : null,
+          boardNow ? boardNow.scrollLeft : null,
+        ];
+      },
+      targets: [saved.scrollY, saved.scrollLeft],
+      apply: ([scrollY, scrollLeft]) => {
+        const pageNow = pageScrollElement();
+        const boardNow = this.boardScroll()?.nativeElement;
+        if (pageNow) pageNow.scrollTop = scrollY;
+        if (boardNow) boardNow.scrollLeft = scrollLeft;
+        clearBoardScroll();
+      },
+    });
   }
 
   /**
@@ -372,7 +422,15 @@ export class Board implements OnInit {
     this.api
       .board()
       .pipe(finalize(() => this.loading.set(false)))
-      .subscribe({ next: (d) => this.data.set(d), error: (e) => this.error.set(errorMessage(e)) });
+      .subscribe({
+        next: (d) => {
+          this.data.set(d);
+          // Schedule after data arrives so the first afterNextRender sees #boardScroll
+          // (not the loading-only first paint).
+          this.scheduleBoardScrollRestore();
+        },
+        error: (e) => this.error.set(errorMessage(e)),
+      });
   }
 
   openColumn() {
@@ -507,15 +565,22 @@ export class Board implements OnInit {
 
   /** Real URL of a card, so the browser's own link features (new tab, copy link, status bar) keep working. */
   itemHref(card: Item): string {
-    return this.location.prepareExternalUrl(`/items/${card.number}`);
+    return this.location.prepareExternalUrl(itemAppPath(card.number));
   }
 
   onItemClick(event: MouseEvent, card: Item) {
     // Ctrl/Cmd/Shift/Alt-click and non-primary buttons are the browser's: let the href do its job.
-    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+    if (!isUnmodifiedPrimaryClick(event)) {
       return;
     }
     event.preventDefault();
+    const page = pageScrollElement();
+    const boardEl = this.boardScroll()?.nativeElement;
+    saveBoardScroll({
+      scrollY: page?.scrollTop ?? 0,
+      scrollLeft: boardEl?.scrollLeft ?? 0,
+    });
+    saveReturnTo('/');
     void this.router.navigate(['/items', card.number]);
   }
 

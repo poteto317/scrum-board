@@ -1,4 +1,5 @@
 import { provideRouter, Router } from '@angular/router';
+import { ApplicationRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
@@ -13,7 +14,13 @@ import {
   COPY_COMMAND_SUCCESS,
   resolveCommand,
 } from './command-template';
+import {
+  readBoardScroll,
+  readReturnTo,
+  saveBoardScroll,
+} from './list-scroll-session';
 import { BoardData, Column } from './models';
+import { pageScrollElement } from './page-scroll';
 import { TODO_COLUMN_MISSING } from './todo-column';
 
 describe('Board create requests', () => {
@@ -1523,6 +1530,197 @@ describe('Board card reordering', () => {
     board.onItemClick(plain, card);
     expect(plain.defaultPrevented).toBe(true);
     expect(navigate).toHaveBeenCalledWith(['/items', 1]);
+  });
+
+  it('saves board scroll and returnTo before navigating to item', async () => {
+    sessionStorage.clear();
+    const navigate = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderItems: vi.fn(),
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const board = f.componentInstance;
+    (board as unknown as { router: { navigate: typeof navigate } }).router = {
+      navigate,
+    } as never;
+
+    const page = pageScrollElement()!;
+    const boardEl = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
+    page.scrollTop = 120;
+    boardEl.scrollLeft = 40;
+
+    const card = twoCardBoard().items[0];
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }]) {
+      board.onItemClick(new MouseEvent('click', { cancelable: true, ...init }), card);
+    }
+    expect(readBoardScroll()).toBeNull();
+    expect(readReturnTo()).toBeNull();
+
+    board.onItemClick(new MouseEvent('click', { cancelable: true }), card);
+    expect(readBoardScroll()).toEqual({ scrollY: 120, scrollLeft: 40 });
+    expect(readReturnTo()).toBe('/');
+    expect(navigate).toHaveBeenCalledWith(['/items', 1]);
+  });
+
+  it('restores board scroll once after render when saved', async () => {
+    sessionStorage.clear();
+    const page = pageScrollElement()!;
+    page.scrollTop = 0;
+    saveBoardScroll({ scrollY: 80, scrollLeft: 50 });
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderItems: vi.fn(),
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    TestBed.inject(ApplicationRef).tick();
+    f.detectChanges();
+    await f.whenStable();
+
+    expect(page.scrollTop).toBe(80);
+    expect((f.nativeElement.querySelector('.board-scroll') as HTMLElement).scrollLeft).toBe(50);
+    expect(readBoardScroll()).toBeNull();
+  });
+
+  it('does not re-restore board scroll after a second load', async () => {
+    sessionStorage.clear();
+    const page = pageScrollElement()!;
+    page.scrollTop = 0;
+    saveBoardScroll({ scrollY: 80, scrollLeft: 50 });
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderItems: vi.fn(),
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    TestBed.inject(ApplicationRef).tick();
+    f.detectChanges();
+    await f.whenStable();
+
+    const boardEl = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
+    expect(page.scrollTop).toBe(80);
+    expect(boardEl.scrollLeft).toBe(50);
+
+    // Prove once-only even if a scroll key is written again (e.g. failed clear).
+    saveBoardScroll({ scrollY: 80, scrollLeft: 50 });
+    page.scrollTop = 12;
+    boardEl.scrollLeft = 3;
+    f.componentInstance.load();
+    f.detectChanges();
+    await f.whenStable();
+    TestBed.inject(ApplicationRef).tick();
+    f.detectChanges();
+    await f.whenStable();
+
+    expect(page.scrollTop).toBe(12);
+    expect(boardEl.scrollLeft).toBe(3);
+  });
+
+  it('skips board scroll restore when user scrolls before flush', async () => {
+    sessionStorage.clear();
+    const page = pageScrollElement()!;
+    page.scrollTop = 0;
+    saveBoardScroll({ scrollY: 80, scrollLeft: 50 });
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderItems: vi.fn(),
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+
+    const boardEl = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
+    page.scrollTop = 15;
+    boardEl.scrollLeft = 8;
+    TestBed.inject(ApplicationRef).tick();
+    f.detectChanges();
+    await f.whenStable();
+
+    expect(page.scrollTop).toBe(15);
+    expect(boardEl.scrollLeft).toBe(8);
+  });
+
+  it('does not apply stale board scroll restore after destroy', async () => {
+    sessionStorage.clear();
+    const page = pageScrollElement()!;
+    page.scrollTop = 0;
+    saveBoardScroll({ scrollY: 80, scrollLeft: 50 });
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of(twoCardBoard()),
+            reorderItems: vi.fn(),
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    // Schedule restore without flushing afterNextRender, then destroy so generation advances.
+    f.componentInstance.ngOnInit();
+    f.destroy();
+    TestBed.inject(ApplicationRef).tick();
+
+    expect(page.scrollTop).not.toBe(80);
   });
 
   it('keeps browser and assistive shortcuts that use modifier keys', async () => {
