@@ -515,7 +515,9 @@ describe('ItemDetail copy card link', () => {
     expect(copyBtn.getAttribute('aria-label')).toBe('リンクをコピー');
     const saveState = f.nativeElement.querySelector('.save-state');
     expect(saveState.getAttribute('aria-live')).toBe('polite');
-    expect(f.nativeElement.querySelector('.copy-feedback-banner')).toBeNull();
+    const banner = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(banner.classList.contains('copy-feedback-banner--hidden')).toBe(true);
   });
   it('copies the public card detail URL on success and shows visible feedback', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
