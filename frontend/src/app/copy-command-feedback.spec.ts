@@ -29,7 +29,7 @@ describe('CopyCommandFeedback', () => {
     vi.restoreAllMocks();
   });
 
-  it('copies the resolved command, then clears the success message after 2s', async () => {
+  it('copies the resolved command, then clears the success message after 3s', async () => {
     vi.useFakeTimers();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -40,7 +40,7 @@ describe('CopyCommandFeedback', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
       'open http://127.0.0.1:4200/items/27 then http://127.0.0.1:4200/items/27',
     );
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(3000);
     expect(feedback.message()).toBe('');
   });
 
@@ -93,7 +93,7 @@ describe('CopyCommandFeedback', () => {
     clear.mockClear();
     onDestroy?.();
     expect(clear).toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(3000);
     expect(feedback.message()).toBe(COPY_COMMAND_SUCCESS);
   });
 });

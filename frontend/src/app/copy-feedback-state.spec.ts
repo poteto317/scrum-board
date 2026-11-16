@@ -23,9 +23,9 @@ describe('CopyFeedbackState', () => {
     vi.useFakeTimers();
     const { ref } = mockDestroyRef();
     const state = new CopyFeedbackState(ref);
-    state.show('test');
+    state.show('test', 'success');
     expect(state.message()).toBe('test');
-    vi.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(3000);
     expect(state.message()).toBe('');
   });
 
@@ -33,7 +33,8 @@ describe('CopyFeedbackState', () => {
     const { ref } = mockDestroyRef();
     const latest = new LatestCopyFeedback(ref);
     const state = new CopyFeedbackState(ref, latest);
-    state.show('shared');
+    state.show('shared', 'failure');
     expect(latest.message()).toBe('shared');
+    expect(latest.kind()).toBe('failure');
   });
 });

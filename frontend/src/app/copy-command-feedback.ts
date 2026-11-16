@@ -33,11 +33,11 @@ export class CopyCommandFeedback {
   /** Feedback only (clipboard already written, e.g. ClipboardItem path). */
   announce(ok: boolean): void {
     if (this.state.isDestroyed) return;
-    this.state.show(ok ? COPY_COMMAND_SUCCESS : COPY_COMMAND_FAILURE);
+    this.state.show(ok ? COPY_COMMAND_SUCCESS : COPY_COMMAND_FAILURE, ok ? 'success' : 'failure');
   }
 
   /** When the public origin cannot be loaded (distinct from empty config). */
   failOrigin(): void {
-    this.state.show(COPY_COMMAND_FAILURE);
+    this.state.show(COPY_COMMAND_FAILURE, 'failure');
   }
 }

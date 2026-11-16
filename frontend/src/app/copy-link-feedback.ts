@@ -25,11 +25,11 @@ export class CopyLinkFeedback {
   async copyItemNumber(number: number, origin = window.location.origin): Promise<void> {
     const ok = await copyText(itemDetailUrl(origin, number));
     if (this.state.isDestroyed) return;
-    this.state.show(ok ? COPY_LINK_SUCCESS : COPY_LINK_FAILURE);
+    this.state.show(ok ? COPY_LINK_SUCCESS : COPY_LINK_FAILURE, ok ? 'success' : 'failure');
   }
 
   /** When the public origin cannot be loaded (distinct from empty config). */
   failOrigin(): void {
-    this.state.show(COPY_LINK_FAILURE);
+    this.state.show(COPY_LINK_FAILURE, 'failure');
   }
 }

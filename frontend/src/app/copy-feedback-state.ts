@@ -1,7 +1,14 @@
 import { DestroyRef, signal } from '@angular/core';
-import { LatestCopyFeedback } from './latest-copy-feedback';
+import {
+  COPY_FEEDBACK_CLEAR_MS,
+  CopyFeedbackKind,
+  LatestCopyFeedback,
+} from './latest-copy-feedback';
 
-/** Timed copy-status message with destroy-safe clearing; shared by link and command copy actions. */
+/**
+ * Per-action message mirror with destroy-safe clearing.
+ * When `latest` is set, also publishes there (banner owner); local timer only clears this mirror.
+ */
 export class CopyFeedbackState {
   private readonly _message = signal('');
   readonly message = this._message.asReadonly();
@@ -22,14 +29,14 @@ export class CopyFeedbackState {
     return this.destroyed;
   }
 
-  show(message: string): void {
+  show(message: string, kind: CopyFeedbackKind): void {
     if (this.destroyed) return;
     this._message.set(message);
-    this.latest?.publish(message);
+    this.latest?.publish(message, kind);
     if (this.clearTimer) clearTimeout(this.clearTimer);
     this.clearTimer = setTimeout(() => {
       if (this.destroyed) return;
       this._message.set('');
-    }, 2000);
+    }, COPY_FEEDBACK_CLEAR_MS);
   }
 }
