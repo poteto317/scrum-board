@@ -12,22 +12,25 @@ import (
 )
 
 type memoryRepo struct {
-	columns           []Column
-	cards             map[int64]Item
-	next              int64
-	templates         []CommandTemplate
-	nextTemplateID    int64
-	cardTemplateIDs   map[int64][]int64
+	columns            []Column
+	cards              map[int64]Item
+	next               int64
+	templates          []CommandTemplate
+	nextTemplateID     int64
+	cardTemplateIDs    map[int64][]int64
 	defaultTemplateIDs []int64
+	settings           BoardSettings
+	settingsFail       error
 }
 
 func fresh() *memoryRepo {
 	return &memoryRepo{
-		columns:          []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}},
-		cards:            map[int64]Item{},
-		next:             1,
-		nextTemplateID:   1,
-		cardTemplateIDs:  map[int64][]int64{},
+		columns:         []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}},
+		cards:           map[int64]Item{},
+		next:            1,
+		nextTemplateID:  1,
+		cardTemplateIDs: map[int64][]int64{},
+		settings:        BoardSettings{CardLayout: CardLayoutPack},
 	}
 }
 func (m *memoryRepo) Board(context.Context) (Board, error) {
@@ -38,7 +41,11 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 		}
 		return cmp.Compare(a.ID, b.ID)
 	})
-	b := Board{Columns: cols, Items: []Item{}}
+	layout := m.settings.CardLayout
+	if layout == "" {
+		layout = CardLayoutPack
+	}
+	b := Board{Columns: cols, Items: []Item{}, Settings: BoardSettings{CardLayout: normalizeCardLayout(layout)}}
 	for _, c := range m.cards {
 		b.Items = append(b.Items, c)
 	}
@@ -49,6 +56,46 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 		return cmp.Compare(a.ID, b.ID)
 	})
 	return b, nil
+}
+func (m *memoryRepo) UpdateBoardSettings(_ context.Context, in BoardSettings) (BoardSettings, []Item, error) {
+	if m.settingsFail != nil {
+		return BoardSettings{}, nil, m.settingsFail
+	}
+	if in.CardLayout != CardLayoutPack && in.CardLayout != CardLayoutFree {
+		return BoardSettings{}, nil, ErrBoardSettings
+	}
+	prev := normalizeCardLayout(m.settings.CardLayout)
+	m.settings.CardLayout = in.CardLayout
+	if in.CardLayout != CardLayoutPack {
+		return m.settings, nil, nil
+	}
+	if prev == CardLayoutFree {
+		for _, col := range m.columns {
+			var ids []int64
+			for _, c := range m.cards {
+				if c.ColumnID == col.ID {
+					ids = append(ids, c.ID)
+				}
+			}
+			slices.SortFunc(ids, func(a, b int64) int {
+				ca, cb := m.cards[a], m.cards[b]
+				if c := cmp.Compare(ca.OffsetY, cb.OffsetY); c != 0 {
+					return c
+				}
+				if c := cmp.Compare(ca.Position, cb.Position); c != 0 {
+					return c
+				}
+				return cmp.Compare(a, b)
+			})
+			for pos, id := range ids {
+				c := m.cards[id]
+				c.Position = pos
+				m.cards[id] = c
+			}
+		}
+	}
+	board, _ := m.Board(context.Background())
+	return m.settings, board.Items, nil
 }
 func (m *memoryRepo) GetItem(_ context.Context, id int64) (Item, error) {
 	c, ok := m.cards[id]
@@ -73,6 +120,23 @@ func (m *memoryRepo) nextPosition(columnID int64) int {
 		}
 	}
 	return maxPos + 1
+}
+func (m *memoryRepo) nextFreeOffset(columnID int64) int {
+	maxOffset := -freePlacementStepY
+	found := false
+	for _, c := range m.cards {
+		if c.ColumnID != columnID {
+			continue
+		}
+		found = true
+		if c.OffsetY > maxOffset {
+			maxOffset = c.OffsetY
+		}
+	}
+	if !found {
+		return 0
+	}
+	return maxOffset + freePlacementStepY
 }
 func (m *memoryRepo) compactColumn(columnID int64) {
 	var ids []int64
@@ -112,10 +176,14 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 	if related == nil {
 		related = []RelatedItem{}
 	}
+	offsetY := 0
+	if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
+		offsetY = m.nextFreeOffset(in.ColumnID)
+	}
 	c := Item{
 		Number: m.next, ID: m.next, ColumnID: in.ColumnID,
 		Title: in.Title, Description: in.Description, PRURLs: urls, RelatedItems: related,
-		Position: m.nextPosition(in.ColumnID), Assignee: in.Assignee, BacklogPosition: maxBacklog + 1,
+		Position: m.nextPosition(in.ColumnID), OffsetY: offsetY, Assignee: in.Assignee, BacklogPosition: maxBacklog + 1,
 	}
 	m.next++
 	m.cards[c.ID] = c
@@ -135,6 +203,9 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 			source := c.ColumnID
 			c.ColumnID = *p.ColumnID
 			c.Position = m.nextPosition(*p.ColumnID)
+			if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
+				c.OffsetY = m.nextFreeOffset(*p.ColumnID)
+			}
 			m.cards[id] = c
 			m.compactColumn(source)
 			c = m.cards[id]
@@ -203,6 +274,9 @@ func (m *memoryRepo) ReorderItems(_ context.Context, orders []ItemColumnOrder) (
 			c := m.cards[id]
 			c.ColumnID = order.ColumnID
 			c.Position = pos
+			if order.OffsetYs != nil {
+				c.OffsetY = (*order.OffsetYs)[pos]
+			}
 			m.cards[id] = c
 		}
 	}
