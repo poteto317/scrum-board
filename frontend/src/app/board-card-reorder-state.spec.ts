@@ -4,8 +4,8 @@ import { of, Subject } from 'rxjs';
 import { describe, it, expect, onTestFinished, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
-import { CARD_AUTO_SCROLL_INTERVAL_MS } from './card-order';
-import { BoardData, Card } from './models';
+import { ITEM_AUTO_SCROLL_INTERVAL_MS } from './item-order';
+import { BoardData, Item } from './models';
 
 function mockPageScroller() {
   const page = { scrollTop: 0, scrollHeight: 5000 };
@@ -19,7 +19,7 @@ function mockPageScroller() {
   return page;
 }
 
-function card(id: number, columnId: number, position: number, title: string): Card {
+function card(id: number, columnId: number, position: number, title: string): Item {
   return {
     id,
     number: id,
@@ -42,11 +42,11 @@ function initialBoard(): BoardData {
       { id: 1, name: 'Todo', position: 0 },
       { id: 2, name: 'Doing', position: 1 },
     ],
-    cards: [card(1, 1, 0, 'A'), card(2, 1, 1, 'B'), card(3, 2, 0, 'C')],
+    items: [card(1, 1, 0, 'A'), card(2, 1, 1, 'B'), card(3, 2, 0, 'C')],
   };
 }
 
-async function setup(reorderCards: ReturnType<typeof vi.fn>) {
+async function setup(reorderItems: ReturnType<typeof vi.fn>) {
   const board = vi.fn(() => of(initialBoard()));
   TestBed.configureTestingModule({
     imports: [Board],
@@ -56,7 +56,7 @@ async function setup(reorderCards: ReturnType<typeof vi.fn>) {
         provide: Api,
         useValue: {
           board,
-          reorderCards,
+          reorderItems,
           reorderColumns: vi.fn(),
           listCommandTemplates: () => of({ templates: [] }),
         },
@@ -70,7 +70,7 @@ async function setup(reorderCards: ReturnType<typeof vi.fn>) {
 }
 
 function arrowDown(component: Board, index: number) {
-  component.onCardKeydown(
+  component.onItemKeydown(
     new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }),
     1,
     index,
@@ -78,13 +78,13 @@ function arrowDown(component: Board, index: number) {
 }
 
 function dropIntoDoing(component: Board) {
-  component.onCardDrop(
+  component.onItemDrop(
     {
       previousContainer: { id: 'card-list-1' },
       container: { id: 'card-list-2' },
       previousIndex: 0,
       currentIndex: 0,
-      item: { data: initialBoard().cards[0] },
+      item: { data: initialBoard().items[0] },
     } as never,
     2,
   );
@@ -92,41 +92,41 @@ function dropIntoDoing(component: Board) {
 
 describe('Board card reorder state', () => {
   it('ignores moves while a save is in flight or a modal is open', async () => {
-    const pending = new Subject<{ cards: Card[] }>();
-    const reorderCards = vi.fn(() => pending);
-    const { f, component } = await setup(reorderCards);
+    const pending = new Subject<{ items: Item[] }>();
+    const reorderItems = vi.fn(() => pending);
+    const { f, component } = await setup(reorderItems);
 
     arrowDown(component, 0);
-    expect(reorderCards).toHaveBeenCalledTimes(1);
-    expect(component.canReorderCards()).toBe(false);
+    expect(reorderItems).toHaveBeenCalledTimes(1);
+    expect(component.canReorderItems()).toBe(false);
 
     // A second keyboard move and a drop while the first is saving must not reach the API,
     // otherwise the second save would roll back to the first save's optimistic state.
     arrowDown(component, 0);
     dropIntoDoing(component);
-    expect(reorderCards).toHaveBeenCalledTimes(1);
+    expect(reorderItems).toHaveBeenCalledTimes(1);
 
-    pending.next({ cards: initialBoard().cards });
+    pending.next({ items: initialBoard().items });
     pending.complete();
     f.detectChanges();
-    expect(component.canReorderCards()).toBe(true);
+    expect(component.canReorderItems()).toBe(true);
 
     // The add-card dialog blocks card moves too.
-    component.openCard(1);
-    expect(component.canReorderCards()).toBe(false);
+    component.openItem(1);
+    expect(component.canReorderItems()).toBe(false);
     arrowDown(component, 0);
     dropIntoDoing(component);
-    expect(reorderCards).toHaveBeenCalledTimes(1);
+    expect(reorderItems).toHaveBeenCalledTimes(1);
   });
 
   it('shows the optimistic order while saving and then adopts the server answer', async () => {
-    const pending = new Subject<{ cards: Card[] }>();
+    const pending = new Subject<{ items: Item[] }>();
     const { f, component } = await setup(vi.fn(() => pending));
 
     arrowDown(component, 0);
     const optimistic = component
       .data()
-      .cards.filter((c) => c.columnId === 1)
+      .items.filter((c) => c.columnId === 1)
       .sort((a, b) => a.position - b.position)
       .map((c) => c.id);
     expect(optimistic).toEqual([2, 1]);
@@ -134,19 +134,19 @@ describe('Board card reorder state', () => {
 
     // The database is the authority: the answer replaces the optimistic cards, positions included.
     const answer = [card(1, 1, 5, 'A'), card(2, 1, 4, 'B'), card(3, 2, 0, 'C')];
-    pending.next({ cards: answer });
+    pending.next({ items: answer });
     pending.complete();
     f.detectChanges();
-    expect(component.data().cards).toEqual(answer);
+    expect(component.data().items).toEqual(answer);
     expect(component.reorderAnnouncement()).toContain('2番目');
     expect(f.nativeElement.querySelector('.reorder-alert')).toBeNull();
   });
 
   it('puts focus back on the moved card after a keyboard move, whether it saves or fails', async () => {
-    const saved = new Subject<{ cards: Card[] }>();
-    const failed = new Subject<{ cards: Card[] }>();
-    const reorderCards = vi.fn().mockReturnValueOnce(saved).mockReturnValueOnce(failed);
-    const { f, component } = await setup(reorderCards);
+    const saved = new Subject<{ items: Item[] }>();
+    const failed = new Subject<{ items: Item[] }>();
+    const reorderItems = vi.fn().mockReturnValueOnce(saved).mockReturnValueOnce(failed);
+    const { f, component } = await setup(reorderItems);
     // The card's reorder tab stop is its drag handle; data-card-id sits on the article around it.
     const focused = () => {
       const active = document.activeElement as HTMLElement | null;
@@ -158,15 +158,15 @@ describe('Board card reorder state', () => {
     f.detectChanges();
     await f.whenStable();
     expect(focused()).toBe('1');
-    saved.next({ cards: [card(1, 1, 1, 'A'), card(2, 1, 0, 'B'), card(3, 2, 0, 'C')] });
+    saved.next({ items: [card(1, 1, 1, 'A'), card(2, 1, 0, 'B'), card(3, 2, 0, 'C')] });
     saved.complete();
     f.detectChanges();
     await f.whenStable();
     expect(focused()).toBe('1');
 
-    // Card A is now second, so ArrowUp moves it back; the save fails and focus must stay on it.
+    // Item A is now second, so ArrowUp moves it back; the save fails and focus must stay on it.
     (document.activeElement as HTMLElement).blur();
-    component.onCardKeydown(
+    component.onItemKeydown(
       new KeyboardEvent('keydown', { key: 'ArrowUp', cancelable: true }),
       1,
       1,
@@ -182,13 +182,13 @@ describe('Board card reorder state', () => {
   it.each([
     [
       'saved',
-      (subject: Subject<{ cards: Card[] }>) => subject.next({ cards: initialBoard().cards }),
+      (subject: Subject<{ items: Item[] }>) => subject.next({ items: initialBoard().items }),
     ],
-    ['failed', (subject: Subject<{ cards: Card[] }>) => subject.error({ status: 500, error: {} })],
+    ['failed', (subject: Subject<{ items: Item[] }>) => subject.error({ status: 500, error: {} })],
   ] as const)(
     'puts focus back on the moved card when the answer arrives late and the move %s',
     async (_name, answer) => {
-      const pending = new Subject<{ cards: Card[] }>();
+      const pending = new Subject<{ items: Item[] }>();
       const { f, component } = await setup(vi.fn(() => pending));
 
       arrowDown(component, 0);
@@ -217,10 +217,10 @@ describe('Board card reorder state', () => {
   ] as const)(
     'clears the banner of a failed move as soon as the next move starts (%s)',
     async (_name, status, conflict) => {
-      const failed = new Subject<{ cards: Card[] }>();
-      const next = new Subject<{ cards: Card[] }>();
-      const reorderCards = vi.fn().mockReturnValueOnce(failed).mockReturnValueOnce(next);
-      const { f, component } = await setup(reorderCards);
+      const failed = new Subject<{ items: Item[] }>();
+      const next = new Subject<{ items: Item[] }>();
+      const reorderItems = vi.fn().mockReturnValueOnce(failed).mockReturnValueOnce(next);
+      const { f, component } = await setup(reorderItems);
 
       arrowDown(component, 0);
       failed.error({ status, error: { message: '保存に失敗しました。' } });
@@ -230,13 +230,13 @@ describe('Board card reorder state', () => {
       expect(f.nativeElement.querySelector('.reorder-alert')).not.toBeNull();
 
       arrowDown(component, 0);
-      expect(reorderCards).toHaveBeenCalledTimes(2);
+      expect(reorderItems).toHaveBeenCalledTimes(2);
       expect(component.reorderError()).toBe('');
       expect(component.reorderConflict()).toBe(false);
       f.detectChanges();
       expect(f.nativeElement.querySelector('.reorder-alert')).toBeNull();
 
-      next.next({ cards: initialBoard().cards });
+      next.next({ items: initialBoard().items });
       next.complete();
       f.detectChanges();
       expect(component.reorderError()).toBe('');
@@ -246,18 +246,18 @@ describe('Board card reorder state', () => {
   );
 
   it('rolls back and offers "close" for a server error but not for a conflict', async () => {
-    const serverError = new Subject<{ cards: Card[] }>();
-    const conflict = new Subject<{ cards: Card[] }>();
-    const reorderCards = vi.fn().mockReturnValueOnce(serverError).mockReturnValueOnce(conflict);
-    const { f, board, component } = await setup(reorderCards);
-    const before = initialBoard().cards;
+    const serverError = new Subject<{ items: Item[] }>();
+    const conflict = new Subject<{ items: Item[] }>();
+    const reorderItems = vi.fn().mockReturnValueOnce(serverError).mockReturnValueOnce(conflict);
+    const { f, board, component } = await setup(reorderItems);
+    const before = initialBoard().items;
 
     arrowDown(component, 0);
     serverError.error({ status: 500, error: { message: '保存に失敗しました。' } });
     f.detectChanges();
-    expect(component.data().cards).toEqual(before);
+    expect(component.data().items).toEqual(before);
     expect(component.reorderConflict()).toBe(false);
-    expect(component.reorderAnnouncement()).toBe('カードの移動を保存できませんでした');
+    expect(component.reorderAnnouncement()).toBe('アイテムの移動を保存できませんでした');
     let alert = f.nativeElement.querySelector('.reorder-alert') as HTMLElement;
     expect(alert.textContent).toContain('保存に失敗しました。');
     expect(alert.querySelector('.reorder-dismiss')).not.toBeNull();
@@ -266,9 +266,9 @@ describe('Board card reorder state', () => {
     expect(f.nativeElement.querySelector('.reorder-alert')).toBeNull();
 
     arrowDown(component, 0);
-    conflict.error({ status: 409, error: { message: 'カードの構成が変更されています。' } });
+    conflict.error({ status: 409, error: { message: 'アイテムの構成が変更されています。' } });
     f.detectChanges();
-    expect(component.data().cards).toEqual(before);
+    expect(component.data().items).toEqual(before);
     expect(component.reorderConflict()).toBe(true);
     alert = f.nativeElement.querySelector('.reorder-alert') as HTMLElement;
     expect(alert.querySelector('.reorder-dismiss')).toBeNull();
@@ -303,7 +303,7 @@ describe('Board card reorder state', () => {
       ({ left, top, right, bottom, width: right - left, height: bottom - top }) as DOMRect;
     vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 600));
     scroller.scrollLeft = 0;
-    const move = (x: number, y: number) => component.onCardDragMoved({ pointerPosition: { x, y } });
+    const move = (x: number, y: number) => component.onItemDragMoved({ pointerPosition: { x, y } });
 
     move(500, 300); // the middle of both: nothing scrolls
     expect([scroller.scrollLeft, page.scrollTop]).toEqual([0, 0]);
@@ -342,43 +342,43 @@ describe('Board card reorder state', () => {
     } as DOMRect);
     scroller.scrollLeft = 0;
 
-    component.onCardDragStarted(initialBoard().cards[0]);
-    component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
+    component.onItemDragStarted(initialBoard().items[0]);
+    component.onItemDragMoved({ pointerPosition: { x: 990, y: 300 } });
     const first = scroller.scrollLeft;
     expect(first).toBeGreaterThan(0);
 
     // The tick right after a move adds nothing (the move already scrolled); a resting pointer then scrolls each tick.
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS);
     expect(scroller.scrollLeft).toBe(first);
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS);
     const second = scroller.scrollLeft;
     expect(second).toBeGreaterThan(first);
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 3);
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS * 3);
     expect(scroller.scrollLeft).toBeGreaterThan(second);
 
     // Away from the edge the timer does not scroll.
-    component.onCardDragMoved({ pointerPosition: { x: 500, y: 300 } });
+    component.onItemDragMoved({ pointerPosition: { x: 500, y: 300 } });
     const middle = scroller.scrollLeft;
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 4);
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS * 4);
     expect(scroller.scrollLeft).toBe(middle);
 
     // Letting go stops it at once, before CDK reports the end (the preview is still settling into place).
-    component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
-    component.onCardDragReleased();
+    component.onItemDragMoved({ pointerPosition: { x: 990, y: 300 } });
+    component.onItemDragReleased();
     expect(vi.getTimerCount()).toBe(baselineTimers);
     const released = scroller.scrollLeft;
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 3);
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS * 3);
     expect(scroller.scrollLeft).toBe(released);
 
     // At the edge again, then the drag ends: nothing scrolls afterwards.
-    component.onCardDragStarted(initialBoard().cards[0]);
-    component.onCardDragMoved({ pointerPosition: { x: 990, y: 300 } });
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 2);
+    component.onItemDragStarted(initialBoard().items[0]);
+    component.onItemDragMoved({ pointerPosition: { x: 990, y: 300 } });
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS * 2);
     expect(vi.getTimerCount()).toBe(baselineTimers + 1);
-    component.onCardDragEnded();
+    component.onItemDragEnded();
     expect(vi.getTimerCount()).toBe(baselineTimers); // no auto-scroll interval is left running
     const ended = scroller.scrollLeft;
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS * 5);
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS * 5);
     expect(scroller.scrollLeft).toBe(ended);
   });
 
@@ -399,18 +399,18 @@ describe('Board card reorder state', () => {
       height: 600,
     } as DOMRect);
 
-    component.onCardDragStarted(initialBoard().cards[0]);
-    component.onCardDragMoved({ pointerPosition: { x: 500, y: window.innerHeight - 5 } });
+    component.onItemDragStarted(initialBoard().items[0]);
+    component.onItemDragMoved({ pointerPosition: { x: 500, y: window.innerHeight - 5 } });
     const first = page.scrollTop;
     expect(first).toBeGreaterThan(0);
     const height = page.scrollHeight;
 
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS);
     expect(page.scrollTop).toBe(first);
-    vi.advanceTimersByTime(CARD_AUTO_SCROLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS);
     expect(page.scrollTop).toBeGreaterThan(first);
     expect(page.scrollHeight).toBe(height);
 
-    component.onCardDragReleased();
+    component.onItemDragReleased();
   });
 });

@@ -6,11 +6,11 @@ import { of, Subject } from 'rxjs';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
-import { BoardData, Card } from './models';
+import { BoardData, Item } from './models';
 
-// board.spec.ts feeds onCardDrop hand-made events; this drives the real CdkDropList / CdkDrag instances the
+// board.spec.ts feeds onItemDrop hand-made events; this drives the real CdkDropList / CdkDrag instances the
 // template creates, so a broken binding (ids, connections, disabled state, output wiring) is caught too.
-function card(id: number, columnId: number, position: number): Card {
+function card(id: number, columnId: number, position: number): Item {
   return {
     id,
     number: id,
@@ -34,9 +34,9 @@ describe('Board template CDK wiring', () => {
         { id: 1, name: 'Todo', position: 0 },
         { id: 2, name: 'Doing', position: 1 },
       ],
-      cards: [card(1, 1, 0), card(2, 1, 1), card(3, 2, 0)],
+      items: [card(1, 1, 0), card(2, 1, 1), card(3, 2, 0)],
     };
-    const reorderCards = vi.fn(() => new Subject<{ cards: Card[] }>());
+    const reorderItems = vi.fn(() => new Subject<{ items: Item[] }>());
     TestBed.configureTestingModule({
       imports: [Board],
       providers: [
@@ -45,7 +45,7 @@ describe('Board template CDK wiring', () => {
           provide: Api,
           useValue: {
             board: () => of(board),
-            reorderCards,
+            reorderItems,
             listCommandTemplates: () => of({ templates: [] }),
           },
         },
@@ -84,7 +84,7 @@ describe('Board template CDK wiring', () => {
       ),
     ).toBe(true);
 
-    // The list's dropped output reaches onCardDrop with that column's id: a real cross-column drop.
+    // The list's dropped output reaches onItemDrop with that column's id: a real cross-column drop.
     const [todo, doing] = lists();
     doing.dropped.emit({
       previousContainer: todo,
@@ -97,9 +97,9 @@ describe('Board template CDK wiring', () => {
       dropPoint: { x: 0, y: 0 },
       event: new MouseEvent('mouseup'),
     });
-    expect(reorderCards).toHaveBeenCalledWith([
-      { columnId: 1, cardIds: [2] },
-      { columnId: 2, cardIds: [3, 1] },
+    expect(reorderItems).toHaveBeenCalledWith([
+      { columnId: 1, itemIds: [2] },
+      { columnId: 2, itemIds: [3, 1] },
     ]);
 
     // While the save is pending, every list, card, and handle turns its dragging off without native disabled.
@@ -116,11 +116,11 @@ describe('Board template CDK wiring', () => {
   });
 
   // CDK's own edge scrolling is switched off, so (cdkDragMoved) is the only thing that scrolls while a card is
-  // dragged. Driving a real mouse drag checks the template binding itself, not just onCardDragMoved.
+  // dragged. Driving a real mouse drag checks the template binding itself, not just onItemDragMoved.
   it('scrolls the board and the page while a real mouse drag is held at an edge', async () => {
     const board: BoardData = {
       columns: [{ id: 1, name: 'Todo', position: 0 }],
-      cards: [card(1, 1, 0)],
+      items: [card(1, 1, 0)],
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -130,7 +130,7 @@ describe('Board template CDK wiring', () => {
           provide: Api,
           useValue: {
             board: () => of(board),
-            reorderCards: vi.fn(),
+            reorderItems: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
           },
         },
@@ -152,7 +152,7 @@ describe('Board template CDK wiring', () => {
       ({ left, top, right, bottom, width: right - left, height: bottom - top }) as DOMRect;
     vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 600));
     scroller.scrollLeft = 0;
-    const moved = vi.spyOn(f.componentInstance, 'onCardDragMoved');
+    const moved = vi.spyOn(f.componentInstance, 'onItemDragMoved');
 
     const handle = f.nativeElement.querySelector('.card-drag-handle') as HTMLElement;
     handle.dispatchEvent(

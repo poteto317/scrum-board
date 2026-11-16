@@ -6,7 +6,7 @@ import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
-import { CARD_TOUCH_DRAG_DELAY_MS } from './card-order';
+import { ITEM_TOUCH_DRAG_DELAY_MS } from './item-order';
 
 // Dragging is restricted to the left-center handle (.card-drag-handle) so clicking or selecting the card body
 // never starts an accidental drag, while swiping quickly on the handle still lets the page/list scroll.
@@ -25,7 +25,7 @@ describe('Board card drag start', () => {
   async function renderCard() {
     const board = {
       columns: [{ id: 1, name: 'Todo', position: 0 }],
-      cards: [
+      items: [
         {
           id: 1,
           number: 1,
@@ -50,7 +50,7 @@ describe('Board card drag start', () => {
           provide: Api,
           useValue: {
             board: () => of(board),
-            reorderCards: vi.fn(),
+            reorderItems: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
           },
         },
@@ -97,7 +97,7 @@ describe('Board card drag start', () => {
         const { target, started } = await renderCard();
         const el = target(selector);
         el.dispatchEvent(touch('touchstart', 100, 100));
-        vi.advanceTimersByTime(CARD_TOUCH_DRAG_DELAY_MS + 50);
+        vi.advanceTimersByTime(ITEM_TOUCH_DRAG_DELAY_MS + 50);
         const move = touch('touchmove', 100, 130);
         document.dispatchEvent(move);
         expect(started).toHaveBeenCalledTimes(1);
@@ -171,7 +171,7 @@ describe('Board card drag start', () => {
         const { target, started } = await renderCard();
         const el = target(selector);
         el.dispatchEvent(touch('touchstart', 100, 100));
-        vi.advanceTimersByTime(CARD_TOUCH_DRAG_DELAY_MS + 50);
+        vi.advanceTimersByTime(ITEM_TOUCH_DRAG_DELAY_MS + 50);
         const move = touch('touchmove', 100, 130);
         document.dispatchEvent(move);
         expect(started).not.toHaveBeenCalled();

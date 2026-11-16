@@ -6,10 +6,10 @@ import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
-import { BoardData, Card } from './models';
+import { BoardData, Item } from './models';
 
 // The card is `<article cdkDrag>` holding the drag handle, `.card-quick-actions` (command + copy), and the body link as siblings.
-function card(id: number, position: number): Card {
+function card(id: number, position: number): Item {
   return {
     id,
     number: id,
@@ -28,11 +28,11 @@ function card(id: number, position: number): Card {
 
 const board = (): BoardData => ({
   columns: [{ id: 1, name: 'Todo', position: 0 }],
-  cards: [card(1, 0), card(2, 1)],
+  items: [card(1, 0), card(2, 1)],
 });
 
 async function setup() {
-  const reorderCards = vi.fn(() => of({ cards: board().cards }));
+  const reorderItems = vi.fn(() => of({ items: board().items }));
   TestBed.configureTestingModule({
     imports: [Board],
     providers: [
@@ -41,7 +41,7 @@ async function setup() {
         provide: Api,
         useValue: {
           board: () => of(board()),
-          reorderCards,
+          reorderItems,
           listCommandTemplates: () => of({ templates: [] }),
         },
       },
@@ -55,7 +55,7 @@ async function setup() {
   const handle = article.querySelector('.card-drag-handle') as HTMLButtonElement;
   const link = article.querySelector('.task-card-body') as HTMLAnchorElement;
   const copy = article.querySelector('.copy-card-link') as HTMLButtonElement;
-  return { f, root, article, handle, link, copy, reorderCards };
+  return { f, root, article, handle, link, copy, reorderItems };
 }
 
 describe('Board card structure', () => {
@@ -79,13 +79,13 @@ describe('Board card structure', () => {
     expect(handle.getAttribute('type')).toBe('button');
     expect(handle.textContent?.trim()).toBe('⋮⋮');
     expect(handle.getAttribute('aria-label')).toBe(
-      'TASK-001 card 1を移動（ドラッグまたは上下矢印キー）',
+      'ITEM-001 card 1を移動（ドラッグまたは上下矢印キー）',
     );
     expect(handle.getAttribute('aria-describedby')).toBe('card-drag-help');
     expect(link.tagName).toBe('A');
     expect(link.hasAttribute('data-card-id')).toBe(false);
     expect(link.hasAttribute('aria-describedby')).toBe(false);
-    expect(link.getAttribute('href')).toBe('/cards/1');
+    expect(link.getAttribute('href')).toBe('/items/1');
     // The drag handle, quick-actions wrapper, and link are siblings. Copy stays inside quick actions, never inside the anchor.
     expect(handle.parentElement).toBe(article);
     expect(actions.parentElement).toBe(article);
@@ -97,7 +97,7 @@ describe('Board card structure', () => {
   });
 
   it('handles arrow keys from the drag handle only, never from the link or copy button', async () => {
-    const { handle, copy, link, reorderCards } = await setup();
+    const { handle, copy, link, reorderItems } = await setup();
     const press = (el: HTMLElement) => {
       const ev = new KeyboardEvent('keydown', {
         key: 'ArrowDown',
@@ -109,15 +109,15 @@ describe('Board card structure', () => {
     };
     const onCopy = press(copy);
     expect(onCopy.defaultPrevented).toBe(false);
-    expect(reorderCards).not.toHaveBeenCalled();
+    expect(reorderItems).not.toHaveBeenCalled();
 
     const onLink = press(link);
     expect(onLink.defaultPrevented).toBe(false);
-    expect(reorderCards).not.toHaveBeenCalled();
+    expect(reorderItems).not.toHaveBeenCalled();
 
     const onHandle = press(handle);
     expect(onHandle.defaultPrevented).toBe(true);
-    expect(reorderCards).toHaveBeenCalledTimes(1);
+    expect(reorderItems).toHaveBeenCalledTimes(1);
   });
 
   it('navigates on a plain click of the link, leaves Ctrl-click to the browser, and does not navigate on handle click', async () => {
@@ -136,7 +136,7 @@ describe('Board card structure', () => {
     const plain = new MouseEvent('click', { bubbles: true, cancelable: true });
     link.dispatchEvent(plain);
     expect(plain.defaultPrevented).toBe(true);
-    expect(navigate).toHaveBeenCalledWith(['/cards', 1]);
+    expect(navigate).toHaveBeenCalledWith(['/items', 1]);
   });
 
   it('copying a link neither navigates nor reorders', async () => {
@@ -146,7 +146,7 @@ describe('Board card structure', () => {
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
     try {
-      const { f, copy, reorderCards } = await setup();
+      const { f, copy, reorderItems } = await setup();
       const router = TestBed.inject(Router);
       const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
       const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
@@ -156,7 +156,7 @@ describe('Board card structure', () => {
       expect(ev.defaultPrevented).toBe(false);
       expect(navigate).not.toHaveBeenCalled();
       expect(navigateByUrl).not.toHaveBeenCalled();
-      expect(reorderCards).not.toHaveBeenCalled();
+      expect(reorderItems).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: original });
     }
