@@ -28,6 +28,7 @@ function card(id: number, columnId: number, position: number, title: string): It
     description: '',
     position,
     backlogPosition: position,
+    offsetY: 0,
     prUrls: [],
     relatedItems: [],
     assignee: '',
@@ -43,6 +44,7 @@ function initialBoard(): BoardData {
       { id: 2, name: 'Doing', position: 1 },
     ],
     items: [card(1, 1, 0, 'A'), card(2, 1, 1, 'B'), card(3, 2, 0, 'C')],
+    settings: { cardLayout: 'pack' },
   };
 }
 
@@ -90,6 +92,33 @@ function dropIntoDoing(component: Board) {
   );
 }
 
+function startItemDrag(component: Board, item: Item) {
+  component.onItemDragStarted(
+    {
+      event: new MouseEvent('mousedown', { clientY: 100 }),
+      source: {
+        element: {
+          nativeElement: {
+            getBoundingClientRect: () =>
+              ({
+                top: 80,
+                left: 0,
+                right: 100,
+                bottom: 160,
+                width: 100,
+                height: 80,
+                x: 0,
+                y: 80,
+                toJSON: () => ({}),
+              }) as DOMRect,
+          },
+        },
+      },
+    } as never,
+    item,
+  );
+}
+
 describe('Board card reorder state', () => {
   it('ignores moves while a save is in flight or a modal is open', async () => {
     const pending = new Subject<{ items: Item[] }>();
@@ -117,6 +146,36 @@ describe('Board card reorder state', () => {
     arrowDown(component, 0);
     dropIntoDoing(component);
     expect(reorderItems).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables reordering while layout switching or settings saving', async () => {
+    const reorderItems = vi.fn(() => of({ items: initialBoard().items }));
+    const { f, component } = await setup(reorderItems);
+    expect(component.canReorderItems()).toBe(true);
+
+    component.layoutSwitching.set(true);
+    f.detectChanges();
+    expect(component.canReorderItems()).toBe(false);
+    expect(
+      (f.nativeElement.querySelector('.card-list') as HTMLElement).classList.contains(
+        'cdk-drop-list-disabled',
+      ) || f.nativeElement.querySelector('[cdkdroplistdisabled], .cdk-drop-list-disabled'),
+    ).toBeTruthy();
+    arrowDown(component, 0);
+    dropIntoDoing(component);
+    expect(reorderItems).not.toHaveBeenCalled();
+
+    component.layoutSwitching.set(false);
+    component.settingsSaving.set(true);
+    f.detectChanges();
+    expect(component.canReorderItems()).toBe(false);
+    arrowDown(component, 0);
+    dropIntoDoing(component);
+    expect(reorderItems).not.toHaveBeenCalled();
+
+    component.settingsSaving.set(false);
+    f.detectChanges();
+    expect(component.canReorderItems()).toBe(true);
   });
 
   it('shows the optimistic order while saving and then adopts the server answer', async () => {
@@ -342,7 +401,7 @@ describe('Board card reorder state', () => {
     } as DOMRect);
     scroller.scrollLeft = 0;
 
-    component.onItemDragStarted(initialBoard().items[0]);
+    startItemDrag(component, initialBoard().items[0]);
     component.onItemDragMoved({ pointerPosition: { x: 990, y: 300 } });
     const first = scroller.scrollLeft;
     expect(first).toBeGreaterThan(0);
@@ -371,7 +430,7 @@ describe('Board card reorder state', () => {
     expect(scroller.scrollLeft).toBe(released);
 
     // At the edge again, then the drag ends: nothing scrolls afterwards.
-    component.onItemDragStarted(initialBoard().items[0]);
+    startItemDrag(component, initialBoard().items[0]);
     component.onItemDragMoved({ pointerPosition: { x: 990, y: 300 } });
     vi.advanceTimersByTime(ITEM_AUTO_SCROLL_INTERVAL_MS * 2);
     expect(vi.getTimerCount()).toBe(baselineTimers + 1);
@@ -399,7 +458,7 @@ describe('Board card reorder state', () => {
       height: 600,
     } as DOMRect);
 
-    component.onItemDragStarted(initialBoard().items[0]);
+    startItemDrag(component, initialBoard().items[0]);
     component.onItemDragMoved({ pointerPosition: { x: 500, y: window.innerHeight - 5 } });
     const first = page.scrollTop;
     expect(first).toBeGreaterThan(0);

@@ -361,6 +361,42 @@ dialog.modal-backdrop::backdrop {
   cursor: default;
   opacity: 0.45;
 }
+.layout-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+.layout-toggle input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+.layout-toggle-disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.card-list-free {
+  position: relative;
+  display: block;
+  gap: 0;
+}
+.card-list-free > .task-card {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  width: auto;
+  margin: 0;
+}
+/* Preview is fixed/portal-like via CDK; keep placeholders out of free-list height growth (L-680). */
+.card-list-free > .task-card.cdk-drag-placeholder {
+  display: none;
+}
+.card-list-free > .empty-column {
+  position: relative;
+}
 .card-list.cdk-drop-list-dragging .task-card:not(.cdk-drag-placeholder) {
   transition: transform 200ms ease;
 }

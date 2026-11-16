@@ -4,7 +4,8 @@ import { of, Subject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
-import { BoardData, Item } from './models';
+import { normalizeBoardData, NormalizedBoardData } from './board-data';
+import { Item } from './models';
 
 // The board polls every 5 seconds (live-refresh.ts). CDK reports previousIndex / currentIndex against the list
 // as it was when the drag began, so a poll that swaps the board's data mid-drag makes onItemDrop move the wrong card.
@@ -19,6 +20,7 @@ function card(id: number, position: number, title: string): Item {
     description: '',
     position,
     backlogPosition: position,
+    offsetY: 0,
     prUrls: [],
     relatedItems: [],
     assignee: '',
@@ -33,12 +35,16 @@ const C = card(3, 2, 'C');
 const D = card(4, 3, 'D');
 const E = card(5, 4, 'E');
 
-function todoBoard(items: Item[]): BoardData {
-  return { columns: [{ id: 1, name: 'Todo', position: 0 }], items };
+function todoBoard(items: Item[]): NormalizedBoardData {
+  return normalizeBoardData({
+    columns: [{ id: 1, name: 'Todo', position: 0 }],
+    items,
+    settings: { cardLayout: 'pack' },
+  });
 }
 
 /** The positions as the server renumbers them after a card is deleted elsewhere. */
-function withoutA(): BoardData {
+function withoutA(): NormalizedBoardData {
   return todoBoard([B, C, D, E].map((c, position) => ({ ...c, position })));
 }
 
@@ -140,7 +146,7 @@ describe('Board live refresh while a card is dragged', () => {
 
   it('drops the answer of a poll that was already on its way when the card was picked up', async () => {
     const { f, board, component } = await setup();
-    const slow = new Subject<BoardData>();
+    const slow = new Subject<NormalizedBoardData>();
     board.mockReturnValue(slow.asObservable());
     await vi.advanceTimersByTimeAsync(POLL_MS); // the request goes out ...
     grab(f, B.id); // ... the card is picked up ...
@@ -251,7 +257,7 @@ describe('Board live refresh while a card is dragged', () => {
       of({ items: [B, A, C, D, E].map((c, position) => ({ ...c, position })) }),
     );
     const { f, board, component } = await setup(reorderItems);
-    const slow = new Subject<BoardData>();
+    const slow = new Subject<NormalizedBoardData>();
     board.mockReturnValue(slow.asObservable());
     await vi.advanceTimersByTimeAsync(POLL_MS); // the request goes out, with the old order ...
 

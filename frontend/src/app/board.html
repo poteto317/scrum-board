@@ -11,8 +11,26 @@
     <div class="active-tab">
       <span class="board-icon" aria-hidden="true">▥</span> かんばんボード
     </div>
-    <span class="toolbar-count">{{ data().items.length }} アイテム</span
-    ><span class="board-summary"
+    <span class="toolbar-count">{{ data().items.length }} アイテム</span>
+    <label
+      class="layout-toggle"
+      [class.layout-toggle-disabled]="!canToggleCardLayout()"
+      [attr.title]="canToggleCardLayout() ? null : layoutToggleGate().reason"
+    >
+      <input
+        type="checkbox"
+        [checked]="isFreeLayout()"
+        [disabled]="!canToggleCardLayout()"
+        [attr.aria-disabled]="!canToggleCardLayout()"
+        [attr.aria-describedby]="canToggleCardLayout() ? null : 'layout-toggle-reason'"
+        (change)="onCardLayoutToggle($any($event.target).checked)"
+      />
+      <span>自由配置</span>
+    </label>
+    @if (!canToggleCardLayout() && layoutToggleGate().reason) {
+      <span id="layout-toggle-reason" class="sr-only">{{ layoutToggleGate().reason }}</span>
+    }
+    <span class="board-summary"
       >{{ done() }} 完了 <span>／</span> {{ data().columns.length }} ステータス</span
     >
   </section>
@@ -28,10 +46,12 @@
   } @else {
     <div class="sr-only" aria-live="polite">{{ reorderAnnouncement() }}</div>
     <p id="card-drag-help" class="sr-only">
-      @if (canReorderItems()) {
-        左端のハンドルをドラッグして別の位置やステータスへ移動できます。ハンドルで上下矢印キーを押すと列内を移動できます。キーボードだけで別ステータスへ移す場合は、アイテムを開いてステータスを変更してください。
-      } @else {
+      @if (!canReorderItems()) {
         保存中などのため、いまはアイテムを移動できません。
+      } @else if (isFreeLayout()) {
+        左端のハンドルをドラッグして位置やステータスを変えられます。自由配置中は上下矢印キーでの並べ替えはできません。キーボードだけで別ステータスへ移す場合は、アイテムを開いてステータスを変更してください。
+      } @else {
+        左端のハンドルをドラッグして別の位置やステータスへ移動できます。ハンドルで上下矢印キーを押すと列内を移動できます。キーボードだけで別ステータスへ移す場合は、アイテムを開いてステータスを変更してください。
       }
     </p>
     <app-copy-feedback-banner
@@ -110,11 +130,14 @@
             </header>
             <div
               class="card-list"
+              [class.card-list-free]="isFreeLayout()"
+              [style.min-height.px]="isFreeLayout() ? freeListMinHeight(column.id) : null"
               cdkDropList
               [id]="dropListId(column.id)"
               [cdkDropListData]="grouped().get(column.id) || []"
               [cdkDropListConnectedTo]="connectedLists(column.id)"
               [cdkDropListDisabled]="!canReorderItems()"
+              [cdkDropListSortingDisabled]="isFreeLayout()"
               [cdkDropListAutoScrollDisabled]="true"
               (cdkDropListDropped)="onItemDrop($event, column.id)"
             >
@@ -122,11 +145,12 @@
                 <article
                   class="task-card"
                   [class.command-menu-open]="openCommandItemId() === card.id"
+                  [style.top.px]="isFreeLayout() ? (card.offsetY ?? 0) : null"
                   cdkDrag
                   [attr.data-card-id]="card.id"
                   [cdkDragData]="card"
                   [cdkDragDisabled]="!canReorderItems()"
-                  (cdkDragStarted)="onItemDragStarted(card)"
+                  (cdkDragStarted)="onItemDragStarted($event, card)"
                   (cdkDragMoved)="onItemDragMoved($event)"
                   (cdkDragReleased)="onItemDragReleased()"
                   (cdkDragEnded)="onItemDragEnded()"
@@ -141,7 +165,9 @@
                       formatItemNumber(card.number) +
                       ' ' +
                       card.title +
-                      'を移動（ドラッグまたは上下矢印キー）'
+                      (isFreeLayout()
+                        ? 'を移動（ドラッグ）'
+                        : 'を移動（ドラッグまたは上下矢印キー）')
                     "
                     aria-describedby="card-drag-help"
                     (keydown)="onItemKeydown($event, column.id, cardIndex)"
@@ -285,7 +311,7 @@
     <footer class="board-footer">
       <span
         ><span class="tip-icon" aria-hidden="true">i</span>
-        列の見出しはドラッグまたは左右矢印キー、アイテム左端のハンドルはドラッグまたは上下矢印キーで並び替えられます。</span
+        列の見出しはドラッグまたは左右矢印キー、アイテム左端のハンドルはドラッグで移動できます。上詰め配置ではハンドルの上下矢印キーでも並べ替えられます。</span
       ><span class="footer-note">少しずつ、よりよいチームへ。</span>
     </footer>
   }

@@ -18,6 +18,7 @@ function card(id: number, position: number): Item {
     description: '',
     position,
     backlogPosition: position,
+    offsetY: 0,
     prUrls: [],
     relatedItems: [],
     assignee: '',
@@ -29,6 +30,7 @@ function card(id: number, position: number): Item {
 const board = (): BoardData => ({
   columns: [{ id: 1, name: 'Todo', position: 0 }],
   items: [card(1, 0), card(2, 1)],
+  settings: { cardLayout: 'pack' },
 });
 
 async function setup() {

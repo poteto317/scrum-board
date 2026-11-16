@@ -19,6 +19,7 @@ import {
   readReturnTo,
   saveBoardScroll,
 } from './list-scroll-session';
+import { normalizeBoardData } from './board-data';
 import { BoardData, Column } from './models';
 import { pageScrollElement } from './page-scroll';
 import { TODO_COLUMN_MISSING } from './todo-column';
@@ -34,13 +35,15 @@ describe('Board create requests', () => {
       providers: [CommandTemplatesSession, { provide: Api, useValue: api }],
     });
     const board = TestBed.runInInjectionContext(() => new Board());
-    board.data.set({
-      columns: [
-        { id: 1, name: 'Todo', position: 0 },
-        { id: 2, name: 'Doing', position: 1 },
-      ],
-      items: [],
-    });
+    board.data.set(
+      normalizeBoardData({
+        columns: [
+          { id: 1, name: 'Todo', position: 0 },
+          { id: 2, name: 'Doing', position: 1 },
+        ],
+        items: [],
+      }),
+    );
     board.itemForm.setValue({ title: '保存するタイトル', description: '本文' });
     board.addItem();
     board.addItem();
@@ -83,13 +86,15 @@ describe('Board create requests', () => {
       ],
     });
     const board = TestBed.runInInjectionContext(() => new Board());
-    board.data.set({
-      columns: [
-        { id: 1, name: 'Todo', position: 0 },
-        { id: 2, name: 'Doing', position: 1 },
-      ],
-      items: [],
-    });
+    board.data.set(
+      normalizeBoardData({
+        columns: [
+          { id: 1, name: 'Todo', position: 0 },
+          { id: 2, name: 'Doing', position: 1 },
+        ],
+        items: [],
+      }),
+    );
     board.openItem(2);
     board.itemForm.setValue({ title: 'from doing', description: '' });
     board.addItem();
@@ -126,7 +131,7 @@ describe('Board create requests', () => {
       ],
     });
     const board = TestBed.runInInjectionContext(() => new Board());
-    board.data.set({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] });
+    board.data.set(normalizeBoardData({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] }));
     board.itemForm.setValue({ title: 'first', description: '' });
     board.addItem();
     expect(createItem).toHaveBeenCalledWith({ title: 'first', description: '', columnId: 1 });
@@ -143,7 +148,7 @@ describe('Board create requests', () => {
       ],
     });
     const board = TestBed.runInInjectionContext(() => new Board());
-    board.data.set({ columns: [{ id: 2, name: 'Doing', position: 0 }], items: [] });
+    board.data.set(normalizeBoardData({ columns: [{ id: 2, name: 'Doing', position: 0 }], items: [] }));
     board.itemForm.setValue({ title: 'x', description: '' });
     board.addItem();
     expect(createItem).not.toHaveBeenCalled();
@@ -651,8 +656,8 @@ describe('Board copy command menu', () => {
   });
 });
 
-function sampleBoard(columns: Column[]): BoardData {
-  return {
+function sampleBoard(columns: Column[]) {
+  return normalizeBoardData({
     columns: columns.map((c) => ({ ...c })),
     items: [
       {
@@ -663,6 +668,7 @@ function sampleBoard(columns: Column[]): BoardData {
         description: '',
         position: 0,
         backlogPosition: 0,
+        offsetY: 0,
         prUrls: [],
         relatedItems: [],
         assignee: '',
@@ -670,7 +676,8 @@ function sampleBoard(columns: Column[]): BoardData {
         updatedAt: '',
       },
     ],
-  };
+    settings: { cardLayout: 'pack' },
+  });
 }
 
 function makeColumns(): Column[] {
@@ -1974,7 +1981,7 @@ describe('Board live refresh', () => {
     expect(f.componentInstance.loading()).toBe(false);
     expect(f.componentInstance.data().items).toHaveLength(1);
 
-    const polled: BoardData = {
+    const polled = normalizeBoardData({
       columns: initial.columns,
       items: [
         ...initial.items,
@@ -1993,7 +2000,7 @@ describe('Board live refresh', () => {
           updatedAt: '',
         },
       ],
-    };
+    });
     api.board.mockReturnValue(of(polled));
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.componentInstance.loading()).toBe(false);
@@ -2061,7 +2068,7 @@ describe('Board live refresh', () => {
     f.detectChanges();
     f.componentInstance.draggingColumnId.set(1);
     const before = f.componentInstance.data().items.length;
-    api.board.mockReturnValue(of({ ...initial, items: [] }));
+    api.board.mockReturnValue(of(normalizeBoardData({ ...initial, items: [] })));
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.componentInstance.data().items).toHaveLength(before);
     f.destroy();
@@ -2070,7 +2077,7 @@ describe('Board live refresh', () => {
   it('does not apply an in-flight poll after reordering starts', async () => {
     vi.useFakeTimers();
     const initial = sampleBoard([{ id: 1, name: 'Todo', position: 0 }]);
-    const slow = new Subject<BoardData>();
+    const slow = new Subject<ReturnType<typeof sampleBoard>>();
     const api = {
       board: vi.fn(() => of(initial)),
       listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
@@ -2085,7 +2092,7 @@ describe('Board live refresh', () => {
     await vi.advanceTimersByTimeAsync(5000);
     f.componentInstance.reordering.set(true);
     const before = f.componentInstance.data().items.length;
-    slow.next({ ...initial, items: [] });
+    slow.next(normalizeBoardData({ ...initial, items: [] }));
     slow.complete();
     expect(f.componentInstance.data().items).toHaveLength(before);
     f.destroy();
