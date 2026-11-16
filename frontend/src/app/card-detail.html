@@ -245,27 +245,76 @@
             </button>
           </div>
           <p id="pr-url-note" class="field-note">
-            URLを追加して紐付けます。削除で解除できます。複数可（登録順）。
+            URLを追加して紐付けます。削除・並べ替え（ドラッグまたは上下）ができます。
           </p>
           <p id="pr-url-error" class="form-error">
             @if (prLinks.draft.invalid && prLinks.draft.touched && prLinks.draft.value.trim()) {
               GitHub PRのURLを入力してください。例: https://github.com/owner/repo/pull/1
             }
           </p>
-          <ul class="pr-list" aria-label="紐付けたGitHub PR">
-            @for (url of card()!.prUrls; track $index) {
-              <li class="pr-item">
-                <a class="pr-link" [href]="url" target="_blank" rel="noopener noreferrer"
-                  >GitHub PR ↗<span class="pr-link-url">{{ url }}</span></a
-                >
-                <button
-                  type="button"
-                  class="secondary pr-remove"
-                  [disabled]="prLinks.saving()"
-                  (click)="prLinks.remove($index)"
-                >
-                  削除
-                </button>
+          <ul
+            class="pr-list"
+            aria-label="紐付けたGitHub PR"
+            cdkDropList
+            [cdkDropListData]="card()!.prUrls"
+            [cdkDropListDisabled]="prLinks.saving() || card()!.prUrls.length < 2"
+            (cdkDropListDropped)="onPrDrop($event)"
+          >
+            @for (url of card()!.prUrls; track url; let i = $index; let first = $first; let last = $last) {
+              <li
+                class="pr-item"
+                cdkDrag
+                [cdkDragDisabled]="prLinks.saving() || card()!.prUrls.length < 2"
+                (cdkDragStarted)="onListDragStarted()"
+                (cdkDragEnded)="onListDragEnded()"
+              >
+                <div class="pr-item-row">
+                  @if (card()!.prUrls.length > 1) {
+                    <button
+                      type="button"
+                      class="card-drag-handle"
+                      cdkDragHandle
+                      [cdkDragHandleDisabled]="prLinks.saving()"
+                      [attr.aria-disabled]="prLinks.saving()"
+                      [attr.aria-label]="'GitHub PR を並び替え: ' + url"
+                    >
+                      <span aria-hidden="true">⋮⋮</span>
+                    </button>
+                  }
+                  <a class="pr-link" [href]="url" target="_blank" rel="noopener noreferrer"
+                    >GitHub PR ↗<span class="pr-link-url">{{ url }}</span></a
+                  >
+                </div>
+                <div class="pr-item-actions">
+                  @if (card()!.prUrls.length > 1) {
+                    <button
+                      type="button"
+                      class="secondary pr-move"
+                      [disabled]="prLinks.saving() || first"
+                      [attr.aria-label]="'1つ上へ: ' + url"
+                      (click)="prLinks.move(i, -1)"
+                    >
+                      上へ
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary pr-move"
+                      [disabled]="prLinks.saving() || last"
+                      [attr.aria-label]="'1つ下へ: ' + url"
+                      (click)="prLinks.move(i, 1)"
+                    >
+                      下へ
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="secondary pr-remove"
+                    [disabled]="prLinks.saving()"
+                    (click)="prLinks.remove(i)"
+                  >
+                    削除
+                  </button>
+                </div>
               </li>
             }
           </ul>
@@ -297,33 +346,88 @@
             </button>
           </div>
           <p id="related-note" class="field-note">
-            他カードの番号、または外部の http(s) URL。カード同士は双方向に付きます。
+            他カードの番号、または外部の http(s) URL。カード同士は双方向。並べ替え可。
           </p>
           <p id="related-label-note" class="field-note">表示名は任意（空ならタイトル／ホスト名）。</p>
-          <ul class="pr-list" aria-label="関連アイテム">
-            @for (item of card()!.relatedItems; track item.kind + ':' + (item.number || item.url)) {
-              <li class="pr-item">
-                @if (item.kind === 'card') {
-                  <a class="pr-link" [routerLink]="['/cards', item.number]"
-                    >TASK-{{ item.number }} · {{ relatedDisplayLabel(item) }}</a
+          <ul
+            class="pr-list"
+            aria-label="関連アイテム"
+            cdkDropList
+            [cdkDropListData]="card()!.relatedItems"
+            [cdkDropListDisabled]="relatedItems.saving() || card()!.relatedItems.length < 2"
+            (cdkDropListDropped)="onRelatedDrop($event)"
+          >
+            @for (
+              item of card()!.relatedItems;
+              track item.kind + ':' + (item.number || item.url);
+              let i = $index;
+              let first = $first;
+              let last = $last
+            ) {
+              <li
+                class="pr-item"
+                cdkDrag
+                [cdkDragDisabled]="relatedItems.saving() || card()!.relatedItems.length < 2"
+                (cdkDragStarted)="onListDragStarted()"
+                (cdkDragEnded)="onListDragEnded()"
+              >
+                <div class="pr-item-row">
+                  @if (card()!.relatedItems.length > 1) {
+                    <button
+                      type="button"
+                      class="card-drag-handle"
+                      cdkDragHandle
+                      [cdkDragHandleDisabled]="relatedItems.saving()"
+                      [attr.aria-disabled]="relatedItems.saving()"
+                      [attr.aria-label]="'関連を並び替え: ' + relatedDisplayLabel(item)"
+                    >
+                      <span aria-hidden="true">⋮⋮</span>
+                    </button>
+                  }
+                  @if (item.kind === 'card') {
+                    <a class="pr-link" [routerLink]="['/cards', item.number]"
+                      >TASK-{{ item.number }} · {{ relatedDisplayLabel(item) }}</a
+                    >
+                  } @else {
+                    <a
+                      class="pr-link"
+                      [href]="item.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >{{ relatedDisplayLabel(item) }} ↗<span class="pr-link-url">{{ item.url }}</span></a
+                    >
+                  }
+                </div>
+                <div class="pr-item-actions">
+                  @if (card()!.relatedItems.length > 1) {
+                    <button
+                      type="button"
+                      class="secondary pr-move"
+                      [disabled]="relatedItems.saving() || first"
+                      [attr.aria-label]="'1つ上へ: ' + relatedDisplayLabel(item)"
+                      (click)="relatedItems.move(i, -1)"
+                    >
+                      上へ
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary pr-move"
+                      [disabled]="relatedItems.saving() || last"
+                      [attr.aria-label]="'1つ下へ: ' + relatedDisplayLabel(item)"
+                      (click)="relatedItems.move(i, 1)"
+                    >
+                      下へ
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="secondary pr-remove"
+                    [disabled]="relatedItems.saving()"
+                    (click)="relatedItems.remove(item)"
                   >
-                } @else {
-                  <a
-                    class="pr-link"
-                    [href]="item.url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    >{{ relatedDisplayLabel(item) }} ↗<span class="pr-link-url">{{ item.url }}</span></a
-                  >
-                }
-                <button
-                  type="button"
-                  class="secondary pr-remove"
-                  [disabled]="relatedItems.saving()"
-                  (click)="relatedItems.remove(item)"
-                >
-                  削除
-                </button>
+                    削除
+                  </button>
+                </div>
               </li>
             }
           </ul>

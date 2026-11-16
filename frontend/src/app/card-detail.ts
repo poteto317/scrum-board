@@ -4,6 +4,7 @@ import { Component, DestroyRef, HostListener, inject, NgZone, OnInit, signal } f
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ReactiveFormsModule } from '@angular/forms';
+import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import {
   catchError,
   combineLatest,
@@ -18,7 +19,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
-import { Column } from './models';
+import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
 import { CardAssignee } from './card-assignee';
 import { CardAutosave } from './card-autosave';
@@ -36,7 +37,16 @@ import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 
 @Component({
   selector: 'app-card-detail',
-  imports: [ReactiveFormsModule, RouterLink, DatePipe, Modal, CardHistory],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    DatePipe,
+    Modal,
+    CardHistory,
+    CdkDropList,
+    CdkDrag,
+    CdkDragHandle,
+  ],
   providers: [
     CardAutosave,
     CardPrLinks,
@@ -84,12 +94,15 @@ export class CardDetail implements OnInit {
   readonly commandUrlHelp = '{{url}} はこのカードのリンクに置き換わります。';
   readonly commandMenuOpen = signal(false);
   readonly managingCommands = signal(false);
+  /** True while a PR/related list item is being dragged (pause live refresh). */
+  readonly listDragging = signal(false);
   private deleted = false;
 
   constructor() {
     this.prLinks.bind({
       card: () => this.card(),
       applyPrSave: (updated) => this.autosave.applyPrSave(updated),
+      markPrSideDirty: () => this.autosave.markPrSideDirty(),
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
@@ -161,6 +174,7 @@ export class CardDetail implements OnInit {
         this.routeNumber() > 0 &&
         !this.autosave.hasChanges() &&
         !this.cardCommands.isDirty() &&
+        !this.listDragging() &&
         !this.busy(),
       fetch: () => {
         const number = this.routeNumber();
@@ -171,7 +185,7 @@ export class CardDetail implements OnInit {
       },
       apply: ({ board, card }) => {
         if (card.number !== this.routeNumber()) return;
-        if (this.autosave.hasChanges() || this.busy()) return;
+        if (this.autosave.hasChanges() || this.listDragging() || this.busy()) return;
         this.error.set('');
         this.columns.set(board.columns);
         const next = {
@@ -350,5 +364,23 @@ export class CardDetail implements OnInit {
   @HostListener('document:keydown.escape')
   closeCommandMenuFromKeyboard() {
     this.commandMenuOpen.set(false);
+  }
+
+  onPrDrop(event: CdkDragDrop<string[]>) {
+    if (event.previousIndex === event.currentIndex) return;
+    this.prLinks.reorder(event.previousIndex, event.currentIndex);
+  }
+
+  onRelatedDrop(event: CdkDragDrop<RelatedItem[]>) {
+    if (event.previousIndex === event.currentIndex) return;
+    this.relatedItems.reorder(event.previousIndex, event.currentIndex);
+  }
+
+  onListDragStarted() {
+    this.listDragging.set(true);
+  }
+
+  onListDragEnded() {
+    this.listDragging.set(false);
   }
 }
