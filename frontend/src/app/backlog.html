@@ -86,7 +86,8 @@
                 <span class="backlog-status">{{ statusName(card.columnId) }}</span>
                 <a
                   class="backlog-detail-link"
-                  [routerLink]="['/items', card.number]"
+                  [attr.href]="itemHref(card)"
+                  (click)="onDetailClick($event, card)"
                   draggable="false"
                   >詳細</a
                 >
