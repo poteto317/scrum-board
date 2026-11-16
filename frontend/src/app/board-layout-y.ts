@@ -41,16 +41,19 @@ export function pointerClientY(event: MouseEvent | TouchEvent): number | null {
   return touch ? touch.clientY : null;
 }
 
+/** When a card's measured height is unknown (jsdom / first paint), estimate with this px. */
+export const FREE_CARD_FALLBACK_HEIGHT_PX = 120;
+
 /** free 列の min-height: max(72, 各カード offsetY + 高さ)。ドラッグ preview は含めない想定。 */
 export function freeListMinHeightPx(
   cards: readonly Item[],
   heightById: ReadonlyMap<number, number>,
-  fallbackHeight = 120,
+  fallbackHeight = FREE_CARD_FALLBACK_HEIGHT_PX,
 ): number {
   let maxBottom = 0;
   for (const card of cards) {
     const h = heightById.get(card.id) ?? fallbackHeight;
-    maxBottom = Math.max(maxBottom, (card.offsetY ?? 0) + h);
+    maxBottom = Math.max(maxBottom, card.offsetY + h);
   }
   return Math.max(CARD_LIST_MIN_HEIGHT_PX, maxBottom);
 }

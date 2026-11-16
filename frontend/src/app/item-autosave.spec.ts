@@ -12,6 +12,7 @@ const initial: Item = {
   description: '本文',
   position: 0,
   backlogPosition: 0,
+    offsetY: 0,
   prUrls: [],
   relatedItems: [],
   assignee: '',
