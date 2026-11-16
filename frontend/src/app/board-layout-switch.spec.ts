@@ -168,6 +168,23 @@ describe('switchPackToFree / switchFreeToPack', () => {
     expect(state.settingsSavingLog).toEqual([true, false]);
   });
 
+  it('reverts free→pack when patchBoardSettings fails', async () => {
+    const previous = board('free', [card(1, 1, 0, 80)]);
+    const state = { data: previous, layoutSwitching: false, settingsSaving: false };
+    const setReorderError = vi.fn();
+    const d = deps({
+      state,
+      setReorderError,
+      patchBoardSettings: vi.fn(() => throwError(() => ({ status: 500, message: 'fail' }))),
+    });
+    await switchFreeToPack(d);
+    expect(state.data).toEqual(previous);
+    expect(state.data.settings.cardLayout).toBe('free');
+    expect(setReorderError).toHaveBeenCalled();
+    expect(state.layoutSwitching).toBe(false);
+    expect(state.settingsSaving).toBe(false);
+  });
+
   it('no-ops when already busy', async () => {
     const state = {
       data: board('pack', [card(1, 1, 0)]),
