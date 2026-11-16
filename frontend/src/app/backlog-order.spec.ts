@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { computeAutoScrollDelta, computeDropSlot, moveCard, targetIndex } from './backlog-order';
-import { Card } from './models';
+import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
+import { Item } from './models';
 
-const cards: Card[] = [
+const items: Item[] = [
   {
     id: 1,
     number: 1,
@@ -90,13 +90,13 @@ describe('backlog-order helpers', () => {
   });
 
   it('moves card immutably and reassigns contiguous backlog positions', () => {
-    const moved = moveCard(cards, 3, 2);
+    const moved = moveItem(items, 3, 2);
     expect(moved.map((c) => c.id)).toEqual([1, 2, 9, 3]);
     expect(moved.map((c) => c.backlogPosition)).toEqual([0, 1, 2, 3]);
-    expect(cards.map((c) => c.id)).toEqual([1, 2, 3, 9]);
-    expect(moveCard(cards, 1, 1)).toBe(cards);
-    expect(moveCard(cards, -1, 2)).toBe(cards);
-    expect(moveCard(cards, 1, 4)).toBe(cards);
+    expect(items.map((c) => c.id)).toEqual([1, 2, 3, 9]);
+    expect(moveItem(items, 1, 1)).toBe(items);
+    expect(moveItem(items, -1, 2)).toBe(items);
+    expect(moveItem(items, 1, 4)).toBe(items);
   });
 
   it('computes vertical auto-scroll deltas only within 48px container edges', () => {

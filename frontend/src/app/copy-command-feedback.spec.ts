@@ -38,7 +38,7 @@ describe('CopyCommandFeedback', () => {
     await feedback.copyResolved('open {{url}} then {{url}}', 27, 'http://127.0.0.1:4200');
     expect(feedback.message()).toBe(COPY_COMMAND_SUCCESS);
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      'open http://127.0.0.1:4200/cards/27 then http://127.0.0.1:4200/cards/27',
+      'open http://127.0.0.1:4200/items/27 then http://127.0.0.1:4200/items/27',
     );
     await vi.advanceTimersByTimeAsync(2000);
     expect(feedback.message()).toBe('');
@@ -52,7 +52,7 @@ describe('CopyCommandFeedback', () => {
     vi.spyOn(document, 'execCommand').mockReturnValue(false);
     await feedback.copyResolved('gh pr view {{url}}', 1, 'http://example');
     expect(feedback.message()).toBe(COPY_COMMAND_FAILURE);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('gh pr view http://example/cards/1');
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('gh pr view http://example/items/1');
   });
 
   it('sets failure message when public origin cannot be loaded', () => {

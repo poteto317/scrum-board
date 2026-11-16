@@ -8,7 +8,7 @@ import {
 
 describe('related-item helpers', () => {
   it('parses card numbers and http(s) URLs', () => {
-    expect(parseRelatedDraft(' 12 ')).toEqual({ kind: 'card', number: 12 });
+    expect(parseRelatedDraft(' 12 ')).toEqual({ kind: 'item', number: 12 });
     expect(parseRelatedDraft('https://example.com/a')).toEqual({
       kind: 'url',
       url: 'https://example.com/a',
@@ -19,9 +19,9 @@ describe('related-item helpers', () => {
   });
 
   it('displayLabel prefers label then title/host', () => {
-    expect(displayLabel({ kind: 'card', number: 3, title: 'Hello', label: 'L' })).toBe('L');
-    expect(displayLabel({ kind: 'card', number: 3, title: 'Hello', label: '' })).toBe('Hello');
-    expect(displayLabel({ kind: 'card', number: 3 })).toBe('TASK-3');
+    expect(displayLabel({ kind: 'item', number: 3, title: 'Hello', label: 'L' })).toBe('L');
+    expect(displayLabel({ kind: 'item', number: 3, title: 'Hello', label: '' })).toBe('Hello');
+    expect(displayLabel({ kind: 'item', number: 3 })).toBe('ITEM-003');
     expect(displayLabel({ kind: 'url', url: 'https://docs.example.com/path' })).toBe(
       'docs.example.com',
     );
@@ -34,7 +34,7 @@ describe('related-item helpers', () => {
     control.setValue('notaurl');
     expect(control.invalid).toBe(true);
     expect(
-      sameRelatedItem({ kind: 'card', number: 1 }, { kind: 'card', number: 1, title: 'x' }),
+      sameRelatedItem({ kind: 'item', number: 1 }, { kind: 'item', number: 1, title: 'x' }),
     ).toBe(true);
     expect(
       sameRelatedItem(

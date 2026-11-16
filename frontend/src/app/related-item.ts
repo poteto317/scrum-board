@@ -1,8 +1,9 @@
+import { formatItemNumber } from './item-number';
 import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 import { RelatedItem } from './models';
 
 export type RelatedDraft =
-  | { kind: 'card'; number: number }
+  | { kind: 'item'; number: number }
   | { kind: 'url'; url: string }
   | { kind: 'invalid' };
 
@@ -11,7 +12,7 @@ export function parseRelatedDraft(raw: string): RelatedDraft {
   const text = raw.trim();
   if (!text) return { kind: 'invalid' };
   if (/^[1-9][0-9]*$/.test(text)) {
-    return { kind: 'card', number: Number(text) };
+    return { kind: 'item', number: Number(text) };
   }
   if (isHttpUrl(text)) {
     return { kind: 'url', url: text };
@@ -42,8 +43,8 @@ export function httpUrlValidator(): ValidatorFn {
 export function displayLabel(item: RelatedItem): string {
   const label = (item.label ?? '').trim();
   if (label) return label;
-  if (item.kind === 'card') {
-    return (item.title ?? '').trim() || `TASK-${item.number ?? ''}`;
+  if (item.kind === 'item') {
+    return (item.title ?? '').trim() || formatItemNumber(item.number ?? 0);
   }
   const url = (item.url ?? '').trim();
   try {
@@ -55,12 +56,12 @@ export function displayLabel(item: RelatedItem): string {
 }
 
 export function relatedItemKey(item: RelatedItem): string {
-  if (item.kind === 'card') return `card:${item.number}`;
+  if (item.kind === 'item') return `item:${item.number}`;
   return `url:${item.url}`;
 }
 
 export function sameRelatedItem(a: RelatedItem, b: RelatedItem): boolean {
   if (a.kind !== b.kind) return false;
-  if (a.kind === 'card') return a.number === b.number;
+  if (a.kind === 'item') return a.number === b.number;
   return a.url === b.url;
 }

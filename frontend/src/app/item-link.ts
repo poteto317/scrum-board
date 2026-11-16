@@ -1,5 +1,5 @@
-export const cardDetailUrl = (origin: string, number: number): string =>
-  `${origin.replace(/\/$/, '')}/cards/${number}`;
+export const itemDetailUrl = (origin: string, number: number): string =>
+  `${origin.replace(/\/$/, '')}/items/${number}`;
 
 export const copyText = async (text: string): Promise<boolean> => {
   if (navigator.clipboard?.writeText) {

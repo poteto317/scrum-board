@@ -1,5 +1,5 @@
 import { DestroyRef } from '@angular/core';
-import { cardDetailUrl, copyText } from './card-link';
+import { itemDetailUrl, copyText } from './item-link';
 import { CopyFeedbackState } from './copy-feedback-state';
 import { COPY_COMMAND_FAILURE, COPY_COMMAND_SUCCESS, resolveCommand } from './command-template';
 import { LatestCopyFeedback } from './latest-copy-feedback';
@@ -25,7 +25,7 @@ export class CopyCommandFeedback {
     number: number,
     origin = window.location.origin,
   ): Promise<void> {
-    const ok = await copyText(resolveCommand(template, cardDetailUrl(origin, number)));
+    const ok = await copyText(resolveCommand(template, itemDetailUrl(origin, number)));
     if (this.state.isDestroyed) return;
     this.announce(ok);
   }

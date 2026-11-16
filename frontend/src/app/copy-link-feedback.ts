@@ -1,5 +1,5 @@
 import { DestroyRef } from '@angular/core';
-import { cardDetailUrl, copyText } from './card-link';
+import { itemDetailUrl, copyText } from './item-link';
 import { CopyFeedbackState } from './copy-feedback-state';
 import { LatestCopyFeedback } from './latest-copy-feedback';
 
@@ -22,8 +22,8 @@ export class CopyLinkFeedback {
     this.message = this.state.message;
   }
 
-  async copyCardNumber(number: number, origin = window.location.origin): Promise<void> {
-    const ok = await copyText(cardDetailUrl(origin, number));
+  async copyItemNumber(number: number, origin = window.location.origin): Promise<void> {
+    const ok = await copyText(itemDetailUrl(origin, number));
     if (this.state.isDestroyed) return;
     this.state.show(ok ? COPY_LINK_SUCCESS : COPY_LINK_FAILURE);
   }
