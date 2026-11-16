@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- DB 物理名 `cards` / `card_id` は変えない。
+- DB 表名は `items` / `item_*` へ（列名 `card_id` は当面維持）。
 - `/api/cards` は残さない（FE・smoke・docs を同時更新）。
 - CSS `.task-card` は触らない。
 - `/feature` 中はコミットしない。

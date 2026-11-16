@@ -187,7 +187,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 
 タイトルは1〜200文字、説明は10000文字以内。タイトル・列名の前後の空白は削除します。絵文字を含むUnicode文字数で検証します。空のPATCH、未知のプロパティ、不正なJSONも拒否します。エラー形式は`{"message":"..."}`。不正入力400、未存在404、重複列409、内部エラー500です。
 
-列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のアイテムは`position`・ID順で、`GET /api/board`もこの順です。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます。ドラッグ&ドロップは`PUT /api/items/order`で保存し、`cards.position`はAPI起動時に自動で追加されます。
+列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のアイテムは`position`・ID順で、`GET /api/board`もこの順です。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます。ドラッグ&ドロップは`PUT /api/items/order`で保存し、`items.position`はAPI起動時に自動で追加されます。
 
 ## 検証
 
@@ -237,11 +237,11 @@ APIへ直接、不正なUTF-8や片側だけのサロゲートエスケープを
 
 画面の `ITEM-001` などはAPIの `number` を表示します。`number` は詳細URLにも使い、`id` は内部の識別子として更新・削除に使用します。例として `id: 18, number: 3` のアイテムは `/items/3` で `ITEM-003` と表示されます。画面は `GET /api/items/by-number/3` で取得した内部IDを使って保存・削除します。
 
-API起動時に `card_numbers` と `card_number_sequence` を冪等に作成し、未採番アイテムを作成日時・内部ID順で採番します。既存アイテムのID・本文・ステータス・日時は書き換えません。サンプルだけのDBではサンプルが1、その後の最初の作成が2になります。作成失敗は番号を消費せず、削除した番号は再利用しません。再起動・編集・ステータス移動でも一度発行した番号を維持します。
+API起動時に `item_numbers` と `item_number_sequence` を冪等に作成し、未採番アイテムを作成日時・内部ID順で採番します。既存アイテムのID・本文・ステータス・日時は書き換えません。サンプルだけのDBではサンプルが1、その後の最初の作成が2になります。作成失敗は番号を消費せず、削除した番号は再利用しません。再起動・編集・ステータス移動でも一度発行した番号を維持します。
 
 既存データのある環境では、APIを止めてバックアップを取得してから更新してください。移行はAPI公開前に実行され、失敗した場合は起動を中止します。旧版と新版のAPIを混在させず、新版が採番を終えてから公開します。バックフィルと新規採番は同じカウンター行をロックし、トランザクションで番号とアイテムを一緒に確定します。初期SQLの再実行やデータボリュームの削除は不要です。
 
-旧版へコードを戻しても `cards` 本体は維持できますが、旧画面のURLと番号表示は内部ID方式へ戻ります。番号表の削除・再作成は番号の同一性を失うため行わないでください。
+旧版へコードを戻しても `items` 本体は維持できますが、旧画面のURLと番号表示は内部ID方式へ戻ります。番号表の削除・再作成は番号の同一性を失うため行わないでください。
 
 実MySQLの採番テストは、使い捨てDB `scrumboard_numbering_test` と `scrumboard_numbering_test_fresh` が必要です。`KANBAN_TEST_DSN` が未指定ならskipし、別名のDBは拒否します。テストはこの2つのDB内のテーブルだけをリセットします。
 
@@ -268,13 +268,13 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 
 アイテム詳細のプロパティでGitHub PRのURLを追加・削除・並べ替え（ドラッグまたは上下ボタン）できます。1アイテムに複数URLを登録でき（件数上限なし）、削除で解除します。APIからは `prUrls` 配列の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。関連アイテムも同様に並べ替えできます。
 
-URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します（1アイテム複数行）。既存のアイテム・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。起動時に旧スキーマ（1アイテム1行）から自動移行します。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
+URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `item_pr_links` に保存します（1アイテム複数行）。既存のアイテム・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。起動時に旧スキーマ（1アイテム1行）から自動移行します。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
 
 更新前のバックアップから復元する場合は、ダンプに含まれない補助表が取り残されないよう、復元の前にAPIを止めて補助表を削除してください。取り残された行は、復元で戻ったアイテムやその後に作ったアイテムと内部IDが重なり、別のアイテムにPR URLや番号が付くおそれがあります。更新後に保存したPR URLは失われ、番号は次のAPI起動時に作成日時・内部ID順で採番し直されます。
 
 ```sh
 docker compose stop api
-docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE" -e "SET FOREIGN_KEY_CHECKS=0; DROP TABLE IF EXISTS card_history, card_pr_links, card_numbers, card_number_sequence;"'
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE" -e "SET FOREIGN_KEY_CHECKS=0; DROP TABLE IF EXISTS item_history, item_pr_links, item_numbers, item_number_sequence;"'
 docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --default-character-set=utf8mb4 -uroot' < backups/<更新前のダンプ>.sql
 docker compose start api
 ```
@@ -289,7 +289,7 @@ docker compose start api
 
 詳細画面の「変更履歴」から、作成とタイトル・説明・ステータス・PR URLの変更前後を確認できます。自動保存とAPI更新のどちらも同じトランザクションで履歴を残し、値が変わらない再送では増えません。50件ずつ追加表示します。アイテムを削除すると、そのアイテムの履歴も削除されます。
 
-起動時の `backend/internal/kanban/history_migration.go` が補助表 `card_history` を準備し、履歴のない既存アイテムには「履歴機能導入時の状態」を一度だけ保存します。過去の初期値を推定するものではありません。過去記録の復元は `backend/cmd/import-history` と `history_import.go`、画面は `frontend/src/app/item-history.*` を参照してください。
+起動時の `backend/internal/kanban/history_migration.go` が補助表 `item_history` を準備し、履歴のない既存アイテムには「履歴機能導入時の状態」を一度だけ保存します。過去の初期値を推定するものではありません。過去記録の復元は `backend/cmd/import-history` と `history_import.go`、画面は `frontend/src/app/item-history.*` を参照してください。
 
 復元記録は「復元した記録」と注記・根拠PRで通常の変更と区別します。バックアップ間の差分は観測時刻であり、正確な操作時刻や途中の全変更を保証しません。作成日時しか分からない場合は初期本文を捏造しません。復元方法とJSON形式は[APIガイド](docs/api.md#過去履歴の取り込み)を参照してください。
 
@@ -321,7 +321,7 @@ Cloud SQL for MySQL 8 上に、本番と同じ DB 名・ユーザー（例: `scr
 
 本番の `PUBLIC_ORIGIN`（末尾スラッシュなし、例: `https://scrum-board-xxxxx.asia-northeast1.run.app`）を **必ず** 設定してから `rewrite-origins` を実行します。未設定・空は更新せず非0終了です。
 
-対象カラム: `cards.title` / `cards.description` / `card_history.note` / `card_history.evidence_url` / `command_templates.template`（`{{url}}` プレースホルダはそのまま。展開済み localhost のみ置換）。
+対象カラム: `items.title` / `items.description` / `item_history.note` / `item_history.evidence_url` / `command_templates.template`（`{{url}}` プレースホルダはそのまま。展開済み localhost のみ置換）。
 
 **最初は必ずドライラン**で件数を確認します。
 
