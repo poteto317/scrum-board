@@ -7,12 +7,12 @@ import (
 
 func (r MySQLRepository) prepareHistory(ctx context.Context) error {
 	_, err := r.DB.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS item_history (
- id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, card_id BIGINT NOT NULL,
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, item_id BIGINT NOT NULL,
  kind VARCHAR(20) NOT NULL, occurred_at DATETIME(6) NOT NULL, recorded_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  changes JSON NOT NULL, note TEXT NOT NULL, evidence_url VARCHAR(2048) NOT NULL,
  event_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NULL,
- UNIQUE KEY history_import(card_id,event_key), INDEX history_order(card_id,occurred_at,id),
- CONSTRAINT fk_history_card FOREIGN KEY(card_id) REFERENCES items(id) ON DELETE CASCADE
+ UNIQUE KEY history_import(item_id,event_key), INDEX history_order(item_id,occurred_at,id),
+ CONSTRAINT fk_history_item FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`)
 	return err
 }
@@ -56,7 +56,7 @@ func (r MySQLRepository) baseline(ctx context.Context, id int64) error {
 		return dbError(err)
 	}
 	var exists bool
-	if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM item_history WHERE card_id=?)", id).Scan(&exists); err != nil {
+	if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM item_history WHERE item_id=?)", id).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {

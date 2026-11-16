@@ -11,8 +11,10 @@ import (
 func TestMySQLCommandTemplatesCRUDAndLimit(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
-	if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS command_templates"); err != nil {
-		t.Fatal(err)
+	for _, table := range []string{"item_command_templates", "command_template_defaults", "command_templates"} {
+		if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
+			t.Fatal(err)
+		}
 	}
 	r := MySQLRepository{DB: db}
 	if err := r.InitializeCommandTemplates(ctx); err != nil {

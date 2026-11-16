@@ -68,7 +68,7 @@ func resolveRelatedStored(ctx context.Context, tx *sql.Tx, ownerID int64, items 
 		switch it.Kind {
 		case relatedKindItem:
 			var peerID int64
-			err := tx.QueryRowContext(ctx, "SELECT card_id FROM item_numbers WHERE task_number=?", it.Number).Scan(&peerID)
+			err := tx.QueryRowContext(ctx, "SELECT item_id FROM item_numbers WHERE item_number=?", it.Number).Scan(&peerID)
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, ErrRelatedItem
 			}
@@ -100,7 +100,7 @@ func insertRelatedRows(ctx context.Context, tx *sql.Tx, cardID int64, rows []rel
 			url = row.url
 		}
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO item_related_items(card_id,position,kind,related_card_id,url,label) VALUES(?,?,?,?,?,?)`,
+			`INSERT INTO item_related_items(item_id,position,kind,related_item_id,url,label) VALUES(?,?,?,?,?,?)`,
 			cardID, i, row.kind, related, url, row.label); err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func insertRelatedRows(ctx context.Context, tx *sql.Tx, cardID int64, rows []rel
 
 func nextRelatedPosition(ctx context.Context, tx *sql.Tx, cardID int64) (int, error) {
 	var max sql.NullInt64
-	if err := tx.QueryRowContext(ctx, `SELECT MAX(position) FROM item_related_items WHERE card_id=?`, cardID).Scan(&max); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT MAX(position) FROM item_related_items WHERE item_id=?`, cardID).Scan(&max); err != nil {
 		return 0, err
 	}
 	if !max.Valid {
@@ -122,14 +122,14 @@ func nextRelatedPosition(ctx context.Context, tx *sql.Tx, cardID int64) (int, er
 func hasReverseRelated(ctx context.Context, tx *sql.Tx, ownerID, peerID int64) (bool, error) {
 	var n int
 	err := tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM item_related_items WHERE card_id=? AND kind=? AND related_card_id=?`,
+		`SELECT COUNT(*) FROM item_related_items WHERE item_id=? AND kind=? AND related_item_id=?`,
 		ownerID, relatedKindItem, peerID).Scan(&n)
 	return n > 0, err
 }
 
 func compactRelatedPositions(ctx context.Context, tx *sql.Tx, cardID int64) error {
 	rows, err := tx.QueryContext(ctx,
-		`SELECT kind, related_card_id, url, label FROM item_related_items WHERE card_id=? ORDER BY position, related_card_id, url`, cardID)
+		`SELECT kind, related_item_id, COALESCE(url, ''), label FROM item_related_items WHERE item_id=? ORDER BY position, related_item_id, url`, cardID)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func compactRelatedPositions(ctx context.Context, tx *sql.Tx, cardID int64) erro
 		return err
 	}
 	rows.Close()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM item_related_items WHERE card_id=?`, cardID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM item_related_items WHERE item_id=?`, cardID); err != nil {
 		return err
 	}
 	return insertRelatedRows(ctx, tx, cardID, stored)
@@ -195,7 +195,7 @@ func syncPeerRelatedLinks(ctx context.Context, tx *sql.Tx, ownerID int64, oldPee
 			return err
 		}
 		if _, err = tx.ExecContext(ctx,
-			`INSERT INTO item_related_items(card_id,position,kind,related_card_id,url,label) VALUES(?,?,?,?,NULL,'')`,
+			`INSERT INTO item_related_items(item_id,position,kind,related_item_id,url,label) VALUES(?,?,?,?,NULL,'')`,
 			peerID, pos, relatedKindItem, ownerID); err != nil {
 			return err
 		}
@@ -208,7 +208,7 @@ func syncPeerRelatedLinks(ctx context.Context, tx *sql.Tx, ownerID int64, oldPee
 			continue
 		}
 		if _, err := tx.ExecContext(ctx,
-			`DELETE FROM item_related_items WHERE card_id=? AND kind=? AND related_card_id=?`,
+			`DELETE FROM item_related_items WHERE item_id=? AND kind=? AND related_item_id=?`,
 			peerID, relatedKindItem, ownerID); err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func replaceRelatedItems(ctx context.Context, tx *sql.Tx, ownerID int64, items [
 		befores[id] = c
 	}
 
-	if _, err = tx.ExecContext(ctx, `DELETE FROM item_related_items WHERE card_id=?`, ownerID); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM item_related_items WHERE item_id=?`, ownerID); err != nil {
 		return nil, err
 	}
 	if err = insertRelatedRows(ctx, tx, ownerID, stored); err != nil {

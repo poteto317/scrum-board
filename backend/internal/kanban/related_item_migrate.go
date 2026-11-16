@@ -6,17 +6,17 @@ import (
 )
 
 const cardRelatedItemsDDL = `CREATE TABLE IF NOT EXISTS item_related_items (
- card_id BIGINT NOT NULL,
+ item_id BIGINT NOT NULL,
  position INT NOT NULL,
  kind VARCHAR(8) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
- related_card_id BIGINT NULL,
+ related_item_id BIGINT NULL,
  url VARCHAR(2048) CHARACTER SET ascii COLLATE ascii_bin NULL,
  label VARCHAR(120) NOT NULL DEFAULT '',
- PRIMARY KEY (card_id, position),
- UNIQUE KEY uq_item_related_card (card_id, related_card_id),
- UNIQUE KEY uq_item_related_url (card_id, url),
- CONSTRAINT fk_item_related_owner FOREIGN KEY(card_id) REFERENCES items(id) ON DELETE CASCADE,
- CONSTRAINT fk_item_related_peer FOREIGN KEY(related_card_id) REFERENCES items(id) ON DELETE CASCADE
+ PRIMARY KEY (item_id, position),
+ UNIQUE KEY uq_item_related_item (item_id, related_item_id),
+ UNIQUE KEY uq_item_related_url (item_id, url),
+ CONSTRAINT fk_item_related_owner FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE,
+ CONSTRAINT fk_item_related_peer FOREIGN KEY(related_item_id) REFERENCES items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`
 
 // InitializeRelatedItems creates item_related_items if missing (additive).

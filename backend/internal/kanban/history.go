@@ -32,7 +32,7 @@ func insertHistory(ctx context.Context, tx *sql.Tx, id int64, event HistoryEvent
 		return err
 	}
 	// A string, not []byte: a binary-charset value is rejected by the JSON column when parameters are interpolated client-side.
-	_, err = tx.ExecContext(ctx, `INSERT INTO item_history(card_id,kind,occurred_at,changes,note,evidence_url,event_key)
+	_, err = tx.ExecContext(ctx, `INSERT INTO item_history(item_id,kind,occurred_at,changes,note,evidence_url,event_key)
  VALUES(?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id`, id, event.Kind, event.OccurredAt, string(payload), event.Note, event.EvidenceURL, key)
 	return err
 }

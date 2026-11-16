@@ -7,7 +7,7 @@ import (
 )
 
 // A database from before both drag & drop (no cards.position) and multiple PR links (item_pr_links keyed by
-// card_id only) goes through the startup initializers in the order cmd/server/main.go runs them. Each is
+// item_id only) goes through the startup initializers in the order cmd/server/main.go runs them. Each is
 // idempotent, so booting twice changes nothing, and no step may touch the legacy PR table before it is migrated.
 func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
 	db := mysqlTestDB(t, "")
@@ -37,11 +37,12 @@ func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	boot := func() {
 		t.Helper()
-		// The same order as cmd/server/main.go.
+		// The same order as cmd/server/main.go (column rename before Initialize*).
 		for _, step := range []struct {
 			name string
 			run  func(context.Context) error
 		}{
+			{"RenameCardColumnsToItems", r.RenameCardColumnsToItems},
 			{"InitializeItemPositions", r.InitializeItemPositions},
 			{"InitializeBacklogPositions", r.InitializeBacklogPositions},
 			{"InitializePRLinks", r.InitializePRLinks},

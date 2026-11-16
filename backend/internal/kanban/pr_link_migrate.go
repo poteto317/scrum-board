@@ -22,7 +22,7 @@ SELECT COUNT(*) FROM information_schema.columns
 }
 
 // InitializePRLinks is additive for card/number data. It migrates the old
-// single-URL schema (card_id PK) to multi-row (card_id, position).
+// single-URL schema (item_id PK) to multi-row (item_id, position).
 // MySQL DDL auto-commits, so a crashed RENAME can leave item_pr_links__new
 // behind; the next boot recovers that table before creating an empty one.
 func (r MySQLRepository) InitializePRLinks(ctx context.Context) error {
@@ -76,8 +76,8 @@ func (r MySQLRepository) InitializePRLinks(ctx context.Context) error {
 		return err
 	}
 	if _, err = r.DB.ExecContext(ctx, `
-INSERT INTO item_pr_links__new (card_id, position, pr_url)
-SELECT card_id, 0, pr_url FROM item_pr_links WHERE pr_url <> ''`); err != nil {
+INSERT INTO item_pr_links__new (item_id, position, pr_url)
+SELECT item_id, 0, pr_url FROM item_pr_links WHERE pr_url <> ''`); err != nil {
 		return fmt.Errorf("migrate item_pr_links: %w", err)
 	}
 	// Swap: keep __new if RENAME fails after DROP (recovered on next boot).

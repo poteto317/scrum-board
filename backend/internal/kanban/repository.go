@@ -49,8 +49,8 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.task_number, c.column_id, c.title, c.description, c.position, c.backlog_position, c.assignee, c.created_at, c.updated_at"
-const numberedCards = " FROM items c JOIN item_numbers n ON n.card_id=c.id"
+const cardFields = "c.id, n.item_number, c.column_id, c.title, c.description, c.position, c.backlog_position, c.assignee, c.created_at, c.updated_at"
+const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
 	queryable
@@ -109,7 +109,7 @@ func (r MySQLRepository) GetItem(ctx context.Context, id int64) (Item, error) {
 	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 }
 func (r MySQLRepository) GetItemByNumber(ctx context.Context, number int64) (Item, error) {
-	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.task_number=?", number)
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.item_number=?", number)
 }
 func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -140,7 +140,7 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 	if err != nil {
 		return Item{}, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO item_numbers(card_id,task_number) VALUES(?,?)", id, number); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO item_numbers(item_id,item_number) VALUES(?,?)", id, number); err != nil {
 		return Item{}, dbError(err)
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE item_number_sequence SET next_number=? WHERE singleton=1", number+1); err != nil {

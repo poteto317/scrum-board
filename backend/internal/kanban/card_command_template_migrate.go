@@ -8,11 +8,11 @@ import (
 // InitializeItemCommandTemplates creates per-card links and new-card defaults tables.
 func (r MySQLRepository) InitializeItemCommandTemplates(ctx context.Context) error {
 	_, err := r.DB.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS item_command_templates (
-  card_id BIGINT NOT NULL,
+  item_id BIGINT NOT NULL,
   template_id BIGINT NOT NULL,
   position INT NOT NULL DEFAULT 0,
-  PRIMARY KEY (card_id, template_id),
-  CONSTRAINT fk_item_command_templates_card FOREIGN KEY (card_id) REFERENCES items(id) ON DELETE CASCADE,
+  PRIMARY KEY (item_id, template_id),
+  CONSTRAINT fk_item_command_templates_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
   CONSTRAINT fk_item_command_templates_template FOREIGN KEY (template_id) REFERENCES command_templates(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`)
 	if err != nil {
