@@ -12,8 +12,8 @@ var (
 	ErrDuplicate         = errors.New("duplicate column")
 	ErrColumnOrder       = errors.New("invalid column order")
 	ErrColumnMismatch    = errors.New("column set mismatch")
-	ErrCardOrder         = errors.New("invalid card order")
-	ErrCardOrderMismatch = errors.New("card set mismatch")
+	ErrItemOrder         = errors.New("invalid item order")
+	ErrItemOrderMismatch = errors.New("item set mismatch")
 	ErrBacklogOrder      = errors.New("invalid backlog order")
 	ErrBacklogMismatch   = errors.New("backlog set mismatch")
 )
@@ -23,7 +23,7 @@ type Column struct {
 	Name     string `json:"name"`
 	Position int    `json:"position"`
 }
-type Card struct {
+type Item struct {
 	Number          int64     `json:"number"`
 	ID              int64     `json:"id"`
 	ColumnID        int64     `json:"columnId"`
@@ -38,15 +38,15 @@ type Card struct {
 	UpdatedAt       time.Time     `json:"updatedAt"`
 }
 
-type CardColumnOrder struct {
+type ItemColumnOrder struct {
 	ColumnID int64   `json:"columnId"`
-	CardIDs  []int64 `json:"cardIds"`
+	ItemIDs  []int64 `json:"itemIds"`
 }
 type Board struct {
 	Columns []Column `json:"columns"`
-	Cards   []Card   `json:"cards"`
+	Items []Item   `json:"items"`
 }
-type CardInput struct {
+type ItemInput struct {
 	ColumnID     int64         `json:"columnId"`
 	Title        string        `json:"title"`
 	Description  string        `json:"description"`
@@ -54,7 +54,7 @@ type CardInput struct {
 	RelatedItems []RelatedItem `json:"relatedItems"`
 	Assignee     string        `json:"assignee"`
 }
-type CardPatch struct {
+type ItemPatch struct {
 	ColumnID     *int64         `json:"columnId"`
 	Title        *string        `json:"title"`
 	Description  *string        `json:"description"`
@@ -67,24 +67,24 @@ type CardPatch struct {
 type Repository interface {
 	Board(context.Context) (Board, error)
 	History(context.Context, int64, int64) (HistoryPage, error)
-	GetCard(context.Context, int64) (Card, error)
-	GetCardByNumber(context.Context, int64) (Card, error)
+	GetItem(context.Context, int64) (Item, error)
+	GetItemByNumber(context.Context, int64) (Item, error)
 	GetColumnByName(context.Context, string) (Column, error)
-	CreateCard(context.Context, CardInput) (Card, error)
-	UpdateCard(context.Context, int64, CardPatch) (Card, error)
-	DeleteCard(context.Context, int64) error
+	CreateItem(context.Context, ItemInput) (Item, error)
+	UpdateItem(context.Context, int64, ItemPatch) (Item, error)
+	DeleteItem(context.Context, int64) error
 	CreateColumn(context.Context, string) (Column, error)
 	ReorderColumns(context.Context, []int64) ([]Column, error)
-	ReorderCards(context.Context, []CardColumnOrder) ([]Card, error)
-	Backlog(context.Context) ([]Card, error)
-	ReorderBacklog(context.Context, []int64) ([]Card, error)
+	ReorderItems(context.Context, []ItemColumnOrder) ([]Item, error)
+	Backlog(context.Context) ([]Item, error)
+	ReorderBacklog(context.Context, []int64) ([]Item, error)
 	ListCommandTemplates(context.Context) ([]CommandTemplate, error)
 	CreateCommandTemplate(context.Context, CommandTemplateInput) (CommandTemplate, error)
 	UpdateCommandTemplate(context.Context, int64, CommandTemplatePatch) (CommandTemplate, error)
 	DeleteCommandTemplate(context.Context, int64) error
-	ListCardCommandTemplates(context.Context, int64) ([]CommandTemplate, error)
-	ReplaceCardCommandTemplates(context.Context, int64, []int64) ([]CommandTemplate, error)
+	ListItemCommandTemplates(context.Context, int64) ([]CommandTemplate, error)
+	ReplaceItemCommandTemplates(context.Context, int64, []int64) ([]CommandTemplate, error)
 	ListCommandTemplateDefaults(context.Context) ([]int64, error)
 	ReplaceCommandTemplateDefaults(context.Context, []int64) ([]int64, error)
-	ApplyCommandTemplatesToAllCards(context.Context, []int64) error
+	ApplyCommandTemplatesToAllItems(context.Context, []int64) error
 }

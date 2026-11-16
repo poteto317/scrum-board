@@ -8,16 +8,16 @@ import (
 func TestCardCommandTemplatesHTTP(t *testing.T) {
 	h := NewHandler(fresh())
 
-	w := request(h, "POST", "/api/cards", `{"title":"A","description":"","columnId":1}`)
+	w := request(h, "POST", "/api/items", `{"title":"A","description":"","columnId":1}`)
 	if w.Code != 201 {
 		t.Fatalf("create card: %d %s", w.Code, w.Body.String())
 	}
-	var card Card
+	var card Item
 	if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
 		t.Fatal(err)
 	}
 
-	w = request(h, "GET", "/api/cards/by-number/"+itoa(card.Number)+"/command-templates", "")
+	w = request(h, "GET", "/api/items/by-number/"+itoa(card.Number)+"/command-templates", "")
 	if w.Code != 200 {
 		t.Fatalf("get empty: %d %s", w.Code, w.Body.String())
 	}
@@ -31,7 +31,7 @@ func TestCardCommandTemplatesHTTP(t *testing.T) {
 		t.Fatalf("want empty, got %+v", empty.Templates)
 	}
 
-	w = request(h, "GET", "/api/cards/by-number/99999/command-templates", "")
+	w = request(h, "GET", "/api/items/by-number/99999/command-templates", "")
 	if w.Code != 404 {
 		t.Fatalf("missing card get: %d", w.Code)
 	}
@@ -45,7 +45,7 @@ func TestCardCommandTemplatesHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w = request(h, "PUT", "/api/cards/by-number/"+itoa(card.Number)+"/command-templates", `{"templateIds":[`+itoa(tmpl.ID)+`,`+itoa(tmpl.ID)+`]}`)
+	w = request(h, "PUT", "/api/items/by-number/"+itoa(card.Number)+"/command-templates", `{"templateIds":[`+itoa(tmpl.ID)+`,`+itoa(tmpl.ID)+`]}`)
 	if w.Code != 200 {
 		t.Fatalf("put card: %d %s", w.Code, w.Body.String())
 	}
@@ -59,12 +59,12 @@ func TestCardCommandTemplatesHTTP(t *testing.T) {
 		t.Fatalf("dedupe link: %+v", linked.Templates)
 	}
 
-	w = request(h, "PUT", "/api/cards/by-number/99999/command-templates", `{"templateIds":[]}`)
+	w = request(h, "PUT", "/api/items/by-number/99999/command-templates", `{"templateIds":[]}`)
 	if w.Code != 404 {
 		t.Fatalf("missing card put: %d", w.Code)
 	}
 
-	w = request(h, "PUT", "/api/cards/by-number/"+itoa(card.Number)+"/command-templates", `{"templateIds":[999999]}`)
+	w = request(h, "PUT", "/api/items/by-number/"+itoa(card.Number)+"/command-templates", `{"templateIds":[999999]}`)
 	if w.Code != 400 {
 		t.Fatalf("unknown id: %d %s", w.Code, w.Body.String())
 	}
@@ -87,15 +87,15 @@ func TestCardCommandTemplatesHTTP(t *testing.T) {
 		t.Fatalf("defaults=%+v", defaults.TemplateIDs)
 	}
 
-	w = request(h, "POST", "/api/cards", `{"title":"B","description":"","columnId":1}`)
+	w = request(h, "POST", "/api/items", `{"title":"B","description":"","columnId":1}`)
 	if w.Code != 201 {
 		t.Fatalf("create B: %d %s", w.Code, w.Body.String())
 	}
-	var cardB Card
+	var cardB Item
 	if err := json.Unmarshal(w.Body.Bytes(), &cardB); err != nil {
 		t.Fatal(err)
 	}
-	w = request(h, "GET", "/api/cards/by-number/"+itoa(cardB.Number)+"/command-templates", "")
+	w = request(h, "GET", "/api/items/by-number/"+itoa(cardB.Number)+"/command-templates", "")
 	if err := json.Unmarshal(w.Body.Bytes(), &linked); err != nil {
 		t.Fatal(err)
 	}
@@ -112,12 +112,12 @@ func TestCardCommandTemplatesHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w = request(h, "POST", "/api/command-templates/apply-to-all-cards", `{"templateIds":[`+itoa(echo.ID)+`]}`)
+	w = request(h, "POST", "/api/command-templates/apply-to-all-items", `{"templateIds":[`+itoa(echo.ID)+`]}`)
 	if w.Code != 204 {
 		t.Fatalf("apply: %d %s", w.Code, w.Body.String())
 	}
 	for _, n := range []int64{card.Number, cardB.Number} {
-		w = request(h, "GET", "/api/cards/by-number/"+itoa(n)+"/command-templates", "")
+		w = request(h, "GET", "/api/items/by-number/"+itoa(n)+"/command-templates", "")
 		if err := json.Unmarshal(w.Body.Bytes(), &linked); err != nil {
 			t.Fatal(err)
 		}
@@ -133,7 +133,7 @@ func TestDefaultsAndApplyRejectUnknownIDs(t *testing.T) {
 	if w.Code != 400 {
 		t.Fatalf("defaults unknown: %d %s", w.Code, w.Body.String())
 	}
-	w = request(h, "POST", "/api/command-templates/apply-to-all-cards", `{"templateIds":[999999]}`)
+	w = request(h, "POST", "/api/command-templates/apply-to-all-items", `{"templateIds":[999999]}`)
 	if w.Code != 400 {
 		t.Fatalf("apply unknown: %d %s", w.Code, w.Body.String())
 	}
@@ -165,19 +165,19 @@ func TestApplyEmptyClearsAllCardsAndDeleteRemovesLinks(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("defaults: %d", w.Code)
 	}
-	w = request(h, "POST", "/api/cards", `{"title":"A","description":"","columnId":1}`)
+	w = request(h, "POST", "/api/items", `{"title":"A","description":"","columnId":1}`)
 	if w.Code != 201 {
 		t.Fatal(w.Body.String())
 	}
-	var card Card
+	var card Item
 	if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
 		t.Fatal(err)
 	}
-	w = request(h, "POST", "/api/command-templates/apply-to-all-cards", `{"templateIds":[]}`)
+	w = request(h, "POST", "/api/command-templates/apply-to-all-items", `{"templateIds":[]}`)
 	if w.Code != 204 {
 		t.Fatalf("empty apply: %d %s", w.Code, w.Body.String())
 	}
-	w = request(h, "GET", "/api/cards/by-number/"+itoa(card.Number)+"/command-templates", "")
+	w = request(h, "GET", "/api/items/by-number/"+itoa(card.Number)+"/command-templates", "")
 	var linked struct {
 		Templates []CommandTemplate `json:"templates"`
 	}
@@ -188,7 +188,7 @@ func TestApplyEmptyClearsAllCardsAndDeleteRemovesLinks(t *testing.T) {
 		t.Fatalf("want cleared, got %+v", linked.Templates)
 	}
 
-	w = request(h, "PUT", "/api/cards/by-number/"+itoa(card.Number)+"/command-templates", `{"templateIds":[`+itoa(tmpl.ID)+`]}`)
+	w = request(h, "PUT", "/api/items/by-number/"+itoa(card.Number)+"/command-templates", `{"templateIds":[`+itoa(tmpl.ID)+`]}`)
 	if w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
@@ -200,7 +200,7 @@ func TestApplyEmptyClearsAllCardsAndDeleteRemovesLinks(t *testing.T) {
 	if w.Code != 204 {
 		t.Fatalf("delete: %d", w.Code)
 	}
-	w = request(h, "GET", "/api/cards/by-number/"+itoa(card.Number)+"/command-templates", "")
+	w = request(h, "GET", "/api/items/by-number/"+itoa(card.Number)+"/command-templates", "")
 	if err := json.Unmarshal(w.Body.Bytes(), &linked); err != nil {
 		t.Fatal(err)
 	}
@@ -228,11 +228,11 @@ func TestDefaultsChangeDoesNotAlterExistingCard(t *testing.T) {
 	var b CommandTemplate
 	_ = json.Unmarshal(w.Body.Bytes(), &b)
 	request(h, "PUT", "/api/command-template-defaults", `{"templateIds":[`+itoa(a.ID)+`]}`)
-	w = request(h, "POST", "/api/cards", `{"title":"A","description":"","columnId":1}`)
-	var card Card
+	w = request(h, "POST", "/api/items", `{"title":"A","description":"","columnId":1}`)
+	var card Item
 	_ = json.Unmarshal(w.Body.Bytes(), &card)
 	request(h, "PUT", "/api/command-template-defaults", `{"templateIds":[`+itoa(b.ID)+`]}`)
-	w = request(h, "GET", "/api/cards/by-number/"+itoa(card.Number)+"/command-templates", "")
+	w = request(h, "GET", "/api/items/by-number/"+itoa(card.Number)+"/command-templates", "")
 	var linked struct {
 		Templates []CommandTemplate `json:"templates"`
 	}

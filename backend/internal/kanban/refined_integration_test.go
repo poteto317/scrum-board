@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestMySQLRefinedCardIsFiledInTodoWithHistory(t *testing.T) {
+func TestMySQLRefinedItemIsFiledInTodoWithHistory(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
@@ -15,9 +15,9 @@ func TestMySQLRefinedCardIsFiledInTodoWithHistory(t *testing.T) {
 	if err := r.InitializeHistory(ctx); err != nil {
 		t.Fatal(err)
 	}
-	h := NewHandler(r, WithCardFormatter(&fakeFormatter{fn: ok("整えた題名", "整えた説明")}))
+	h := NewHandler(r, WithItemFormatter(&fakeFormatter{fn: ok("整えた題名", "整えた説明")}))
 	w := postJSON(h, `{"title":"下書き","description":"下書き説明"}`)
-	var card Card
+	var card Item
 	if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil || w.Code != 201 {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}
@@ -31,7 +31,7 @@ func TestMySQLRefinedCardIsFiledInTodoWithHistory(t *testing.T) {
 	}
 }
 
-func TestMySQLRefinedCardFailureWritesNothingAndKeepsTheNumber(t *testing.T) {
+func TestMySQLRefinedItemFailureWritesNothingAndKeepsTheNumber(t *testing.T) {
 	captureLogs(t) // the expected failures are logged; keep them out of the test output
 	db := mysqlTestDB(t, "")
 	r := MySQLRepository{DB: db}
@@ -46,12 +46,12 @@ func TestMySQLRefinedCardFailureWritesNothingAndKeepsTheNumber(t *testing.T) {
 		return
 	}
 	cardsBefore, nextBefore := count()
-	failing := &fakeFormatter{fn: func(context.Context, Draft) (RefinedCard, error) { return RefinedCard{}, errors.New("upstream down") }}
-	if w := postJSON(NewHandler(r, WithCardFormatter(failing)), `{"title":"下書き"}`); w.Code != 502 {
+	failing := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) { return RefinedItem{}, errors.New("upstream down") }}
+	if w := postJSON(NewHandler(r, WithItemFormatter(failing)), `{"title":"下書き"}`); w.Code != 502 {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}
 	unusable := &fakeFormatter{fn: ok("", "")}
-	if w := postJSON(NewHandler(r, WithCardFormatter(unusable)), `{"title":"下書き"}`); w.Code != 502 {
+	if w := postJSON(NewHandler(r, WithItemFormatter(unusable)), `{"title":"下書き"}`); w.Code != 502 {
 		t.Fatalf("unusable output: status=%d", w.Code)
 	}
 	if cards, next := count(); cards != cardsBefore || next != nextBefore {

@@ -12,7 +12,7 @@ func TestPRLinkHTTP(t *testing.T) {
 	h := NewHandler(repo)
 	url := "https://github.com/poteto317/scrum-board/pull/2"
 	url2 := "https://github.com/poteto317/scrum-board/pull/3"
-	w := request(h, "POST", "/api/cards", `{"title":"keep","columnId":1,"description":"body","prUrls":["  `+url+`  "]}`)
+	w := request(h, "POST", "/api/items", `{"title":"keep","columnId":1,"description":"body","prUrls":["  `+url+`  "]}`)
 	if w.Code != 201 {
 		t.Fatalf("create: %d %s", w.Code, w.Body)
 	}
@@ -37,17 +37,17 @@ func TestPRLinkHTTP(t *testing.T) {
 		}
 		return urls
 	}
-	c := read("GET", "/api/cards/by-number/1", "")
+	c := read("GET", "/api/items/by-number/1", "")
 	if !reflect.DeepEqual(asURLs(c), []string{url}) {
 		t.Fatalf("link not saved: %+v", c)
 	}
 	for _, body := range []string{`{"title":"keep"}`, `{"prUrls":null,"description":"body"}`, `{"prUrls":["  ` + url + `  "]}`, `{"columnId":2}`} {
-		c = read("PATCH", "/api/cards/1", body)
+		c = read("PATCH", "/api/items/1", body)
 		if !reflect.DeepEqual(asURLs(c), []string{url}) || c["title"] != "keep" || c["description"] != "body" {
 			t.Fatalf("partial update: %+v", c)
 		}
 	}
-	c = read("PATCH", "/api/cards/1", `{"prUrls":["`+url+`","`+url2+`"]}`)
+	c = read("PATCH", "/api/items/1", `{"prUrls":["`+url+`","`+url2+`"]}`)
 	if !reflect.DeepEqual(asURLs(c), []string{url, url2}) {
 		t.Fatalf("multi: %+v", c)
 	}
@@ -57,20 +57,20 @@ func TestPRLinkHTTP(t *testing.T) {
 		[]any{strings.Repeat("x", 2049)},
 	} {
 		body, _ := json.Marshal(map[string]any{"prUrls": bad, "title": "must not change"})
-		before := read("GET", "/api/cards/1", "")
-		w := request(h, "PATCH", "/api/cards/1", string(body))
+		before := read("GET", "/api/items/1", "")
+		w := request(h, "PATCH", "/api/items/1", string(body))
 		if w.Code != 400 {
 			t.Fatalf("bad %v: %d %s", bad, w.Code, w.Body)
 		}
-		if after := read("GET", "/api/cards/1", ""); !reflect.DeepEqual(before, after) {
+		if after := read("GET", "/api/items/1", ""); !reflect.DeepEqual(before, after) {
 			t.Fatal("invalid request mutated card")
 		}
 	}
-	w = request(h, "PATCH", "/api/cards/1", `{"prUrl":"`+url+`"}`)
+	w = request(h, "PATCH", "/api/items/1", `{"prUrl":"`+url+`"}`)
 	if w.Code != 400 {
 		t.Fatalf("legacy prUrl key: %d %s", w.Code, w.Body)
 	}
-	c = read("PATCH", "/api/cards/1", `{"prUrls":[]}`)
+	c = read("PATCH", "/api/items/1", `{"prUrls":[]}`)
 	if !reflect.DeepEqual(asURLs(c), []string{}) {
 		t.Fatalf("clear: %+v", c)
 	}

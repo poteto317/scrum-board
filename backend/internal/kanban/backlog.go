@@ -5,7 +5,7 @@ import (
 	"database/sql"
 )
 
-func (r MySQLRepository) Backlog(ctx context.Context) ([]Card, error) {
+func (r MySQLRepository) Backlog(ctx context.Context) ([]Item, error) {
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
@@ -18,7 +18,7 @@ func (r MySQLRepository) Backlog(ctx context.Context) ([]Card, error) {
 	return cards, tx.Commit()
 }
 
-func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([]Card, error) {
+func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([]Item, error) {
 	if err := validateBacklogOrder(cardIDs); err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([
 	}
 	defer tx.Rollback()
 	// Every card writer takes the all-columns lock before touching cards (see lockColumnRows), so ReorderBacklog
-	// must too: otherwise its primary-key-order card locks invert against ReorderCards' index-order locks (deadlock).
+	// must too: otherwise its primary-key-order card locks invert against ReorderItems' index-order locks (deadlock).
 	if _, err = lockColumnRows(ctx, tx); err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([
 	if err != nil {
 		return nil, err
 	}
-	if !sameCardIDSet(existing, cardIDs) {
+	if !sameItemIDSet(existing, cardIDs) {
 		return nil, ErrBacklogMismatch
 	}
 	for pos, id := range cardIDs {
@@ -87,13 +87,13 @@ func lockAllCards(ctx context.Context, tx *sql.Tx) ([]int64, error) {
 	return ids, rows.Err()
 }
 
-func listBacklogCards(ctx context.Context, tx *sql.Tx) ([]Card, error) {
+func listBacklogCards(ctx context.Context, tx *sql.Tx) ([]Item, error) {
 	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.backlog_position,c.id")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	cards := []Card{}
+	cards := []Item{}
 	for rows.Next() {
 		c, err := scanCard(rows)
 		if err != nil {
@@ -113,7 +113,7 @@ func listBacklogCards(ctx context.Context, tx *sql.Tx) ([]Card, error) {
 	return cards, nil
 }
 
-func sameCardIDSet(existing, requested []int64) bool {
+func sameItemIDSet(existing, requested []int64) bool {
 	if len(existing) != len(requested) {
 		return false
 	}

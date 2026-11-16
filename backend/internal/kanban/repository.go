@@ -34,8 +34,8 @@ func dbError(err error) error {
 
 type scanner interface{ Scan(...any) error }
 
-func scanCard(s scanner) (Card, error) {
-	var c Card
+func scanCard(s scanner) (Item, error) {
+	var c Item
 	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.BacklogPosition, &c.Assignee, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
@@ -54,7 +54,7 @@ const numberedCards = " FROM cards c JOIN card_numbers n ON n.card_id=c.id"
 func loadCard(ctx context.Context, q interface {
 	queryable
 	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, query string, args ...any) (Card, error) {
+}, query string, args ...any) (Item, error) {
 	c, err := scanCard(q.QueryRowContext(ctx, query, args...))
 	if err != nil {
 		return c, err
@@ -69,7 +69,7 @@ func loadCard(ctx context.Context, q interface {
 }
 
 func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
-	b := Board{Columns: []Column{}, Cards: []Card{}}
+	b := Board{Columns: []Column{}, Items: []Item{}}
 	// A consistent snapshot prevents a concurrent column/card creation from splitting the board response.
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -90,90 +90,90 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 		if e != nil {
 			return b, e
 		}
-		b.Cards = append(b.Cards, c)
+		b.Items = append(b.Items, c)
 	}
 	if err = rows.Err(); err != nil {
 		return b, err
 	}
 	rows.Close()
-	if err = attachPRURLs(ctx, tx, b.Cards); err != nil {
+	if err = attachPRURLs(ctx, tx, b.Items); err != nil {
 		return b, err
 	}
-	if err = attachRelatedItems(ctx, tx, b.Cards); err != nil {
+	if err = attachRelatedItems(ctx, tx, b.Items); err != nil {
 		return b, err
 	}
 	return b, tx.Commit()
 }
-func (r MySQLRepository) GetCard(ctx context.Context, id int64) (Card, error) {
+func (r MySQLRepository) GetItem(ctx context.Context, id int64) (Item, error) {
 	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 }
-func (r MySQLRepository) GetCardByNumber(ctx context.Context, number int64) (Card, error) {
+func (r MySQLRepository) GetItemByNumber(ctx context.Context, number int64) (Item, error) {
 	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.task_number=?", number)
 }
-func (r MySQLRepository) CreateCard(ctx context.Context, in CardInput) (Card, error) {
+func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	defer tx.Rollback()
 	number, err := lockNextNumber(ctx, tx)
 	if err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	if err = lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	nextPos, err := nextCardPosition(ctx, tx, in.ColumnID)
 	if err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	nextBacklog, err := nextBacklogPosition(ctx, tx)
 	if err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	result, err := tx.ExecContext(ctx, "INSERT INTO cards(column_id,title,description,position,backlog_position,assignee) VALUES(?,?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, nextBacklog, in.Assignee)
 	if err != nil {
-		return Card{}, dbError(err)
+		return Item{}, dbError(err)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO card_numbers(card_id,task_number) VALUES(?,?)", id, number); err != nil {
-		return Card{}, dbError(err)
+		return Item{}, dbError(err)
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE card_number_sequence SET next_number=? WHERE singleton=1", number+1); err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	if err = replacePRURLs(ctx, tx, id, in.PRURLs); err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	related := in.RelatedItems
 	if related == nil {
 		related = []RelatedItem{}
 	}
 	if err = applyRelatedItemsPatch(ctx, tx, id, related, time.Now().UTC()); err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	if err = copyCommandTemplateDefaultsToCard(ctx, tx, id); err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	card, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 	if err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	if err = appendHistory(ctx, tx, nil, card, "created"); err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	return card, tx.Commit()
 }
-func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) (Card, error) {
+func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	defer tx.Rollback()
-	// A column move takes the same all-columns lock as ReorderCards/CreateCard before touching any card (DeleteCard does too), so
+	// A column move takes the same all-columns lock as ReorderItems/CreateItem before touching any card (DeleteItem does too), so
 	// InnoDB never sees two writers wait on each other's card and column rows. A PR-link rewrite takes it too:
 	// replacePRURLs DELETEs a range that is empty for a card's first save and then INSERTs into it, and two such
 	// transactions on different cards each hold the gap lock the other's INSERT waits for (deadlock, 1213).
@@ -181,22 +181,22 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	switch {
 	case p.ColumnID != nil:
 		if err = lockExistingColumn(ctx, tx, *p.ColumnID); err != nil {
-			return Card{}, err
+			return Item{}, err
 		}
 	case p.PRURLs != nil, p.RelatedItems != nil:
 		if _, err = lockColumnRows(ctx, tx); err != nil {
-			return Card{}, err
+			return Item{}, err
 		}
 	}
 	// relatedItems touches peer card rows: lock owner+peers in id order (never owner-first then peers).
 	if p.RelatedItems != nil {
 		if err = lockCardsForRelatedReplace(ctx, tx, id, *p.RelatedItems); err != nil {
-			return Card{}, err
+			return Item{}, err
 		}
 	} else {
 		var lockedID int64
 		if err = tx.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
-			return Card{}, dbError(err)
+			return Item{}, dbError(err)
 		}
 	}
 	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
@@ -216,7 +216,7 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	if p.ColumnID != nil && *p.ColumnID != c.ColumnID {
 		nextPos, err := nextCardPosition(ctx, tx, *p.ColumnID)
 		if err != nil {
-			return Card{}, err
+			return Item{}, err
 		}
 		c.ColumnID = *p.ColumnID
 		c.Position = nextPos
@@ -227,21 +227,21 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 	}
 	_, err = tx.ExecContext(ctx, "UPDATE cards SET title=?,description=?,column_id=?,position=?,assignee=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.Assignee, now, id)
 	if err != nil {
-		return Card{}, dbError(err)
+		return Item{}, dbError(err)
 	}
 	if p.PRURLs != nil {
 		if err = replacePRURLs(ctx, tx, id, *p.PRURLs); err != nil {
-			return Card{}, err
+			return Item{}, err
 		}
 	}
 	if p.RelatedItems != nil {
 		if err = applyRelatedItemsPatch(ctx, tx, id, *p.RelatedItems, now); err != nil {
-			return Card{}, err
+			return Item{}, err
 		}
 	}
 	if moved {
 		if err = compactColumnPositions(ctx, tx, sourceColumnID); err != nil {
-			return Card{}, err
+			return Item{}, err
 		}
 	}
 	c, err = loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
@@ -249,11 +249,11 @@ func (r MySQLRepository) UpdateCard(ctx context.Context, id int64, p CardPatch) 
 		return c, err
 	}
 	if err = appendHistory(ctx, tx, &before, c, "updated"); err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
 	return c, tx.Commit()
 }
-func (r MySQLRepository) DeleteCard(ctx context.Context, id int64) error {
+func (r MySQLRepository) DeleteItem(ctx context.Context, id int64) error {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err

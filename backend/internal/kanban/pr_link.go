@@ -41,7 +41,7 @@ type queryable interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
-func attachPRURLs(ctx context.Context, q queryable, cards []Card) error {
+func attachPRURLs(ctx context.Context, q queryable, cards []Item) error {
 	for i := range cards {
 		if cards[i].PRURLs == nil {
 			cards[i].PRURLs = []string{}
@@ -81,8 +81,8 @@ func attachPRURLs(ctx context.Context, q queryable, cards []Card) error {
 	return rows.Err()
 }
 
-func attachPRURL(ctx context.Context, q queryable, c *Card) error {
-	cards := []Card{*c}
+func attachPRURL(ctx context.Context, q queryable, c *Item) error {
+	cards := []Item{*c}
 	if err := attachPRURLs(ctx, q, cards); err != nil {
 		return err
 	}

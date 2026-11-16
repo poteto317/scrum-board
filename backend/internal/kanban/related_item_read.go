@@ -5,7 +5,7 @@ import (
 	"database/sql"
 )
 
-func attachRelatedItems(ctx context.Context, q queryable, cards []Card) error {
+func attachRelatedItems(ctx context.Context, q queryable, cards []Item) error {
 	for i := range cards {
 		if cards[i].RelatedItems == nil {
 			cards[i].RelatedItems = []RelatedItem{}
@@ -48,7 +48,7 @@ func attachRelatedItems(ctx context.Context, q queryable, cards []Card) error {
 			continue
 		}
 		item := RelatedItem{Kind: kind, Label: label}
-		if kind == relatedKindCard {
+		if kind == relatedKindItem {
 			item.Number = number
 			item.Title = title
 		} else {
@@ -59,8 +59,8 @@ func attachRelatedItems(ctx context.Context, q queryable, cards []Card) error {
 	return rows.Err()
 }
 
-func attachRelatedItem(ctx context.Context, q queryable, c *Card) error {
-	cards := []Card{*c}
+func attachRelatedItem(ctx context.Context, q queryable, c *Item) error {
+	cards := []Item{*c}
 	if err := attachRelatedItems(ctx, q, cards); err != nil {
 		return err
 	}
@@ -68,8 +68,8 @@ func attachRelatedItem(ctx context.Context, q queryable, c *Card) error {
 	return nil
 }
 
-func listRelatedCardIDs(ctx context.Context, q queryable, cardID int64) ([]int64, error) {
-	rows, err := q.QueryContext(ctx, `SELECT related_card_id FROM card_related_items WHERE card_id=? AND kind=? ORDER BY position`, cardID, relatedKindCard)
+func listRelatedItemIDs(ctx context.Context, q queryable, cardID int64) ([]int64, error) {
+	rows, err := q.QueryContext(ctx, `SELECT related_card_id FROM card_related_items WHERE card_id=? AND kind=? ORDER BY position`, cardID, relatedKindItem)
 	if err != nil {
 		return nil, err
 	}

@@ -5,14 +5,14 @@ import (
 	"database/sql"
 )
 
-func (r MySQLRepository) ListCardCommandTemplates(ctx context.Context, cardID int64) ([]CommandTemplate, error) {
+func (r MySQLRepository) ListItemCommandTemplates(ctx context.Context, cardID int64) ([]CommandTemplate, error) {
 	if err := r.ensureCardExists(ctx, cardID); err != nil {
 		return nil, err
 	}
 	return listCardCommandTemplates(ctx, r.DB, cardID)
 }
 
-func (r MySQLRepository) ReplaceCardCommandTemplates(ctx context.Context, cardID int64, templateIDs []int64) ([]CommandTemplate, error) {
+func (r MySQLRepository) ReplaceItemCommandTemplates(ctx context.Context, cardID int64, templateIDs []int64) ([]CommandTemplate, error) {
 	ids := dedupeTemplateIDs(templateIDs)
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -61,7 +61,7 @@ func (r MySQLRepository) ReplaceCommandTemplateDefaults(ctx context.Context, tem
 	return ids, nil
 }
 
-func (r MySQLRepository) ApplyCommandTemplatesToAllCards(ctx context.Context, templateIDs []int64) error {
+func (r MySQLRepository) ApplyCommandTemplatesToAllItems(ctx context.Context, templateIDs []int64) error {
 	ids := dedupeTemplateIDs(templateIDs)
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {

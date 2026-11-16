@@ -66,8 +66,8 @@ func logFormatFailure(err error) {
 	slog.Error("ai card formatting failed", "kind", kind, "upstream_status", status)
 }
 
-// createRefinedCard files a Todo card whose title and description were tidied by the AI from the caller's draft.
-func (h handler) createRefinedCard(w http.ResponseWriter, r *http.Request) {
+// createRefinedItem files a Todo card whose title and description were tidied by the AI from the caller's draft.
+func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 	if !isJSONRequest(r) {
 		refinedError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Typeはapplication/jsonにしてください。")
 		return
@@ -116,7 +116,7 @@ func (h handler) createRefinedCard(w http.ResponseWriter, r *http.Request) {
 		aiFailed(w)
 		return
 	}
-	card, err := h.repo.CreateCard(r.Context(), CardInput{ColumnID: todo.ID, Title: stored.Title, Description: stored.Description})
+	card, err := h.repo.CreateItem(r.Context(), ItemInput{ColumnID: todo.ID, Title: stored.Title, Description: stored.Description})
 	if err != nil {
 		storageFailed(w, "create")
 		return

@@ -10,7 +10,7 @@ import (
 
 type relatedStored struct {
 	kind          string
-	relatedCardID int64
+	relatedItemID int64
 	number        int64
 	url           string
 	label         string
@@ -22,21 +22,21 @@ func lockCardsForRelatedReplace(ctx context.Context, tx *sql.Tx, ownerID int64, 
 	if err != nil {
 		return err
 	}
-	oldPeers, err := listRelatedCardIDs(ctx, tx, ownerID)
+	oldPeers, err := listRelatedItemIDs(ctx, tx, ownerID)
 	if err != nil {
 		return err
 	}
 	ids := []int64{ownerID}
 	ids = append(ids, oldPeers...)
 	for _, s := range stored {
-		if s.kind == relatedKindCard {
-			ids = append(ids, s.relatedCardID)
+		if s.kind == relatedKindItem {
+			ids = append(ids, s.relatedItemID)
 		}
 	}
-	return lockCardIDs(ctx, tx, ids)
+	return lockItemIDs(ctx, tx, ids)
 }
 
-func lockCardIDs(ctx context.Context, tx *sql.Tx, ids []int64) error {
+func lockItemIDs(ctx context.Context, tx *sql.Tx, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -66,7 +66,7 @@ func resolveRelatedStored(ctx context.Context, tx *sql.Tx, ownerID int64, items 
 	out := make([]relatedStored, 0, len(items))
 	for _, it := range items {
 		switch it.Kind {
-		case relatedKindCard:
+		case relatedKindItem:
 			var peerID int64
 			err := tx.QueryRowContext(ctx, "SELECT card_id FROM card_numbers WHERE task_number=?", it.Number).Scan(&peerID)
 			if errors.Is(err, sql.ErrNoRows) {
@@ -78,7 +78,7 @@ func resolveRelatedStored(ctx context.Context, tx *sql.Tx, ownerID int64, items 
 			if peerID == ownerID {
 				return nil, ErrRelatedItem
 			}
-			out = append(out, relatedStored{kind: relatedKindCard, relatedCardID: peerID, number: it.Number, label: it.Label})
+			out = append(out, relatedStored{kind: relatedKindItem, relatedItemID: peerID, number: it.Number, label: it.Label})
 		case relatedKindURL:
 			out = append(out, relatedStored{kind: relatedKindURL, url: it.URL, label: it.Label})
 		default:
@@ -92,8 +92,8 @@ func insertRelatedRows(ctx context.Context, tx *sql.Tx, cardID int64, rows []rel
 	for i, row := range rows {
 		var related any
 		var url any
-		if row.kind == relatedKindCard {
-			related = row.relatedCardID
+		if row.kind == relatedKindItem {
+			related = row.relatedItemID
 			url = nil
 		} else {
 			related = nil
@@ -123,7 +123,7 @@ func hasReverseRelated(ctx context.Context, tx *sql.Tx, ownerID, peerID int64) (
 	var n int
 	err := tx.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM card_related_items WHERE card_id=? AND kind=? AND related_card_id=?`,
-		ownerID, relatedKindCard, peerID).Scan(&n)
+		ownerID, relatedKindItem, peerID).Scan(&n)
 	return n > 0, err
 }
 
@@ -142,8 +142,8 @@ func compactRelatedPositions(ctx context.Context, tx *sql.Tx, cardID int64) erro
 			return err
 		}
 		s := relatedStored{kind: kind, label: label}
-		if kind == relatedKindCard {
-			s.relatedCardID = relatedID.Int64
+		if kind == relatedKindItem {
+			s.relatedItemID = relatedID.Int64
 		} else {
 			s.url = itemURL
 		}
@@ -196,7 +196,7 @@ func syncPeerRelatedLinks(ctx context.Context, tx *sql.Tx, ownerID int64, oldPee
 		}
 		if _, err = tx.ExecContext(ctx,
 			`INSERT INTO card_related_items(card_id,position,kind,related_card_id,url,label) VALUES(?,?,?,?,NULL,'')`,
-			peerID, pos, relatedKindCard, ownerID); err != nil {
+			peerID, pos, relatedKindItem, ownerID); err != nil {
 			return err
 		}
 		if err = touchCardUpdatedAt(ctx, tx, peerID, now); err != nil {
@@ -209,7 +209,7 @@ func syncPeerRelatedLinks(ctx context.Context, tx *sql.Tx, ownerID int64, oldPee
 		}
 		if _, err := tx.ExecContext(ctx,
 			`DELETE FROM card_related_items WHERE card_id=? AND kind=? AND related_card_id=?`,
-			peerID, relatedKindCard, ownerID); err != nil {
+			peerID, relatedKindItem, ownerID); err != nil {
 			return err
 		}
 		if err := compactRelatedPositions(ctx, tx, peerID); err != nil {
@@ -222,14 +222,14 @@ func syncPeerRelatedLinks(ctx context.Context, tx *sql.Tx, ownerID int64, oldPee
 	return nil
 }
 
-func peerCardsForHistory(ctx context.Context, tx *sql.Tx, befores map[int64]Card) ([][2]Card, error) {
-	var peers [][2]Card
+func peerCardsForHistory(ctx context.Context, tx *sql.Tx, befores map[int64]Item) ([][2]Item, error) {
+	var peers [][2]Item
 	for id, before := range befores {
 		after, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 		if err != nil {
 			return nil, err
 		}
-		peers = append(peers, [2]Card{before, after})
+		peers = append(peers, [2]Item{before, after})
 	}
 	sort.Slice(peers, func(i, j int) bool { return peers[i][0].ID < peers[j][0].ID })
 	return peers, nil
@@ -255,19 +255,19 @@ func applyRelatedItemsPatch(ctx context.Context, tx *sql.Tx, id int64, items []R
 
 // replaceRelatedItems rewrites owner card rows and syncs reverse card links.
 // Returns peer cards whose relatedItems changed (before, after) for history.
-func replaceRelatedItems(ctx context.Context, tx *sql.Tx, ownerID int64, items []RelatedItem, now time.Time) ([][2]Card, error) {
+func replaceRelatedItems(ctx context.Context, tx *sql.Tx, ownerID int64, items []RelatedItem, now time.Time) ([][2]Item, error) {
 	stored, err := resolveRelatedStored(ctx, tx, ownerID, items)
 	if err != nil {
 		return nil, err
 	}
-	oldPeers, err := listRelatedCardIDs(ctx, tx, ownerID)
+	oldPeers, err := listRelatedItemIDs(ctx, tx, ownerID)
 	if err != nil {
 		return nil, err
 	}
 	newPeerSet := map[int64]struct{}{}
 	for _, s := range stored {
-		if s.kind == relatedKindCard {
-			newPeerSet[s.relatedCardID] = struct{}{}
+		if s.kind == relatedKindItem {
+			newPeerSet[s.relatedItemID] = struct{}{}
 		}
 	}
 	oldPeerSet := map[int64]struct{}{}
@@ -281,12 +281,12 @@ func replaceRelatedItems(ctx context.Context, tx *sql.Tx, ownerID int64, items [
 	for id := range newPeerSet {
 		lockIDs = append(lockIDs, id)
 	}
-	if err = lockCardIDs(ctx, tx, lockIDs); err != nil {
+	if err = lockItemIDs(ctx, tx, lockIDs); err != nil {
 		return nil, err
 	}
 
 	changed := peerSetDiff(oldPeerSet, newPeerSet)
-	befores := map[int64]Card{}
+	befores := map[int64]Item{}
 	for id := range changed {
 		c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 		if err != nil {

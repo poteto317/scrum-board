@@ -57,7 +57,7 @@ func relatedItemsJSON(items []RelatedItem) string {
 	return string(payload)
 }
 
-func historyValues(ctx context.Context, tx *sql.Tx, c Card) (map[string]string, error) {
+func historyValues(ctx context.Context, tx *sql.Tx, c Item) (map[string]string, error) {
 	var name string
 	if err := tx.QueryRowContext(ctx, "SELECT name FROM board_columns WHERE id=?", c.ColumnID).Scan(&name); err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func historyValues(ctx context.Context, tx *sql.Tx, c Card) (map[string]string, 
 		"prUrls": prURLsJSON(c.PRURLs), "relatedItems": relatedItemsJSON(c.RelatedItems), "assignee": c.Assignee,
 	}, nil
 }
-func appendHistory(ctx context.Context, tx *sql.Tx, before *Card, after Card, kind string) error {
+func appendHistory(ctx context.Context, tx *sql.Tx, before *Item, after Item, kind string) error {
 	values, err := historyValues(ctx, tx, after)
 	if err != nil {
 		return err

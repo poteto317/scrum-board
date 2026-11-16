@@ -19,7 +19,7 @@ func TestMySQLBacklogReorderAndCreateAppend(t *testing.T) {
 
 	var ids []int64
 	for _, title := range []string{"A", "B", "C"} {
-		c, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: title})
+		c, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: title})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -36,7 +36,7 @@ func TestMySQLBacklogReorderAndCreateAppend(t *testing.T) {
 	seedID := backlog[0].ID
 	order := []int64{ids[2], seedID, ids[0], ids[1]}
 	h := NewHandler(r)
-	payload, _ := json.Marshal(map[string][]int64{"cardIds": order})
+	payload, _ := json.Marshal(map[string][]int64{"itemIds": order})
 	w := request(h, "PUT", "/api/backlog/order", string(payload))
 	if w.Code != 200 {
 		t.Fatalf("PUT /api/backlog/order: %d %s", w.Code, w.Body)
@@ -51,7 +51,7 @@ func TestMySQLBacklogReorderAndCreateAppend(t *testing.T) {
 		}
 	}
 
-	d, err := r.CreateCard(ctx, CardInput{ColumnID: 3, Title: "D"})
+	d, err := r.CreateItem(ctx, ItemInput{ColumnID: 3, Title: "D"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestMySQLBacklogReorderAndCreateAppend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.EqualFunc(before, after, func(a, b Card) bool {
+	if !slices.EqualFunc(before, after, func(a, b Item) bool {
 		return a.ID == b.ID && a.BacklogPosition == b.BacklogPosition
 	}) {
 		t.Fatalf("mismatch mutated backlog: before=%+v after=%+v", before, after)
@@ -88,11 +88,11 @@ func TestMySQLBacklogInitializeIdempotent(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	mustInit(t, r)
-	c1, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "one"})
+	c1, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "one"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c2, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "two"})
+	c2, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "two"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestMySQLBacklogInitializeIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.EqualFunc(before, after, func(a, b Card) bool {
+	if !slices.EqualFunc(before, after, func(a, b Item) bool {
 		return a.ID == b.ID && a.BacklogPosition == b.BacklogPosition
 	}) {
 		t.Fatalf("re-init changed order: before=%+v after=%+v", before, after)
@@ -125,7 +125,7 @@ func TestMySQLBacklogBackfillAllZeroPreservesUpdatedAt(t *testing.T) {
 	ctx := context.Background()
 	mustInit(t, r)
 	for _, title := range []string{"late", "early"} {
-		if _, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: title}); err != nil {
+		if _, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: title}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -187,10 +187,10 @@ func TestMySQLBacklogReorderPreservesUpdatedAt(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	mustInit(t, r)
-	if _, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "one"}); err != nil {
+	if _, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "one"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "two"}); err != nil {
+	if _, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "two"}); err != nil {
 		t.Fatal(err)
 	}
 	before, err := r.Backlog(ctx)
@@ -223,7 +223,7 @@ func TestMySQLBacklogReorderConcurrency(t *testing.T) {
 
 	var ids []int64
 	for i := 0; i < 3; i++ {
-		c, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: fmt.Sprintf("C%d", i)})
+		c, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: fmt.Sprintf("C%d", i)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -299,7 +299,7 @@ func TestMySQLBacklogReorderConcurrency(t *testing.T) {
 		}(i)
 		go func(idx int) {
 			defer wg.Done()
-			_, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: fmt.Sprintf("N%d", idx)})
+			_, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: fmt.Sprintf("N%d", idx)})
 			if err != nil {
 				createErrs <- err
 			}

@@ -35,40 +35,40 @@ func boardSnapshot(t *testing.T, r MySQLRepository) string {
 	return out + fmt.Sprintf("history rows=%d max=%d\n", n, maxID)
 }
 
-// ReorderCards answers 409 (ErrCardOrderMismatch) when the client's card set differs from the database, and
-// 400 (ErrCardOrder) for a malformed request. Either way nothing is written.
-func TestReorderCardsRejectsStaleSetMySQL(t *testing.T) {
+// ReorderItems answers 409 (ErrItemOrderMismatch) when the client's card set differs from the database, and
+// 400 (ErrItemOrder) for a malformed request. Either way nothing is written.
+func TestReorderItemsRejectsStaleSetMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t) // Todo: seed, a, b
 	ctx := context.Background()
-	d, err := r.CreateCard(ctx, CardInput{ColumnID: 2, Title: "d"}) // Doing
+	d, err := r.CreateItem(ctx, ItemInput{ColumnID: 2, Title: "d"}) // Doing
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := r.CreateCard(ctx, CardInput{ColumnID: 3, Title: "e"}) // Done
+	e, err := r.CreateItem(ctx, ItemInput{ColumnID: 3, Title: "e"}) // Done
 	if err != nil {
 		t.Fatal(err)
 	}
 	seed := int64(1)
 	cases := []struct {
 		name   string
-		orders []CardColumnOrder
+		orders []ItemColumnOrder
 		want   error
 	}{
-		{"omits a card of the column (stale screen)", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{seed, a.ID}}}, ErrCardOrderMismatch},
-		{"empty list for a non-empty column", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{}}}, ErrCardOrderMismatch},
-		{"card of an unsent column, same count", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{seed, a.ID, d.ID}}}, ErrCardOrderMismatch},
-		{"card of an unsent column, extra", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{seed, a.ID, b.ID, e.ID}}}, ErrCardOrderMismatch},
-		{"unknown card id, same count", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{seed, a.ID, 9999}}}, ErrCardOrderMismatch},
-		{"unknown column id", []CardColumnOrder{{ColumnID: 9999, CardIDs: []int64{}}}, ErrCardOrderMismatch},
-		{"unknown column after a valid one", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{b.ID, a.ID, seed}}, {ColumnID: 9999, CardIDs: []int64{}}}, ErrCardOrderMismatch},
-		{"invalid second column after a valid move", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{b.ID, a.ID, seed}}, {ColumnID: 2, CardIDs: []int64{d.ID, 9999}}}, ErrCardOrderMismatch},
-		{"duplicate card across columns", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{seed, a.ID, b.ID}}, {ColumnID: 2, CardIDs: []int64{d.ID, a.ID}}}, ErrCardOrder},
-		{"duplicate column", []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{seed}}, {ColumnID: 1, CardIDs: []int64{a.ID, b.ID}}}, ErrCardOrder},
+		{"omits a card of the column (stale screen)", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{seed, a.ID}}}, ErrItemOrderMismatch},
+		{"empty list for a non-empty column", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{}}}, ErrItemOrderMismatch},
+		{"card of an unsent column, same count", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{seed, a.ID, d.ID}}}, ErrItemOrderMismatch},
+		{"card of an unsent column, extra", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{seed, a.ID, b.ID, e.ID}}}, ErrItemOrderMismatch},
+		{"unknown card id, same count", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{seed, a.ID, 9999}}}, ErrItemOrderMismatch},
+		{"unknown column id", []ItemColumnOrder{{ColumnID: 9999, ItemIDs: []int64{}}}, ErrItemOrderMismatch},
+		{"unknown column after a valid one", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{b.ID, a.ID, seed}}, {ColumnID: 9999, ItemIDs: []int64{}}}, ErrItemOrderMismatch},
+		{"invalid second column after a valid move", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{b.ID, a.ID, seed}}, {ColumnID: 2, ItemIDs: []int64{d.ID, 9999}}}, ErrItemOrderMismatch},
+		{"duplicate card across columns", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{seed, a.ID, b.ID}}, {ColumnID: 2, ItemIDs: []int64{d.ID, a.ID}}}, ErrItemOrder},
+		{"duplicate column", []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{seed}}, {ColumnID: 1, ItemIDs: []int64{a.ID, b.ID}}}, ErrItemOrder},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			before := boardSnapshot(t, r)
-			if _, err := r.ReorderCards(ctx, tc.orders); !errors.Is(err, tc.want) {
+			if _, err := r.ReorderItems(ctx, tc.orders); !errors.Is(err, tc.want) {
 				t.Fatalf("want %v, got %v", tc.want, err)
 			}
 			if after := boardSnapshot(t, r); after != before {
@@ -78,9 +78,9 @@ func TestReorderCardsRejectsStaleSetMySQL(t *testing.T) {
 	}
 
 	// The same sets are accepted once they are complete (moving d into Todo while leaving Doing empty is legal).
-	if _, err = r.ReorderCards(ctx, []CardColumnOrder{
-		{ColumnID: 1, CardIDs: []int64{d.ID, seed, a.ID, b.ID}},
-		{ColumnID: 2, CardIDs: []int64{}},
+	if _, err = r.ReorderItems(ctx, []ItemColumnOrder{
+		{ColumnID: 1, ItemIDs: []int64{d.ID, seed, a.ID, b.ID}},
+		{ColumnID: 2, ItemIDs: []int64{}},
 	}); err != nil {
 		t.Fatalf("complete set rejected: %v", err)
 	}
@@ -88,10 +88,10 @@ func TestReorderCardsRejectsStaleSetMySQL(t *testing.T) {
 	// The HTTP contract over the real repository: stale set -> 409, malformed -> 400, DB untouched.
 	h := NewHandler(r)
 	before := boardSnapshot(t, r)
-	if w := request(h, "PUT", "/api/cards/order", fmt.Sprintf(`{"columns":[{"columnId":1,"cardIds":[%d]}]}`, seed)); w.Code != 409 {
+	if w := request(h, "PUT", "/api/items/order", fmt.Sprintf(`{"columns":[{"columnId":1,"itemIds":[%d]}]}`, seed)); w.Code != 409 {
 		t.Fatalf("stale set: %d %s", w.Code, w.Body)
 	}
-	if w := request(h, "PUT", "/api/cards/order", fmt.Sprintf(`{"columns":[{"columnId":1,"cardIds":[%d,%d]},{"columnId":2,"cardIds":[%d]}]}`, seed, a.ID, a.ID)); w.Code != 400 {
+	if w := request(h, "PUT", "/api/items/order", fmt.Sprintf(`{"columns":[{"columnId":1,"itemIds":[%d,%d]},{"columnId":2,"itemIds":[%d]}]}`, seed, a.ID, a.ID)); w.Code != 400 {
 		t.Fatalf("duplicate card: %d %s", w.Code, w.Body)
 	}
 	if after := boardSnapshot(t, r); after != before {

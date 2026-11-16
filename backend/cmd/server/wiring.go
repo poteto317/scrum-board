@@ -13,7 +13,7 @@ const defaultModel = "claude-haiku-5-5"
 
 // newFormatter returns the Claude-backed formatter, or a nil interface when ANTHROPIC_API_KEY is empty.
 // It must return an untyped nil: a typed nil pointer would look configured to the handler.
-func newFormatter(getenv func(string) string, opts ...option.RequestOption) kanban.CardFormatter {
+func newFormatter(getenv func(string) string, opts ...option.RequestOption) kanban.ItemFormatter {
 	// Secrets often come with a trailing newline; sent as is, the key would fail in the HTTP client with no useful message.
 	key := strings.TrimSpace(getenv("ANTHROPIC_API_KEY"))
 	if key == "" {
@@ -30,7 +30,7 @@ func newFormatter(getenv func(string) string, opts ...option.RequestOption) kanb
 func buildHandler(repo kanban.Repository, getenv func(string) string, opts ...option.RequestOption) http.Handler {
 	var handlerOpts []kanban.Option
 	if formatter := newFormatter(getenv, opts...); formatter != nil {
-		handlerOpts = append(handlerOpts, kanban.WithCardFormatter(formatter))
+		handlerOpts = append(handlerOpts, kanban.WithItemFormatter(formatter))
 	}
 	handlerOpts = append(handlerOpts, kanban.WithPublicOrigin(getenv("PUBLIC_ORIGIN")))
 	return http.TimeoutHandler(kanban.NewHandler(repo, handlerOpts...), kanban.RequestTimeout, `{"message":"処理がタイムアウトしました。"}`)

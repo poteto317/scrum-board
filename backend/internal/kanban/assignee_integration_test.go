@@ -18,7 +18,7 @@ func TestMySQLAssigneeMigrationAndHistory(t *testing.T) {
 	if err := r.InitializeHistory(ctx); err != nil {
 		t.Fatal(err)
 	}
-	card, err := r.CreateCard(ctx, CardInput{Title: "assignee-it", Description: "", ColumnID: 1})
+	card, err := r.CreateItem(ctx, ItemInput{Title: "assignee-it", Description: "", ColumnID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestMySQLAssigneeMigrationAndHistory(t *testing.T) {
 		t.Fatalf("new card assignee=%q", card.Assignee)
 	}
 	value := "Cursor"
-	updated, err := r.UpdateCard(ctx, card.ID, CardPatch{Assignee: &value})
+	updated, err := r.UpdateItem(ctx, card.ID, ItemPatch{Assignee: &value})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,14 +17,14 @@ func TestMySQLStatusChange(t *testing.T) {
 	if _, err := db.Exec("ALTER TABLE cards AUTO_INCREMENT=22"); err != nil {
 		t.Fatal(err)
 	}
-	original, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "AI status task", Description: "preserve description"})
+	original, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "AI status task", Description: "preserve description"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if original.ID != 22 || original.Number != 2 {
 		t.Fatal("fixture does not separate ID and number", original)
 	}
-	other, err := r.GetCard(ctx, 1)
+	other, err := r.GetItem(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestMySQLStatusChange(t *testing.T) {
 		t.Fatalf("unsafe column lookup %v", err)
 	}
 	h := NewHandler(r)
-	path := "/api/cards/by-number/" + strconv.FormatInt(original.Number, 10) + "/status"
+	path := "/api/items/by-number/" + strconv.FormatInt(original.Number, 10) + "/status"
 	for _, tc := range []struct {
 		name string
 		id   int64
@@ -50,19 +50,19 @@ func TestMySQLStatusChange(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("status %q: %d %s", tc.name, w.Code, w.Body)
 		}
-		var card Card
+		var card Item
 		if err = json.Unmarshal(w.Body.Bytes(), &card); err != nil {
 			t.Fatal(err)
 		}
 		if card.ID != original.ID || card.Number != original.Number || card.ColumnID != tc.id || card.Title != original.Title || card.Description != original.Description || !card.CreatedAt.Equal(original.CreatedAt) {
 			t.Fatalf("bad persisted status response %+v", card)
 		}
-		persisted, err := r.GetCard(ctx, card.ID)
+		persisted, err := r.GetItem(ctx, card.ID)
 		if err != nil || persisted.ColumnID != tc.id || !persisted.UpdatedAt.Equal(card.UpdatedAt) {
 			t.Fatalf("not persisted: %+v %v", persisted, err)
 		}
 	}
-	before, err := r.GetCard(ctx, original.ID)
+	before, err := r.GetItem(ctx, original.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +71,11 @@ func TestMySQLStatusChange(t *testing.T) {
 			t.Fatalf("invalid status: %d %s", w.Code, w.Body)
 		}
 	}
-	after, err := r.GetCard(ctx, original.ID)
+	after, err := r.GetItem(ctx, original.ID)
 	if err != nil || !reflect.DeepEqual(after, before) {
 		t.Fatalf("failed status request modified card: %+v %v", after, err)
 	}
-	untouched, err := r.GetCard(ctx, 1)
+	untouched, err := r.GetItem(ctx, 1)
 	if err != nil || !reflect.DeepEqual(untouched, other) {
 		t.Fatal("unrelated card changed", err)
 	}

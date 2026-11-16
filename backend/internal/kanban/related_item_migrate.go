@@ -30,5 +30,9 @@ func (r MySQLRepository) InitializeRelatedItems(ctx context.Context) error {
 	}
 	defer r.DB.ExecContext(ctx, "SELECT RELEASE_LOCK('scrumboard_card_related_items_migrate')")
 	_, err := r.DB.ExecContext(ctx, cardRelatedItemsDDL)
+	if err != nil {
+		return err
+	}
+	_, err = r.DB.ExecContext(ctx, `UPDATE card_related_items SET kind='item' WHERE kind='card'`)
 	return err
 }

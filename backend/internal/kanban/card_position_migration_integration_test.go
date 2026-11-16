@@ -7,7 +7,7 @@ import (
 
 // A database created before drag & drop has no cards.position: startup must add it and backfill by
 // (created_at, id), then keep a manual order on every later start.
-func TestInitializeCardPositionsOnLegacySchemaMySQL(t *testing.T) {
+func TestInitializeItemPositionsOnLegacySchemaMySQL(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
 	exec := func(q string) {
@@ -43,7 +43,7 @@ func TestInitializeCardPositionsOnLegacySchemaMySQL(t *testing.T) {
 		return m
 	}
 	stamps := updatedAt()
-	if err := r.InitializeCardPositions(ctx); err != nil {
+	if err := r.InitializeItemPositions(ctx); err != nil {
 		t.Fatal(err)
 	}
 	positions := func() map[int64]int {
@@ -87,7 +87,7 @@ func TestInitializeCardPositionsOnLegacySchemaMySQL(t *testing.T) {
 	// A restart must keep a manual order.
 	exec("UPDATE cards SET position=3-position WHERE column_id=1")
 	before := positions()
-	if err := r.InitializeCardPositions(ctx); err != nil {
+	if err := r.InitializeItemPositions(ctx); err != nil {
 		t.Fatal(err)
 	}
 	after := positions()

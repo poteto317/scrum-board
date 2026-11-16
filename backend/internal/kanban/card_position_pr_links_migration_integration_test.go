@@ -42,7 +42,7 @@ func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
 			name string
 			run  func(context.Context) error
 		}{
-			{"InitializeCardPositions", r.InitializeCardPositions},
+			{"InitializeItemPositions", r.InitializeItemPositions},
 			{"InitializeBacklogPositions", r.InitializeBacklogPositions},
 			{"InitializePRLinks", r.InitializePRLinks},
 			{"InitializeNumbers", r.InitializeNumbers},
@@ -60,7 +60,7 @@ func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		var ids []int64
-		for _, c := range board.Cards {
+		for _, c := range board.Items {
 			ids = append(ids, c.ID)
 			want := []string{}
 			if c.ID == 11 {
@@ -77,11 +77,11 @@ func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
 	boot()
 	check("first boot")
 	// A manual order and a second PR link must survive the next boot.
-	if _, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{12, 11, 10}}}); err != nil {
+	if _, err := r.ReorderItems(ctx, []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{12, 11, 10}}}); err != nil {
 		t.Fatal(err)
 	}
 	urls := []string{kept, "https://github.com/poteto317/scrum-board/pull/100"}
-	if _, err := r.UpdateCard(ctx, 11, CardPatch{PRURLs: &urls}); err != nil {
+	if _, err := r.UpdateItem(ctx, 11, ItemPatch{PRURLs: &urls}); err != nil {
 		t.Fatal(err)
 	}
 	boot()
@@ -90,7 +90,7 @@ func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	var ids []int64
-	for _, c := range board.Cards {
+	for _, c := range board.Items {
 		ids = append(ids, c.ID)
 		if c.ID == 11 && !reflect.DeepEqual(c.PRURLs, urls) {
 			t.Fatalf("second boot lost links: %#v", c.PRURLs)

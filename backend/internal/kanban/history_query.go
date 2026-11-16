@@ -8,7 +8,7 @@ import (
 
 func (r MySQLRepository) History(ctx context.Context, number, before int64) (HistoryPage, error) {
 	page := HistoryPage{Events: []HistoryEvent{}}
-	c, err := r.GetCardByNumber(ctx, number)
+	c, err := r.GetItemByNumber(ctx, number)
 	if err != nil {
 		return page, err
 	}

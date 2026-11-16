@@ -8,7 +8,7 @@ import (
 func TestNormalizeRelatedItems(t *testing.T) {
 	t.Parallel()
 	ok, valid := normalizeRelatedItems([]RelatedItem{
-		{Kind: "card", Number: 3, Title: "ignored", Label: "  a  "},
+		{Kind: "item", Number: 3, Title: "ignored", Label: "  a  "},
 		{Kind: "url", URL: "  HTTPS://example.com/x  ", Label: ""},
 	})
 	if !valid || len(ok) != 2 {
@@ -25,10 +25,10 @@ func TestNormalizeRelatedItems(t *testing.T) {
 		name  string
 		items []RelatedItem
 	}{
-		{"self-shaped dup number", []RelatedItem{{Kind: "card", Number: 1}, {Kind: "card", Number: 1}}},
+		{"self-shaped dup number", []RelatedItem{{Kind: "item", Number: 1}, {Kind: "item", Number: 1}}},
 		{"dup url", []RelatedItem{{Kind: "url", URL: "https://a.com"}, {Kind: "url", URL: "https://a.com"}}},
 		{"bad kind", []RelatedItem{{Kind: "file", URL: "https://a.com"}}},
-		{"bad number", []RelatedItem{{Kind: "card", Number: 0}}},
+		{"bad number", []RelatedItem{{Kind: "item", Number: 0}}},
 		{"ftp", []RelatedItem{{Kind: "url", URL: "ftp://a.com"}}},
 		{"too long label", []RelatedItem{{Kind: "url", URL: "https://a.com", Label: strings.Repeat("あ", relatedLabelMax+1)}}},
 		{"too long url", []RelatedItem{{Kind: "url", URL: "https://a.com/" + strings.Repeat("x", relatedURLMax)}}},
@@ -48,7 +48,7 @@ func TestNormalizeRelatedItems(t *testing.T) {
 
 func TestRelatedItemsJSONOmitsTitle(t *testing.T) {
 	t.Parallel()
-	got := relatedItemsJSON([]RelatedItem{{Kind: "card", Number: 2, Title: "T", Label: "L"}})
+	got := relatedItemsJSON([]RelatedItem{{Kind: "item", Number: 2, Title: "T", Label: "L"}})
 	if strings.Contains(got, "title") || !strings.Contains(got, `"number":2`) {
 		t.Fatalf("got %s", got)
 	}

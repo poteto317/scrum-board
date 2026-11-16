@@ -41,16 +41,16 @@ func (r *errRepo) GetColumnByName(ctx context.Context, name string) (Column, err
 	return r.memoryRepo.GetColumnByName(ctx, name)
 }
 
-func (r *errRepo) CreateCard(ctx context.Context, in CardInput) (Card, error) {
+func (r *errRepo) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	r.mu.Lock()
 	r.createCalls++
 	r.createDeadline, _ = ctx.Deadline()
 	err := r.createErr
 	r.mu.Unlock()
 	if err != nil {
-		return Card{}, err
+		return Item{}, err
 	}
-	return r.memoryRepo.CreateCard(ctx, in)
+	return r.memoryRepo.CreateItem(ctx, in)
 }
 
 func (r *errRepo) counts() (int, int) {
@@ -65,10 +65,10 @@ type fakeFormatter struct {
 	drafts   []Draft
 	left     []time.Duration // remaining time until the context deadline, when there is one
 	hasLimit []bool
-	fn       func(context.Context, Draft) (RefinedCard, error)
+	fn       func(context.Context, Draft) (RefinedItem, error)
 }
 
-func (f *fakeFormatter) Format(ctx context.Context, d Draft) (RefinedCard, error) {
+func (f *fakeFormatter) Format(ctx context.Context, d Draft) (RefinedItem, error) {
 	f.mu.Lock()
 	f.calls++
 	f.drafts = append(f.drafts, d)
@@ -86,9 +86,9 @@ func (f *fakeFormatter) callCount() int {
 	return f.calls
 }
 
-func ok(title, description string) func(context.Context, Draft) (RefinedCard, error) {
-	return func(context.Context, Draft) (RefinedCard, error) {
-		return RefinedCard{Title: title, Description: description}, nil
+func ok(title, description string) func(context.Context, Draft) (RefinedItem, error) {
+	return func(context.Context, Draft) (RefinedItem, error) {
+		return RefinedItem{Title: title, Description: description}, nil
 	}
 }
 
@@ -138,7 +138,7 @@ type apiError struct {
 
 func post(h http.Handler, ctx context.Context, contentType, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/api/cards/refined", strings.NewReader(body)).WithContext(ctx)
+	r := httptest.NewRequest(http.MethodPost, "/api/items/refined", strings.NewReader(body)).WithContext(ctx)
 	if contentType != "" {
 		r.Header.Set("Content-Type", contentType)
 	}
@@ -150,11 +150,11 @@ func postJSON(h http.Handler, body string) *httptest.ResponseRecorder {
 	return post(h, context.Background(), "application/json", body)
 }
 
-func newRefined(repo Repository, f CardFormatter) http.Handler {
+func newRefined(repo Repository, f ItemFormatter) http.Handler {
 	if f == nil {
 		return NewHandler(repo)
 	}
-	return NewHandler(repo, WithCardFormatter(f))
+	return NewHandler(repo, WithItemFormatter(f))
 }
 
 func decodeError(t *testing.T, w *httptest.ResponseRecorder) apiError {
@@ -166,7 +166,7 @@ func decodeError(t *testing.T, w *httptest.ResponseRecorder) apiError {
 	return e
 }
 
-func TestRefinedCardIsCreatedInTodoWithTrimmedValues(t *testing.T) {
+func TestRefinedItemIsCreatedInTodoWithTrimmedValues(t *testing.T) {
 	repo := &errRepo{memoryRepo: fresh()}
 	f := &fakeFormatter{fn: ok("  整えた題名  ", "\n整えた説明\n")}
 	h := newRefined(repo, f)
@@ -174,7 +174,7 @@ func TestRefinedCardIsCreatedInTodoWithTrimmedValues(t *testing.T) {
 	if w.Code != 201 {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}
-	var card Card
+	var card Item
 	if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestRefinedCardIsCreatedInTodoWithTrimmedValues(t *testing.T) {
 	}
 }
 
-func TestRefinedCardPassesEmptyTitleAndAcceptsBoundaryLengths(t *testing.T) {
+func TestRefinedItemPassesEmptyTitleAndAcceptsBoundaryLengths(t *testing.T) {
 	f := &fakeFormatter{fn: ok("題名", "説明")}
 	h := newRefined(&errRepo{memoryRepo: fresh()}, f)
 	if w := postJSON(h, `{"description":"説明だけ"}`); w.Code != 201 || f.drafts[0] != (Draft{Description: "説明だけ"}) {
@@ -202,7 +202,7 @@ func TestRefinedCardPassesEmptyTitleAndAcceptsBoundaryLengths(t *testing.T) {
 	}
 }
 
-func TestRefinedCardRejectsInvalidInputBeforeAnythingElse(t *testing.T) {
+func TestRefinedItemRejectsInvalidInputBeforeAnythingElse(t *testing.T) {
 	long := func(n int) string { return strings.Repeat("😀", n) }
 	for name, tc := range map[string]struct {
 		contentType, body string
@@ -236,7 +236,7 @@ func TestRefinedCardRejectsInvalidInputBeforeAnythingElse(t *testing.T) {
 	}
 }
 
-func TestRefinedCardUnconfiguredIsReportedBeforeResolvingTheColumn(t *testing.T) {
+func TestRefinedItemUnconfiguredIsReportedBeforeResolvingTheColumn(t *testing.T) {
 	repo := &errRepo{memoryRepo: fresh()}
 	w := postJSON(NewHandler(repo), `{"title":"x"}`)
 	if w.Code != 503 || decodeError(t, w).Code != "ai_not_configured" {
@@ -246,7 +246,7 @@ func TestRefinedCardUnconfiguredIsReportedBeforeResolvingTheColumn(t *testing.T)
 		t.Fatal("column was resolved although the AI is not configured")
 	}
 	// A nil formatter given explicitly means the same.
-	if w := postJSON(NewHandler(repo, WithCardFormatter(nil)), `{"title":"x"}`); w.Code != 503 {
+	if w := postJSON(NewHandler(repo, WithItemFormatter(nil)), `{"title":"x"}`); w.Code != 503 {
 		t.Fatalf("nil formatter: %d", w.Code)
 	}
 	// Existing endpoints do not depend on the formatter.
@@ -255,7 +255,7 @@ func TestRefinedCardUnconfiguredIsReportedBeforeResolvingTheColumn(t *testing.T)
 	}
 }
 
-func TestRefinedCardWithoutTodoColumnFailsBeforeCallingTheAI(t *testing.T) {
+func TestRefinedItemWithoutTodoColumnFailsBeforeCallingTheAI(t *testing.T) {
 	mem := fresh()
 	mem.columns = []Column{{ID: 2, Name: "Doing"}}
 	f := &fakeFormatter{fn: ok("題名", "説明")}
@@ -265,7 +265,7 @@ func TestRefinedCardWithoutTodoColumnFailsBeforeCallingTheAI(t *testing.T) {
 	}
 }
 
-func TestRefinedCardRepositoryErrorsAreServerErrorsWithoutLeaks(t *testing.T) {
+func TestRefinedItemRepositoryErrorsAreServerErrorsWithoutLeaks(t *testing.T) {
 	logs := captureLogs(t)
 	leaky := errors.New("db said " + secretDraft + " " + secretKey)
 	for name, tc := range map[string]struct{ colErr, createErr error }{
@@ -300,21 +300,21 @@ func TestRefinedCardRepositoryErrorsAreServerErrorsWithoutLeaks(t *testing.T) {
 	}
 }
 
-func TestRefinedCardRejectsUnusableAIOutputWithoutCreatingACard(t *testing.T) {
+func TestRefinedItemRejectsUnusableAIOutputWithoutCreatingACard(t *testing.T) {
 	long := func(n int) string { return strings.Repeat("あ", n) }
 	for name, tc := range map[string]struct {
 		body string
-		out  RefinedCard
+		out  RefinedItem
 	}{
-		"empty title":                {`{"title":"x"}`, RefinedCard{Title: ""}},
-		"blank title":                {`{"title":"x"}`, RefinedCard{Title: " \n "}},
-		"title too long":             {`{"title":"x"}`, RefinedCard{Title: long(201)}},
-		"invalid UTF-8 title":        {`{"title":"x"}`, RefinedCard{Title: "\xff題名"}},
-		"description too long":       {`{"title":"x","description":"y"}`, RefinedCard{Title: "題名", Description: long(10001)}},
-		"invalid UTF-8 description":  {`{"title":"x","description":"y"}`, RefinedCard{Title: "題名", Description: "\xff"}},
-		"description lost":           {`{"title":"x","description":"y"}`, RefinedCard{Title: "題名", Description: ""}},
-		"description became blank":   {`{"title":"x","description":"y"}`, RefinedCard{Title: "題名", Description: " \n"}},
-		"derived title still absent": {`{"description":"y"}`, RefinedCard{Title: ""}},
+		"empty title":                {`{"title":"x"}`, RefinedItem{Title: ""}},
+		"blank title":                {`{"title":"x"}`, RefinedItem{Title: " \n "}},
+		"title too long":             {`{"title":"x"}`, RefinedItem{Title: long(201)}},
+		"invalid UTF-8 title":        {`{"title":"x"}`, RefinedItem{Title: "\xff題名"}},
+		"description too long":       {`{"title":"x","description":"y"}`, RefinedItem{Title: "題名", Description: long(10001)}},
+		"invalid UTF-8 description":  {`{"title":"x","description":"y"}`, RefinedItem{Title: "題名", Description: "\xff"}},
+		"description lost":           {`{"title":"x","description":"y"}`, RefinedItem{Title: "題名", Description: ""}},
+		"description became blank":   {`{"title":"x","description":"y"}`, RefinedItem{Title: "題名", Description: " \n"}},
+		"derived title still absent": {`{"description":"y"}`, RefinedItem{Title: ""}},
 	} {
 		repo := &errRepo{memoryRepo: fresh()}
 		w := postJSON(newRefined(repo, &fakeFormatter{fn: ok(tc.out.Title, tc.out.Description)}), tc.body)
@@ -327,17 +327,17 @@ func TestRefinedCardRejectsUnusableAIOutputWithoutCreatingACard(t *testing.T) {
 	}
 }
 
-func TestRefinedCardKeepsADescriptionEmptyWhenTheDraftHadNone(t *testing.T) {
+func TestRefinedItemKeepsADescriptionEmptyWhenTheDraftHadNone(t *testing.T) {
 	repo := &errRepo{memoryRepo: fresh()}
 	w := postJSON(newRefined(repo, &fakeFormatter{fn: ok("題名", "AIが書いた説明")}), `{"title":"下書き"}`)
-	var card Card
+	var card Item
 	_ = json.Unmarshal(w.Body.Bytes(), &card)
 	if w.Code != 201 || card.Description != "" {
 		t.Fatalf("status=%d description=%q", w.Code, card.Description)
 	}
 }
 
-func TestRefinedCardAIFailuresNeverCreateACardOrLeak(t *testing.T) {
+func TestRefinedItemAIFailuresNeverCreateACardOrLeak(t *testing.T) {
 	logs := captureLogs(t)
 	for name, err := range map[string]error{
 		"plain error":    errors.New("boom " + secretReply + secretKey + secretDraft),
@@ -347,7 +347,7 @@ func TestRefinedCardAIFailuresNeverCreateACardOrLeak(t *testing.T) {
 		"wrapped secret": errors.Join(errors.New("x"), failure{kind: "server"}),
 	} {
 		repo := &errRepo{memoryRepo: fresh()}
-		f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedCard, error) { return RefinedCard{}, err }}
+		f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) { return RefinedItem{}, err }}
 		w := postJSON(newRefined(repo, f), `{"title":"`+secretDraft+`"}`)
 		if w.Code != 502 || decodeError(t, w).Code != "ai_failed" {
 			t.Fatalf("%s: status=%d body=%s", name, w.Code, w.Body)
@@ -371,12 +371,12 @@ func TestRefinedCardAIFailuresNeverCreateACardOrLeak(t *testing.T) {
 	}
 }
 
-func TestRefinedCardLimitsConcurrentAICallsAndAlwaysReleasesTheSlot(t *testing.T) {
+func TestRefinedItemLimitsConcurrentAICallsAndAlwaysReleasesTheSlot(t *testing.T) {
 	repo := &errRepo{memoryRepo: fresh()}
 	release := make(chan struct{})
-	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedCard, error) {
+	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) {
 		<-release
-		return RefinedCard{}, errors.New("stop here") // never reach CreateCard: memoryRepo is not thread safe
+		return RefinedItem{}, errors.New("stop here") // never reach CreateItem: memoryRepo is not thread safe
 	}}
 	h := newRefined(repo, f)
 	var wg sync.WaitGroup
@@ -401,9 +401,9 @@ func TestRefinedCardLimitsConcurrentAICallsAndAlwaysReleasesTheSlot(t *testing.T
 	if w := postJSON(h, `{"title":"x"}`); w.Code != 201 {
 		t.Fatalf("after release: %d %s", w.Code, w.Body)
 	}
-	for name, fn := range map[string]func(context.Context, Draft) (RefinedCard, error){
-		"error": func(context.Context, Draft) (RefinedCard, error) { return RefinedCard{}, errors.New("x") },
-		"panic": func(context.Context, Draft) (RefinedCard, error) { panic("formatter exploded") },
+	for name, fn := range map[string]func(context.Context, Draft) (RefinedItem, error){
+		"error": func(context.Context, Draft) (RefinedItem, error) { return RefinedItem{}, errors.New("x") },
+		"panic": func(context.Context, Draft) (RefinedItem, error) { panic("formatter exploded") },
 	} {
 		f2 := &fakeFormatter{fn: fn}
 		h2 := newRefined(&errRepo{memoryRepo: fresh()}, f2)
@@ -418,7 +418,7 @@ func TestRefinedCardLimitsConcurrentAICallsAndAlwaysReleasesTheSlot(t *testing.T
 		}
 	}
 	// A canceled request also frees its slot.
-	f3 := &fakeFormatter{fn: func(ctx context.Context, _ Draft) (RefinedCard, error) { return RefinedCard{}, ctx.Err() }}
+	f3 := &fakeFormatter{fn: func(ctx context.Context, _ Draft) (RefinedItem, error) { return RefinedItem{}, ctx.Err() }}
 	h3 := newRefined(&errRepo{memoryRepo: fresh()}, f3)
 	for i := 0; i <= maxConcurrentFormats; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -430,7 +430,7 @@ func TestRefinedCardLimitsConcurrentAICallsAndAlwaysReleasesTheSlot(t *testing.T
 	}
 }
 
-func TestRefinedCardAIDeadlineFollowsTheRemainingRequestTime(t *testing.T) {
+func TestRefinedItemAIDeadlineFollowsTheRemainingRequestTime(t *testing.T) {
 	near := func(got, want time.Duration) bool { return got > want-time.Second && got <= want }
 	run := func(ctx context.Context) (*fakeFormatter, int) {
 		f := &fakeFormatter{fn: ok("題名", "説明")}
@@ -462,7 +462,7 @@ func TestRefinedCardAIDeadlineFollowsTheRemainingRequestTime(t *testing.T) {
 	}
 }
 
-func TestRefinedCardStoresTheCardWithTheRequestContextNotTheAIContext(t *testing.T) {
+func TestRefinedItemStoresTheCardWithTheRequestContextNotTheAIContext(t *testing.T) {
 	repo := &errRepo{memoryRepo: fresh()}
 	f := &fakeFormatter{fn: ok("題名", "説明")}
 	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Second)
@@ -475,15 +475,15 @@ func TestRefinedCardStoresTheCardWithTheRequestContextNotTheAIContext(t *testing
 	got := repo.createDeadline
 	repo.mu.Unlock()
 	if !got.Equal(want) {
-		t.Fatalf("CreateCard got deadline %v, want the request deadline %v (the AI deadline would leave no time to store the card)", got, want)
+		t.Fatalf("CreateItem got deadline %v, want the request deadline %v (the AI deadline would leave no time to store the card)", got, want)
 	}
 }
 
-func TestRefinedCardAnswersBusyWithoutWaiting(t *testing.T) {
+func TestRefinedItemAnswersBusyWithoutWaiting(t *testing.T) {
 	release := make(chan struct{})
-	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedCard, error) {
+	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) {
 		<-release
-		return RefinedCard{}, errors.New("stop here")
+		return RefinedItem{}, errors.New("stop here")
 	}}
 	h := newRefined(&errRepo{memoryRepo: fresh()}, f)
 	var wg sync.WaitGroup
@@ -508,7 +508,7 @@ func TestRefinedCardAnswersBusyWithoutWaiting(t *testing.T) {
 	}
 }
 
-func TestRefinedCardOtherFailurePathsDoNotLogDraftsOrAIText(t *testing.T) {
+func TestRefinedItemOtherFailurePathsDoNotLogDraftsOrAIText(t *testing.T) {
 	logs := captureLogs(t)
 	// Output rejected after the AI answered: the AI text and the draft are both secrets here.
 	bad := secretReply + strings.Repeat("あ", 300)

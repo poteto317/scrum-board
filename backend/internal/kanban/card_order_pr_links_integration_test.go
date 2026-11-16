@@ -8,12 +8,12 @@ import (
 
 // A card with several PR links must reach every board-facing read once, with all of its links in registration
 // order, however the card was moved: the card list is not allowed to be joined to card_pr_links (one row per PR).
-func newLinkedBoard(t *testing.T) (r MySQLRepository, two, three, none Card) {
+func newLinkedBoard(t *testing.T) (r MySQLRepository, two, three, none Item) {
 	t.Helper()
 	r, _, _ = newOrderedBoard(t)
 	ctx := context.Background()
-	mk := func(title string, urls []string) Card {
-		c, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: title, PRURLs: urls})
+	mk := func(title string, urls []string) Item {
+		c, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: title, PRURLs: urls})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -26,7 +26,7 @@ func newLinkedBoard(t *testing.T) (r MySQLRepository, two, three, none Card) {
 }
 
 // assertLinkedCards checks a card list: every card exactly once, links intact and in order, [] (not null) for none.
-func assertLinkedCards(t *testing.T, where string, cards []Card, two, three, none Card) {
+func assertLinkedCards(t *testing.T, where string, cards []Item, two, three, none Item) {
 	t.Helper()
 	seen := map[int64]int{}
 	for _, c := range cards {
@@ -65,35 +65,35 @@ func TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(board.Cards) != total {
-		t.Fatalf("Board returned %d cards, want %d (a PR-link join would repeat cards): %+v", len(board.Cards), total, board.Cards)
+	if len(board.Items) != total {
+		t.Fatalf("Board returned %d cards, want %d (a PR-link join would repeat cards): %+v", len(board.Items), total, board.Items)
 	}
-	assertLinkedCards(t, "Board", board.Cards, two, three, none)
-	for _, c := range []Card{two, three} {
-		got, err := r.GetCard(ctx, c.ID)
+	assertLinkedCards(t, "Board", board.Items, two, three, none)
+	for _, c := range []Item{two, three} {
+		got, err := r.GetItem(ctx, c.ID)
 		if err != nil || !reflect.DeepEqual(got.PRURLs, c.PRURLs) {
-			t.Fatalf("GetCard %d: %#v %v", c.ID, got.PRURLs, err)
+			t.Fatalf("GetItem %d: %#v %v", c.ID, got.PRURLs, err)
 		}
-		got, err = r.GetCardByNumber(ctx, c.Number)
+		got, err = r.GetItemByNumber(ctx, c.Number)
 		if err != nil || !reflect.DeepEqual(got.PRURLs, c.PRURLs) {
-			t.Fatalf("GetCardByNumber %d: %#v %v", c.Number, got.PRURLs, err)
+			t.Fatalf("GetItemByNumber %d: %#v %v", c.Number, got.PRURLs, err)
 		}
 	}
 
-	// ReorderCards: inside a column, then across columns. The result and the stored board both keep every link.
+	// ReorderItems: inside a column, then across columns. The result and the stored board both keep every link.
 	ids := idsByPosition(t, r, 1)
 	rev := make([]int64, len(ids))
 	for i, id := range ids {
 		rev[len(ids)-1-i] = id
 	}
-	cards, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: rev}})
+	cards, err := r.ReorderItems(ctx, []ItemColumnOrder{{ColumnID: 1, ItemIDs: rev}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(cards) != total {
-		t.Fatalf("ReorderCards returned %d cards, want %d", len(cards), total)
+		t.Fatalf("ReorderItems returned %d cards, want %d", len(cards), total)
 	}
-	assertLinkedCards(t, "ReorderCards within a column", cards, two, three, none)
+	assertLinkedCards(t, "ReorderItems within a column", cards, two, three, none)
 
 	var rest []int64
 	for _, id := range ids {
@@ -101,38 +101,38 @@ func TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL(t *testing.T) {
 			rest = append(rest, id)
 		}
 	}
-	cards, err = r.ReorderCards(ctx, []CardColumnOrder{
-		{ColumnID: 1, CardIDs: rest},
-		{ColumnID: 2, CardIDs: []int64{three.ID, two.ID}},
+	cards, err = r.ReorderItems(ctx, []ItemColumnOrder{
+		{ColumnID: 1, ItemIDs: rest},
+		{ColumnID: 2, ItemIDs: []int64{three.ID, two.ID}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertLinkedCards(t, "ReorderCards across columns", cards, two, three, none)
+	assertLinkedCards(t, "ReorderItems across columns", cards, two, three, none)
 	board, err = r.Board(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertLinkedCards(t, "Board after ReorderCards", board.Cards, two, three, none)
-	for _, c := range []Card{two, three} {
+	assertLinkedCards(t, "Board after ReorderItems", board.Items, two, three, none)
+	for _, c := range []Item{two, three} {
 		page, err := r.History(ctx, c.Number, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
 		move := page.Events[0]
 		if move.Kind != "updated" || len(move.Changes) != 1 || move.Changes[0].Field != "status" {
-			t.Fatalf("moving card %d through ReorderCards must record only a status change: %+v", c.ID, page.Events)
+			t.Fatalf("moving card %d through ReorderItems must record only a status change: %+v", c.ID, page.Events)
 		}
 	}
 
-	// UpdateCard's column move.
+	// UpdateItem's column move.
 	doing := int64(2)
-	moved, err := r.UpdateCard(ctx, three.ID, CardPatch{ColumnID: &doing})
+	moved, err := r.UpdateItem(ctx, three.ID, ItemPatch{ColumnID: &doing})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if moved.ColumnID != 2 || !reflect.DeepEqual(moved.PRURLs, three.PRURLs) {
-		t.Fatalf("UpdateCard move: %+v", moved)
+		t.Fatalf("UpdateItem move: %+v", moved)
 	}
 	page, err := r.History(ctx, three.Number, 0)
 	if err != nil {
@@ -145,7 +145,7 @@ func TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertLinkedCards(t, "Board after UpdateCard move", board.Cards, two, three, none)
+	assertLinkedCards(t, "Board after UpdateItem move", board.Items, two, three, none)
 
 	// Backlog read and reorder.
 	backlog, err := r.Backlog(ctx)
@@ -168,9 +168,9 @@ func TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL(t *testing.T) {
 
 	// The links themselves are untouched, and a later edit of them diffs against the full list.
 	urls := append(append([]string(nil), two.PRURLs...), "https://github.com/o/r/pull/9")
-	edited, err := r.UpdateCard(ctx, two.ID, CardPatch{PRURLs: &urls})
+	edited, err := r.UpdateItem(ctx, two.ID, ItemPatch{PRURLs: &urls})
 	if err != nil || !reflect.DeepEqual(edited.PRURLs, urls) {
-		t.Fatalf("UpdateCard links: %#v %v", edited.PRURLs, err)
+		t.Fatalf("UpdateItem links: %#v %v", edited.PRURLs, err)
 	}
 	page, err = r.History(ctx, two.Number, 0)
 	if err != nil {

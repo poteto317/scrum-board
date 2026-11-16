@@ -16,7 +16,7 @@ import (
 
 type HistoricalRecord struct {
 	Number      int64           `json:"number"`
-	CardID      int64           `json:"cardId"`
+	ItemID      int64           `json:"itemId"`
 	CreatedAt   time.Time       `json:"createdAt"`
 	Key         string          `json:"key"`
 	OccurredAt  time.Time       `json:"occurredAt"`
@@ -32,7 +32,7 @@ var importKey = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,128}$`)
 const importClockSkew = 5 * time.Minute
 
 func validHistoricalRecord(v HistoricalRecord, now time.Time) bool {
-	if v.Number <= 0 || v.CardID <= 0 || v.CreatedAt.IsZero() || v.OccurredAt.IsZero() || v.OccurredAt.Year() < 1000 || v.OccurredAt.Year() > 9999 || v.OccurredAt.Truncate(time.Microsecond).After(now.Add(importClockSkew)) || !importKey.MatchString(v.Key) || len(v.Changes) > 6 || len(v.Note) == 0 || utf8.RuneCountInString(v.Note) > 4000 || !validPRURL(v.EvidenceURL) {
+	if v.Number <= 0 || v.ItemID <= 0 || v.CreatedAt.IsZero() || v.OccurredAt.IsZero() || v.OccurredAt.Year() < 1000 || v.OccurredAt.Year() > 9999 || v.OccurredAt.Truncate(time.Microsecond).After(now.Add(importClockSkew)) || !importKey.MatchString(v.Key) || len(v.Changes) > 6 || len(v.Note) == 0 || utf8.RuneCountInString(v.Note) > 4000 || !validPRURL(v.EvidenceURL) {
 		return false
 	}
 	seen := map[string]bool{}
@@ -108,7 +108,7 @@ func (r MySQLRepository) ImportHistory(ctx context.Context, records []Historical
 		}
 	}
 	records = append([]HistoricalRecord(nil), records...)
-	sort.SliceStable(records, func(i, j int) bool { return records[i].CardID < records[j].CardID })
+	sort.SliceStable(records, func(i, j int) bool { return records[i].ItemID < records[j].ItemID })
 	// Read each key after acquiring its card lock, including commits made while waiting.
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
@@ -116,7 +116,7 @@ func (r MySQLRepository) ImportHistory(ctx context.Context, records []Historical
 	}
 	defer tx.Rollback()
 	// Every card writer takes the all-columns lock before touching cards (see lockColumnRows), so an import
-	// joins it too: otherwise its card-by-id locks can cross ReorderCards' index-order scan and deadlock.
+	// joins it too: otherwise its card-by-id locks can cross ReorderItems' index-order scan and deadlock.
 	if _, err = lockColumnRows(ctx, tx); err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (r MySQLRepository) ImportHistory(ctx context.Context, records []Historical
 		v.OccurredAt = v.OccurredAt.Truncate(time.Microsecond)
 		var id int64
 		var created time.Time
-		err = tx.QueryRowContext(ctx, "SELECT id,created_at FROM cards WHERE id=? FOR UPDATE", v.CardID).Scan(&id, &created)
+		err = tx.QueryRowContext(ctx, "SELECT id,created_at FROM cards WHERE id=? FOR UPDATE", v.ItemID).Scan(&id, &created)
 		if err != nil {
 			return dbError(err)
 		}
