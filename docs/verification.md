@@ -89,7 +89,7 @@
 - `GET /api/backlog` / `PUT /api/backlog/order` と `/backlog` UI のドラッグ&ドロップ / 上下キー並び替え
 - 全ステータス（Done 含む）表示、バックログ／ボードからの新規追加（ステータス選択なし・常に Todo）
 - 400 / 409 / 永続化、並び替え後のアイテム追加が末尾、Create と Reorder の並行
-- `ReorderBacklog` もアイテム行に触れる前に全列ロック（`lockColumnRows`）を取り、`ReorderItems` / `CreateItem` / `UpdateItem` / `DeleteItem` / `ImportHistory` と交差してデッドロックしないこと（使い捨て MySQL の決定的テスト `TestCardWritersQueueOnTheAllColumnsLockMySQL` で、`ReorderBacklog` のロックを外すと落ちることを確認。統合前の `ReorderBacklog`（`cards` を主キー順にロックするだけ）は、`ReorderItems` と 80 並行で混在させると約 3 分の 1 が MySQL 1213 になることをレビューで実測した。マージ時にこのリポジトリの Go テストで並行ストレステストを組んだが交差を再現できず検出力がなかったため、決定的テストを根拠にする）
+- `ReorderBacklog` もアイテム行に触れる前に全列ロック（`lockColumnRows`）を取り、`ReorderItems` / `CreateItem` / `UpdateItem` / `DeleteItem` / `ImportHistory` と交差してデッドロックしないこと（使い捨て MySQL の決定的テスト `TestCardWritersQueueOnTheAllColumnsLockMySQL` で、`ReorderBacklog` のロックを外すと落ちることを確認。統合前の `ReorderBacklog`（`items` を主キー順にロックするだけ）は、`ReorderItems` と 80 並行で混在させると約 3 分の 1 が MySQL 1213 になることをレビューで実測した。マージ時にこのリポジトリの Go テストで並行ストレステストを組んだが交差を再現できず検出力がなかったため、決定的テストを根拠にする）
 - アイテムの `position`（列内の並び順）と `backlogPosition`（バックログの優先順位）が独立していること。一方の並び替えがもう一方を変えないこと
 
 ### コマンドテンプレート

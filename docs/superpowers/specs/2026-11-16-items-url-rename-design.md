@@ -19,7 +19,7 @@
 | 番号プレフィックス | **`TASK-` → `ITEM-`**。表示は **常に3桁ゼロ埋め**（`ITEM-003`）。ボード・詳細・バックログ・aria・announce・関連フォールバックで統一 |
 | 関連 kind | JSON / DB の **`card` → `item`**（起動時マイグレーションで既存行を更新） |
 | 公開 JSON の id 配列キー | 列内／バックログ並び替えの **`cardIds` → `itemIds`**（リクエスト・ドキュメントとも） |
-| DB 物理表名 | **`cards` / `card_*` は維持**（ストレージ名。コード・API は Item。Cloud SQL の大規模 RENAME は今回やらない） |
+| DB 物理表名 | **`cards` / `card_*` → `items` / `item_*`**（起動時 `RENAME TABLE`。列名 `card_id` などは当面維持） |
 | ドキュメント | **README・docs/api.md・verification・smoke 等の利用者向けを更新**。過去の specs/plans は歴史として原則触らない |
 | 対象外 | 英語の CSS クラス名（`.task-card` 等）の一括リネーム、外部に出た旧 `/cards` ブックマーク以外の互換 API、DB 列名 `card_id` の物理リネーム |
 
@@ -117,7 +117,7 @@ FE `Api` のメソッド名も `itemByNumber` / `updateItem` 等に合わせる�
 
 ## 対象外
 
-- DB 表 `cards` → `items` の物理リネーム
+- DB 列名 `card_id` などの物理リネーム（表名は `items` / `item_*` へ移行済み）
 - CSS クラス一括リネーム
 - 外部ツールがまだ `/api/cards` を叩く場合の永久互換レイヤ（必要なら別カード）
 - 英語 UI コピー（YOUR WORK…）の変更
