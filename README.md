@@ -266,7 +266,7 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 
 ### カードとGitHub PRの紐付け
 
-カード詳細のプロパティでGitHub PRのURLを追加・削除できます。1カードに複数URLを登録でき（件数上限なし、登録順）、削除で解除します。APIからは `prUrls` 配列の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。
+カード詳細のプロパティでGitHub PRのURLを追加・削除・並べ替え（ドラッグまたは上下ボタン）できます。1カードに複数URLを登録でき（件数上限なし）、削除で解除します。APIからは `prUrls` 配列の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。関連アイテムも同様に並べ替えできます。
 
 URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `card_pr_links` に保存します（1カード複数行）。既存のカード・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。起動時に旧スキーマ（1カード1行）から自動移行します。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
 
