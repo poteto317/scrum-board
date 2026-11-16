@@ -2,18 +2,18 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CardDetail } from './card-detail';
+import { ItemDetail } from './item-detail';
 import { Api } from './api';
-import { Card } from './models';
-import { cardDetailUrl } from './card-link';
+import { Item } from './models';
+import { itemDetailUrl } from './item-link';
 import { COPY_LINK_SUCCESS } from './copy-link-feedback';
 import {
-  COMMAND_CARD_MENU_EMPTY,
+  COMMAND_ITEM_MENU_EMPTY,
   COPY_COMMAND_FAILURE,
   COPY_COMMAND_SUCCESS,
   resolveCommand,
 } from './command-template';
-const card: Card = {
+const card: Item = {
   id: 18,
   number: 3,
   columnId: 1,
@@ -27,16 +27,16 @@ const card: Card = {
   createdAt: '',
   updatedAt: '',
 };
-describe('CardDetail autosave', () => {
+describe('ItemDetail autosave', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
-    cardByNumber: ReturnType<typeof vi.fn>;
-    updateCard: ReturnType<typeof vi.fn>;
-    deleteCard: ReturnType<typeof vi.fn>;
+    itemByNumber: ReturnType<typeof vi.fn>;
+    updateItem: ReturnType<typeof vi.fn>;
+    deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
-    listCardCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -51,16 +51,16 @@ describe('CardDetail autosave', () => {
             { id: 1, name: 'Todo', position: 0 },
             { id: 2, name: 'Doing', position: 0 },
           ],
-          cards: [],
+          items: [],
         }),
       ),
-      cardByNumber: vi.fn(() => of(card)),
-      updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
-      deleteCard: vi.fn(() => of(undefined)),
-      listCommandTemplates: vi.fn(() => of({ templates: [] })), listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      itemByNumber: vi.fn(() => of(card)),
+      updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
+      deleteItem: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
-      imports: [CardDetail],
+      imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
         { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
@@ -74,12 +74,12 @@ describe('CardDetail autosave', () => {
     vi.useRealTimers();
   });
   const create = () => {
-    const f = TestBed.createComponent(CardDetail);
+    const f = TestBed.createComponent(ItemDetail);
     f.detectChanges();
     return f;
   };
   it('refreshes history after a successful autosave without resetting the draft', () => {
-    api.updateCard.mockImplementation((_id, patch) =>
+    api.updateItem.mockImplementation((_id, patch) =>
       of({ ...card, ...patch, updatedAt: '2026-11-13T00:00:00Z' }),
     );
     const f = create();
@@ -96,28 +96,28 @@ describe('CardDetail autosave', () => {
     const f = create();
     expect(f.nativeElement.querySelector('button[type="submit"]')).toBeNull();
     vi.advanceTimersByTime(2500);
-    expect(api.updateCard).not.toHaveBeenCalled();
-    expect(f.nativeElement.querySelector('.eyebrow').textContent).toBe('TASK-003');
+    expect(api.updateItem).not.toHaveBeenCalled();
+    expect(f.nativeElement.querySelector('.eyebrow').textContent).toBe('ITEM-003');
   });
   it('saves the status selection immediately using the internal ID and leaves inputs enabled', () => {
-    const pending = new Subject<Card>();
-    api.updateCard.mockReturnValue(pending);
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValue(pending);
     const f = create();
     const select = f.nativeElement.querySelector('#detail-status') as HTMLSelectElement;
     select.selectedIndex = 1;
     select.dispatchEvent(new Event('change'));
-    expect(api.updateCard).toHaveBeenCalledWith(18, { columnId: 2 });
+    expect(api.updateItem).toHaveBeenCalledWith(18, { columnId: 2 });
     expect(f.componentInstance.form.enabled).toBe(true);
   });
   it('saves text on blur and displays failure without clearing edits', () => {
-    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '通信失敗' } })));
+    api.updateItem.mockReturnValue(throwError(() => ({ error: { message: '通信失敗' } })));
     const f = create();
     const input = f.nativeElement.querySelector('#detail-title') as HTMLInputElement;
     input.value = '編集中';
     input.dispatchEvent(new Event('input'));
     input.dispatchEvent(new Event('blur'));
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { title: '編集中' });
+    expect(api.updateItem).toHaveBeenCalledWith(18, { title: '編集中' });
     expect(input.value).toBe('編集中');
     expect(f.nativeElement.textContent).toContain('通信失敗');
     expect(f.nativeElement.textContent).toContain('再試行');
@@ -136,11 +136,11 @@ describe('CardDetail autosave', () => {
       input.value = value;
       input.dispatchEvent(new Event('input'));
       vi.advanceTimersByTime(2500);
-      expect(api.updateCard).not.toHaveBeenCalled();
+      expect(api.updateItem).not.toHaveBeenCalled();
       input.dispatchEvent(new Event('compositionend'));
       vi.advanceTimersByTime(600);
-      expect(api.updateCard).toHaveBeenCalledTimes(1);
-      expect(api.updateCard).toHaveBeenCalledWith(18, patch);
+      expect(api.updateItem).toHaveBeenCalledTimes(1);
+      expect(api.updateItem).toHaveBeenCalledWith(18, patch);
     },
   );
   it.each(['title', 'description'] as const)('saves %s immediately on blur', (field) => {
@@ -149,10 +149,10 @@ describe('CardDetail autosave', () => {
     const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
     input.value = value;
     input.dispatchEvent(new Event('input'));
-    expect(api.updateCard).not.toHaveBeenCalled();
+    expect(api.updateItem).not.toHaveBeenCalled();
     input.dispatchEvent(new Event('blur'));
-    expect(api.updateCard).toHaveBeenCalledTimes(1);
-    expect(api.updateCard).toHaveBeenCalledWith(18, patch);
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith(18, patch);
   });
   it('cancels the pending save when the screen is destroyed', () => {
     const f = create();
@@ -161,14 +161,14 @@ describe('CardDetail autosave', () => {
     input.dispatchEvent(new Event('input'));
     f.destroy();
     vi.advanceTimersByTime(2500);
-    expect(api.updateCard).not.toHaveBeenCalled();
+    expect(api.updateItem).not.toHaveBeenCalled();
   });
   it('adds and removes PR URLs via immediate PATCH', () => {
     const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
     const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1] }));
-    api.updateCard.mockReturnValueOnce(of({ ...card, prUrls: [url1, url2] }));
-    api.updateCard.mockReturnValueOnce(of({ ...card, prUrls: [url1] }));
+    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url1] }));
+    api.updateItem.mockReturnValueOnce(of({ ...card, prUrls: [url1, url2] }));
+    api.updateItem.mockReturnValueOnce(of({ ...card, prUrls: [url1] }));
     const f = create();
     expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(1);
     const input = f.nativeElement.querySelector('#detail-pr-url') as HTMLInputElement;
@@ -176,24 +176,24 @@ describe('CardDetail autosave', () => {
     input.dispatchEvent(new Event('input'));
     f.nativeElement.querySelector('.pr-add button').click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { prUrls: [url1, url2] });
+    expect(api.updateItem).toHaveBeenCalledWith(18, { prUrls: [url1, url2] });
     expect(input.value).toBe('');
     expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(2);
     f.nativeElement.querySelectorAll('.pr-remove')[1].click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { prUrls: [url1] });
+    expect(api.updateItem).toHaveBeenCalledWith(18, { prUrls: [url1] });
     expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(1);
   });
   it('keeps an invalid PR URL unsent and uses only the saved PRs as links', () => {
     const url = 'https://github.com/poteto317/scrum-board/pull/2';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
+    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
     const f = create();
     const input = f.nativeElement.querySelector('#detail-pr-url') as HTMLInputElement;
     input.value = 'https://github.com.evil/a/b/pull/1';
     input.dispatchEvent(new Event('input'));
     f.nativeElement.querySelector('.pr-add button').click();
     f.detectChanges();
-    expect(api.updateCard).not.toHaveBeenCalled();
+    expect(api.updateItem).not.toHaveBeenCalled();
     const link = f.nativeElement.querySelector('.pr-link');
     expect(link.getAttribute('href')).toBe(url);
     expect(link.rel).toBe('noopener noreferrer');
@@ -201,8 +201,8 @@ describe('CardDetail autosave', () => {
   });
   it('keeps the PR list when add PATCH fails', () => {
     const url = 'https://github.com/poteto317/scrum-board/pull/2';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
-    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '保存失敗' } })));
+    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
+    api.updateItem.mockReturnValue(throwError(() => ({ error: { message: '保存失敗' } })));
     const f = create();
     const input = f.nativeElement.querySelector('#detail-pr-url') as HTMLInputElement;
     input.value = 'https://github.com/poteto317/scrum-board/pull/9';
@@ -215,8 +215,8 @@ describe('CardDetail autosave', () => {
   it('reorders PR URLs with move buttons and hides controls for a single PR', () => {
     const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
     const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
-    api.updateCard.mockReturnValue(of({ ...card, prUrls: [url2, url1] }));
+    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
+    api.updateItem.mockReturnValue(of({ ...card, prUrls: [url2, url1] }));
     const f = create();
     expect(f.nativeElement.querySelectorAll('.pr-move')).toHaveLength(4);
     const downs = f.nativeElement.querySelectorAll(
@@ -224,7 +224,7 @@ describe('CardDetail autosave', () => {
     ) as NodeListOf<HTMLButtonElement>;
     downs[1].click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { prUrls: [url2, url1] });
+    expect(api.updateItem).toHaveBeenCalledWith(18, { prUrls: [url2, url1] });
     const links = [...f.nativeElement.querySelectorAll('.pr-list[aria-label="紐付けたGitHub PR"] .pr-link')].map(
       (a: HTMLAnchorElement) => a.getAttribute('href'),
     );
@@ -232,7 +232,7 @@ describe('CardDetail autosave', () => {
   });
   it('hides PR reorder controls when only one PR is linked', () => {
     const url = 'https://github.com/poteto317/scrum-board/pull/2';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
+    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
     const f = create();
     const list = f.nativeElement.querySelector('.pr-list[aria-label="紐付けたGitHub PR"]');
     expect(list.querySelectorAll('.pr-move')).toHaveLength(0);
@@ -241,8 +241,8 @@ describe('CardDetail autosave', () => {
   it('rolls PR order back when reorder PATCH fails', () => {
     const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
     const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
-    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '順序の保存に失敗' } })));
+    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
+    api.updateItem.mockReturnValue(throwError(() => ({ error: { message: '順序の保存に失敗' } })));
     const f = create();
     f.nativeElement.querySelectorAll('.pr-list[aria-label="紐付けたGitHub PR"] .pr-move')[1].click();
     f.detectChanges();
@@ -255,12 +255,12 @@ describe('CardDetail autosave', () => {
   it('reorders related items with move buttons', () => {
     const a = { kind: 'url' as const, url: 'https://example.com/a', label: 'A' };
     const b = { kind: 'url' as const, url: 'https://example.com/b', label: 'B' };
-    api.cardByNumber.mockReturnValue(of({ ...card, relatedItems: [a, b] }));
-    api.updateCard.mockReturnValue(of({ ...card, relatedItems: [b, a] }));
+    api.itemByNumber.mockReturnValue(of({ ...card, relatedItems: [a, b] }));
+    api.updateItem.mockReturnValue(of({ ...card, relatedItems: [b, a] }));
     const f = create();
     f.nativeElement.querySelectorAll('.pr-list[aria-label="関連アイテム"] .pr-move')[1].click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { relatedItems: [b, a] });
+    expect(api.updateItem).toHaveBeenCalledWith(18, { relatedItems: [b, a] });
     const labels = [...f.nativeElement.querySelectorAll('.pr-list[aria-label="関連アイテム"] .pr-link')].map(
       (el: HTMLElement) => el.textContent?.replace(/\s+/g, ' ').trim(),
     );
@@ -270,8 +270,8 @@ describe('CardDetail autosave', () => {
   it('rolls related order back when reorder PATCH fails', () => {
     const a = { kind: 'url' as const, url: 'https://example.com/a', label: 'A' };
     const b = { kind: 'url' as const, url: 'https://example.com/b', label: 'B' };
-    api.cardByNumber.mockReturnValue(of({ ...card, relatedItems: [a, b] }));
-    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '関連の順序保存に失敗' } })));
+    api.itemByNumber.mockReturnValue(of({ ...card, relatedItems: [a, b] }));
+    api.updateItem.mockReturnValue(throwError(() => ({ error: { message: '関連の順序保存に失敗' } })));
     const f = create();
     f.nativeElement.querySelectorAll('.pr-list[aria-label="関連アイテム"] .pr-move')[1].click();
     f.detectChanges();
@@ -285,7 +285,7 @@ describe('CardDetail autosave', () => {
   it('pauses live refresh while a list item is dragging', () => {
     const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
     const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
+    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
     const f = create();
     expect(f.componentInstance.listDragging()).toBe(false);
     f.componentInstance.onListDragStarted();
@@ -296,28 +296,28 @@ describe('CardDetail autosave', () => {
   it('clears listDragging when navigating to another card', () => {
     const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
     const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
-    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
+    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
     const f = create();
     f.componentInstance.onListDragStarted();
     expect(f.componentInstance.listDragging()).toBe(true);
-    api.cardByNumber.mockReturnValue(of({ ...card, number: 4, id: 19, prUrls: [] }));
+    api.itemByNumber.mockReturnValue(of({ ...card, number: 4, id: 19, prUrls: [] }));
     params.next(new Map([['number', '4']]));
     f.detectChanges();
     expect(f.componentInstance.listDragging()).toBe(false);
   });
   it('adds and removes related card/URL via immediate PATCH', () => {
     const related = [{ kind: 'url' as const, url: 'https://example.com/a', label: '仕様' }];
-    api.cardByNumber.mockReturnValue(of({ ...card, relatedItems: related }));
-    api.updateCard.mockReturnValueOnce(
+    api.itemByNumber.mockReturnValue(of({ ...card, relatedItems: related }));
+    api.updateItem.mockReturnValueOnce(
       of({
         ...card,
         relatedItems: [
           ...related,
-          { kind: 'card', number: 7, title: '他', label: '' },
+          { kind: 'item', number: 7, title: '他', label: '' },
         ],
       }),
     );
-    api.updateCard.mockReturnValueOnce(of({ ...card, relatedItems: related }));
+    api.updateItem.mockReturnValueOnce(of({ ...card, relatedItems: related }));
     const f = create();
     const list = () => f.nativeElement.querySelector('[aria-label="関連アイテム"]');
     expect(list().querySelectorAll('.pr-link')).toHaveLength(1);
@@ -326,28 +326,28 @@ describe('CardDetail autosave', () => {
     input.dispatchEvent(new Event('input'));
     f.nativeElement.querySelector('.related-add button').click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, {
-      relatedItems: [...related, { kind: 'card', number: 7, label: '' }],
+    expect(api.updateItem).toHaveBeenCalledWith(18, {
+      relatedItems: [...related, { kind: 'item', number: 7, label: '' }],
     });
     expect(list().querySelectorAll('.pr-link')).toHaveLength(2);
     list().querySelectorAll('.pr-remove')[1].click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { relatedItems: related });
+    expect(api.updateItem).toHaveBeenCalledWith(18, { relatedItems: related });
   });
   it('sets a preset assignee with immediate PATCH', () => {
-    api.updateCard.mockReturnValue(of({ ...card, assignee: 'Cursor' }));
+    api.updateItem.mockReturnValue(of({ ...card, assignee: 'Cursor' }));
     const f = create();
     const chip = Array.from(
       f.nativeElement.querySelectorAll('.assignee-chip') as NodeListOf<HTMLButtonElement>,
     ).find((b) => b.textContent?.trim() === 'Cursor')!;
     chip.click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { assignee: 'Cursor' });
-    expect(f.componentInstance.card()?.assignee).toBe('Cursor');
+    expect(api.updateItem).toHaveBeenCalledWith(18, { assignee: 'Cursor' });
+    expect(f.componentInstance.item()?.assignee).toBe('Cursor');
     expect(chip.classList.contains('selected')).toBe(true);
   });
   it('clears the free-text draft when the selected preset is clicked again', () => {
-    api.cardByNumber.mockReturnValue(of({ ...card, assignee: 'Cursor' }));
+    api.itemByNumber.mockReturnValue(of({ ...card, assignee: 'Cursor' }));
     const f = create();
     const input = f.nativeElement.querySelector('#detail-assignee') as HTMLInputElement;
     input.value = 'leftover';
@@ -357,11 +357,11 @@ describe('CardDetail autosave', () => {
     ).find((b) => b.textContent?.trim() === 'Cursor')!;
     chip.click();
     f.detectChanges();
-    expect(api.updateCard).not.toHaveBeenCalled();
+    expect(api.updateItem).not.toHaveBeenCalled();
     expect(input.value).toBe('');
   });
   it('applies free-text assignee and clears it', () => {
-    api.updateCard
+    api.updateItem
       .mockReturnValueOnce(of({ ...card, assignee: 'mash' }))
       .mockReturnValueOnce(of({ ...card, assignee: '' }));
     const f = create();
@@ -370,32 +370,32 @@ describe('CardDetail autosave', () => {
     input.dispatchEvent(new Event('input'));
     f.nativeElement.querySelector('.assignee-custom button').click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { assignee: 'mash' });
-    expect(f.componentInstance.card()?.assignee).toBe('mash');
+    expect(api.updateItem).toHaveBeenCalledWith(18, { assignee: 'mash' });
+    expect(f.componentInstance.item()?.assignee).toBe('mash');
     f.nativeElement.querySelector('.assignee-clear').click();
     f.detectChanges();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { assignee: '' });
-    expect(f.componentInstance.card()?.assignee).toBe('');
+    expect(api.updateItem).toHaveBeenCalledWith(18, { assignee: '' });
+    expect(f.componentInstance.item()?.assignee).toBe('');
   });
   it('reverts assignee display when PATCH fails and keeps the draft', () => {
-    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '対応の保存失敗' } })));
+    api.updateItem.mockReturnValue(throwError(() => ({ error: { message: '対応の保存失敗' } })));
     const f = create();
     const input = f.nativeElement.querySelector('#detail-assignee') as HTMLInputElement;
     input.value = 'draft-name';
     input.dispatchEvent(new Event('input'));
     f.nativeElement.querySelector('.assignee-custom button').click();
     f.detectChanges();
-    expect(f.componentInstance.card()?.assignee).toBe('');
+    expect(f.componentInstance.item()?.assignee).toBe('');
     expect(input.value).toBe('draft-name');
     expect(f.nativeElement.textContent).toContain('対応の保存失敗');
   });
   it('flushes edits before allowing navigation', async () => {
-    const pending = new Subject<Card>();
-    api.updateCard.mockReturnValue(pending);
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValue(pending);
     const f = create();
     f.componentInstance.form.controls.description.setValue('移動前');
     const leaving = f.componentInstance.canLeave();
-    expect(api.updateCard).toHaveBeenCalledWith(18, { description: '移動前' });
+    expect(api.updateItem).toHaveBeenCalledWith(18, { description: '移動前' });
     pending.next({ ...card, description: '移動前' });
     pending.complete();
     expect(await leaving).toBe(true);
@@ -409,19 +409,19 @@ describe('CardDetail autosave', () => {
     expect(f.componentInstance.form.controls.title.value).toBe('');
   });
   it('ignores an old response after switching directly to another card', () => {
-    const pending = new Subject<Card>();
-    api.updateCard.mockReturnValue(pending);
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValue(pending);
     const f = create();
     f.componentInstance.form.controls.title.setValue('送信');
     f.componentInstance.autosave.flush();
-    api.cardByNumber.mockReturnValue(of({ ...card, id: 99, number: 40, title: '別カード' }));
+    api.itemByNumber.mockReturnValue(of({ ...card, id: 99, number: 40, title: '別アイテム' }));
     params.next(new Map([['number', '40']]));
     pending.next({ ...card, title: '古い応答' });
     pending.complete();
     vi.advanceTimersByTime(2500);
-    expect(f.componentInstance.card()?.id).toBe(99);
-    expect(f.componentInstance.form.controls.title.value).toBe('別カード');
-    expect(api.updateCard).toHaveBeenCalledTimes(1);
+    expect(f.componentInstance.item()?.id).toBe(99);
+    expect(f.componentInstance.form.controls.title.value).toBe('別アイテム');
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
   });
   it('warns on unload with unsaved data', () => {
     const f = create();
@@ -438,14 +438,14 @@ describe('CardDetail autosave', () => {
     f.componentInstance.form.controls.description.setValue('未保存');
     f.componentInstance.remove();
     vi.advanceTimersByTime(2500);
-    expect(api.deleteCard).toHaveBeenCalledWith(18);
-    expect(api.updateCard).not.toHaveBeenCalled();
+    expect(api.deleteItem).toHaveBeenCalledWith(18);
+    expect(api.updateItem).not.toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
     expect(await f.componentInstance.canLeave()).toBe(true);
   });
   it('confirms before leave while assignee PATCH is in flight', async () => {
-    const pending = new Subject<Card>();
-    api.updateCard.mockReturnValue(pending);
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValue(pending);
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const f = create();
     const chip = Array.from(
@@ -458,17 +458,17 @@ describe('CardDetail autosave', () => {
   });
 });
 
-describe('CardDetail copy card link', () => {
+describe('ItemDetail copy card link', () => {
   let params: BehaviorSubject<Map<string, string>>;
   const originalClipboard = navigator.clipboard;
   let api: {
     history: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
-    cardByNumber: ReturnType<typeof vi.fn>;
-    updateCard: ReturnType<typeof vi.fn>;
-    deleteCard: ReturnType<typeof vi.fn>;
+    itemByNumber: ReturnType<typeof vi.fn>;
+    updateItem: ReturnType<typeof vi.fn>;
+    deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
-    listCardCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
     params = new BehaviorSubject(new Map([['number', '3']]));
@@ -477,16 +477,16 @@ describe('CardDetail copy card link', () => {
       board: vi.fn(() =>
         of({
           columns: [{ id: 1, name: 'Todo', position: 0 }],
-          cards: [],
+          items: [],
         }),
       ),
-      cardByNumber: vi.fn(() => of(card)),
-      updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
-      deleteCard: vi.fn(() => of(undefined)),
-      listCommandTemplates: vi.fn(() => of({ templates: [] })), listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      itemByNumber: vi.fn(() => of(card)),
+      updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
+      deleteItem: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
-      imports: [CardDetail],
+      imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
         { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
@@ -504,7 +504,7 @@ describe('CardDetail copy card link', () => {
     vi.useRealTimers();
   });
   const create = () => {
-    const f = TestBed.createComponent(CardDetail);
+    const f = TestBed.createComponent(ItemDetail);
     f.detectChanges();
     return f;
   };
@@ -532,7 +532,7 @@ describe('CardDetail copy card link', () => {
     copyBtn.click();
     await vi.waitUntil(() => f.componentInstance.copyLinkFeedback() !== '');
     f.detectChanges();
-    const expected = cardDetailUrl(window.location.origin, card.number);
+    const expected = itemDetailUrl(window.location.origin, card.number);
     expect(writeText).toHaveBeenCalledWith(expected);
     const feedback = f.nativeElement.querySelector('.copy-link-feedback');
     expect(feedback).not.toBeNull();
@@ -561,13 +561,13 @@ describe('CardDetail copy card link', () => {
     });
     const f = create();
     f.componentInstance.autosave.reset(null);
-    await f.componentInstance.copyCardLink();
+    await f.componentInstance.copyItemLink();
     expect(writeText).not.toHaveBeenCalled();
     expect(f.componentInstance.copyLinkFeedback()).toBe('');
   });
 });
 
-describe('CardDetail copy command menu and management', () => {
+describe('ItemDetail copy command menu and management', () => {
   const originalClipboard = navigator.clipboard;
   const template = {
     id: 7,
@@ -614,14 +614,14 @@ describe('CardDetail copy command menu and management', () => {
     const params = new BehaviorSubject(new Map([['number', '3']]));
     const api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
-      board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], cards: [] })),
-      cardByNumber: vi.fn(() => of(card)),
-      updateCard: vi.fn(),
-      deleteCard: vi.fn(),
+      board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
+      itemByNumber: vi.fn(() => of(card)),
+      updateItem: vi.fn(),
+      deleteItem: vi.fn(),
       listCommandTemplates: vi.fn(() => of({ templates })),
-      listCardCommandTemplatesByNumber: vi.fn(() => of({ templates })),
-      replaceCardCommandTemplatesByNumber: vi.fn(() => of({ templates })),
-      applyCommandTemplatesToAllCards: vi.fn(() => of(undefined)),
+      listItemCommandTemplatesByNumber: vi.fn(() => of({ templates })),
+      replaceItemCommandTemplatesByNumber: vi.fn(() => of({ templates })),
+      applyCommandTemplatesToAllItems: vi.fn(() => of(undefined)),
       replaceCommandTemplateDefaults: vi.fn(() => of({ templateIds: [] })),
       listCommandTemplateDefaults: vi.fn(() => of({ templateIds: [] })),
       createCommandTemplate: vi.fn(),
@@ -631,14 +631,14 @@ describe('CardDetail copy command menu and management', () => {
     };
     const router = { navigate: vi.fn() };
     TestBed.configureTestingModule({
-      imports: [CardDetail],
+      imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
         { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
         { provide: Router, useValue: router },
       ],
     });
-    const f = TestBed.createComponent(CardDetail);
+    const f = TestBed.createComponent(ItemDetail);
     f.detectChanges();
     return { f, api, router };
   };
@@ -689,7 +689,7 @@ describe('CardDetail copy command menu and management', () => {
     });
     const { f, api, router } = create();
     expect(api.listCommandTemplates).toHaveBeenCalled();
-    expect(api.listCardCommandTemplatesByNumber).toHaveBeenCalled();
+    expect(api.listItemCommandTemplatesByNumber).toHaveBeenCalled();
     const button = f.nativeElement.querySelector(
       '.copy-command-button',
     ) as HTMLButtonElement | null;
@@ -708,7 +708,7 @@ describe('CardDetail copy command menu and management', () => {
     expect(feedback.classList.contains('sr-only')).toBe(false);
     expect(feedback.textContent).toContain(COPY_COMMAND_SUCCESS);
     expect(writeText).toHaveBeenCalledWith(
-      resolveCommand(template.template, cardDetailUrl(window.location.origin, card.number)),
+      resolveCommand(template.template, itemDetailUrl(window.location.origin, card.number)),
     );
     expect(router.navigate).not.toHaveBeenCalled();
   });
@@ -732,7 +732,7 @@ describe('CardDetail copy command menu and management', () => {
       );
     });
     expect(writeText).toHaveBeenCalledWith(
-      resolveCommand(template.template, cardDetailUrl(window.location.origin, card.number)),
+      resolveCommand(template.template, itemDetailUrl(window.location.origin, card.number)),
     );
   });
 
@@ -797,7 +797,7 @@ describe('CardDetail copy command menu and management', () => {
     });
     const { f } = create({}, []);
     const { menu } = openMenu(f);
-    expect(menu.textContent).toContain(COMMAND_CARD_MENU_EMPTY);
+    expect(menu.textContent).toContain(COMMAND_ITEM_MENU_EMPTY);
     expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
     menu.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(writeText).not.toHaveBeenCalled();
@@ -807,22 +807,22 @@ describe('CardDetail copy command menu and management', () => {
     const { f } = create(
       {
         listCommandTemplates: vi.fn(() => of({ templates: [template] })),
-        listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+        listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
       },
       [template],
     );
     const { menu } = openMenu(f);
-    expect(menu.textContent).toContain(COMMAND_CARD_MENU_EMPTY);
+    expect(menu.textContent).toContain(COMMAND_ITEM_MENU_EMPTY);
     expect(menu.textContent).not.toContain(template.name);
   });
 
   it('shows a load failure instead of the empty-registration notice when listing templates fails', () => {
     const { f } = create({
-      listCardCommandTemplatesByNumber: vi.fn(() => throwError(() => ({ status: 0 }))),
+      listItemCommandTemplatesByNumber: vi.fn(() => throwError(() => ({ status: 0 }))),
       listCommandTemplates: vi.fn(() => throwError(() => ({ status: 0 }))),
     });
     const { menu } = openMenu(f);
-    expect(menu.textContent).not.toContain(COMMAND_CARD_MENU_EMPTY);
+    expect(menu.textContent).not.toContain(COMMAND_ITEM_MENU_EMPTY);
     expect(menu.textContent).toContain('通信に失敗しました');
     expect(menu.querySelector('button, [role="menuitem"]')).toBeNull();
     const dialog = openDialog(f);
@@ -848,7 +848,7 @@ describe('CardDetail copy command menu and management', () => {
     expect(dialog.querySelector('#command-name')).not.toBeNull();
     expect(dialog.querySelector('#command-template')).not.toBeNull();
     expect(dialog.querySelector('form button[type="submit"]')).not.toBeNull();
-    expect(dialog.textContent).toContain('{{url}} はこのカードのリンクに置き換わります。');
+    expect(dialog.textContent).toContain('{{url}} はこのアイテムのリンクに置き換わります。');
   });
 
   it('adds a template, refreshes the list, and reports success', () => {
@@ -995,29 +995,29 @@ describe('CardDetail copy command menu and management', () => {
   });
 });
 
-describe('CardDetail IME response handling', () => {
+describe('ItemDetail IME response handling', () => {
   it.each(['title', 'description'] as const)(
     'preserves buffered IME input in %s when an earlier save responds',
     (field) => {
-      const pending = new Subject<Card>();
+      const pending = new Subject<Item>();
       TestBed.configureTestingModule({
-        imports: [CardDetail],
+        imports: [ItemDetail],
         providers: [
           {
             provide: Api,
             useValue: {
               history: () => of({ events: [], nextBefore: 0 }),
-              board: () => of({ columns: [], cards: [] }),
-              cardByNumber: () => of(card),
-              updateCard: () => pending,
-              listCommandTemplates: vi.fn(() => of({ templates: [] })), listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+              board: () => of({ columns: [], items: [] }),
+              itemByNumber: () => of(card),
+              updateItem: () => pending,
+              listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
             },
           },
           { provide: ActivatedRoute, useValue: { paramMap: of(new Map([['number', '3']])) } },
           { provide: Router, useValue: { navigate: vi.fn() } },
         ],
       });
-      const f = TestBed.createComponent(CardDetail);
+      const f = TestBed.createComponent(ItemDetail);
       f.detectChanges();
       const input = f.nativeElement.querySelector(`#detail-${field}`) as HTMLInputElement;
       const sent = field === 'title' ? '送信するタイトル' : '送信する本文';
@@ -1040,16 +1040,16 @@ describe('CardDetail IME response handling', () => {
   );
 });
 
-describe('CardDetail live refresh', () => {
+describe('ItemDetail live refresh', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
-    cardByNumber: ReturnType<typeof vi.fn>;
-    updateCard: ReturnType<typeof vi.fn>;
-    deleteCard: ReturnType<typeof vi.fn>;
+    itemByNumber: ReturnType<typeof vi.fn>;
+    updateItem: ReturnType<typeof vi.fn>;
+    deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
-    listCardCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -1064,16 +1064,16 @@ describe('CardDetail live refresh', () => {
             { id: 1, name: 'Todo', position: 0 },
             { id: 2, name: 'Doing', position: 0 },
           ],
-          cards: [],
+          items: [],
         }),
       ),
-      cardByNumber: vi.fn(() => of(card)),
-      updateCard: vi.fn((_id, patch) => of({ ...card, ...patch })),
-      deleteCard: vi.fn(() => of(undefined)),
-      listCommandTemplates: vi.fn(() => of({ templates: [] })), listCardCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      itemByNumber: vi.fn(() => of(card)),
+      updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
+      deleteItem: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
     };
     TestBed.configureTestingModule({
-      imports: [CardDetail],
+      imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
         { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
@@ -1087,7 +1087,7 @@ describe('CardDetail live refresh', () => {
     vi.useRealTimers();
   });
   const create = () => {
-    const f = TestBed.createComponent(CardDetail);
+    const f = TestBed.createComponent(ItemDetail);
     f.detectChanges();
     return f;
   };
@@ -1095,11 +1095,11 @@ describe('CardDetail live refresh', () => {
   it('refreshes card from poll when no local edits', async () => {
     const f = create();
     expect(f.componentInstance.loading()).toBe(false);
-    api.cardByNumber.mockReturnValue(
+    api.itemByNumber.mockReturnValue(
       of({ ...card, title: '外部更新', updatedAt: '2026-11-14T12:00:00Z' }),
     );
     await vi.advanceTimersByTimeAsync(5000);
-    expect(f.componentInstance.card()?.title).toBe('外部更新');
+    expect(f.componentInstance.item()?.title).toBe('外部更新');
     expect(f.componentInstance.loading()).toBe(false);
     f.destroy();
   });
@@ -1109,38 +1109,38 @@ describe('CardDetail live refresh', () => {
     // emitEvent: false avoids scheduling autosave; advancing 5s would flush a save and clear hasChanges.
     f.componentInstance.form.controls.title.setValue('編集中', { emitEvent: false });
     expect(f.componentInstance.autosave.hasChanges()).toBe(true);
-    api.cardByNumber.mockReturnValue(of({ ...card, title: 'サーバ側' }));
+    api.itemByNumber.mockReturnValue(of({ ...card, title: 'サーバ側' }));
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.componentInstance.form.controls.title.value).toBe('編集中');
-    expect(f.componentInstance.card()?.title).not.toBe('サーバ側');
+    expect(f.componentInstance.item()?.title).not.toBe('サーバ側');
     f.destroy();
   });
 
   it('ignores poll for a different card number after navigation', async () => {
-    const slow = new Subject<Card>();
+    const slow = new Subject<Item>();
     const f = create();
-    expect(f.componentInstance.card()?.number).toBe(3);
+    expect(f.componentInstance.item()?.number).toBe(3);
     // Next poll returns a slow observable for card #3
-    api.cardByNumber.mockReturnValue(slow.asObservable());
+    api.itemByNumber.mockReturnValue(slow.asObservable());
     await vi.advanceTimersByTimeAsync(5000);
-    const other = { ...card, id: 90, number: 9, title: '別カード' };
-    api.cardByNumber.mockReturnValue(of(other));
+    const other = { ...card, id: 90, number: 9, title: '別アイテム' };
+    api.itemByNumber.mockReturnValue(of(other));
     api.board.mockReturnValue(
       of({
         columns: [
           { id: 1, name: 'Todo', position: 0 },
           { id: 2, name: 'Doing', position: 0 },
         ],
-        cards: [],
+        items: [],
       }),
     );
     params.next(new Map([['number', '9']]));
-    expect(f.componentInstance.card()?.number).toBe(9);
-    expect(f.componentInstance.card()?.title).toBe('別カード');
-    slow.next({ ...card, title: '遅延した旧カード' });
+    expect(f.componentInstance.item()?.number).toBe(9);
+    expect(f.componentInstance.item()?.title).toBe('別アイテム');
+    slow.next({ ...card, title: '遅延した旧アイテム' });
     slow.complete();
-    expect(f.componentInstance.card()?.number).toBe(9);
-    expect(f.componentInstance.card()?.title).not.toBe('遅延した旧カード');
+    expect(f.componentInstance.item()?.number).toBe(9);
+    expect(f.componentInstance.item()?.title).not.toBe('遅延した旧アイテム');
     f.destroy();
   });
 });

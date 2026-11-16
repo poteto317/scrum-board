@@ -5,11 +5,11 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { CommandTemplate } from './command-template';
 
-export const CARD_COMMANDS_SAVE_SUCCESS = 'このカードのコマンドを保存しました';
+export const ITEM_COMMANDS_SAVE_SUCCESS = 'このアイテムのコマンドを保存しました';
 
 /** Per-card command selection for card detail (catalog is separate). */
 @Injectable()
-export class CardCommandsSession {
+export class ItemCommandsSession {
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
   readonly templates = signal<CommandTemplate[]>([]);
@@ -30,7 +30,7 @@ export class CardCommandsSession {
     this.templates.set([]);
     this.selectedIds.set([]);
     this.api
-      .listCardCommandTemplatesByNumber(cardNumber)
+      .listItemCommandTemplatesByNumber(cardNumber)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
@@ -80,7 +80,7 @@ export class CardCommandsSession {
     this.saveMessage.set('');
     const ids = this.selectedIds();
     this.api
-      .replaceCardCommandTemplatesByNumber(number, ids)
+      .replaceItemCommandTemplatesByNumber(number, ids)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.saving.set(false)),
@@ -90,7 +90,7 @@ export class CardCommandsSession {
           const list = res?.templates ?? [];
           this.templates.set(list);
           this.selectedIds.set(list.map((t) => t.id));
-          this.saveMessage.set(CARD_COMMANDS_SAVE_SUCCESS);
+          this.saveMessage.set(ITEM_COMMANDS_SAVE_SUCCESS);
         },
         error: (error) => this.saveMessage.set(errorMessage(error)),
       });

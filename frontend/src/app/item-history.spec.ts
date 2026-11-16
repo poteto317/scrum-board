@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi } from 'vitest';
-import { CardHistory } from './card-history';
+import { ItemHistory } from './item-history';
 import { Api } from './api';
 import { HistoryPage } from './models';
 const event = {
@@ -30,10 +30,10 @@ it('labels assignee changes as 対応', () => {
     ),
   };
   TestBed.configureTestingModule({
-    imports: [CardHistory],
+    imports: [ItemHistory],
     providers: [{ provide: Api, useValue: api }],
   });
-  const f = TestBed.createComponent(CardHistory);
+  const f = TestBed.createComponent(ItemHistory);
   f.componentRef.setInput('number', 3);
   f.detectChanges();
   expect(f.nativeElement.textContent).toContain('対応');
@@ -47,10 +47,10 @@ it('shows recovered evidence and appends the next page', () => {
       .mockReturnValueOnce(of({ events: [{ ...event, id: 2 }], nextBefore: 0 })),
   };
   TestBed.configureTestingModule({
-    imports: [CardHistory],
+    imports: [ItemHistory],
     providers: [{ provide: Api, useValue: api }],
   });
-  const f = TestBed.createComponent(CardHistory);
+  const f = TestBed.createComponent(ItemHistory);
   f.componentRef.setInput('number', 3);
   f.detectChanges();
   expect(f.nativeElement.textContent).toContain('復元');
@@ -71,10 +71,10 @@ it('ignores old pages on route or revision change', () => {
       .mockReturnValue(of({ events: [], nextBefore: 0 })),
   };
   TestBed.configureTestingModule({
-    imports: [CardHistory],
+    imports: [ItemHistory],
     providers: [{ provide: Api, useValue: api }],
   });
-  const f = TestBed.createComponent(CardHistory);
+  const f = TestBed.createComponent(ItemHistory);
   f.componentRef.setInput('number', 3);
   f.detectChanges();
   f.componentRef.setInput('number', 7);
@@ -96,10 +96,10 @@ it('retains prior events on pagination errors and retries', () => {
       .mockReturnValue(of({ events: [], nextBefore: 0 })),
   };
   TestBed.configureTestingModule({
-    imports: [CardHistory],
+    imports: [ItemHistory],
     providers: [{ provide: Api, useValue: api }],
   });
-  const f = TestBed.createComponent(CardHistory);
+  const f = TestBed.createComponent(ItemHistory);
   f.componentRef.setInput('number', 3);
   f.detectChanges();
   f.componentInstance.more();
@@ -111,10 +111,10 @@ it('retains prior events on pagination errors and retries', () => {
 });
 function setup(api: { history: ReturnType<typeof vi.fn> }, number = 3) {
   TestBed.configureTestingModule({
-    imports: [CardHistory],
+    imports: [ItemHistory],
     providers: [{ provide: Api, useValue: api }],
   });
-  const f = TestBed.createComponent(CardHistory);
+  const f = TestBed.createComponent(ItemHistory);
   f.componentRef.setInput('number', number);
   f.detectChanges();
   return f;

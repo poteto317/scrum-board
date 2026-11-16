@@ -1,14 +1,14 @@
-import { Card } from './models';
+import { Item } from './models';
 
-export const CARD_DRAG_THRESHOLD_PX = 8;
+export const ITEM_DRAG_THRESHOLD_PX = 8;
 
 /** While a card is held at an edge, scroll once per this interval (a column drag's dragover repeats about as often). */
-export const CARD_AUTO_SCROLL_INTERVAL_MS = 50;
+export const ITEM_AUTO_SCROLL_INTERVAL_MS = 50;
 /**
  * A finger must rest on a card's drag handle this long before a move drags it, so a quick swipe over the handle
  * scrolls the list or the board instead of starting a drag. A mouse drags from the handle once past the threshold.
  */
-export const CARD_TOUCH_DRAG_DELAY_MS = 200;
+export const ITEM_TOUCH_DRAG_DELAY_MS = 200;
 
 export function dropListIdForColumn(columnId: number): string {
   return `card-list-${columnId}`;
@@ -23,13 +23,13 @@ export function columnIdFromDropListId(listId: string): number | null {
 }
 
 /** Returns null when indexes are out of range or the drop is a no-op. */
-export function applyCardDrop(
-  cards: readonly Card[],
+export function applyItemDrop(
+  cards: readonly Item[],
   previousColumnId: number,
   currentColumnId: number,
   previousIndex: number,
   currentIndex: number,
-): Card[] | null {
+): Item[] | null {
   const source = cards
     .filter((c) => c.columnId === previousColumnId)
     .slice()
@@ -42,7 +42,7 @@ export function applyCardDrop(
     const next = source.slice();
     const [moved] = next.splice(previousIndex, 1);
     next.splice(currentIndex, 0, moved);
-    return replaceColumnCards(cards, previousColumnId, next);
+    return replaceColumnItems(cards, previousColumnId, next);
   }
 
   const dest = cards
@@ -55,18 +55,18 @@ export function applyCardDrop(
   nextSource.splice(previousIndex, 1);
   const nextDest = dest.slice();
   nextDest.splice(currentIndex, 0, moved);
-  let next = replaceColumnCards(cards, previousColumnId, nextSource);
-  next = replaceColumnCards(next, currentColumnId, nextDest);
+  let next = replaceColumnItems(cards, previousColumnId, nextSource);
+  next = replaceColumnItems(next, currentColumnId, nextDest);
   return next;
 }
 
-export function buildCardOrderPayload(
-  cards: readonly Card[],
+export function buildItemOrderPayload(
+  cards: readonly Item[],
   columnIds: readonly number[],
-): { columnId: number; cardIds: number[] }[] {
+): { columnId: number; itemIds: number[] }[] {
   return columnIds.map((columnId) => ({
     columnId,
-    cardIds: cards
+    itemIds: cards
       .filter((c) => c.columnId === columnId)
       .slice()
       .sort((a, b) => a.position - b.position || a.id - b.id)
@@ -74,11 +74,11 @@ export function buildCardOrderPayload(
   }));
 }
 
-function replaceColumnCards(
-  cards: readonly Card[],
+function replaceColumnItems(
+  cards: readonly Item[],
   columnId: number,
-  ordered: readonly Card[],
-): Card[] {
+  ordered: readonly Item[],
+): Item[] {
   const others = cards.filter((c) => c.columnId !== columnId);
   const positioned = ordered.map((c, position) => ({ ...c, columnId, position }));
   return [...others, ...positioned];

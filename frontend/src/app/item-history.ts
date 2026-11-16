@@ -14,12 +14,12 @@ import { HistoryEvent } from './models';
 import { validPrUrl } from './pr-url';
 
 @Component({
-  selector: 'app-card-history',
+  selector: 'app-item-history',
   imports: [DatePipe],
-  templateUrl: './card-history.html',
-  styleUrl: './card-history.css',
+  templateUrl: './item-history.html',
+  styleUrl: './item-history.css',
 })
-export class CardHistory implements OnChanges {
+export class ItemHistory implements OnChanges {
   @Input({ required: true }) number = 0;
   @Input() revision = '';
   private readonly api = inject(Api);

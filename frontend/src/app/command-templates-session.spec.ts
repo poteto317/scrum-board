@@ -24,7 +24,7 @@ describe('CommandTemplatesSession', () => {
     createCommandTemplate: ReturnType<typeof vi.fn>;
     updateCommandTemplate: ReturnType<typeof vi.fn>;
     deleteCommandTemplate: ReturnType<typeof vi.fn>;
-    applyCommandTemplatesToAllCards: ReturnType<typeof vi.fn>;
+    applyCommandTemplatesToAllItems: ReturnType<typeof vi.fn>;
     replaceCommandTemplateDefaults: ReturnType<typeof vi.fn>;
   };
   let session: CommandTemplatesSession;
@@ -35,7 +35,7 @@ describe('CommandTemplatesSession', () => {
       createCommandTemplate: vi.fn(),
       updateCommandTemplate: vi.fn(),
       deleteCommandTemplate: vi.fn(),
-      applyCommandTemplatesToAllCards: vi.fn(() => of(undefined)),
+      applyCommandTemplatesToAllItems: vi.fn(() => of(undefined)),
       replaceCommandTemplateDefaults: vi.fn(() => of({ templateIds: [] })),
     };
     TestBed.configureTestingModule({
@@ -260,10 +260,10 @@ describe('CommandTemplatesSession', () => {
 
   it('applies to all cards only after confirm accepts', () => {
     session.bulkSelectedIds.set([existing.id]);
-    session.applyToAllCards(() => false);
-    expect(api.applyCommandTemplatesToAllCards).not.toHaveBeenCalled();
-    session.applyToAllCards(() => true);
-    expect(api.applyCommandTemplatesToAllCards).toHaveBeenCalledWith([existing.id]);
+    session.applyToAllItems(() => false);
+    expect(api.applyCommandTemplatesToAllItems).not.toHaveBeenCalled();
+    session.applyToAllItems(() => true);
+    expect(api.applyCommandTemplatesToAllItems).toHaveBeenCalledWith([existing.id]);
   });
 
   it('sets defaults only after confirm accepts', () => {
