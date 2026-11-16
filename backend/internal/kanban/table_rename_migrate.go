@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Legacy storage names → public Item naming. Column names (card_id, …) stay for this step.
+// Legacy storage names → public Item naming. Column renames are RenameCardColumnsToItems.
 // old names are written as literals so renames are not rewritten by mechanical edits.
 var cardToItemTables = []struct{ old, new string }{
 	{"card_command_templates", "item_command_templates"},
