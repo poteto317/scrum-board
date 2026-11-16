@@ -15,6 +15,7 @@ func TestLoadManifest(t *testing.T) {
 		want  string // empty means accepted
 	}{
 		"one record":        {"[" + record + "]", ""},
+		"legacy cardId":     {"[" + strings.Replace(record, `"itemId"`, `"cardId"`, 1) + "]", ""},
 		"unknown key":       {`[` + strings.Replace(record, `"evidenceUrl"`, `"evidence"`, 1) + `]`, "invalid manifest JSON"},
 		"trailing data":     {"[" + record + "] []", "trailing manifest data"},
 		"not an array":      {record, "invalid manifest JSON"},

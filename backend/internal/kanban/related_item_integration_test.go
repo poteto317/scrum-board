@@ -100,3 +100,39 @@ func TestMySQLRelatedItemsBidirectional(t *testing.T) {
 		t.Fatalf("missing: %v", err)
 	}
 }
+
+func TestMySQLRelatedItemsMigratesLegacyCardKind(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	r := MySQLRepository{DB: db}
+	mustInit(t, r)
+
+	a, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "peer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx,
+		`INSERT INTO card_related_items (card_id, position, kind, related_card_id, url, label) VALUES (?, 0, 'card', ?, NULL, '')`,
+		a.ID, b.ID,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = r.InitializeRelatedItems(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var kind string
+	if err = db.QueryRowContext(ctx,
+		`SELECT kind FROM card_related_items WHERE card_id=? AND position=0`, a.ID,
+	).Scan(&kind); err != nil || kind != "item" {
+		t.Fatalf("kind after migrate: %q %v", kind, err)
+	}
+	got, err := r.GetItem(ctx, a.ID)
+	if err != nil || len(got.RelatedItems) != 1 || got.RelatedItems[0].Kind != "item" || got.RelatedItems[0].Number != b.Number {
+		t.Fatalf("read after migrate: %+v %v", got.RelatedItems, err)
+	}
+}
