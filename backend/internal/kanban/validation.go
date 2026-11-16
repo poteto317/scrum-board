@@ -50,6 +50,9 @@ func validateItemOrder(orders []ItemColumnOrder) error {
 		if order.ItemIDs == nil {
 			return ErrItemOrder
 		}
+		if order.OffsetYs != nil && len(*order.OffsetYs) != len(order.ItemIDs) {
+			return ErrItemOrder
+		}
 		for _, id := range order.ItemIDs {
 			if id <= 0 {
 				return ErrItemOrder
@@ -58,6 +61,13 @@ func validateItemOrder(orders []ItemColumnOrder) error {
 				return ErrItemOrder
 			}
 			seenCards[id] = struct{}{}
+		}
+		if order.OffsetYs != nil {
+			for _, y := range *order.OffsetYs {
+				if y < 0 || y > MaxOffsetY {
+					return ErrItemOrder
+				}
+			}
 		}
 	}
 	return nil

@@ -16,6 +16,18 @@ var (
 	ErrItemOrderMismatch = errors.New("item set mismatch")
 	ErrBacklogOrder      = errors.New("invalid backlog order")
 	ErrBacklogMismatch   = errors.New("backlog set mismatch")
+	ErrBoardSettings     = errors.New("invalid board settings")
+)
+
+const (
+	CardLayoutPack = "pack"
+	CardLayoutFree = "free"
+	// MaxOffsetY is the inclusive upper bound for free-layout offsetY / offsetYs (CSS px).
+	// Values above this are rejected with HTTP 400 on PUT /api/items/order.
+	MaxOffsetY = 100_000
+	// freePlacementStepY is the approximate vertical gap used when placing a new/moved
+	// card at the bottom of a free-layout column (server has no DOM heights).
+	freePlacementStepY = 160
 )
 
 type Column struct {
@@ -30,6 +42,7 @@ type Item struct {
 	Title           string    `json:"title"`
 	Description     string    `json:"description"`
 	Position        int       `json:"position"`
+	OffsetY         int       `json:"offsetY"`
 	BacklogPosition int       `json:"backlogPosition"`
 	PRURLs          []string      `json:"prUrls"`
 	PRTitles        []string      `json:"prTitles"`
@@ -42,10 +55,15 @@ type Item struct {
 type ItemColumnOrder struct {
 	ColumnID int64   `json:"columnId"`
 	ItemIDs  []int64 `json:"itemIds"`
+	OffsetYs *[]int  `json:"offsetYs,omitempty"`
+}
+type BoardSettings struct {
+	CardLayout string `json:"cardLayout"`
 }
 type Board struct {
-	Columns []Column `json:"columns"`
-	Items []Item   `json:"items"`
+	Columns  []Column      `json:"columns"`
+	Items    []Item        `json:"items"`
+	Settings BoardSettings `json:"settings"`
 }
 type ItemInput struct {
 	ColumnID     int64         `json:"columnId"`
@@ -67,6 +85,7 @@ type ItemPatch struct {
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.
 type Repository interface {
 	Board(context.Context) (Board, error)
+	UpdateBoardSettings(context.Context, BoardSettings) (BoardSettings, []Item, error)
 	History(context.Context, int64, int64) (HistoryPage, error)
 	GetItem(context.Context, int64) (Item, error)
 	GetItemByNumber(context.Context, int64) (Item, error)
