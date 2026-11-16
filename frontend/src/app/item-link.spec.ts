@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { itemDetailUrl, copyText } from './item-link';
+import { itemAppPath, itemDetailUrl, copyText } from './item-link';
+
+describe('itemAppPath', () => {
+  it('builds the app-relative item detail path', () => {
+    expect(itemAppPath(27)).toBe('/items/27');
+    expect(itemAppPath(3)).toBe('/items/3');
+  });
+});
 
 describe('itemDetailUrl', () => {
   it('builds an absolute card detail URL from origin and public number', () => {
