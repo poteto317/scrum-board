@@ -212,6 +212,87 @@ describe('CardDetail autosave', () => {
     expect(f.nativeElement.querySelectorAll('.pr-link')).toHaveLength(1);
     expect(f.nativeElement.textContent).toContain('保存失敗');
   });
+  it('reorders PR URLs with move buttons and hides controls for a single PR', () => {
+    const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
+    const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
+    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
+    api.updateCard.mockReturnValue(of({ ...card, prUrls: [url2, url1] }));
+    const f = create();
+    expect(f.nativeElement.querySelectorAll('.pr-move')).toHaveLength(4);
+    const downs = f.nativeElement.querySelectorAll(
+      '.pr-list[aria-label="紐付けたGitHub PR"] .pr-move',
+    ) as NodeListOf<HTMLButtonElement>;
+    downs[1].click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, { prUrls: [url2, url1] });
+    const links = [...f.nativeElement.querySelectorAll('.pr-list[aria-label="紐付けたGitHub PR"] .pr-link')].map(
+      (a: HTMLAnchorElement) => a.getAttribute('href'),
+    );
+    expect(links).toEqual([url2, url1]);
+  });
+  it('hides PR reorder controls when only one PR is linked', () => {
+    const url = 'https://github.com/poteto317/scrum-board/pull/2';
+    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url] }));
+    const f = create();
+    const list = f.nativeElement.querySelector('.pr-list[aria-label="紐付けたGitHub PR"]');
+    expect(list.querySelectorAll('.pr-move')).toHaveLength(0);
+    expect(list.querySelectorAll('.card-drag-handle')).toHaveLength(0);
+  });
+  it('rolls PR order back when reorder PATCH fails', () => {
+    const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
+    const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
+    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
+    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '順序の保存に失敗' } })));
+    const f = create();
+    f.nativeElement.querySelectorAll('.pr-list[aria-label="紐付けたGitHub PR"] .pr-move')[1].click();
+    f.detectChanges();
+    const links = [...f.nativeElement.querySelectorAll('.pr-list[aria-label="紐付けたGitHub PR"] .pr-link')].map(
+      (a: HTMLAnchorElement) => a.getAttribute('href'),
+    );
+    expect(links).toEqual([url1, url2]);
+    expect(f.nativeElement.textContent).toContain('順序の保存に失敗');
+  });
+  it('reorders related items with move buttons', () => {
+    const a = { kind: 'url' as const, url: 'https://example.com/a', label: 'A' };
+    const b = { kind: 'url' as const, url: 'https://example.com/b', label: 'B' };
+    api.cardByNumber.mockReturnValue(of({ ...card, relatedItems: [a, b] }));
+    api.updateCard.mockReturnValue(of({ ...card, relatedItems: [b, a] }));
+    const f = create();
+    f.nativeElement.querySelectorAll('.pr-list[aria-label="関連アイテム"] .pr-move')[1].click();
+    f.detectChanges();
+    expect(api.updateCard).toHaveBeenCalledWith(18, { relatedItems: [b, a] });
+    const labels = [...f.nativeElement.querySelectorAll('.pr-list[aria-label="関連アイテム"] .pr-link')].map(
+      (el: HTMLElement) => el.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(labels[0]).toContain('B');
+    expect(labels[1]).toContain('A');
+  });
+  it('rolls related order back when reorder PATCH fails', () => {
+    const a = { kind: 'url' as const, url: 'https://example.com/a', label: 'A' };
+    const b = { kind: 'url' as const, url: 'https://example.com/b', label: 'B' };
+    api.cardByNumber.mockReturnValue(of({ ...card, relatedItems: [a, b] }));
+    api.updateCard.mockReturnValue(throwError(() => ({ error: { message: '関連の順序保存に失敗' } })));
+    const f = create();
+    f.nativeElement.querySelectorAll('.pr-list[aria-label="関連アイテム"] .pr-move')[1].click();
+    f.detectChanges();
+    const labels = [...f.nativeElement.querySelectorAll('.pr-list[aria-label="関連アイテム"] .pr-link')].map(
+      (el: HTMLElement) => el.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(labels[0]).toContain('A');
+    expect(labels[1]).toContain('B');
+    expect(f.nativeElement.textContent).toContain('関連の順序保存に失敗');
+  });
+  it('pauses live refresh while a list item is dragging', () => {
+    const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
+    const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
+    api.cardByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
+    const f = create();
+    expect(f.componentInstance.listDragging()).toBe(false);
+    f.componentInstance.onListDragStarted();
+    expect(f.componentInstance.listDragging()).toBe(true);
+    f.componentInstance.onListDragEnded();
+    expect(f.componentInstance.listDragging()).toBe(false);
+  });
   it('adds and removes related card/URL via immediate PATCH', () => {
     const related = [{ kind: 'url' as const, url: 'https://example.com/a', label: '仕様' }];
     api.cardByNumber.mockReturnValue(of({ ...card, relatedItems: related }));
