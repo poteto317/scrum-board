@@ -40,6 +40,7 @@ func TestRenameCardColumnsToItemsMigratesLegacyNames(t *testing.T) {
 	assertFK(t, r, "item_related_items", "fk_item_related_peer")
 	assertIndex(t, r, "item_related_items", "uq_item_related_item")
 	assertFK(t, r, "item_command_templates", "fk_item_command_templates_item")
+	assertItemNumberPositiveCheck(t, r)
 
 	var afterID, afterNum int64
 	if err := db.QueryRow(`SELECT item_id, item_number FROM item_numbers WHERE item_id=101`).Scan(&afterID, &afterNum); err != nil {
@@ -47,6 +48,32 @@ func TestRenameCardColumnsToItemsMigratesLegacyNames(t *testing.T) {
 	}
 	if afterID != beforeID || afterNum != beforeNum || afterNum != 42 {
 		t.Fatalf("id/number changed: before=%d/%d after=%d/%d", beforeID, beforeNum, afterID, afterNum)
+	}
+}
+
+func TestRenameCardColumnsToItemsResumesPartialColumnRename(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	r := MySQLRepository{DB: db}
+	mustPrepareColumnRenameTables(t, r)
+	mustReverseColumnsToLegacy(t, r)
+	mustExec(t, db, `INSERT INTO items(id,column_id,title,description) VALUES (202,1,'partial','')`)
+	mustExec(t, db, `INSERT INTO item_numbers(card_id,task_number) VALUES (202,7)`)
+
+	// Simulate mid-migrate: only card_id→item_id done; task_number still legacy.
+	mustExec(t, db, `ALTER TABLE item_numbers DROP FOREIGN KEY fk_card_number`)
+	mustExec(t, db, `ALTER TABLE item_numbers CHANGE COLUMN card_id item_id BIGINT NOT NULL`)
+
+	if err := r.RenameCardColumnsToItems(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertHasColumn(t, r, "item_numbers", "item_id")
+	assertHasColumn(t, r, "item_numbers", "item_number")
+	assertFK(t, r, "item_numbers", "fk_item_number")
+	assertItemNumberPositiveCheck(t, r)
+	var n int64
+	if err := db.QueryRow(`SELECT item_number FROM item_numbers WHERE item_id=202`).Scan(&n); err != nil || n != 7 {
+		t.Fatalf("number=%d err=%v", n, err)
 	}
 }
 
@@ -313,6 +340,22 @@ func assertIndex(t *testing.T, r MySQLRepository, table, name string) {
 	ok, err := r.indexExists(context.Background(), table, name)
 	if err != nil || !ok {
 		t.Fatalf("%s index %s missing: %v %v", table, name, ok, err)
+	}
+}
+
+func assertItemNumberPositiveCheck(t *testing.T, r MySQLRepository) {
+	t.Helper()
+	var n int
+	err := r.DB.QueryRow(`
+SELECT COUNT(*)
+  FROM information_schema.CHECK_CONSTRAINTS cc
+  JOIN information_schema.TABLE_CONSTRAINTS tc
+    ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+   AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+ WHERE tc.TABLE_SCHEMA = DATABASE() AND tc.TABLE_NAME = 'item_numbers' AND tc.CONSTRAINT_TYPE = 'CHECK'
+   AND REPLACE(REPLACE(REPLACE(REPLACE(LOWER(cc.CHECK_CLAUSE), ' ', ''), CHAR(96), ''), '(', ''), ')', '') LIKE '%item_number>0%'`).Scan(&n)
+	if err != nil || n < 1 {
+		t.Fatalf("item_number > 0 CHECK missing: n=%d err=%v", n, err)
 	}
 }
 

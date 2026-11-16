@@ -117,7 +117,7 @@ var cardToItemColumnTables = []tableColumnRename{
 // Idempotent per column and constraint (L-038). Does not rewrite row ids or numbers (L-456).
 func (r MySQLRepository) RenameCardColumnsToItems(ctx context.Context) error {
 	var locked int
-	if err := r.DB.QueryRowContext(ctx, "SELECT GET_LOCK(?, 30)", renameCardColumnsLock).Scan(&locked); err != nil {
+	if err := r.DB.QueryRowContext(ctx, "SELECT GET_LOCK(?, 120)", renameCardColumnsLock).Scan(&locked); err != nil {
 		return err
 	}
 	if locked != 1 {
