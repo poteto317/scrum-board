@@ -19,9 +19,10 @@
 | 番号プレフィックス | **`TASK-` → `ITEM-`**。表示は **常に3桁ゼロ埋め**（`ITEM-003`）。ボード・詳細・バックログ・aria・announce・関連フォールバックで統一 |
 | 関連 kind | JSON / DB の **`card` → `item`**（起動時マイグレーションで既存行を更新） |
 | 公開 JSON の id 配列キー | 列内／バックログ並び替えの **`cardIds` → `itemIds`**（リクエスト・ドキュメントとも） |
-| DB 物理表名 | **`cards` / `card_*` → `items` / `item_*`**（起動時 `RENAME TABLE`。列名 `card_id` などは当面維持） |
+| DB 物理表名 | **`cards` / `card_*` → `items` / `item_*`**（起動時 `RENAME TABLE`） |
+| DB 列・制約名 | **列リネーム済み** → `2026-11-16-item-column-rename-design.md`（`card_id`→`item_id` 等） |
 | ドキュメント | **README・docs/api.md・verification・smoke 等の利用者向けを更新**。過去の specs/plans は歴史として原則触らない |
-| 対象外 | 英語の CSS クラス名（`.task-card` 等）の一括リネーム、外部に出た旧 `/cards` ブックマーク以外の互換 API、DB 列名 `card_id` の物理リネーム |
+| 対象外 | 英語の CSS クラス名（`.task-card` 等）の一括リネーム、外部に出た旧 `/cards` ブックマーク以外の互換 API |
 
 ## 目的と受け入れ条件
 
@@ -80,7 +81,7 @@ FE `Api` のメソッド名も `itemByNumber` / `updateItem` 等に合わせる�
 | board / backlog 配列 | `cards` | `items` |
 | `PUT /api/items/order` 等の列内順 | `cardIds` | `itemIds` |
 | `PUT /api/backlog/order` | `cardIds`（または同等） | `itemIds` |
-| 履歴インポート等でクライアントが送る公開フィールド名に `cardId` がある場合 | `cardId` | `itemId`（DB 列は `card_id` のまま） |
+| 履歴インポート等でクライアントが送る公開フィールド名に `cardId` がある場合 | `cardId` | `itemId`（DB 列は `item_id`。詳細は item-column-rename-design） |
 
 ## 文言
 
@@ -91,15 +92,17 @@ FE `Api` のメソッド名も `itemByNumber` / `updateItem` 等に合わせる�
 ## コードリネーム方針
 
 - **やる:** 型 `Item` / `ItemInput` / `ItemPatch`、Go 同名、Angular コンポーネント・サービスファイルの `card-*` → `item-*`（`git mv`）、セレクタ `app-item-detail` 等、テストファイル名。
-- **やらない（今回）:** DB 表・列の物理名、CSS の `.task-card` / `data-card-id`（動作に無関係な識別子。必要なら追従リネームは別カード）。
+- **やらない（今回）:** CSS の `.task-card` / `data-card-id`（動作に無関係な識別子。必要なら追従リネームは別カード）。
+- DB 表名は `items` / `item_*` へ移行済み。列・制約名の item 揃えは `2026-11-16-item-column-rename-design.md`。
 - 関連テーブルの kind 値だけアプリ＋マイグレーションで `item` に変更。
 
 一括機械置換は誤爆しやすいので、プランでは層ごとに（URL → API → 型 → UI 文言 → ファイル名）分割する。
 
 ## DB
 
-- 表 `cards` 等はリネームしない。
-- `card_related_items.kind`: `'card'` → `'item'` を起動時マイグレーションで `UPDATE`（冪等）。
+- 表名は `items` / `item_*` へ移行済み（起動時 `RENAME TABLE`）。
+- 列・制約名（`card_id`→`item_id` 等）は **列リネーム済み** → `2026-11-16-item-column-rename-design.md`。
+- `item_related_items.kind`: `'card'` → `'item'` を起動時マイグレーションで `UPDATE`（冪等）。
 - CHECK / アプリ検証を `item` に更新。
 
 ## ドキュメント・スクリプト
@@ -117,10 +120,13 @@ FE `Api` のメソッド名も `itemByNumber` / `updateItem` 等に合わせる�
 
 ## 対象外
 
-- DB 列名 `card_id` などの物理リネーム（表名は `items` / `item_*` へ移行済み）
 - CSS クラス一括リネーム
 - 外部ツールがまだ `/api/cards` を叩く場合の永久互換レイヤ（必要なら別カード）
 - 英語 UI コピー（YOUR WORK…）の変更
+
+## 追記（列リネーム）
+
+DB 列・制約名の `card_id` / `task_number` 等の物理リネームは本 spec の当初スコープ外だったが、続きは `2026-11-16-item-column-rename-design.md` で実施する。
 
 ## レビュー済み
 

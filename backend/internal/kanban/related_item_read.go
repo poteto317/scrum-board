@@ -25,11 +25,11 @@ func attachRelatedItems(ctx context.Context, q queryable, cards []Item) error {
 		}
 		placeholders = append(placeholders, '?')
 	}
-	query := `SELECT r.card_id, r.kind, r.related_card_id, r.url, r.label, COALESCE(n.task_number, 0), COALESCE(c.title, '')
+	query := `SELECT r.item_id, r.kind, r.related_item_id, COALESCE(r.url, ''), r.label, COALESCE(n.item_number, 0), COALESCE(c.title, '')
  FROM item_related_items r
- LEFT JOIN items c ON c.id = r.related_card_id
- LEFT JOIN item_numbers n ON n.card_id = r.related_card_id
- WHERE r.card_id IN (` + string(placeholders) + `) ORDER BY r.card_id, r.position`
+ LEFT JOIN items c ON c.id = r.related_item_id
+ LEFT JOIN item_numbers n ON n.item_id = r.related_item_id
+ WHERE r.item_id IN (` + string(placeholders) + `) ORDER BY r.item_id, r.position`
 	rows, err := q.QueryContext(ctx, query, ids...)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func attachRelatedItem(ctx context.Context, q queryable, c *Item) error {
 }
 
 func listRelatedItemIDs(ctx context.Context, q queryable, cardID int64) ([]int64, error) {
-	rows, err := q.QueryContext(ctx, `SELECT related_card_id FROM item_related_items WHERE card_id=? AND kind=? ORDER BY position`, cardID, relatedKindItem)
+	rows, err := q.QueryContext(ctx, `SELECT related_item_id FROM item_related_items WHERE item_id=? AND kind=? ORDER BY position`, cardID, relatedKindItem)
 	if err != nil {
 		return nil, err
 	}

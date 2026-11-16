@@ -140,7 +140,7 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 		t.Fatalf("wrong failure %v", err)
 	}
 	// A failure after the cards INSERT must roll the card and number back together.
-	if _, err = db.Exec(`ALTER TABLE item_numbers ADD CONSTRAINT reject_new_number CHECK (task_number <= 3)`); err != nil {
+	if _, err = db.Exec(`ALTER TABLE item_numbers ADD CONSTRAINT reject_new_number CHECK (item_number <= 3)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "must roll back"}); err == nil {

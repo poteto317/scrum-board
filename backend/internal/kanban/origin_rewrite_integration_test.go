@@ -25,13 +25,13 @@ func TestRewriteLocalBoardOrigins_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustExec(t, db, `INSERT INTO item_history (card_id, kind, occurred_at, changes, note, evidence_url, event_key)
+	mustExec(t, db, `INSERT INTO item_history (item_id, kind, occurred_at, changes, note, evidence_url, event_key)
 		VALUES (?, 'edited', NOW(6), '[]', ?, ?, 'e1')`, cardID,
 		"note http://127.0.0.1:4200",
 		"http://localhost:4200/cards/9")
 	mustExec(t, db, `INSERT INTO command_templates (name, template, position) VALUES ('t', ?, 0)`,
 		"open http://127.0.0.1:4200/cards/{{id}}")
-	mustExec(t, db, `INSERT INTO item_pr_links (card_id, position, pr_url) VALUES (?, 0, ?)`, cardID,
+	mustExec(t, db, `INSERT INTO item_pr_links (item_id, position, pr_url) VALUES (?, 0, ?)`, cardID,
 		"https://github.com/org/repo/pull/1")
 
 	matches, updates, err := repo.RewriteLocalBoardOrigins(ctx, target, true)
@@ -65,7 +65,7 @@ func TestRewriteLocalBoardOrigins_Integration(t *testing.T) {
 		t.Fatalf("cards: title=%q desc=%q", title, desc)
 	}
 	var note, evidence string
-	if err = db.QueryRow(`SELECT note, evidence_url FROM item_history WHERE card_id=?`, cardID).Scan(&note, &evidence); err != nil {
+	if err = db.QueryRow(`SELECT note, evidence_url FROM item_history WHERE item_id=?`, cardID).Scan(&note, &evidence); err != nil {
 		t.Fatal(err)
 	}
 	if note != "note https://prod.example" || evidence != "https://prod.example/cards/9" {
@@ -79,7 +79,7 @@ func TestRewriteLocalBoardOrigins_Integration(t *testing.T) {
 		t.Fatalf("template=%q", tmpl)
 	}
 	var prURL string
-	if err = db.QueryRow(`SELECT pr_url FROM item_pr_links WHERE card_id=?`, cardID).Scan(&prURL); err != nil {
+	if err = db.QueryRow(`SELECT pr_url FROM item_pr_links WHERE item_id=?`, cardID).Scan(&prURL); err != nil {
 		t.Fatal(err)
 	}
 	if prURL != "https://github.com/org/repo/pull/1" {

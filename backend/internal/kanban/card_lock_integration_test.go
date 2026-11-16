@@ -333,7 +333,7 @@ func TestDeleteItemMySQL(t *testing.T) {
 		t.Fatalf("second delete want ErrNotFound, got %v", err)
 	}
 	var rest int
-	if err := r.DB.QueryRow("SELECT (SELECT COUNT(*) FROM item_history WHERE card_id=?)+(SELECT COUNT(*) FROM item_numbers WHERE card_id=?)", a.ID, a.ID).Scan(&rest); err != nil || rest != 0 {
+	if err := r.DB.QueryRow("SELECT (SELECT COUNT(*) FROM item_history WHERE item_id=?)+(SELECT COUNT(*) FROM item_numbers WHERE item_id=?)", a.ID, a.ID).Scan(&rest); err != nil || rest != 0 {
 		t.Fatalf("history/number cascade: %d %v", rest, err)
 	}
 }

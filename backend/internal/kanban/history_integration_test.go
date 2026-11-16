@@ -51,6 +51,7 @@ func TestMySQLHistory(t *testing.T) {
 		{Field: "description", After: after.Description},
 		{Field: "status", After: status},
 		{Field: "prUrls", After: prURLsJSON(after.PRURLs)},
+		{Field: "relatedItems", After: relatedItemsJSON(after.RelatedItems)},
 		{Field: "assignee", After: after.Assignee},
 	}
 	if !reflect.DeepEqual(baseline.Changes, wantBaseline) || baseline.Note == "" || baseline.OccurredAt.Year() < 2020 || baseline.EvidenceURL != "" {
@@ -227,7 +228,7 @@ func TestMySQLHistoryParallelAndConflictingImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT COUNT(*) FROM item_history WHERE card_id=1").Scan(&count); err != nil || count != 0 {
+	if err = db.QueryRow("SELECT COUNT(*) FROM item_history WHERE item_id=1").Scan(&count); err != nil || count != 0 {
 		t.Fatal("history cascade", count, err)
 	}
 }
@@ -331,7 +332,7 @@ func TestMySQLConcurrentImportRejectsConflict(t *testing.T) {
 	ready := false
 	for i := 0; i < 200; i++ {
 		var count int
-		if err = probe.QueryRowContext(ctx, "SELECT COUNT(*) FROM item_history WHERE card_id=1 AND event_key='batch-a-first'").Scan(&count); err != nil {
+		if err = probe.QueryRowContext(ctx, "SELECT COUNT(*) FROM item_history WHERE item_id=1 AND event_key='batch-a-first'").Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count == 1 {
@@ -484,7 +485,7 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 		t.Fatalf("changes: %+v", page.Events[0])
 	}
 	created := page.Events[1]
-	if created.Kind != "created" || len(created.Changes) != 5 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
+	if created.Kind != "created" || len(created.Changes) != 6 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
 		t.Fatalf("created event: %+v", created)
 	}
 }
@@ -540,7 +541,7 @@ func TestMySQLImportKeyConflictChecksEveryStoredField(t *testing.T) {
 	var baseline HistoricalRecord
 	var payload []byte
 	baseline.Number, baseline.ItemID, baseline.CreatedAt, baseline.Key = first.Number, first.ID, first.CreatedAt, "baseline-v1"
-	if err = r.DB.QueryRow("SELECT occurred_at,changes,note,evidence_url FROM item_history WHERE card_id=1 AND event_key='baseline-v1'").Scan(&baseline.OccurredAt, &payload, &baseline.Note, &baseline.EvidenceURL); err != nil {
+	if err = r.DB.QueryRow("SELECT occurred_at,changes,note,evidence_url FROM item_history WHERE item_id=1 AND event_key='baseline-v1'").Scan(&baseline.OccurredAt, &payload, &baseline.Note, &baseline.EvidenceURL); err != nil {
 		t.Fatal("seed card must have a baseline event:", err)
 	}
 	if err = json.Unmarshal(payload, &baseline.Changes); err != nil {

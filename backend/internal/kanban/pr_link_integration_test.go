@@ -22,14 +22,14 @@ func TestMySQLPRLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = db.Exec(`CREATE TABLE item_pr_links (
- card_id BIGINT NOT NULL PRIMARY KEY,
+ item_id BIGINT NOT NULL PRIMARY KEY,
  pr_url VARCHAR(2048) NOT NULL,
- CONSTRAINT fk_item_pr_links_card FOREIGN KEY(card_id) REFERENCES items(id) ON DELETE CASCADE
+ CONSTRAINT fk_item_pr_links_item FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`); err != nil {
 		t.Fatal(err)
 	}
 	kept := "https://github.com/poteto317/scrum-board/pull/99"
-	if _, err = db.Exec(`INSERT INTO item_pr_links(card_id,pr_url) VALUES(1,?)`, kept); err != nil {
+	if _, err = db.Exec(`INSERT INTO item_pr_links(item_id,pr_url) VALUES(1,?)`, kept); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -108,7 +108,7 @@ func TestMySQLPRLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err = db.QueryRow("SELECT COUNT(*) FROM item_pr_links WHERE card_id=?", created.ID).Scan(&count); err != nil || count != 0 {
+	if err = db.QueryRow("SELECT COUNT(*) FROM item_pr_links WHERE item_id=?", created.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("cascade: %d %v", count, err)
 	}
 }
