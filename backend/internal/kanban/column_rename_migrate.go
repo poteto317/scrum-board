@@ -13,10 +13,11 @@ type columnRename struct {
 }
 
 type expectedIndex struct {
-	name          string
-	columns       string // e.g. "(item_id, pr_url)"
-	unique        bool
-	requireColumn string // if set, skip ADD until this column exists (e.g. position on multi-URL PR table)
+	name               string
+	columns            string // e.g. "(item_id, pr_url)"
+	unique             bool
+	requireColumn      string // if set, skip ADD until this column exists (e.g. position on multi-URL PR table)
+	requireASCIIColumn string // if set, skip ADD unless that column's charset is ascii
 }
 
 type expectedFK struct {
@@ -68,7 +69,7 @@ var cardToItemColumnTables = []tableColumnRename{
 		},
 		indexes: []expectedIndex{
 			// Legacy single-URL tables lack position; InitializePRLinks rebuilds ascii UNIQUE.
-			{name: "uq_item_pr_url", columns: "(item_id, pr_url)", unique: true, requireColumn: "position"},
+			{name: "uq_item_pr_url", columns: "(item_id, pr_url)", unique: true, requireColumn: "position", requireASCIIColumn: "pr_url"},
 		},
 		fks: []expectedFK{
 			{name: "fk_item_pr_links_item", column: "item_id", refTable: "items", refColumn: "id", onDelete: "CASCADE"},
@@ -80,7 +81,7 @@ var cardToItemColumnTables = []tableColumnRename{
 			{"card_id", "item_id"},
 		},
 		indexes: []expectedIndex{
-			{name: "uq_item_pr_url", columns: "(item_id, pr_url)", unique: true, requireColumn: "position"},
+			{name: "uq_item_pr_url", columns: "(item_id, pr_url)", unique: true, requireColumn: "position", requireASCIIColumn: "pr_url"},
 		},
 		fks: []expectedFK{
 			{name: "fk_item_pr_links_item_new", column: "item_id", refTable: "items", refColumn: "id", onDelete: "CASCADE"},
@@ -117,6 +118,7 @@ var cardToItemColumnTables = []tableColumnRename{
 // Idempotent per column and constraint (L-038). Does not rewrite row ids or numbers (L-456).
 func (r MySQLRepository) RenameCardColumnsToItems(ctx context.Context) error {
 	var locked int
+	// Longer than other migrates (30s): this path may ALTER many tables under one lock.
 	if err := r.DB.QueryRowContext(ctx, "SELECT GET_LOCK(?, 120)", renameCardColumnsLock).Scan(&locked); err != nil {
 		return err
 	}
@@ -202,9 +204,8 @@ func (r MySQLRepository) ensureExpectedIndexes(ctx context.Context, spec tableCo
 				continue
 			}
 		}
-		// Multi-URL UNIQUE on utf8mb4 pr_url exceeds InnoDB key length; InitializePRLinks uses ascii.
-		if idx.name == "uq_item_pr_url" {
-			ascii, err := r.columnCharsetIsASCII(ctx, spec.table, "pr_url")
+		if idx.requireASCIIColumn != "" {
+			ascii, err := r.columnCharsetIsASCII(ctx, spec.table, idx.requireASCIIColumn)
 			if err != nil {
 				return err
 			}

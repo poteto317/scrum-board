@@ -128,6 +128,7 @@ func hasReverseRelated(ctx context.Context, tx *sql.Tx, ownerID, peerID int64) (
 }
 
 func compactRelatedPositions(ctx context.Context, tx *sql.Tx, cardID int64) error {
+	// COALESCE: url is NULL for kind=item rows; Scan into string requires non-NULL.
 	rows, err := tx.QueryContext(ctx,
 		`SELECT kind, related_item_id, COALESCE(url, ''), label FROM item_related_items WHERE item_id=? ORDER BY position, related_item_id, url`, cardID)
 	if err != nil {
