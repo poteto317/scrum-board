@@ -54,6 +54,7 @@ import {
 } from './command-template';
 import { AppOrigin } from './app-origin';
 import { CopyCommandFeedback } from './copy-command-feedback';
+import { CopyFeedbackBanner } from './copy-feedback-banner';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { LatestCopyFeedback } from './latest-copy-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
@@ -62,7 +63,15 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
   selector: 'app-board',
-  imports: [ReactiveFormsModule, Modal, CdkDropList, CdkDrag, CdkDragHandle, NgStyle],
+  imports: [
+    ReactiveFormsModule,
+    Modal,
+    CdkDropList,
+    CdkDrag,
+    CdkDragHandle,
+    NgStyle,
+    CopyFeedbackBanner,
+  ],
   templateUrl: './board.html',
   styleUrl: './board.css',
   providers: [
@@ -108,6 +117,7 @@ export class Board implements OnInit {
   readonly copyLinkAnnouncement = this.linkCopy.message;
   readonly copyCommandAnnouncement = this.commandCopy.message;
   readonly copyFeedback = this.copyStatus.message;
+  readonly copyFeedbackKind = this.copyStatus.kind;
   readonly commandMenuEmpty = COMMAND_ITEM_MENU_EMPTY;
   readonly openCommandItemId = signal<number | null>(null);
   readonly commandMenuTemplates = signal<CommandTemplate[]>([]);

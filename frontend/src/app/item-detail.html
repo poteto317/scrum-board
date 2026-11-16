@@ -10,6 +10,10 @@
       <button class="secondary" (click)="load()">再試行</button>
     </div>
   } @else {
+    <app-copy-feedback-banner
+      [message]="copyFeedback()"
+      [kind]="copyFeedbackKind()"
+    />
     <section class="detail-heading">
       <div class="detail-heading-main">
         <div class="eyebrow">{{ formatItemNumber(item()!.number) }}</div>
@@ -78,9 +82,6 @@
             コマンドを管理
           </button>
         </div>
-        <p class="copy-link-feedback" role="status" aria-live="polite">
-          {{ copyFeedback() }}
-        </p>
       </div>
     </section>
     <form [formGroup]="form" (submit)="$event.preventDefault()" class="detail-layout">

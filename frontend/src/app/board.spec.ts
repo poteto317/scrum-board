@@ -358,8 +358,10 @@ describe('Board copy card link', () => {
     f.detectChanges();
     expect(writeText).toHaveBeenCalledWith(itemDetailUrl(window.location.origin, 2));
     expect(navigateSpy).not.toHaveBeenCalled();
-    const live = f.nativeElement.querySelector('.copy-link-live');
+    const live = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
     expect(live).not.toBeNull();
+    expect(live.classList.contains('copy-feedback-banner--ok')).toBe(true);
+    expect(live.querySelector('.copy-feedback-banner__icon')).not.toBeNull();
     expect(live.textContent).toContain('リンクをコピーしました');
   });
 
@@ -373,9 +375,10 @@ describe('Board copy card link', () => {
     copyBtn.click();
     await vi.waitUntil(() => f.componentInstance.copyLinkAnnouncement() !== '');
     f.detectChanges();
-    expect(f.nativeElement.querySelector('.copy-link-live').textContent).toContain(
-      'リンクをコピーできませんでした',
-    );
+    const live = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
+    expect(live.classList.contains('copy-feedback-banner--error')).toBe(true);
+    expect(live.querySelector('.copy-feedback-banner__icon')).not.toBeNull();
+    expect(live.textContent).toContain('リンクをコピーできませんでした');
   });
 });
 
@@ -463,7 +466,7 @@ describe('Board copy command menu', () => {
     expect(listItemCommandTemplatesByNumber).toHaveBeenCalled();
     await vi.waitUntil(() => {
       f.detectChanges();
-      return (f.nativeElement.querySelector('.copy-link-live')?.textContent ?? '').includes(
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
         COPY_COMMAND_SUCCESS,
       );
     });
@@ -473,9 +476,10 @@ describe('Board copy command menu', () => {
     expect(navigateSpy).not.toHaveBeenCalled();
     expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
     expect(button!.getAttribute('aria-expanded')).toBe('false');
-    expect(f.nativeElement.querySelector('.copy-link-live').textContent).toContain(
-      COPY_COMMAND_SUCCESS,
-    );
+    const live = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
+    expect(live.classList.contains('copy-feedback-banner--ok')).toBe(true);
+    expect(live.querySelector('.copy-feedback-banner__icon')).not.toBeNull();
+    expect(live.textContent).toContain(COPY_COMMAND_SUCCESS);
   });
 
   it('keeps the menu open for multiple templates and copies the chosen item', async () => {
@@ -493,7 +497,7 @@ describe('Board copy command menu', () => {
     (menu.querySelector('button') as HTMLButtonElement).click();
     await vi.waitUntil(() => {
       f.detectChanges();
-      return (f.nativeElement.querySelector('.copy-link-live')?.textContent ?? '').includes(
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
         COPY_COMMAND_SUCCESS,
       );
     });
@@ -518,13 +522,14 @@ describe('Board copy command menu', () => {
     f.detectChanges();
     await vi.waitUntil(() => {
       f.detectChanges();
-      return (f.nativeElement.querySelector('.copy-link-live')?.textContent ?? '').includes(
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
         COPY_COMMAND_FAILURE,
       );
     });
-    expect(f.nativeElement.querySelector('.copy-link-live').textContent).toContain(
-      COPY_COMMAND_FAILURE,
-    );
+    const live = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
+    expect(live.classList.contains('copy-feedback-banner--error')).toBe(true);
+    expect(live.querySelector('.copy-feedback-banner__icon')).not.toBeNull();
+    expect(live.textContent).toContain(COPY_COMMAND_FAILURE);
   });
 
   it('shows an empty notice and does not copy when no templates exist', async () => {
@@ -606,7 +611,7 @@ describe('Board copy command menu', () => {
     f.detectChanges();
     await vi.waitUntil(() => {
       f.detectChanges();
-      return (f.nativeElement.querySelector('.copy-link-live')?.textContent ?? '').includes(
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
         COPY_COMMAND_SUCCESS,
       );
     });
@@ -615,7 +620,7 @@ describe('Board copy command menu', () => {
       f.detectChanges();
       return f.componentInstance.copyFeedback() === COPY_LINK_SUCCESS;
     });
-    const live = f.nativeElement.querySelector('.copy-link-live').textContent ?? '';
+    const live = f.nativeElement.querySelector('.copy-feedback-banner').textContent ?? '';
     expect(live).toContain(COPY_LINK_SUCCESS);
     expect(live).not.toContain(COPY_COMMAND_SUCCESS);
     expect(f.componentInstance.copyCommandAnnouncement()).toBe(COPY_COMMAND_SUCCESS);
