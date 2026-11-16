@@ -99,6 +99,9 @@ export class ListFilterSession {
 
   private bumpLoadGeneration() {
     this.loadGeneration++;
+    // Invalidate in-flight PUT so its response cannot rewind a newer draft (L-040).
+    this.saveGeneration++;
+    this.saveInFlight = false;
   }
 
   private scheduleSave() {

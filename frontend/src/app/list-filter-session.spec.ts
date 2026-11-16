@@ -104,6 +104,18 @@ describe('ListFilterSession', () => {
     expect(session.filter().query).toBe('two');
   });
 
+  it('in-flight PUT before next debounce does not rewind typed draft', async () => {
+    vi.useFakeTimers();
+    session.setQuery('one');
+    await vi.advanceTimersByTimeAsync(300);
+    const first = http.expectOne('/api/list-filter');
+    session.setQuery('two');
+    first.flush({ query: 'one', statusIds: [] });
+    expect(session.filter().query).toBe('two');
+    await vi.advanceTimersByTimeAsync(300);
+    http.expectOne('/api/list-filter').flush({ query: 'two', statusIds: [] });
+  });
+
   it('clear schedules empty PUT', async () => {
     vi.useFakeTimers();
     session.toggleStatus(2);
