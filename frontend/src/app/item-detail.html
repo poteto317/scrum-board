@@ -277,13 +277,18 @@
                       cdkDragHandle
                       [cdkDragHandleDisabled]="prLinks.saving()"
                       [attr.aria-disabled]="prLinks.saving()"
-                      [attr.aria-label]="'GitHub PR を並び替え: ' + url"
+                      [attr.aria-label]="'GitHub PR を並び替え: ' + prLabel(url, i)"
                     >
                       <span aria-hidden="true">⋮⋮</span>
                     </button>
                   }
-                  <a class="pr-link" [href]="url" target="_blank" rel="noopener noreferrer"
-                    >GitHub PR ↗<span class="pr-link-url">{{ url }}</span></a
+                  <a
+                    class="pr-link"
+                    [href]="url"
+                    [attr.title]="url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >{{ prLabel(url, i) }} ↗</a
                   >
                 </div>
                 <div class="pr-item-actions">
@@ -292,7 +297,7 @@
                       type="button"
                       class="secondary pr-move"
                       [disabled]="prLinks.saving() || first"
-                      [attr.aria-label]="'1つ上へ: ' + url"
+                      [attr.aria-label]="'1つ上へ: ' + prLabel(url, i)"
                       (click)="prLinks.move(i, -1)"
                     >
                       上へ
@@ -301,7 +306,7 @@
                       type="button"
                       class="secondary pr-move"
                       [disabled]="prLinks.saving() || last"
-                      [attr.aria-label]="'1つ下へ: ' + url"
+                      [attr.aria-label]="'1つ下へ: ' + prLabel(url, i)"
                       (click)="prLinks.move(i, 1)"
                     >
                       下へ
@@ -395,7 +400,8 @@
                       [href]="related.url"
                       target="_blank"
                       rel="noopener noreferrer"
-                      >{{ relatedDisplayLabel(related) }} ↗<span class="pr-link-url">{{ related.url }}</span></a
+                      [attr.title]="related.url"
+                      >{{ relatedDisplayLabel(related) }} ↗</a
                     >
                   }
                 </div>

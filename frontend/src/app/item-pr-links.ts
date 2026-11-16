@@ -6,6 +6,7 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { moveIndex } from './list-reorder';
 import { Item } from './models';
+import { alignPrTitles } from './pr-display';
 import { prUrlValidator } from './pr-url';
 
 /** Immediate add/remove/reorder for card.prUrls — separate from title/description autosave. */
@@ -16,14 +17,14 @@ export class ItemPrLinks {
   readonly saving = signal(false);
   readonly draft = new FormControl('', { nonNullable: true, validators: [prUrlValidator] });
   private cancel$?: Observable<unknown>;
-  private apply!: (updated: Pick<Item, 'prUrls' | 'updatedAt'>) => void;
+  private apply!: (updated: Pick<Item, 'prUrls' | 'prTitles' | 'updatedAt'>) => void;
   private markDirty!: () => void;
   private reportError!: (message: string) => void;
   private current!: () => Item | null;
 
   bind(opts: {
     item: () => Item | null;
-    applyPrSave: (updated: Pick<Item, 'prUrls' | 'updatedAt'>) => void;
+    applyPrSave: (updated: Pick<Item, 'prUrls' | 'prTitles' | 'updatedAt'>) => void;
     markPrSideDirty: () => void;
     onError: (message: string) => void;
     cancel$: Observable<unknown>;
@@ -65,20 +66,23 @@ export class ItemPrLinks {
     const previous = [...card.prUrls];
     const next = moveIndex(previous, from, to);
     if (next === previous) return;
-    this.apply({ prUrls: next, updatedAt: card.updatedAt });
-    this.save(next, undefined, previous);
+    this.save(next);
   }
 
   move(index: number, delta: number) {
     this.reorder(index, index + delta);
   }
 
-  private save(prUrls: string[], onSuccess?: () => void, previous?: string[]) {
+  private save(prUrls: string[], onSuccess?: () => void) {
     const card = this.current();
     if (!card || !this.cancel$) return;
+    const snapshotUrls = [...card.prUrls];
+    const snapshotTitles = [...(card.prTitles ?? [])];
+    const aligned = alignPrTitles(snapshotUrls, snapshotTitles, prUrls);
     this.saving.set(true);
     this.markDirty();
     this.reportError('');
+    this.apply({ prUrls, prTitles: aligned, updatedAt: card.updatedAt });
     this.api
       .updateItem(card.id, { prUrls })
       .pipe(
@@ -88,13 +92,20 @@ export class ItemPrLinks {
       )
       .subscribe({
         next: (updated) => {
-          this.apply({ prUrls: updated.prUrls ?? [], updatedAt: updated.updatedAt });
+          const nextUrls = updated.prUrls ?? [];
+          this.apply({
+            prUrls: nextUrls,
+            prTitles: alignPrTitles(prUrls, aligned, nextUrls),
+            updatedAt: updated.updatedAt,
+          });
           onSuccess?.();
         },
         error: (error) => {
-          if (previous) {
-            this.apply({ prUrls: previous, updatedAt: this.current()?.updatedAt ?? card.updatedAt });
-          }
+          this.apply({
+            prUrls: snapshotUrls,
+            prTitles: snapshotTitles,
+            updatedAt: this.current()?.updatedAt ?? card.updatedAt,
+          });
           this.reportError(errorMessage(error));
         },
       });
