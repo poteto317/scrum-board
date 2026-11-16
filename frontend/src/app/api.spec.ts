@@ -16,27 +16,27 @@ describe('Api', () => {
   });
   afterEach(() => http.verify());
   it('sends the selected status as columnId', () => {
-    api.updateCard(7, { columnId: 3 }).subscribe();
-    const req = http.expectOne('/api/cards/7');
+    api.updateItem(7, { columnId: 3 }).subscribe();
+    const req = http.expectOne('/api/items/7');
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ columnId: 3 });
     req.flush({ id: 7, columnId: 3, title: '学習', description: '' });
   });
   it('propagates save failures so inputs can be retained', () => {
     let status = 0;
-    api.updateCard(7, { title: '編集中' }).subscribe({ error: (e) => (status = e.status) });
-    http.expectOne('/api/cards/7').flush({ message: '失敗' }, { status: 500, statusText: 'Error' });
+    api.updateItem(7, { title: '編集中' }).subscribe({ error: (e) => (status = e.status) });
+    http.expectOne('/api/items/7').flush({ message: '失敗' }, { status: 500, statusText: 'Error' });
     expect(status).toBe(500);
   });
   it('resolves a public number through the number-specific endpoint', () => {
-    api.cardByNumber(3).subscribe((card) => expect(card.id).toBe(18));
-    const req = http.expectOne('/api/cards/by-number/3');
+    api.itemByNumber(3).subscribe((card) => expect(card.id).toBe(18));
+    const req = http.expectOne('/api/items/by-number/3');
     expect(req.request.method).toBe('GET');
     req.flush({ id: 18, number: 3, columnId: 1, title: 'Task', description: '' });
   });
   it('patches assignee by public number', () => {
     api.updateAssigneeByNumber(7, 'Claude').subscribe((card) => expect(card.assignee).toBe('Claude'));
-    const req = http.expectOne('/api/cards/by-number/7/assignee');
+    const req = http.expectOne('/api/items/by-number/7/assignee');
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ assignee: 'Claude' });
     req.flush({ id: 22, number: 7, assignee: 'Claude' });
@@ -66,17 +66,17 @@ describe('Api', () => {
       .flush({ message: '競合' }, { status: 409, statusText: 'Conflict' });
     expect(status).toBe(409);
   });
-  it('sends PUT /api/cards/order with column cardIds', () => {
+  it('sends PUT /api/items/order with column itemIds', () => {
     let result: unknown;
     const columns = [
-      { columnId: 1, cardIds: [2, 1] },
-      { columnId: 2, cardIds: [3] },
+      { columnId: 1, itemIds: [2, 1] },
+      { columnId: 2, itemIds: [3] },
     ];
-    api.reorderCards(columns).subscribe((res) => (result = res));
-    const req = http.expectOne('/api/cards/order');
+    api.reorderItems(columns).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/items/order');
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ columns });
-    const payload = { cards: [{ id: 2, number: 2, columnId: 1, title: 'x', position: 0 }] };
+    const payload = { items: [{ id: 2, number: 2, columnId: 1, title: 'x', position: 0 }] };
     req.flush(payload);
     expect(result).toEqual(payload);
   });
@@ -86,19 +86,19 @@ describe('Api', () => {
     const req = http.expectOne('/api/backlog');
     expect(req.request.method).toBe('GET');
     const payload = {
-      cards: [{ id: 2, number: 2, columnId: 1, title: 'B', backlogPosition: 0 }],
+      items: [{ id: 2, number: 2, columnId: 1, title: 'B', backlogPosition: 0 }],
     };
     req.flush(payload);
     expect(result).toEqual(payload);
   });
-  it('sends PUT /api/backlog/order with cardIds and returns reordered cards', () => {
+  it('sends PUT /api/backlog/order with itemIds and returns reordered cards', () => {
     let result: unknown;
     api.reorderBacklog([3, 1, 2]).subscribe((res) => (result = res));
     const req = http.expectOne('/api/backlog/order');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ cardIds: [3, 1, 2] });
+    expect(req.request.body).toEqual({ itemIds: [3, 1, 2] });
     const payload = {
-      cards: [
+      items: [
         { id: 3, backlogPosition: 0 },
         { id: 1, backlogPosition: 1 },
         { id: 2, backlogPosition: 2 },
@@ -151,14 +151,14 @@ describe('Api', () => {
     req.flush(null);
   });
   it('lists card command templates by number', () => {
-    api.listCardCommandTemplatesByNumber(3).subscribe();
-    const req = http.expectOne('/api/cards/by-number/3/command-templates');
+    api.listItemCommandTemplatesByNumber(3).subscribe();
+    const req = http.expectOne('/api/items/by-number/3/command-templates');
     expect(req.request.method).toBe('GET');
     req.flush({ templates: [] });
   });
   it('replaces card command templates by number', () => {
-    api.replaceCardCommandTemplatesByNumber(3, [1, 2]).subscribe();
-    const req = http.expectOne('/api/cards/by-number/3/command-templates');
+    api.replaceItemCommandTemplatesByNumber(3, [1, 2]).subscribe();
+    const req = http.expectOne('/api/items/by-number/3/command-templates');
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ templateIds: [1, 2] });
     req.flush({ templates: [] });
@@ -173,8 +173,8 @@ describe('Api', () => {
     req.flush({ templateIds: [2] });
   });
   it('applies command templates to all cards', () => {
-    api.applyCommandTemplatesToAllCards([1]).subscribe();
-    const req = http.expectOne('/api/command-templates/apply-to-all-cards');
+    api.applyCommandTemplatesToAllItems([1]).subscribe();
+    const req = http.expectOne('/api/command-templates/apply-to-all-items');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ templateIds: [1] });
     req.flush(null);
@@ -186,7 +186,7 @@ it('requests history by public number and an optional event cursor', () => {
   const api = TestBed.inject(Api),
     http = TestBed.inject(HttpTestingController);
   api.history(13, 42).subscribe();
-  const req = http.expectOne('/api/cards/by-number/13/history?before=42');
+  const req = http.expectOne('/api/items/by-number/13/history?before=42');
   expect(req.request.method).toBe('GET');
   req.flush({ events: [], nextBefore: 0 });
   http.verify();

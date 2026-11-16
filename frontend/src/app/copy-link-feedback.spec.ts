@@ -33,9 +33,9 @@ describe('CopyLinkFeedback', () => {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
-    await feedback.copyCardNumber(27, 'http://127.0.0.1:4200');
+    await feedback.copyItemNumber(27, 'http://127.0.0.1:4200');
     expect(feedback.message()).toBe(COPY_LINK_SUCCESS);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://127.0.0.1:4200/cards/27');
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://127.0.0.1:4200/items/27');
     await vi.advanceTimersByTimeAsync(2000);
     expect(feedback.message()).toBe('');
   });
@@ -46,7 +46,7 @@ describe('CopyLinkFeedback', () => {
       value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     });
     vi.spyOn(document, 'execCommand').mockReturnValue(false);
-    await feedback.copyCardNumber(1, 'http://example');
+    await feedback.copyItemNumber(1, 'http://example');
     expect(feedback.message()).toBe(COPY_LINK_FAILURE);
   });
 
@@ -69,7 +69,7 @@ describe('CopyLinkFeedback', () => {
         ),
       },
     });
-    const pending = feedback.copyCardNumber(3, 'http://example');
+    const pending = feedback.copyItemNumber(3, 'http://example');
     onDestroy?.();
     resolveWrite();
     await pending;

@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CommandTemplate } from './command-template';
-import { BoardData, Card, CardInput, Column, HistoryPage } from './models';
+import { BoardData, Item, ItemInput, Column, HistoryPage } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class Api {
@@ -12,11 +12,11 @@ export class Api {
   board() {
     return this.http.get<BoardData>('/api/board');
   }
-  cardByNumber(number: number) {
-    return this.http.get<Card>(`/api/cards/by-number/${number}`);
+  itemByNumber(number: number) {
+    return this.http.get<Item>(`/api/items/by-number/${number}`);
   }
   history(number: number, before = 0) {
-    return this.http.get<HistoryPage>(`/api/cards/by-number/${number}/history`, {
+    return this.http.get<HistoryPage>(`/api/items/by-number/${number}/history`, {
       params: before ? { before: String(before) } : {},
     });
   }
@@ -26,26 +26,26 @@ export class Api {
   reorderColumns(columnIds: number[]) {
     return this.http.put<{ columns: Column[] }>('/api/columns/order', { columnIds });
   }
-  reorderCards(columns: { columnId: number; cardIds: number[] }[]) {
-    return this.http.put<{ cards: Card[] }>('/api/cards/order', { columns });
+  reorderItems(columns: { columnId: number; itemIds: number[] }[]) {
+    return this.http.put<{ items: Item[] }>('/api/items/order', { columns });
   }
   backlog() {
-    return this.http.get<{ cards: Card[] }>('/api/backlog');
+    return this.http.get<{ items: Item[] }>('/api/backlog');
   }
-  reorderBacklog(cardIds: number[]) {
-    return this.http.put<{ cards: Card[] }>('/api/backlog/order', { cardIds });
+  reorderBacklog(itemIds: number[]) {
+    return this.http.put<{ items: Item[] }>('/api/backlog/order', { itemIds });
   }
-  createCard(input: CardInput) {
-    return this.http.post<Card>('/api/cards', input);
+  createItem(input: ItemInput) {
+    return this.http.post<Item>('/api/items', input);
   }
-  updateCard(id: number, input: Partial<CardInput>) {
-    return this.http.patch<Card>(`/api/cards/${id}`, input);
+  updateItem(id: number, input: Partial<ItemInput>) {
+    return this.http.patch<Item>(`/api/items/${id}`, input);
   }
   updateAssigneeByNumber(number: number, assignee: string) {
-    return this.http.patch<Card>(`/api/cards/by-number/${number}/assignee`, { assignee });
+    return this.http.patch<Item>(`/api/items/by-number/${number}/assignee`, { assignee });
   }
-  deleteCard(id: number) {
-    return this.http.delete<void>(`/api/cards/${id}`);
+  deleteItem(id: number) {
+    return this.http.delete<void>(`/api/items/${id}`);
   }
   listCommandTemplates() {
     return this.http.get<{ templates: CommandTemplate[] }>('/api/command-templates');
@@ -59,14 +59,14 @@ export class Api {
   deleteCommandTemplate(id: number) {
     return this.http.delete<void>(`/api/command-templates/${id}`);
   }
-  listCardCommandTemplatesByNumber(number: number) {
+  listItemCommandTemplatesByNumber(number: number) {
     return this.http.get<{ templates: CommandTemplate[] }>(
-      `/api/cards/by-number/${number}/command-templates`,
+      `/api/items/by-number/${number}/command-templates`,
     );
   }
-  replaceCardCommandTemplatesByNumber(number: number, templateIds: number[]) {
+  replaceItemCommandTemplatesByNumber(number: number, templateIds: number[]) {
     return this.http.put<{ templates: CommandTemplate[] }>(
-      `/api/cards/by-number/${number}/command-templates`,
+      `/api/items/by-number/${number}/command-templates`,
       { templateIds },
     );
   }
@@ -78,7 +78,7 @@ export class Api {
       templateIds,
     });
   }
-  applyCommandTemplatesToAllCards(templateIds: number[]) {
-    return this.http.post<void>('/api/command-templates/apply-to-all-cards', { templateIds });
+  applyCommandTemplatesToAllItems(templateIds: number[]) {
+    return this.http.post<void>('/api/command-templates/apply-to-all-items', { templateIds });
   }
 }

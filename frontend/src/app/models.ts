@@ -4,14 +4,14 @@ export interface Column {
   position: number;
 }
 export interface RelatedItem {
-  kind: 'card' | 'url';
+  kind: 'item' | 'url';
   number?: number;
   title?: string;
   url?: string;
   label?: string;
 }
 
-export interface Card {
+export interface Item {
   number: number;
   id: number;
   columnId: number;
@@ -27,10 +27,10 @@ export interface Card {
 }
 export interface BoardData {
   columns: Column[];
-  cards: Card[];
+  items: Item[];
 }
-export type CardInput = Pick<Card, 'title' | 'description' | 'columnId'> &
-  Partial<Pick<Card, 'prUrls' | 'relatedItems' | 'assignee'>>;
+export type ItemInput = Pick<Item, 'title' | 'description' | 'columnId'> &
+  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee'>>;
 
 export interface HistoryChange {
   field: string;

@@ -1,4 +1,4 @@
-import { Card } from './models';
+import { Item } from './models';
 
 export interface RowBound {
   top: number;
@@ -26,17 +26,17 @@ export function targetIndex(fromIndex: number, dropSlot: number, length: number)
   return insertAt === fromIndex ? null : insertAt;
 }
 
-export function moveCard(cards: readonly Card[], fromIndex: number, toIndex: number): Card[] {
+export function moveItem(items: readonly Item[], fromIndex: number, toIndex: number): Item[] {
   if (
     fromIndex < 0 ||
-    fromIndex >= cards.length ||
+    fromIndex >= items.length ||
     toIndex < 0 ||
-    toIndex >= cards.length ||
+    toIndex >= items.length ||
     fromIndex === toIndex
   ) {
-    return cards as Card[];
+    return items as Item[];
   }
-  const next = [...cards];
+  const next = [...items];
   const [moved] = next.splice(fromIndex, 1);
   next.splice(toIndex, 0, moved);
   return next.map((card, index) => ({ ...card, backlogPosition: index }));

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cardDetailUrl, copyText } from './card-link';
+import { itemDetailUrl, copyText } from './item-link';
 
-describe('cardDetailUrl', () => {
+describe('itemDetailUrl', () => {
   it('builds an absolute card detail URL from origin and public number', () => {
-    expect(cardDetailUrl('http://127.0.0.1:4200', 27)).toBe('http://127.0.0.1:4200/cards/27');
-    expect(cardDetailUrl('http://127.0.0.1:4200/', 3)).toBe('http://127.0.0.1:4200/cards/3');
+    expect(itemDetailUrl('http://127.0.0.1:4200', 27)).toBe('http://127.0.0.1:4200/items/27');
+    expect(itemDetailUrl('http://127.0.0.1:4200/', 3)).toBe('http://127.0.0.1:4200/items/3');
   });
 });
 
@@ -32,8 +32,8 @@ describe('copyText', () => {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
-    await expect(copyText('http://example/cards/1')).resolves.toBe(true);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://example/cards/1');
+    await expect(copyText('http://example/items/1')).resolves.toBe(true);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://example/items/1');
   });
 
   it('returns false when writeText rejects without trying execCommand', async () => {
