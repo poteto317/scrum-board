@@ -1691,6 +1691,18 @@ describe('Board card reordering', () => {
 
     expect(page.scrollTop).toBe(15);
     expect(boardEl.scrollLeft).toBe(8);
+    expect(readBoardScroll()).toBeNull();
+
+    // Remount with cleared key must not reapply saved positions.
+    f.destroy();
+    const f2 = TestBed.createComponent(Board);
+    f2.detectChanges();
+    await f2.whenStable();
+    TestBed.inject(ApplicationRef).tick();
+    f2.detectChanges();
+    await f2.whenStable();
+    expect(page.scrollTop).toBe(15);
+    expect((f2.nativeElement.querySelector('.board-scroll') as HTMLElement).scrollLeft).not.toBe(50);
   });
 
   it('does not apply stale board scroll restore after destroy', async () => {
