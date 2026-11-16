@@ -76,7 +76,8 @@ export class CardAutosave {
     };
     for (const key of sideFields) {
       if (updated[key] === undefined) continue;
-      // Only shield against an in-flight form flush; otherwise the next flush must adopt server.
+      // Shield when a form flush is in flight. applyPrSave / applyRelatedSave also mark their
+      // fields so optimistic side edits before mark*SideDirty still win over a concurrent flush.
       if (this.saving()) this.sideDirty.add(key);
       if (key === 'prUrls') next.prUrls = [...(updated.prUrls ?? [])];
       else if (key === 'relatedItems') next.relatedItems = [...(updated.relatedItems ?? [])];
@@ -85,7 +86,12 @@ export class CardAutosave {
     this.card.set(next);
   }
   applyPrSave(updated: Pick<Card, 'prUrls' | 'updatedAt'>) {
+    this.sideDirty.add('prUrls');
     this.applySideSave(updated);
+  }
+  /** Shield prUrls from an in-flight title/description flush (L-453). */
+  markPrSideDirty() {
+    this.sideDirty.add('prUrls');
   }
   /** Shield relatedItems from an in-flight title/description flush (L-453). */
   markRelatedSideDirty() {
