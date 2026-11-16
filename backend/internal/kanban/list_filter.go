@@ -62,6 +62,7 @@ func (r MySQLRepository) GetListFilter(ctx context.Context) (ListFilter, error) 
 }
 
 func (r MySQLRepository) PutListFilter(ctx context.Context, in ListFilter) (ListFilter, error) {
+	// Column IDs only — avoid Board()'s item/PR/related load. Read snapshot then write prefs.
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return ListFilter{}, err
