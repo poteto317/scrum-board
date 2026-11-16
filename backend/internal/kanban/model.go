@@ -32,6 +32,7 @@ type Item struct {
 	Position        int       `json:"position"`
 	BacklogPosition int       `json:"backlogPosition"`
 	PRURLs          []string      `json:"prUrls"`
+	PRTitles        []string      `json:"prTitles"`
 	RelatedItems    []RelatedItem `json:"relatedItems"`
 	Assignee        string        `json:"assignee"`
 	CreatedAt       time.Time     `json:"createdAt"`

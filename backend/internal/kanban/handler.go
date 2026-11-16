@@ -7,10 +7,11 @@ import (
 )
 
 type handler struct {
-	repo         Repository
-	formatter    ItemFormatter
-	slots        chan struct{}
-	publicOrigin string
+	repo            Repository
+	formatter       ItemFormatter
+	slots           chan struct{}
+	publicOrigin    string
+	prTitleResolver *PRTitleResolver
 }
 
 // Option customizes NewHandler without changing the call sites that only need the repository.
@@ -26,8 +27,17 @@ func WithPublicOrigin(origin string) Option {
 	return func(h *handler) { h.publicOrigin = NormalizePublicOrigin(origin) }
 }
 
+// WithPRTitleResolver injects PR title resolution for tests; production uses GitHub with optional GITHUB_TOKEN.
+func WithPRTitleResolver(r *PRTitleResolver) Option {
+	return func(h *handler) { h.prTitleResolver = r }
+}
+
 func NewHandler(repo Repository, opts ...Option) http.Handler {
-	h := handler{repo: repo, slots: make(chan struct{}, maxConcurrentFormats)}
+	h := handler{
+		repo:            repo,
+		slots:           make(chan struct{}, maxConcurrentFormats),
+		prTitleResolver: NewPRTitleResolver(nil),
+	}
 	for _, opt := range opts {
 		opt(&h)
 	}
@@ -59,6 +69,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	// by-number only: GET /api/items/{id}/command-templates conflicts with GET /api/items/by-number/{number} in ServeMux.
 	mux.HandleFunc("GET /api/items/by-number/{number}/command-templates", h.listItemCommandTemplatesByNumber)
 	mux.HandleFunc("PUT /api/items/by-number/{number}/command-templates", h.replaceItemCommandTemplatesByNumber)
+	mux.HandleFunc("POST /api/pr-titles", h.batchPRTitles)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
@@ -111,6 +122,7 @@ func (h handler) getItem(w http.ResponseWriter, r *http.Request) {
 		fail(w, e)
 		return
 	}
+	attachPRTitles(r.Context(), h.prTitleResolver, &c)
 	reply(w, 200, c)
 }
 func (h handler) getItemByNumber(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +135,29 @@ func (h handler) getItemByNumber(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	attachPRTitles(r.Context(), h.prTitleResolver, &card)
 	reply(w, 200, card)
+}
+func (h handler) batchPRTitles(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		URLs []string `json:"urls"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if len(in.URLs) > maxPRTitleBatch {
+		invalid(w, "一度に解決できるPR URLは50件までです。")
+		return
+	}
+	titles := make(map[string]string, len(in.URLs))
+	for _, raw := range in.URLs {
+		url := strings.TrimSpace(raw)
+		if url == "" || !validPRURL(url) {
+			continue
+		}
+		titles[url] = ResolvePRTitleLabel(r.Context(), h.prTitleResolver, url)
+	}
+	reply(w, 200, map[string]map[string]string{"titles": titles})
 }
 func (h handler) createColumn(w http.ResponseWriter, r *http.Request) {
 	var in struct {
