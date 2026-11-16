@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi } from 'vitest';
 import { ItemHistory } from './item-history';
@@ -13,8 +14,14 @@ const event = {
   note: '観測時点の復元',
   evidenceUrl: 'https://github.com/a/b/pull/2',
 };
+function withPrTitles<T extends { history: ReturnType<typeof vi.fn> }>(api: T) {
+  return {
+    prTitles: vi.fn(() => of({ titles: {} as Record<string, string> })),
+    ...api,
+  };
+}
 it('labels assignee changes as 対応', () => {
-  const api = {
+  const f = setup({
     history: vi.fn(() =>
       of({
         events: [
@@ -28,14 +35,7 @@ it('labels assignee changes as 対応', () => {
         nextBefore: 0,
       }),
     ),
-  };
-  TestBed.configureTestingModule({
-    imports: [ItemHistory],
-    providers: [{ provide: Api, useValue: api }],
   });
-  const f = TestBed.createComponent(ItemHistory);
-  f.componentRef.setInput('number', 3);
-  f.detectChanges();
   expect(f.nativeElement.textContent).toContain('対応');
   expect(f.nativeElement.textContent).toContain('Cursor');
 });
@@ -46,13 +46,7 @@ it('shows recovered evidence and appends the next page', () => {
       .mockReturnValueOnce(of({ events: [event], nextBefore: 1 }))
       .mockReturnValueOnce(of({ events: [{ ...event, id: 2 }], nextBefore: 0 })),
   };
-  TestBed.configureTestingModule({
-    imports: [ItemHistory],
-    providers: [{ provide: Api, useValue: api }],
-  });
-  const f = TestBed.createComponent(ItemHistory);
-  f.componentRef.setInput('number', 3);
-  f.detectChanges();
+  const f = setup(api);
   expect(f.nativeElement.textContent).toContain('復元');
   expect(f.nativeElement.textContent).toContain('Todo');
   expect(f.nativeElement.textContent).toContain('Done');
@@ -70,13 +64,7 @@ it('ignores old pages on route or revision change', () => {
       .mockReturnValueOnce(pending)
       .mockReturnValue(of({ events: [], nextBefore: 0 })),
   };
-  TestBed.configureTestingModule({
-    imports: [ItemHistory],
-    providers: [{ provide: Api, useValue: api }],
-  });
-  const f = TestBed.createComponent(ItemHistory);
-  f.componentRef.setInput('number', 3);
-  f.detectChanges();
+  const f = setup(api);
   f.componentRef.setInput('number', 7);
   f.detectChanges();
   pending.next({ events: [event], nextBefore: 0 });
@@ -95,13 +83,7 @@ it('retains prior events on pagination errors and retries', () => {
       .mockReturnValueOnce(throwError(() => ({ status: 500 })))
       .mockReturnValue(of({ events: [], nextBefore: 0 })),
   };
-  TestBed.configureTestingModule({
-    imports: [ItemHistory],
-    providers: [{ provide: Api, useValue: api }],
-  });
-  const f = TestBed.createComponent(ItemHistory);
-  f.componentRef.setInput('number', 3);
-  f.detectChanges();
+  const f = setup(api);
   f.componentInstance.more();
   f.detectChanges();
   expect(f.componentInstance.events()).toHaveLength(1);
@@ -109,10 +91,10 @@ it('retains prior events on pagination errors and retries', () => {
   f.componentInstance.retry();
   expect(api.history).toHaveBeenLastCalledWith(3, 1);
 });
-function setup(api: { history: ReturnType<typeof vi.fn> }, number = 3) {
+function setup(api: { history: ReturnType<typeof vi.fn>; prTitles?: ReturnType<typeof vi.fn> }, number = 3) {
   TestBed.configureTestingModule({
     imports: [ItemHistory],
-    providers: [{ provide: Api, useValue: api }],
+    providers: [provideRouter([]), { provide: Api, useValue: withPrTitles(api) }],
   });
   const f = TestBed.createComponent(ItemHistory);
   f.componentRef.setInput('number', number);
@@ -299,7 +281,9 @@ it('renders prUrls JSON arrays as links and falls back for invalid JSON', () => 
   });
   const anchor = linked.nativeElement.querySelector('.pr-history a');
   expect(anchor?.getAttribute('href')).toBe(url);
+  expect(anchor?.textContent?.trim()).toBe('a/b#1');
   expect(linked.nativeElement.textContent).toContain('GitHub PR');
+  expect(linked.nativeElement.textContent).not.toContain(url);
   TestBed.resetTestingModule();
   const invalid = setup({
     history: vi.fn(() =>
@@ -316,4 +300,69 @@ it('renders prUrls JSON arrays as links and falls back for invalid JSON', () => 
   });
   expect(invalid.nativeElement.querySelector('.pr-history')).toBeNull();
   expect(invalid.nativeElement.textContent).toContain('not-json');
+});
+it('shows PR titles from batch API and related items as named links', () => {
+  const url = 'https://github.com/a/b/pull/9';
+  const titles = vi.fn(() => of({ titles: { [url]: 'Cool PR' } }));
+  const f = setup({
+    history: vi.fn(() =>
+      of({
+        events: [
+          {
+            ...event,
+            evidenceUrl: '',
+            changes: [
+              { field: 'prUrls', before: '[]', after: JSON.stringify([url]) },
+              {
+                field: 'relatedItems',
+                before: '[]',
+                after: JSON.stringify([
+                  { kind: 'item', number: 3, label: 'Named' },
+                  { kind: 'url', url: 'https://example.com/x', label: 'Docs' },
+                ]),
+              },
+            ],
+          },
+        ],
+        nextBefore: 0,
+      }),
+    ),
+    prTitles: titles,
+  });
+  expect(titles).toHaveBeenCalled();
+  const pr = f.nativeElement.querySelector('.pr-history a');
+  expect(pr?.textContent?.trim()).toBe('Cool PR');
+  expect(f.nativeElement.textContent).toContain('Named');
+  expect(f.nativeElement.textContent).toContain('Docs');
+  expect(f.nativeElement.textContent).not.toContain('https://example.com/x');
+});
+it('keeps fallback when prTitles batch fails and ignores stale titles after card change', () => {
+  const url = 'https://github.com/a/b/pull/4';
+  const pending = new Subject<{ titles: Record<string, string> }>();
+  const titles = vi
+    .fn()
+    .mockReturnValueOnce(pending)
+    .mockReturnValue(of({ titles: {} }));
+  const f = setup({
+    history: vi.fn(() =>
+      of({
+        events: [
+          {
+            ...event,
+            evidenceUrl: '',
+            changes: [{ field: 'prUrls', before: '[]', after: JSON.stringify([url]) }],
+          },
+        ],
+        nextBefore: 0,
+      }),
+    ),
+    prTitles: titles,
+  });
+  expect(f.nativeElement.querySelector('.pr-history a')?.textContent?.trim()).toBe('a/b#4');
+  f.componentRef.setInput('number', 9);
+  f.detectChanges();
+  pending.next({ titles: { [url]: 'Stale' } });
+  pending.complete();
+  f.detectChanges();
+  expect(f.componentInstance.prTitleMap()[url]).toBeUndefined();
 });

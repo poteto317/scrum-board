@@ -1,0 +1,16 @@
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.8;
+  margin: 6px 0 0;
+  max-height: 240px;
+  overflow: auto;
+}
+a {
+  color: var(--accent);
+}
+.pr-history {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+}
