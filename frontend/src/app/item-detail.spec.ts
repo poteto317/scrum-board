@@ -13,6 +13,14 @@ import {
   COPY_COMMAND_SUCCESS,
   resolveCommand,
 } from './command-template';
+import {
+  clearReturnTo,
+  LIST_RETURN_KEY,
+  readBoardScroll,
+  readReturnTo,
+  saveBoardScroll,
+  saveReturnTo,
+} from './list-scroll-session';
 const card: Item = {
   id: 18,
   number: 3,
@@ -38,11 +46,12 @@ describe('ItemDetail autosave', () => {
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
   };
-  let router: { navigate: ReturnType<typeof vi.fn> };
+  let router: { navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> };
   beforeEach(() => {
     vi.useFakeTimers();
+    sessionStorage.clear();
     params = new BehaviorSubject(new Map([['number', '3']]));
-    router = { navigate: vi.fn() };
+    router = { navigate: vi.fn(), navigateByUrl: vi.fn() };
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       board: vi.fn(() =>
@@ -69,6 +78,7 @@ describe('ItemDetail autosave', () => {
     });
   });
   afterEach(() => {
+    sessionStorage.clear();
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
     vi.useRealTimers();
@@ -78,6 +88,41 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     return f;
   };
+  it('goBackToList navigates to saved returnTo and clears list-return', () => {
+    saveReturnTo('/backlog');
+    const f = create();
+    f.componentInstance.goBackToList();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/backlog');
+    expect(readReturnTo()).toBeNull();
+  });
+  it('goBackToList falls back to / when returnTo missing', () => {
+    clearReturnTo();
+    const f = create();
+    f.componentInstance.goBackToList();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/');
+  });
+  it('goBackToList falls back to / when returnTo raw is invalid', () => {
+    sessionStorage.setItem(LIST_RETURN_KEY, '{"returnTo":"//evil"}');
+    const f = create();
+    f.componentInstance.goBackToList();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/');
+    expect(readReturnTo()).toBeNull();
+  });
+  it('back link href uses list URL from returnTo', () => {
+    saveReturnTo('/backlog');
+    const f = create();
+    const link = f.nativeElement.querySelector('.back-link') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/backlog');
+  });
+  it('delete clears board scroll and list-return then navigates to /', () => {
+    saveReturnTo('/backlog');
+    saveBoardScroll({ scrollY: 99, scrollLeft: 1 });
+    const f = create();
+    f.componentInstance.remove();
+    expect(readReturnTo()).toBeNull();
+    expect(readBoardScroll()).toBeNull();
+    expect(router.navigate).toHaveBeenCalledWith(['/']);
+  });
   it('refreshes history after a successful autosave without resetting the draft', () => {
     api.updateItem.mockImplementation((_id, patch) =>
       of({ ...card, ...patch, updatedAt: '2026-11-13T00:00:00Z' }),

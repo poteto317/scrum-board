@@ -2,7 +2,7 @@ import { formatItemNumber } from './item-number';
 import { ItemHistory } from './item-history';
 import { Modal } from './modal';
 import { Component, DestroyRef, HostListener, inject, NgZone, OnInit, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, Location } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ReactiveFormsModule } from '@angular/forms';
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
@@ -37,6 +37,13 @@ import { CopyFeedbackBanner } from './copy-feedback-banner';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { LatestCopyFeedback } from './latest-copy-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
+import { isUnmodifiedPrimaryClick } from './primary-click';
+import {
+  clearBoardScroll,
+  clearReturnTo,
+  ListReturnTo,
+  readReturnTo,
+} from './list-scroll-session';
 
 @Component({
   selector: 'app-item-detail',
@@ -68,6 +75,7 @@ export class ItemDetail implements OnInit {
   private readonly appOrigin = inject(AppOrigin);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly destroyRef = inject(DestroyRef);
   private readonly zone = inject(NgZone);
   private readonly reload$ = new Subject<void>();
@@ -297,14 +305,41 @@ export class ItemDetail implements OnInit {
       )
       .subscribe({
         next: () => {
+          clearReturnTo();
+          clearBoardScroll();
           this.deleted = true;
-          this.router.navigate(['/']);
+          void this.router.navigate(['/']);
         },
         error: (error) => {
           this.confirmDelete.set(false);
           this.error.set(errorMessage(error));
         },
       });
+  }
+
+  private listReturnPath(): ListReturnTo {
+    return readReturnTo() ?? '/';
+  }
+
+  backLinkLabel(): string {
+    return this.listReturnPath() === '/backlog' ? '← バックログに戻る' : '← ボードに戻る';
+  }
+
+  /** Real list URL so middle-click / open-in-new-tab work via href. */
+  backLinkHref(): string {
+    return this.location.prepareExternalUrl(this.listReturnPath());
+  }
+
+  onBackClick(event: MouseEvent) {
+    if (!isUnmodifiedPrimaryClick(event)) return;
+    event.preventDefault();
+    this.goBackToList();
+  }
+
+  goBackToList() {
+    const to = this.listReturnPath();
+    clearReturnTo();
+    void this.router.navigateByUrl(to);
   }
 
   toggleCommandMenu(event: Event) {
