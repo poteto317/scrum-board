@@ -201,10 +201,10 @@ export class Board implements OnInit {
     return this.linkCopy.copyItemNumber(number, origin);
   }
 
-  toggleCommandMenu(cardId: number, cardNumber: number, event: Event) {
+  toggleCommandMenu(itemId: number, itemNumber: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
-    const opening = this.openCommandItemId() !== cardId;
+    const opening = this.openCommandItemId() !== itemId;
     if (!opening) {
       this.closeCommandMenu();
       return;
@@ -212,7 +212,7 @@ export class Board implements OnInit {
     const button = event.currentTarget;
     if (!(button instanceof HTMLElement)) return;
     const generation = ++this.commandMenuLoadGeneration;
-    const listPromise = firstValueFrom(this.api.listItemCommandTemplatesByNumber(cardNumber));
+    const listPromise = firstValueFrom(this.api.listItemCommandTemplatesByNumber(itemNumber));
 
     // Preserve user activation: write ClipboardItem during the click, resolve text after fetch.
     if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
@@ -222,7 +222,7 @@ export class Board implements OnInit {
           throw new Error('not-single');
         }
         const origin = await this.appOrigin.resolve();
-        return resolveCommand(templates[0].template, itemDetailUrl(origin, cardNumber));
+        return resolveCommand(templates[0].template, itemDetailUrl(origin, itemNumber));
       });
       void navigator.clipboard
         .write([new ClipboardItem({ 'text/plain': textPromise })])
@@ -236,18 +236,18 @@ export class Board implements OnInit {
         .catch(() => {
           this.zone.run(() => {
             if (generation !== this.commandMenuLoadGeneration) return;
-            this.openCommandMenuAfterList(cardId, cardNumber, button, generation, listPromise);
+            this.openCommandMenuAfterList(itemId, itemNumber, button, generation, listPromise);
           });
         });
       return;
     }
 
-    this.openCommandMenuAfterList(cardId, cardNumber, button, generation, listPromise);
+    this.openCommandMenuAfterList(itemId, itemNumber, button, generation, listPromise);
   }
 
   private openCommandMenuAfterList(
-    cardId: number,
-    cardNumber: number,
+    itemId: number,
+    itemNumber: number,
     button: HTMLElement,
     generation: number,
     listPromise: Promise<{ templates?: CommandTemplate[] }>,
@@ -257,11 +257,11 @@ export class Board implements OnInit {
     this.commandMenuTemplates.set([]);
     this.commandMenuError.set('');
     this.commandMenuLoading.set(true);
-    this.openCommandItemId.set(cardId);
+    this.openCommandItemId.set(itemId);
     void listPromise.then(
       (res) => {
         this.zone.run(() => {
-          if (generation !== this.commandMenuLoadGeneration || this.openCommandItemId() !== cardId) {
+          if (generation !== this.commandMenuLoadGeneration || this.openCommandItemId() !== itemId) {
             return;
           }
           const templates = res?.templates ?? [];
@@ -269,13 +269,13 @@ export class Board implements OnInit {
           this.commandMenuError.set('');
           this.commandMenuLoading.set(false);
           if (templates.length === 1) {
-            void this.closeMenuAndCopyCommand(templates[0].template, cardNumber);
+            void this.closeMenuAndCopyCommand(templates[0].template, itemNumber);
           }
         });
       },
       (error) => {
         this.zone.run(() => {
-          if (generation !== this.commandMenuLoadGeneration || this.openCommandItemId() !== cardId) {
+          if (generation !== this.commandMenuLoadGeneration || this.openCommandItemId() !== itemId) {
             return;
           }
           this.commandMenuTemplates.set([]);
@@ -286,7 +286,7 @@ export class Board implements OnInit {
     );
     afterNextRender(
       () => {
-        if (this.openCommandItemId() !== cardId) return;
+        if (this.openCommandItemId() !== itemId) return;
         this.commandMenuStyle.set(this.fixedCommandMenuStyle(button));
       },
       { injector: this.injector },
@@ -563,12 +563,12 @@ export class Board implements OnInit {
     nextCards: Item[],
     columnIds: number[],
     announcement: string,
-    focusCardId?: number,
+    focusItemId?: number,
   ) {
     if (this.reordering()) return;
     const previous = this.data().items;
     const restoreFocus = () => {
-      if (focusCardId !== undefined) this.focusCardAfterRender(focusCardId);
+      if (focusItemId !== undefined) this.focusItemAfterRender(focusItemId);
     };
     this.reordering.set(true);
     this.reorderError.set('');
@@ -594,8 +594,8 @@ export class Board implements OnInit {
       });
   }
 
-  private focusCardAfterRender(cardId: number) {
-    this.focusAfterRender(`[data-card-id="${cardId}"] .card-drag-handle`);
+  private focusItemAfterRender(itemId: number) {
+    this.focusAfterRender(`[data-card-id="${itemId}"] .card-drag-handle`);
   }
 
   onColumnDragStart(event: DragEvent, column: Column, columnEl: HTMLElement) {

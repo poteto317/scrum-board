@@ -258,7 +258,7 @@ export class Backlog implements OnInit {
     this.dropSlot.set(null);
   }
 
-  private applyReorder(fromIndex: number, toIndex: number, focusCardId?: number) {
+  private applyReorder(fromIndex: number, toIndex: number, focusItemId?: number) {
     const previous = this.items();
     if (
       this.reordering() ||
@@ -273,7 +273,7 @@ export class Backlog implements OnInit {
     const next = moveItem(previous, fromIndex, toIndex);
     const moved = next[toIndex];
     const restoreFocus = () => {
-      if (focusCardId !== undefined) this.focusHandleAfterRender(focusCardId);
+      if (focusItemId !== undefined) this.focusHandleAfterRender(focusItemId);
     };
     this.reordering.set(true);
     this.reorderError.set('');
