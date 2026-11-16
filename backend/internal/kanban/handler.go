@@ -45,6 +45,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public-config", h.publicConfig)
 	mux.HandleFunc("GET /api/board", h.board)
+	mux.HandleFunc("PATCH /api/board/settings", h.updateBoardSettings)
 	mux.HandleFunc("GET /api/backlog", h.backlog)
 	mux.HandleFunc("PUT /api/backlog/order", h.reorderBacklog)
 	mux.HandleFunc("GET /api/items/by-number/{number}/history", h.history)
@@ -111,6 +112,27 @@ func (h handler) board(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, 200, b)
+}
+
+func (h handler) updateBoardSettings(w http.ResponseWriter, r *http.Request) {
+	var in BoardSettings
+	if !decode(w, r, &in) {
+		return
+	}
+	if in.CardLayout != CardLayoutPack && in.CardLayout != CardLayoutFree {
+		invalid(w, "cardLayout は pack または free を指定してください。")
+		return
+	}
+	settings, items, err := h.repo.UpdateBoardSettings(r.Context(), in)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	out := map[string]any{"settings": settings}
+	if settings.CardLayout == CardLayoutPack {
+		out["items"] = items
+	}
+	reply(w, 200, out)
 }
 func (h handler) getItem(w http.ResponseWriter, r *http.Request) {
 	n, ok := id(w, r)
