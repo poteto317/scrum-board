@@ -20,6 +20,8 @@ export interface Item {
   position: number;
   backlogPosition: number;
   prUrls: string[];
+  /** Read-only display labels aligned with prUrls; omitted on board/PATCH. */
+  prTitles?: string[];
   relatedItems: RelatedItem[];
   assignee: string;
   createdAt: string;

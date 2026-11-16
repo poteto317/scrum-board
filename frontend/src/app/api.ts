@@ -20,6 +20,9 @@ export class Api {
       params: before ? { before: String(before) } : {},
     });
   }
+  prTitles(urls: string[]) {
+    return this.http.post<{ titles: Record<string, string> }>('/api/pr-titles', { urls });
+  }
   createColumn(name: string) {
     return this.http.post<Column>('/api/columns', { name });
   }
