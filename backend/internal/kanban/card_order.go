@@ -6,6 +6,43 @@ import (
 	"time"
 )
 
+// cardReorderPlan is the SQL/skip decision for one card in ReorderItems.
+type cardReorderPlan struct {
+	Skip          bool
+	ColumnChanged bool
+	Query         string
+	Args          []any
+	NextOffset    int
+}
+
+// planCardReorder decides whether to skip an UPDATE and, if not, which query/args to run.
+// updated_at is the card's edit time: only a column (status) change moves it. A card that merely
+// shifts position/offset keeps it (and its history revision) as it was.
+func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now time.Time) cardReorderPlan {
+	nextOffset := before.OffsetY
+	offsetChanged := false
+	if offsetY != nil {
+		nextOffset = *offsetY
+		offsetChanged = before.OffsetY != nextOffset
+	}
+	columnChanged := before.ColumnID != columnID
+	if !columnChanged && before.Position == pos && !offsetChanged {
+		return cardReorderPlan{Skip: true, NextOffset: nextOffset}
+	}
+	query := "UPDATE items SET column_id=?, position=?, offset_y=?, updated_at=updated_at WHERE id=?"
+	args := []any{columnID, pos, nextOffset, before.ID}
+	if columnChanged {
+		query = "UPDATE items SET column_id=?, position=?, offset_y=?, updated_at=? WHERE id=?"
+		args = []any{columnID, pos, nextOffset, now, before.ID}
+	}
+	return cardReorderPlan{
+		ColumnChanged: columnChanged,
+		Query:         query,
+		Args:          args,
+		NextOffset:    nextOffset,
+	}
+}
+
 func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOrder) ([]Item, error) {
 	if err := validateItemOrder(orders); err != nil {
 		return nil, err
@@ -65,25 +102,22 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 	for _, order := range orders {
 		for pos, cardID := range order.ItemIDs {
 			before := existingSet[cardID]
-			columnChanged := before.ColumnID != order.ColumnID
-			if !columnChanged && before.Position == pos {
+			var offsetY *int
+			if order.OffsetYs != nil {
+				offsetY = &(*order.OffsetYs)[pos]
+			}
+			plan := planCardReorder(before, order.ColumnID, pos, offsetY, now)
+			if plan.Skip {
 				continue
 			}
-			// updated_at is the card's edit time: only a status change moves it. A card that merely
-			// shifts position keeps it (and its history revision) as it was.
-			query := "UPDATE items SET column_id=?, position=?, updated_at=updated_at WHERE id=?"
-			args := []any{order.ColumnID, pos, cardID}
-			if columnChanged {
-				query = "UPDATE items SET column_id=?, position=?, updated_at=? WHERE id=?"
-				args = []any{order.ColumnID, pos, now, cardID}
-			}
-			if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+			if _, err = tx.ExecContext(ctx, plan.Query, plan.Args...); err != nil {
 				return nil, err
 			}
-			if columnChanged {
+			if plan.ColumnChanged {
 				after := before
 				after.ColumnID = order.ColumnID
 				after.Position = pos
+				after.OffsetY = plan.NextOffset
 				after.UpdatedAt = now
 				if err = appendHistory(ctx, tx, &before, after, "updated"); err != nil {
 					return nil, err

@@ -147,6 +147,56 @@ func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID int64) (int, err
 	return maxPos + 1, nil
 }
 
+// nextFreeOffsetY places a new/moved card below the current max offset in a free layout.
+// Empty column: 0. Non-empty: max(offset_y)+freePlacementStepY.
+func nextFreeOffsetY(ctx context.Context, tx *sql.Tx, columnID int64) (int, error) {
+	var max sql.NullInt64
+	if err := tx.QueryRowContext(ctx, "SELECT MAX(offset_y) FROM items WHERE column_id=?", columnID).Scan(&max); err != nil {
+		return 0, err
+	}
+	if !max.Valid {
+		return 0, nil
+	}
+	return int(max.Int64) + freePlacementStepY, nil
+}
+
+// reassignPositionsByOffsetY renumbers each column's positions by (offset_y, position, id).
+// Used when switching free → pack so pack order matches the free visual order.
+func reassignPositionsByOffsetY(ctx context.Context, tx *sql.Tx) error {
+	cols, err := listOrderedColumns(ctx, tx)
+	if err != nil {
+		return err
+	}
+	for _, col := range cols {
+		rows, err := tx.QueryContext(ctx, `
+SELECT id FROM items WHERE column_id=?
+ ORDER BY offset_y, position, id FOR UPDATE`, col.ID)
+		if err != nil {
+			return err
+		}
+		var ids []int64
+		for rows.Next() {
+			var id int64
+			if err = rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			ids = append(ids, id)
+		}
+		if err = rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
+		rows.Close()
+		for pos, id := range ids {
+			if _, err = tx.ExecContext(ctx, "UPDATE items SET position=?, updated_at=updated_at WHERE id=? AND position<>?", pos, id, pos); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID int64) error {
 	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE column_id=? ORDER BY position,id FOR UPDATE", columnID)
 	if err != nil {

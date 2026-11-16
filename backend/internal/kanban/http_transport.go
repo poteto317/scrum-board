@@ -27,6 +27,8 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, 400, map[string]string{"message": "列の並び順を確認してください。"})
 	case errors.Is(err, ErrItemOrder):
 		reply(w, 400, map[string]string{"message": "アイテムの並び順を確認してください。"})
+	case errors.Is(err, ErrBoardSettings):
+		reply(w, 400, map[string]string{"message": "ボード設定を確認してください。"})
 	case errors.Is(err, ErrBacklogOrder):
 		reply(w, 400, map[string]string{"message": "バックログの並び順を確認してください。"})
 	case errors.Is(err, ErrCommandTemplateLimit):

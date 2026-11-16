@@ -37,7 +37,7 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Item, error) {
 	var c Item
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.BacklogPosition, &c.Assignee, &c.CreatedAt, &c.UpdatedAt)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
 	}
@@ -49,7 +49,7 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.item_number, c.column_id, c.title, c.description, c.position, c.backlog_position, c.assignee, c.created_at, c.updated_at"
+const cardFields = "c.id, n.item_number, c.column_id, c.title, c.description, c.position, c.offset_y, c.backlog_position, c.assignee, c.created_at, c.updated_at"
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -70,7 +70,7 @@ func loadCard(ctx context.Context, q interface {
 }
 
 func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
-	b := Board{Columns: []Column{}, Items: []Item{}}
+	b := Board{Columns: []Column{}, Items: []Item{}, Settings: BoardSettings{CardLayout: CardLayoutPack}}
 	// A consistent snapshot prevents a concurrent column/card creation from splitting the board response.
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -78,6 +78,10 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	}
 	defer tx.Rollback()
 	b.Columns, err = listOrderedColumns(ctx, tx)
+	if err != nil {
+		return b, err
+	}
+	b.Settings, err = loadBoardSettings(ctx, tx)
 	if err != nil {
 		return b, err
 	}
@@ -124,15 +128,26 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 	if err = lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
 		return Item{}, err
 	}
+	layout, err := loadBoardSettings(ctx, tx)
+	if err != nil {
+		return Item{}, err
+	}
 	nextPos, err := nextCardPosition(ctx, tx, in.ColumnID)
 	if err != nil {
 		return Item{}, err
+	}
+	offsetY := 0
+	if layout.CardLayout == CardLayoutFree {
+		offsetY, err = nextFreeOffsetY(ctx, tx, in.ColumnID)
+		if err != nil {
+			return Item{}, err
+		}
 	}
 	nextBacklog, err := nextBacklogPosition(ctx, tx)
 	if err != nil {
 		return Item{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO items(column_id,title,description,position,backlog_position,assignee) VALUES(?,?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, nextBacklog, in.Assignee)
+	result, err := tx.ExecContext(ctx, "INSERT INTO items(column_id,title,description,position,offset_y,backlog_position,assignee) VALUES(?,?,?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, offsetY, nextBacklog, in.Assignee)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
@@ -219,14 +234,25 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		if err != nil {
 			return Item{}, err
 		}
+		layout, err := loadBoardSettings(ctx, tx)
+		if err != nil {
+			return Item{}, err
+		}
 		c.ColumnID = *p.ColumnID
 		c.Position = nextPos
+		if layout.CardLayout == CardLayoutFree {
+			offsetY, err := nextFreeOffsetY(ctx, tx, *p.ColumnID)
+			if err != nil {
+				return Item{}, err
+			}
+			c.OffsetY = offsetY
+		}
 		moved = true
 	}
 	if p.Assignee != nil {
 		c.Assignee = *p.Assignee
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,position=?,assignee=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.Assignee, now, id)
+	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,position=?,offset_y=?,assignee=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.OffsetY, c.Assignee, now, id)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
