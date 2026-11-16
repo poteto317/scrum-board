@@ -59,6 +59,8 @@ async function setup(opts: {
           reorderItems,
           patchBoardSettings,
           listCommandTemplates: () => of({ templates: [] }),
+          listFilter: () => of({ query: '', statusIds: [] }),
+          putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
       },
     ],
