@@ -107,4 +107,6 @@ type Repository interface {
 	ListCommandTemplateDefaults(context.Context) ([]int64, error)
 	ReplaceCommandTemplateDefaults(context.Context, []int64) ([]int64, error)
 	ApplyCommandTemplatesToAllItems(context.Context, []int64) error
+	GetListFilter(context.Context) (ListFilter, error)
+	PutListFilter(context.Context, ListFilter) (ListFilter, error)
 }
