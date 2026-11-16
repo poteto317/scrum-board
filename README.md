@@ -9,8 +9,9 @@
 - アイテムの追加（追加ダイアログにステータス選択は無く常に Todo）、詳細表示、編集、削除
 - 詳細画面でステータスを選択して移動（移動先列の末尾へ）
 - ボード上でアイテム左端中央のハンドル（`⋮⋮`）をドラッグ＆ドロップ（または上下矢印キー）し、列内の並べ替えと別ステータスへの移動（アイテム本文のクリックは詳細へ遷移、右上のボタンでリンクをコピー）
+- ボードツールバーの「自由配置」トグルで、既定の上詰め（`pack`）と空きを許す自由配置（`free`）を切り替え。自由配置では列間移動しても高さを保ち、同列内ドラッグで縦位置を変えられる（上下矢印キーでの並べ替えは上詰め時のみ）
 - アイテムは列内に縦積み（列ごとの縦スクロールは無く、長い列はページを縦スクロール）。列が増えたらボード内で横スクロール
-- ボードは5秒ごとに最新の状態へ自動で更新（アイテムや列のドラッグ中・保存中・追加モーダル表示中は更新しません）
+- ボードは5秒ごとに最新の状態へ自動で更新（アイテムや列のドラッグ中・保存中・レイアウト切替中・追加モーダル表示中は更新しません）
 - プロダクトバックログ（全ステータスの優先順位リスト。ドラッグ／キーボードで並び替え、バックログからも新規追加・常に Todo）
 - MySQLへの永続化
 - APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのアイテムを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[使い方](docs/api.md#aiで整えてアイテムを起票する)）
@@ -167,7 +168,8 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | GET | `/api/board` | `{columns: [...], items: [...]}` |
 | POST | `/api/columns` | `{name}`で列を追加 |
 | POST | `/api/items` | `{title, description, columnId, prUrls?, assignee?}`でアイテム追加 |
-| PUT | `/api/items/order` | `{columns:[{columnId, itemIds}]}`でアイテムの列内並べ替え・列間移動（[詳細](docs/api.md#アイテムの並び替え列間移動)） |
+| PUT | `/api/items/order` | `{columns:[{columnId, itemIds, offsetYs?}]}`でアイテムの列内並べ替え・列間移動（[詳細](docs/api.md#アイテムの並び替え列間移動)） |
+| PATCH | `/api/board/settings` | `{cardLayout:"pack"|"free"}`でボード全体のカード配置設定を更新（[詳細](docs/api.md#ボード設定カード配置)） |
 | POST | `/api/items/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてアイテムを起票する)） |
 | GET | `/api/items/{id}` | 内部IDによるアイテム詳細 |
 | GET | `/api/items/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
@@ -187,7 +189,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 
 タイトルは1〜200文字、説明は10000文字以内。タイトル・列名の前後の空白は削除します。絵文字を含むUnicode文字数で検証します。空のPATCH、未知のプロパティ、不正なJSONも拒否します。エラー形式は`{"message":"..."}`。不正入力400、未存在404、重複列409、内部エラー500です。
 
-列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のアイテムは`position`・ID順で、`GET /api/board`もこの順です。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます。ドラッグ&ドロップは`PUT /api/items/order`で保存し、`items.position`はAPI起動時に自動で追加されます。
+列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のアイテムは`position`・ID順で、`GET /api/board`もこの順です（応答に `settings.cardLayout` と各アイテムの `offsetY` も含みます）。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます（自由配置時の `offsetY` はサーバーが近似値を付与）。ドラッグ&ドロップは`PUT /api/items/order`で保存し、`items.position` / `offset_y` と `board_settings` はAPI起動時に冪等に用意されます。
 
 ## 検証
 

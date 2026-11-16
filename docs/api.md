@@ -47,7 +47,7 @@ curl --fail-with-body http://127.0.0.1:4200/api/items/by-number/7
 curl --fail-with-body http://127.0.0.1:4200/api/board
 ```
 
-応答アイテムのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
+応答は `columns` / `items` に加え、`settings: { "cardLayout": "pack" | "free" }` を含みます（既定は `pack`）。各アイテムには列内の並び `position` に加え、自由配置用の `offsetY`（列カードリスト上端からの CSS px・整数 0〜100000。欠落時は 0）が含まれます。応答アイテムのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
 
 ## 公開オリジン（本番リンク用）
 
@@ -222,7 +222,7 @@ curl --fail-with-body --request PUT \
 
 # アイテムの並び替え・列間移動
 
-`PUT /api/items/order` で、影響する列ごとのアイテム順を一括更新します。リクエストには、対象列に現在属するアイテム ID の完全な集合を新しい順で含めます。列間移動では、ソース列とデスト列の両方を同じリクエストに含めます。
+`PUT /api/items/order` で、影響する列ごとのアイテム順を一括更新します。リクエストには、対象列に現在属するアイテム ID の完全な集合を新しい順で含めます。列間移動では、ソース列とデスト列の両方を同じリクエストに含めます。任意で各列に `offsetYs`（`itemIds` と同長の整数配列、各値は 0 以上 100000 以下）を付けられます。省略時は既存の `offset_y` を維持し `position` だけ更新します（上詰め DnD 互換）。
 
 ```sh
 curl --fail-with-body --request PUT \
@@ -231,16 +231,42 @@ curl --fail-with-body --request PUT \
   http://127.0.0.1:4200/api/items/order
 ```
 
-- 成功時は HTTP 200 で `{"items":[...]}`（ボードと同じく `position`・`id` 昇順の**全アイテム**）を返します。各アイテムに `position` が含まれます。`GET /api/board` のアイテム順もこれに従います。
+自由配置の保存例（`offsetYs` 付き）:
+
+```sh
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"columns":[{"columnId":1,"itemIds":[2,1],"offsetYs":[40,120]}]}' \
+  http://127.0.0.1:4200/api/items/order
+```
+
+- 成功時は HTTP 200 で `{"items":[...]}`（ボードと同じく `position`・`id` 昇順の**全アイテム**）を返します。各アイテムに `position` と `offsetY` が含まれます。`GET /api/board` のアイテム順もこれに従います。
 - 空配列の `itemIds` は「その列にアイテムが0枚」を表します。
 - 列（ステータス）が変わったアイテムだけ履歴に `updated`（status 変更）が追加され、更新日時（`updatedAt`）も更新されます。列内の並び替えや、他のアイテムの移動に伴う位置のずれでは、履歴も更新日時も変わりません。
-- アイテムの新規作成、および詳細画面や `PATCH .../status` による列変更では、移動先列の末尾（`MAX(position)+1`）に配置されます。
+- アイテムの新規作成、および詳細画面や `PATCH .../status` による列変更では、移動先列の末尾（`MAX(position)+1`）に配置されます。`cardLayout` が `free` のときは `offsetY = COALESCE(MAX(offset_y), -160) + 160`（空列は 0）も付与します。
 - `position` は列内の並び順を表すだけで、連続した値や 0 始まりとは限りません（アイテムの削除で欠番ができます。並び替えのたびに、対象の列は 0 から振り直されます）。クライアントは `position`、同値は `id` の昇順で順序を決め、`position` を添字として使わないでください。
-- HTTP 400: `columns` 未指定・`null`・空配列、`columnId` の重複や 0 以下、`itemIds` が `null`、アイテム ID の重複や 0 以下、不正 JSON、未知のフィールド。
+- HTTP 400: `columns` 未指定・`null`・空配列、`columnId` の重複や 0 以下、`itemIds` が `null`、アイテム ID の重複や 0 以下、`offsetYs` があるとき長さ不一致・負数・非整数・100000 超、不正 JSON、未知のフィールド（トップレベルおよび `columns[]` 要素）。
 - HTTP 409: 指定列に現在属するアイテム集合と `itemIds` の和集合が一致しない場合、または存在しない列・アイテム ID。
 - HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。
 
 `position`（列内の並び順。アイテムの並び替え・列間移動が更新する）と `backlogPosition`（プロダクトバックログ全体の優先順位。`/api/backlog/order` が更新する）は独立した値で、一方を変えても他方は変わりません。どちらも各アイテムに含まれます。
+
+# ボード設定（カード配置）
+
+`PATCH /api/board/settings` でボード全体の `cardLayout` を更新します。本文は `{ "cardLayout": "pack" | "free" }` のみ（未知フィールドは 400）。設定は Basic Auth 共有のボード共通です。
+
+```sh
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"cardLayout":"free"}' \
+  http://127.0.0.1:4200/api/board/settings
+```
+
+- 成功時は常に `{ "settings": { "cardLayout": "..." } }` を返します。
+- `free` → `pack` のときは同一トランザクションで全列のアイテムを `offset_y, position, id` 順に `position` を振り直し、応答に **`items`（全件）** も含めます（クライアントは再 GET 不要）。`offsetY` の値自体は残します。
+- `pack` → `free` は settings 行のみ更新し、`items` は省略できます。画面上の上詰め結果から `offsetY` を測って先に `PUT /api/items/order`（`offsetYs` 付き）してからこの PATCH する想定です。途中失敗で設定だけ `free` にしないでください。
+- HTTP 400: `cardLayout` 欠落・不正値、未知フィールド、不正 JSON。
+- HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。
 
 # プロダクトバックログ
 

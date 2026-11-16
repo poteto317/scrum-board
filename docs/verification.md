@@ -68,6 +68,16 @@
 - `PUT /api/columns/order` と UI のドラッグ&ドロップ / キーボード並び替え
 - 400 / 409 / 永続化、並び替え後の列追加、専用 Compose での smoke
 
+### カード自由配置（高さを保つ横移動）
+
+- 初回（未設定）は上詰め（`pack`）。見た目・操作は従来どおり
+- ツールバー「自由配置」トグルで `pack` ↔ `free`。読込中・失敗中・設定保存中・並び替え保存中・切替シーケンス中・カードドラッグ中は切替不可（理由を aria / 短文で示す）
+- `pack` → `free`: DOM 計測で全カードの `offsetY` を `PUT /api/items/order`（`offsetYs`）→ 成功後に `PATCH /api/board/settings`。どちらか失敗で設定は `free` にせず UI を戻しバナーで知らせる
+- `free` → `pack`: `PATCH /api/board/settings`。応答の `items` でボードを置換（再 GET しない）。失敗時はトグルを戻す
+- `free` では絶対配置。列間ドロップで `offsetY` 不変（高さ維持）。同列ドロップで掴みオフセット込みのカード上端 Y を更新し空きが残る。CDK sorting 無効・`connectedTo` 維持。上下矢印キー並べ替えは `pack` のみ
+- ライブ更新（ポーリング）で `settings` / `offsetY` が落ちないこと。再読込・別クライアントでもサーバーから復元
+- `GET /api/board` の `settings` / `offsetY`、`PATCH /api/board/settings`、`PUT /api/items/order` の `offsetYs`（省略時は offset 維持・長不一致/負/小数/100000 超・`columns[]` 未知フィールドは 400）
+
 ### アイテムの並び替え・列間移動
 
 - `PUT /api/items/order` と CDK ドラッグ&ドロップ（列内・列間）/ 上下キー
