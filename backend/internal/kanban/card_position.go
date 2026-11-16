@@ -157,7 +157,11 @@ func nextFreeOffsetY(ctx context.Context, tx *sql.Tx, columnID int64) (int, erro
 	if !max.Valid {
 		return 0, nil
 	}
-	return int(max.Int64) + freePlacementStepY, nil
+	next := int(max.Int64) + freePlacementStepY
+	if next > MaxOffsetY {
+		return MaxOffsetY, nil
+	}
+	return next, nil
 }
 
 // reassignPositionsByOffsetY renumbers each column's positions by (offset_y, position, id).

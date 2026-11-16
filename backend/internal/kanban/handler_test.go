@@ -136,7 +136,11 @@ func (m *memoryRepo) nextFreeOffset(columnID int64) int {
 	if !found {
 		return 0
 	}
-	return maxOffset + freePlacementStepY
+	next := maxOffset + freePlacementStepY
+	if next > MaxOffsetY {
+		return MaxOffsetY
+	}
+	return next
 }
 func (m *memoryRepo) compactColumn(columnID int64) {
 	var ids []int64

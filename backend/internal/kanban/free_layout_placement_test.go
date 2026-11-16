@@ -61,6 +61,39 @@ func TestCreateAndMoveFreeOffsetY(t *testing.T) {
 	}
 }
 
+func TestCreateFreeOffsetYCapsAtMax(t *testing.T) {
+	repo := fresh()
+	repo.settings.CardLayout = CardLayoutFree
+	repo.cards[1] = Item{ID: 1, Number: 1, ColumnID: 1, Title: "near-max", Position: 0, OffsetY: MaxOffsetY - 10}
+	repo.cards[2] = Item{ID: 2, Number: 2, ColumnID: 2, Title: "at-max", Position: 0, OffsetY: MaxOffsetY}
+	repo.next = 3
+	h := NewHandler(repo)
+
+	w := request(h, "POST", "/api/items", `{"title":"capped","columnId":1}`)
+	if w.Code != 201 {
+		t.Fatalf("create: %d %s", w.Code, w.Body)
+	}
+	var created Item
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.OffsetY != MaxOffsetY {
+		t.Fatalf("want OffsetY=%d, got %d", MaxOffsetY, created.OffsetY)
+	}
+
+	w = request(h, "PATCH", "/api/items/"+itoa(created.ID), `{"columnId":2}`)
+	if w.Code != 200 {
+		t.Fatalf("move to max column: %d %s", w.Code, w.Body)
+	}
+	var moved Item
+	if err := json.Unmarshal(w.Body.Bytes(), &moved); err != nil {
+		t.Fatal(err)
+	}
+	if moved.ColumnID != 2 || moved.OffsetY != MaxOffsetY {
+		t.Fatalf("move near max want col=2 offset=%d, got %+v", MaxOffsetY, moved)
+	}
+}
+
 func TestCreateAndMovePackLeavesOffsetY(t *testing.T) {
 	repo := fresh()
 	repo.settings.CardLayout = CardLayoutPack
