@@ -34,9 +34,10 @@
         保存中などのため、いまはアイテムを移動できません。
       }
     </p>
-    <div class="sr-only copy-link-live" aria-live="polite">
-      {{ copyFeedback() }}
-    </div>
+    <app-copy-feedback-banner
+      [message]="copyFeedback()"
+      [kind]="copyFeedbackKind()"
+    />
     @if (reorderError()) {
       <div class="reorder-alert" role="alert">
         <p>{{ reorderError() }}</p>

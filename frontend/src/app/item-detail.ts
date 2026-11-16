@@ -32,6 +32,7 @@ import { ItemCommandsSession } from './item-commands-session';
 import { CommandTemplatesSession } from './command-templates-session';
 import { AppOrigin } from './app-origin';
 import { CopyCommandFeedback } from './copy-command-feedback';
+import { CopyFeedbackBanner } from './copy-feedback-banner';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { LatestCopyFeedback } from './latest-copy-feedback';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
@@ -47,6 +48,7 @@ import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
     CdkDropList,
     CdkDrag,
     CdkDragHandle,
+    CopyFeedbackBanner,
   ],
   providers: [
     ItemAutosave,
@@ -92,6 +94,7 @@ export class ItemDetail implements OnInit {
   readonly copyLinkFeedback = this.linkCopy.message;
   readonly copyCommandFeedback = this.commandCopy.message;
   readonly copyFeedback = this.copyStatus.message;
+  readonly copyFeedbackKind = this.copyStatus.kind;
   readonly commandMenuEmpty = COMMAND_ITEM_MENU_EMPTY;
   readonly commandUrlHelp = '{{url}} はこのアイテムのリンクに置き換わります。';
   readonly commandMenuOpen = signal(false);

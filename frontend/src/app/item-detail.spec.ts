@@ -515,11 +515,7 @@ describe('ItemDetail copy card link', () => {
     expect(copyBtn.getAttribute('aria-label')).toBe('リンクをコピー');
     const saveState = f.nativeElement.querySelector('.save-state');
     expect(saveState.getAttribute('aria-live')).toBe('polite');
-    const copyLive = f.nativeElement.querySelector('.copy-link-feedback');
-    expect(copyLive).not.toBeNull();
-    expect(copyLive.getAttribute('aria-live')).toBe('polite');
-    expect(copyLive.textContent.trim()).toBe('');
-    expect(saveState).not.toBe(copyLive);
+    expect(f.nativeElement.querySelector('.copy-feedback-banner')).toBeNull();
   });
   it('copies the public card detail URL on success and shows visible feedback', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -534,10 +530,12 @@ describe('ItemDetail copy card link', () => {
     f.detectChanges();
     const expected = itemDetailUrl(window.location.origin, card.number);
     expect(writeText).toHaveBeenCalledWith(expected);
-    const feedback = f.nativeElement.querySelector('.copy-link-feedback');
+    const feedback = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
     expect(feedback).not.toBeNull();
     expect(feedback.getAttribute('role')).toBe('status');
     expect(feedback.getAttribute('aria-live')).toBe('polite');
+    expect(feedback.classList.contains('copy-feedback-banner--ok')).toBe(true);
+    expect(feedback.querySelector('.copy-feedback-banner__icon')).not.toBeNull();
     expect(feedback.textContent).toContain('リンクをコピーしました');
   });
   it('shows failure feedback when clipboard writeText rejects', async () => {
@@ -550,7 +548,9 @@ describe('ItemDetail copy card link', () => {
     copyBtn.click();
     await vi.waitUntil(() => f.componentInstance.copyLinkFeedback() !== '');
     f.detectChanges();
-    const feedback = f.nativeElement.querySelector('.copy-link-feedback');
+    const feedback = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
+    expect(feedback.classList.contains('copy-feedback-banner--error')).toBe(true);
+    expect(feedback.querySelector('.copy-feedback-banner__icon')).not.toBeNull();
     expect(feedback.textContent).toContain('リンクをコピーできませんでした');
   });
   it('does nothing when card is not loaded', async () => {
@@ -698,14 +698,15 @@ describe('ItemDetail copy command menu and management', () => {
     f.detectChanges();
     await vi.waitUntil(() => {
       f.detectChanges();
-      const feedback = f.nativeElement.querySelector('.copy-link-feedback');
+      const feedback = f.nativeElement.querySelector('.copy-feedback-banner');
       return (feedback?.textContent ?? '').includes(COPY_COMMAND_SUCCESS);
     });
     expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
     expect(button!.getAttribute('aria-expanded')).toBe('false');
-    const feedback = f.nativeElement.querySelector('.copy-link-feedback') as HTMLElement;
+    const feedback = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
     expect(feedback.getAttribute('aria-live')).toBe('polite');
-    expect(feedback.classList.contains('sr-only')).toBe(false);
+    expect(feedback.classList.contains('copy-feedback-banner--ok')).toBe(true);
+    expect(feedback.querySelector('.copy-feedback-banner__icon')).not.toBeNull();
     expect(feedback.textContent).toContain(COPY_COMMAND_SUCCESS);
     expect(writeText).toHaveBeenCalledWith(
       resolveCommand(template.template, itemDetailUrl(window.location.origin, card.number)),
@@ -727,7 +728,7 @@ describe('ItemDetail copy command menu and management', () => {
     (menu.querySelector('button') as HTMLButtonElement).click();
     await vi.waitUntil(() => {
       f.detectChanges();
-      return (f.nativeElement.querySelector('.copy-link-feedback')?.textContent ?? '').includes(
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
         COPY_COMMAND_SUCCESS,
       );
     });
@@ -751,7 +752,7 @@ describe('ItemDetail copy command menu and management', () => {
     f.detectChanges();
     await vi.waitUntil(() => {
       f.detectChanges();
-      return (f.nativeElement.querySelector('.copy-link-feedback')?.textContent ?? '').includes(
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
         COPY_COMMAND_SUCCESS,
       );
     });
@@ -760,7 +761,7 @@ describe('ItemDetail copy command menu and management', () => {
       f.detectChanges();
       return f.componentInstance.copyFeedback() === COPY_LINK_SUCCESS;
     });
-    const feedback = f.nativeElement.querySelector('.copy-link-feedback').textContent ?? '';
+    const feedback = f.nativeElement.querySelector('.copy-feedback-banner').textContent ?? '';
     expect(feedback).toContain(COPY_LINK_SUCCESS);
     expect(feedback).not.toContain(COPY_COMMAND_SUCCESS);
     expect(f.componentInstance.copyCommandFeedback()).toBe(COPY_COMMAND_SUCCESS);
@@ -780,13 +781,14 @@ describe('ItemDetail copy command menu and management', () => {
     f.detectChanges();
     await vi.waitUntil(() => {
       f.detectChanges();
-      return (f.nativeElement.querySelector('.copy-link-feedback')?.textContent ?? '').includes(
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
         COPY_COMMAND_FAILURE,
       );
     });
-    expect(f.nativeElement.querySelector('.copy-link-feedback').textContent).toContain(
-      COPY_COMMAND_FAILURE,
-    );
+    const feedback = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
+    expect(feedback.classList.contains('copy-feedback-banner--error')).toBe(true);
+    expect(feedback.querySelector('.copy-feedback-banner__icon')).not.toBeNull();
+    expect(feedback.textContent).toContain(COPY_COMMAND_FAILURE);
   });
 
   it('shows an empty notice and does not copy when no templates exist', () => {
