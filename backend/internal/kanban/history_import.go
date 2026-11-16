@@ -171,7 +171,7 @@ func (r MySQLRepository) ImportHistory(ctx context.Context, records []Historical
 			return dbError(err)
 		}
 		if number != v.Number || !created.Equal(v.CreatedAt) {
-			return fmt.Errorf("card identity mismatch for number %d", v.Number)
+			return fmt.Errorf("item identity mismatch for number %d", v.Number)
 		}
 		changes := v.Changes
 		if changes == nil {
