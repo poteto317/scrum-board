@@ -243,6 +243,7 @@ export class Board implements OnInit {
         if (boardNow) boardNow.scrollLeft = scrollLeft;
         clearBoardScroll();
       },
+      onSkipped: () => clearBoardScroll(),
     });
   }
 

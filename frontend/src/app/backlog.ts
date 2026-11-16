@@ -138,6 +138,7 @@ export class Backlog implements OnInit {
         }
         clearBacklogScroll();
       },
+      onSkipped: () => clearBacklogScroll(),
     });
   }
 

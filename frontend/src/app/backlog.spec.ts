@@ -628,6 +628,19 @@ describe('Backlog scroll save and restore', () => {
 
     expect(scrollEl.scrollTop).toBe(22);
     expect(scrollEl.scrollLeft).toBe(6);
+    expect(readBacklogScroll()).toBeNull();
+
+    // Remount with cleared key must not reapply saved positions.
+    f.destroy();
+    const f2 = TestBed.createComponent(Backlog);
+    f2.detectChanges();
+    await f2.whenStable();
+    TestBed.inject(ApplicationRef).tick();
+    f2.detectChanges();
+    await f2.whenStable();
+    const scrollEl2 = f2.nativeElement.querySelector('.backlog-scroll') as HTMLElement;
+    expect(scrollEl2.scrollTop).toBe(0);
+    expect(scrollEl2.scrollLeft).toBe(0);
   });
 
   it('does not apply stale backlog scroll restore after destroy', async () => {

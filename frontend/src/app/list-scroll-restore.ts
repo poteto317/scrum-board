@@ -19,6 +19,8 @@ export type ScheduleScrollRestoreOptions = {
   apply: (clamped: number[]) => void;
   /** Saved scroll values to restore. */
   targets: readonly number[];
+  /** When baseline moved causes skip (not when `shouldApply` is false). */
+  onSkipped?: () => void;
 };
 
 /** True when any present current position has moved past baseline (skip restore). */
@@ -41,7 +43,10 @@ export function scheduleScrollRestore(options: ScheduleScrollRestoreOptions): vo
   afterNextRender(
     () => {
       if (!options.shouldApply()) return;
-      if (scrollRestoreBaselineMoved(baseline, options.readCurrent())) return;
+      if (scrollRestoreBaselineMoved(baseline, options.readCurrent())) {
+        options.onSkipped?.();
+        return;
+      }
       options.apply(options.targets.map(clampNonNegative));
     },
     { injector: options.injector },
