@@ -145,7 +145,7 @@
                 <article
                   class="task-card"
                   [class.command-menu-open]="openCommandItemId() === card.id"
-                  [style.top.px]="isFreeLayout() ? (card.offsetY ?? 0) : null"
+                  [style.top.px]="isFreeLayout() ? card.offsetY : null"
                   cdkDrag
                   [attr.data-card-id]="card.id"
                   [cdkDragData]="card"

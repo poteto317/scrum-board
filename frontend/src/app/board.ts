@@ -169,6 +169,8 @@ export class Board implements OnInit {
       !this.loading() &&
       !this.saving() &&
       !this.reordering() &&
+      !this.layoutSwitching() &&
+      !this.settingsSaving() &&
       this.modal() === null &&
       this.data().columns.length > 1,
   );

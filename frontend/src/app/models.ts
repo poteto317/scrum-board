@@ -28,7 +28,7 @@ export interface Item {
   position: number;
   backlogPosition: number;
   /** 欠落時は 0（normalizeBoardData / normalizeItem で補完）。 */
-  offsetY?: number;
+  offsetY: number;
   prUrls: string[];
   /** Read-only display labels aligned with prUrls; omitted on board/PATCH. */
   prTitles?: string[];

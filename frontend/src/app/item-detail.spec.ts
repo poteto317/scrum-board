@@ -29,6 +29,7 @@ const card: Item = {
   description: '元の説明',
   position: 0,
   backlogPosition: 0,
+    offsetY: 0,
   prUrls: [],
   relatedItems: [],
   assignee: '',
