@@ -51,7 +51,10 @@ describe('ItemDetail autosave', () => {
     vi.useFakeTimers();
     sessionStorage.clear();
     params = new BehaviorSubject(new Map([['number', '3']]));
-    router = { navigate: vi.fn(), navigateByUrl: vi.fn() };
+    router = {
+      navigate: vi.fn(),
+      navigateByUrl: vi.fn().mockResolvedValue(true),
+    };
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       board: vi.fn(() =>
@@ -88,23 +91,31 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     return f;
   };
-  it('goBackToList navigates to saved returnTo and clears list-return', () => {
+  it('goBackToList navigates to saved returnTo and clears list-return', async () => {
     saveReturnTo('/backlog');
     const f = create();
-    f.componentInstance.goBackToList();
+    await f.componentInstance.goBackToList();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/backlog');
     expect(readReturnTo()).toBeNull();
   });
-  it('goBackToList falls back to / when returnTo missing', () => {
+  it('goBackToList keeps list-return when navigateByUrl fails', async () => {
+    saveReturnTo('/backlog');
+    router.navigateByUrl.mockResolvedValue(false);
+    const f = create();
+    await f.componentInstance.goBackToList();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/backlog');
+    expect(readReturnTo()).toBe('/backlog');
+  });
+  it('goBackToList falls back to / when returnTo missing', async () => {
     clearReturnTo();
     const f = create();
-    f.componentInstance.goBackToList();
+    await f.componentInstance.goBackToList();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/');
   });
-  it('goBackToList falls back to / when returnTo raw is invalid', () => {
+  it('goBackToList falls back to / when returnTo raw is invalid', async () => {
     sessionStorage.setItem(LIST_RETURN_KEY, '{"returnTo":"//evil"}');
     const f = create();
-    f.componentInstance.goBackToList();
+    await f.componentInstance.goBackToList();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/');
     expect(readReturnTo()).toBeNull();
   });

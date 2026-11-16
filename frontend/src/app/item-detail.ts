@@ -333,13 +333,13 @@ export class ItemDetail implements OnInit {
   onBackClick(event: MouseEvent) {
     if (!isUnmodifiedPrimaryClick(event)) return;
     event.preventDefault();
-    this.goBackToList();
+    void this.goBackToList();
   }
 
-  goBackToList() {
+  async goBackToList() {
     const to = this.listReturnPath();
-    clearReturnTo();
-    void this.router.navigateByUrl(to);
+    const ok = await this.router.navigateByUrl(to);
+    if (ok) clearReturnTo();
   }
 
   toggleCommandMenu(event: Event) {
