@@ -1,5 +1,7 @@
+export const itemAppPath = (number: number): string => `/items/${number}`;
+
 export const itemDetailUrl = (origin: string, number: number): string =>
-  `${origin.replace(/\/$/, '')}/items/${number}`;
+  `${origin.replace(/\/$/, '')}${itemAppPath(number)}`;
 
 export const copyText = async (text: string): Promise<boolean> => {
   if (navigator.clipboard?.writeText) {
