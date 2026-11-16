@@ -6,6 +6,7 @@ import { Api } from './api';
 import { Item, ItemInput } from './models';
 import { textLimit } from './form-validation';
 import { errorMessage } from './api-error';
+import { alignPrTitles } from './pr-display';
 
 const fields = ['title', 'description', 'columnId'] as const;
 type Field = (typeof fields)[number];
@@ -67,7 +68,7 @@ export class ItemAutosave {
       );
   }
   /** Merge immediate side-field saves without touching form drafts. */
-  applySideSave(updated: Partial<Pick<Item, SideField | 'updatedAt'>>) {
+  applySideSave(updated: Partial<Pick<Item, SideField | 'prTitles' | 'updatedAt'>>) {
     const card = this.item();
     if (!card) return;
     const next: Item = {
@@ -83,9 +84,12 @@ export class ItemAutosave {
       else if (key === 'relatedItems') next.relatedItems = [...(updated.relatedItems ?? [])];
       else next[key] = (updated[key] as string) ?? '';
     }
+    if (updated.prTitles !== undefined) {
+      next.prTitles = [...updated.prTitles];
+    }
     this.item.set(next);
   }
-  applyPrSave(updated: Pick<Item, 'prUrls' | 'updatedAt'>) {
+  applyPrSave(updated: Pick<Item, 'prUrls' | 'prTitles' | 'updatedAt'>) {
     this.sideDirty.add('prUrls');
     this.applySideSave(updated);
   }
@@ -194,6 +198,14 @@ export class ItemAutosave {
             else if (key === 'relatedItems') merged.relatedItems = [...(local.relatedItems ?? [])];
             else merged[key] = local[key];
             this.sideDirty.delete(key);
+          }
+          // PATCH responses omit prTitles; keep/remap local enrichment (L-002 / display names).
+          if (local.prTitles?.length || card.prTitles?.length) {
+            merged.prTitles = alignPrTitles(
+              local.prUrls ?? card.prUrls ?? [],
+              local.prTitles ?? card.prTitles,
+              merged.prUrls,
+            );
           }
         }
         this.item.set(merged);

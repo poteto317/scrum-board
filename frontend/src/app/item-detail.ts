@@ -27,6 +27,7 @@ import { ItemAutosave } from './item-autosave';
 import { ItemPrLinks } from './item-pr-links';
 import { ItemRelatedItems } from './item-related-items';
 import { displayLabel } from './related-item';
+import { prDisplayLabel } from './pr-display';
 import { COMMAND_ITEM_MENU_EMPTY } from './command-template';
 import { ItemCommandsSession } from './item-commands-session';
 import { CommandTemplatesSession } from './command-templates-session';
@@ -76,6 +77,9 @@ export class ItemDetail implements OnInit {
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
   readonly relatedDisplayLabel = displayLabel;
+  prLabel(url: string, index: number) {
+    return prDisplayLabel(url, this.item()?.prTitles, index);
+  }
   readonly commands = inject(CommandTemplatesSession);
   readonly itemCommands = inject(ItemCommandsSession);
   readonly presets = ASSIGNEE_PRESETS;

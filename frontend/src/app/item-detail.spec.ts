@@ -163,6 +163,31 @@ describe('ItemDetail autosave', () => {
     vi.advanceTimersByTime(2500);
     expect(api.updateItem).not.toHaveBeenCalled();
   });
+  it('shows PR titles instead of raw URLs and omits related url secondary text', () => {
+    const url = 'https://github.com/poteto317/scrum-board/pull/2';
+    api.itemByNumber.mockReturnValue(
+      of({
+        ...card,
+        prUrls: [url],
+        prTitles: ['Nice title'],
+        relatedItems: [{ kind: 'url', url: 'https://example.com/doc', label: 'Docs' }],
+      }),
+    );
+    const f = create();
+    const pr = f.nativeElement.querySelector(
+      '.pr-list[aria-label="紐付けたGitHub PR"] .pr-link',
+    ) as HTMLAnchorElement;
+    expect(pr.getAttribute('href')).toBe(url);
+    expect(pr.textContent?.replace(/\s+/g, ' ').trim()).toContain('Nice title');
+    expect(pr.textContent).not.toContain(url);
+    expect(pr.querySelector('.pr-link-url')).toBeNull();
+    const related = f.nativeElement.querySelector(
+      '.pr-list[aria-label="関連アイテム"] .pr-link',
+    ) as HTMLAnchorElement;
+    expect(related.textContent?.replace(/\s+/g, ' ').trim()).toContain('Docs');
+    expect(related.querySelector('.pr-link-url')).toBeNull();
+    expect(related.textContent).not.toContain('https://example.com/doc');
+  });
   it('adds and removes PR URLs via immediate PATCH', () => {
     const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
     const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
@@ -215,8 +240,12 @@ describe('ItemDetail autosave', () => {
   it('reorders PR URLs with move buttons and hides controls for a single PR', () => {
     const url1 = 'https://github.com/poteto317/scrum-board/pull/2';
     const url2 = 'https://github.com/poteto317/scrum-board/pull/3';
-    api.itemByNumber.mockReturnValue(of({ ...card, prUrls: [url1, url2] }));
-    api.updateItem.mockReturnValue(of({ ...card, prUrls: [url2, url1] }));
+    api.itemByNumber.mockReturnValue(
+      of({ ...card, prUrls: [url1, url2], prTitles: ['First', 'Second'] }),
+    );
+    api.updateItem.mockReturnValue(
+      of({ ...card, prUrls: [url2, url1], prTitles: undefined }),
+    );
     const f = create();
     expect(f.nativeElement.querySelectorAll('.pr-move')).toHaveLength(4);
     const downs = f.nativeElement.querySelectorAll(
@@ -226,9 +255,14 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     expect(api.updateItem).toHaveBeenCalledWith(18, { prUrls: [url2, url1] });
     const links = [...f.nativeElement.querySelectorAll('.pr-list[aria-label="紐付けたGitHub PR"] .pr-link')].map(
-      (a: HTMLAnchorElement) => a.getAttribute('href'),
+      (a: HTMLAnchorElement) => ({
+        href: a.getAttribute('href'),
+        text: a.textContent?.replace(/\s+/g, ' ').trim(),
+      }),
     );
-    expect(links).toEqual([url2, url1]);
+    expect(links.map((l) => l.href)).toEqual([url2, url1]);
+    expect(links[0].text).toContain('Second');
+    expect(links[1].text).toContain('First');
   });
   it('hides PR reorder controls when only one PR is linked', () => {
     const url = 'https://github.com/poteto317/scrum-board/pull/2';
