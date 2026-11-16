@@ -34,6 +34,7 @@ describe('Board card drag start', () => {
           description: '',
           position: 0,
           backlogPosition: 0,
+          offsetY: 0,
           prUrls: [],
           relatedItems: [],
           assignee: '',
@@ -41,6 +42,7 @@ describe('Board card drag start', () => {
           updatedAt: '',
         },
       ],
+      settings: { cardLayout: 'pack' as const },
     };
     TestBed.configureTestingModule({
       imports: [Board],

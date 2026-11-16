@@ -21,22 +21,34 @@ import {
   CdkDrag,
   CdkDragDrop,
   CdkDragHandle,
+  CdkDragStart,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
-import { filter, finalize, firstValueFrom } from 'rxjs';
+import { filter, finalize, firstValueFrom, map } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { assigneeKind } from './assignee';
 import { itemAppPath, itemDetailUrl } from './item-link';
+import { normalizeBoardData, NormalizedBoardData, normalizeItem } from './board-data';
+import { cardLayoutToggleGate } from './board-layout-settings';
+import {
+  measurePackOffsetsAsItems,
+  scheduleCardHeightMeasure,
+} from './board-layout-measure';
+import { switchFreeToPack, switchPackToFree } from './board-layout-switch';
+import { computeFreeOffsetY, freeListMinHeightPx, pointerClientY } from './board-layout-y';
 import {
   affectedColumnIds,
+  applyFreeItemDrop,
   applyItemDrop,
   buildItemOrderPayload,
+  ItemOrderColumn,
   ITEM_AUTO_SCROLL_INTERVAL_MS,
   ITEM_DRAG_THRESHOLD_PX,
   ITEM_TOUCH_DRAG_DELAY_MS,
   columnIdFromDropListId,
   dropListIdForColumn,
+  sortColumnItems,
 } from './item-order';
 import {
   computeAutoScrollDelta,
@@ -46,7 +58,7 @@ import {
 } from './column-order';
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
-import { BoardData, Item, Column } from './models';
+import { CardLayout, Item, Column } from './models';
 import {
   COMMAND_ITEM_MENU_EMPTY,
   CommandTemplate,
@@ -109,11 +121,13 @@ export class Board implements OnInit {
   private scrollRestoreGeneration = 0;
   private scrollRestoreAttempted = false;
 
-  readonly data = signal<BoardData>({ columns: [], items: [] });
+  readonly data = signal<NormalizedBoardData>(normalizeBoardData({ columns: [], items: [] }));
   readonly loading = signal(true);
   readonly error = signal('');
   readonly saving = signal(false);
   readonly reordering = signal(false);
+  readonly settingsSaving = signal(false);
+  readonly layoutSwitching = signal(false);
   readonly reorderError = signal('');
   readonly reorderConflict = signal(false);
   readonly reorderAnnouncement = signal('');
@@ -123,6 +137,8 @@ export class Board implements OnInit {
   private autoScrollTimer: ReturnType<typeof setInterval> | null = null;
   private dragPointer: { x: number; y: number } | null = null;
   private dragMovedSinceTick = false;
+  private itemDragGrabOffsetY = 0;
+  private readonly cardHeights = signal<ReadonlyMap<number, number>>(new Map());
   private readonly stopAutoScrollOnDestroy = this.destroyRef.onDestroy(() =>
     this.stopAutoScrollTimer(),
   );
@@ -157,8 +173,33 @@ export class Board implements OnInit {
       this.data().columns.length > 1,
   );
   readonly canReorderItems = computed(
-    () => !this.loading() && !this.saving() && !this.reordering() && this.modal() === null,
+    () =>
+      !this.loading() &&
+      !this.saving() &&
+      !this.reordering() &&
+      !this.layoutSwitching() &&
+      !this.settingsSaving() &&
+      this.modal() === null,
   );
+  readonly cardLayout = computed(() =>
+    this.data().settings.cardLayout === 'free' ? 'free' : 'pack',
+  );
+  readonly isFreeLayout = computed(() => this.cardLayout() === 'free');
+  readonly boardLoadState = computed(() => {
+    if (this.loading()) return 'loading' as const;
+    if (this.error()) return 'failed' as const;
+    return 'ready' as const;
+  });
+  readonly layoutToggleGate = computed(() =>
+    cardLayoutToggleGate({
+      boardLoad: this.boardLoadState(),
+      settingsSave: this.settingsSaving() ? 'saving' : 'idle',
+      itemReorder: this.reordering() ? 'saving' : 'idle',
+      layoutSwitchSeq: this.layoutSwitching() ? 'in progress' : 'idle',
+      itemDragging: this.draggingItemId() !== null ? 'dragging' : 'idle',
+    }),
+  );
+  readonly canToggleCardLayout = computed(() => this.layoutToggleGate().allowed);
   readonly dropListIds = computed(() => this.data().columns.map((c) => this.dropListId(c.id)));
   readonly columnForm = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [textLimit(60, true)] }),
@@ -168,11 +209,12 @@ export class Board implements OnInit {
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
   });
   readonly grouped = computed(() => {
-    const groups = new Map<number, BoardData['items']>();
+    const free = this.isFreeLayout();
+    const groups = new Map<number, Item[]>();
     for (const column of this.data().columns) groups.set(column.id, []);
     for (const card of this.data().items) groups.get(card.columnId)?.push(card);
-    for (const [, list] of groups) {
-      list.sort((a, b) => a.position - b.position || a.id - b.id);
+    for (const [columnId, list] of groups) {
+      groups.set(columnId, sortColumnItems(list, free));
     }
     return groups;
   });
@@ -181,6 +223,9 @@ export class Board implements OnInit {
   }
   connectedLists(columnId: number) {
     return this.dropListIds().filter((id) => id !== dropListIdForColumn(columnId));
+  }
+  freeListMinHeight(columnId: number): number {
+    return freeListMinHeightPx(this.grouped().get(columnId) ?? [], this.cardHeights());
   }
   readonly done = computed(() => {
     const id = this.data().columns.find((c) => c.name === 'Done')?.id;
@@ -197,6 +242,8 @@ export class Board implements OnInit {
         !this.loading() &&
         !this.reordering() &&
         !this.saving() &&
+        !this.settingsSaving() &&
+        !this.layoutSwitching() &&
         this.modal() === null &&
         this.draggingColumnId() === null &&
         this.draggingItemId() === null,
@@ -205,6 +252,7 @@ export class Board implements OnInit {
         this.error.set('');
         if (sameJson(this.data(), d)) return;
         this.data.set(d);
+        this.scheduleCardHeightMeasure();
       },
       ...zoneAwareTimers(this.zone),
     });
@@ -254,7 +302,10 @@ export class Board implements OnInit {
    */
   private pollBoard() {
     const requestedFor = this.data();
-    return this.api.board().pipe(filter(() => this.data() === requestedFor));
+    return this.api.board().pipe(
+      map((raw) => normalizeBoardData(raw)),
+      filter(() => this.data() === requestedFor),
+    );
   }
 
   async copyItemLink(number: number) {
@@ -425,13 +476,23 @@ export class Board implements OnInit {
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (d) => {
-          this.data.set(d);
+          this.data.set(normalizeBoardData(d));
           // Schedule after data arrives so the first afterNextRender sees #boardScroll
           // (not the loading-only first paint).
           this.scheduleBoardScrollRestore();
+          this.scheduleCardHeightMeasure();
         },
         error: (e) => this.error.set(errorMessage(e)),
       });
+  }
+
+  onCardLayoutToggle(checked: boolean): Promise<void> | void {
+    if (!this.canToggleCardLayout()) return;
+    const next: CardLayout = checked ? 'free' : 'pack';
+    const current = this.cardLayout();
+    if (next === current) return;
+    if (next === 'free') return this.switchPackToFree();
+    return this.switchFreeToPack();
   }
 
   openColumn() {
@@ -507,8 +568,9 @@ export class Board implements OnInit {
       )
       .subscribe({
         next: (card) => {
-          this.data.update((d) => ({ ...d, items: [...d.items, card] }));
+          this.data.update((d) => ({ ...d, items: [...d.items, normalizeItem(card)] }));
           this.modal.set(null);
+          this.scheduleCardHeightMeasure();
         },
         error: (e) => this.formError.set(errorMessage(e)),
       });
@@ -525,8 +587,11 @@ export class Board implements OnInit {
     this.autoScrollAt(event.pointerPosition);
   }
 
-  onItemDragStarted(card: Item) {
+  onItemDragStarted(event: CdkDragStart<Item>, card: Item) {
     this.draggingItemId.set(card.id);
+    const pointerY = pointerClientY(event.event);
+    const rect = event.source.element.nativeElement.getBoundingClientRect();
+    this.itemDragGrabOffsetY = pointerY == null ? 0 : pointerY - rect.top;
     this.stopAutoScrollTimer();
     this.dragMovedSinceTick = false;
     this.autoScrollTimer = setInterval(() => {
@@ -588,8 +653,10 @@ export class Board implements OnInit {
   /**
    * Bound on the card's drag handle only (not the article, link, or copy button), so arrow keys pressed on the link
    * or copy button never move the card. Enter on the link is its native click; only the arrow keys are handled here.
+   * Keyboard column reorder is pack only (L-472).
    */
   onItemKeydown(event: KeyboardEvent, columnId: number, index: number) {
+    if (this.isFreeLayout()) return;
     const list = this.grouped().get(columnId) ?? [];
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
@@ -604,7 +671,7 @@ export class Board implements OnInit {
       next,
       [columnId],
       `${list[index].title}を${toIndex + 1}番目に移動しました`,
-      movedId,
+      { focusItemId: movedId },
     );
   }
 
@@ -618,6 +685,12 @@ export class Board implements OnInit {
     const dragged = event.item.data as Item | undefined;
     const source = this.grouped().get(previousColumnId) ?? [];
     if (!dragged || source[event.previousIndex]?.id !== dragged.id) return;
+
+    if (this.isFreeLayout()) {
+      this.onFreeItemDrop(event, previousColumnId, columnId, dragged);
+      return;
+    }
+
     const next = applyItemDrop(
       this.data().items,
       previousColumnId,
@@ -635,14 +708,56 @@ export class Board implements OnInit {
     );
   }
 
+  private onFreeItemDrop(
+    event: CdkDragDrop<Item[]>,
+    previousColumnId: number,
+    columnId: number,
+    dragged: Item,
+  ) {
+    const sameColumn = previousColumnId === columnId;
+    let nextOffsetY = dragged.offsetY ?? 0;
+    if (sameColumn) {
+      const listEl = this.columnsContainer()?.nativeElement?.querySelector<HTMLElement>(
+        `#${dropListIdForColumn(columnId)}`,
+      );
+      if (!listEl) return;
+      const listRect = listEl.getBoundingClientRect();
+      nextOffsetY = computeFreeOffsetY({
+        listTop: listRect.top,
+        pointerY: event.dropPoint.y,
+        grabOffsetY: this.itemDragGrabOffsetY,
+        scrollTop: listEl.scrollTop,
+      });
+    }
+    const next = applyFreeItemDrop(
+      this.data().items,
+      previousColumnId,
+      columnId,
+      dragged.id,
+      nextOffsetY,
+    );
+    if (!next) return;
+    const columnName = this.data().columns.find((c) => c.id === columnId)?.name ?? '';
+    this.persistItemOrder(
+      next,
+      affectedColumnIds(previousColumnId, columnId),
+      sameColumn
+        ? `${dragged.title}の位置を更新しました`
+        : `${dragged.title}を${columnName}へ移動しました`,
+      { includeOffsetYs: true },
+    );
+  }
+
   private persistItemOrder(
     nextCards: Item[],
     columnIds: number[],
     announcement: string,
-    focusItemId?: number,
+    options?: { focusItemId?: number; includeOffsetYs?: boolean },
   ) {
     if (this.reordering()) return;
     const previous = this.data().items;
+    const focusItemId = options?.focusItemId;
+    const includeOffsetYs = options?.includeOffsetYs === true || this.isFreeLayout();
     const restoreFocus = () => {
       if (focusItemId !== undefined) this.focusItemAfterRender(focusItemId);
     };
@@ -650,14 +765,19 @@ export class Board implements OnInit {
     this.reorderError.set('');
     this.reorderConflict.set(false);
     this.data.update((d) => ({ ...d, items: nextCards }));
+    this.scheduleCardHeightMeasure();
     restoreFocus();
     this.api
-      .reorderItems(buildItemOrderPayload(nextCards, columnIds))
+      .reorderItems(buildItemOrderPayload(nextCards, columnIds, { includeOffsetYs }))
       .pipe(finalize(() => this.reordering.set(false)))
       .subscribe({
         next: (res) => {
-          this.data.update((d) => ({ ...d, items: res.items }));
+          this.data.update((d) => ({
+            ...d,
+            items: (res.items ?? []).map((item) => normalizeItem(item)),
+          }));
           this.reorderAnnouncement.set(announcement);
+          this.scheduleCardHeightMeasure();
           restoreFocus();
         },
         error: (e) => {
@@ -665,9 +785,54 @@ export class Board implements OnInit {
           this.reorderError.set(errorMessage(e));
           this.reorderConflict.set((e as { status?: number } | null)?.status === 409);
           this.reorderAnnouncement.set('アイテムの移動を保存できませんでした');
+          this.scheduleCardHeightMeasure();
           restoreFocus();
         },
       });
+  }
+
+  private layoutSwitchDeps() {
+    return {
+      isBusy: () => this.layoutSwitching() || this.settingsSaving(),
+      setLayoutSwitching: (busy: boolean) => this.layoutSwitching.set(busy),
+      setSettingsSaving: (busy: boolean) => this.settingsSaving.set(busy),
+      getData: () => this.data(),
+      setData: (data: NormalizedBoardData) => this.data.set(data),
+      updateData: (fn: (data: NormalizedBoardData) => NormalizedBoardData) => this.data.update(fn),
+      setReorderError: (message: string) => this.reorderError.set(message),
+      setReorderConflict: (conflict: boolean) => this.reorderConflict.set(conflict),
+      setReorderAnnouncement: (message: string) => this.reorderAnnouncement.set(message),
+      measurePackOffsetsAsItems: () => this.measurePackOffsetsAsItems(),
+      scheduleCardHeightMeasure: () => this.scheduleCardHeightMeasure(),
+      reorderItems: (columns: ItemOrderColumn[]) => this.api.reorderItems(columns),
+      patchBoardSettings: (body: { cardLayout: CardLayout }) => this.api.patchBoardSettings(body),
+    };
+  }
+
+  private switchPackToFree() {
+    return switchPackToFree(this.layoutSwitchDeps());
+  }
+
+  private switchFreeToPack() {
+    return switchFreeToPack(this.layoutSwitchDeps());
+  }
+
+  private measurePackOffsetsAsItems(): Item[] {
+    const d = this.data();
+    return measurePackOffsetsAsItems(
+      this.columnsContainer()?.nativeElement,
+      d.columns,
+      d.items,
+    );
+  }
+
+  private scheduleCardHeightMeasure() {
+    scheduleCardHeightMeasure({
+      destroyRef: this.destroyRef,
+      injector: this.injector,
+      getRoot: () => this.columnsContainer()?.nativeElement,
+      setHeights: (heights) => this.cardHeights.set(heights),
+    });
   }
 
   private focusItemAfterRender(itemId: number) {
