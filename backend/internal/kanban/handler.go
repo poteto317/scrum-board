@@ -34,9 +34,9 @@ func WithPRTitleResolver(r *PRTitleResolver) Option {
 
 func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{
-		repo:            repo,
-		slots:           make(chan struct{}, maxConcurrentFormats),
-		prTitleResolver: NewPRTitleResolver(nil),
+		repo:  repo,
+		slots: make(chan struct{}, maxConcurrentFormats),
+		// prTitleResolver nil by default so unit tests do not hit GitHub; wire in production via WithPRTitleResolver.
 	}
 	for _, opt := range opts {
 		opt(&h)
