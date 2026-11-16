@@ -13,8 +13,8 @@ import (
 func statusRepo() *memoryRepo {
 	r := fresh()
 	r.columns = append(r.columns, Column{ID: 4, Name: "レビュー待ち"}, Column{ID: 5, Name: strings.Repeat("あ", 60)})
-	r.cards[22] = Card{ID: 22, Number: 7, ColumnID: 1, Title: "keep title", Description: "keep description", PRURLs: []string{}, CreatedAt: time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)}
-	r.cards[7] = Card{ID: 7, Number: 22, ColumnID: 1, Title: "other card", PRURLs: []string{}}
+	r.cards[22] = Item{ID: 22, Number: 7, ColumnID: 1, Title: "keep title", Description: "keep description", PRURLs: []string{}, CreatedAt: time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)}
+	r.cards[7] = Item{ID: 7, Number: 22, ColumnID: 1, Title: "other card", PRURLs: []string{}}
 	return r
 }
 func TestStatusChangeByNumber(t *testing.T) {
@@ -27,11 +27,11 @@ func TestStatusChangeByNumber(t *testing.T) {
 		columnID int64
 	}{{"Doing", 2}, {"Done", 3}, {"レビュー待ち", 4}, {" doing ", 2}, {strings.Repeat("あ", 60), 5}, {"Doing", 2}, {"Doing", 2}} {
 		data, _ := json.Marshal(map[string]string{"status": tc.status})
-		w := request(h, "PATCH", "/api/cards/by-number/7/status", string(data))
+		w := request(h, "PATCH", "/api/items/by-number/7/status", string(data))
 		if w.Code != 200 {
 			t.Fatalf("%q: %d %s", tc.status, w.Code, w.Body)
 		}
-		var c Card
+		var c Item
 		if err := json.Unmarshal(w.Body.Bytes(), &c); err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +59,7 @@ func TestStatusInvalidInputDoesNotUpdate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := statusRepo()
 			before := r.cards[22]
-			w := request(NewHandler(r), "PATCH", "/api/cards/by-number/"+tc.path+"/status", tc.body)
+			w := request(NewHandler(r), "PATCH", "/api/items/by-number/"+tc.path+"/status", tc.body)
 			if w.Code != tc.status {
 				t.Fatalf("%d %s", w.Code, w.Body)
 			}
@@ -75,11 +75,11 @@ type statusFailureRepo struct {
 	cardError, columnError, updateError error
 }
 
-func (r statusFailureRepo) GetCardByNumber(ctx context.Context, n int64) (Card, error) {
+func (r statusFailureRepo) GetItemByNumber(ctx context.Context, n int64) (Item, error) {
 	if r.cardError != nil {
-		return Card{}, r.cardError
+		return Item{}, r.cardError
 	}
-	return r.memoryRepo.GetCardByNumber(ctx, n)
+	return r.memoryRepo.GetItemByNumber(ctx, n)
 }
 func (r statusFailureRepo) GetColumnByName(ctx context.Context, n string) (Column, error) {
 	if r.columnError != nil {
@@ -87,11 +87,11 @@ func (r statusFailureRepo) GetColumnByName(ctx context.Context, n string) (Colum
 	}
 	return r.memoryRepo.GetColumnByName(ctx, n)
 }
-func (r statusFailureRepo) UpdateCard(ctx context.Context, id int64, p CardPatch) (Card, error) {
+func (r statusFailureRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Item, error) {
 	if r.updateError != nil {
-		return Card{}, r.updateError
+		return Item{}, r.updateError
 	}
-	return r.memoryRepo.UpdateCard(ctx, id, p)
+	return r.memoryRepo.UpdateItem(ctx, id, p)
 }
 func TestStatusStorageFailures(t *testing.T) {
 	internal := errors.New("internal-only database failure")
@@ -107,7 +107,7 @@ func TestStatusStorageFailures(t *testing.T) {
 				r.updateError = internal
 			}
 			before := r.cards[22]
-			w := request(NewHandler(r), "PATCH", "/api/cards/by-number/7/status", `{"status":"Doing"}`)
+			w := request(NewHandler(r), "PATCH", "/api/items/by-number/7/status", `{"status":"Doing"}`)
 			if w.Code != 500 || strings.Contains(w.Body.String(), internal.Error()) {
 				t.Fatalf("unsafe failure %d %s", w.Code, w.Body)
 			}

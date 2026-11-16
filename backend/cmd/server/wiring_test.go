@@ -24,7 +24,7 @@ const (
 	secretReply = "SENTINEL-UPSTREAM-body"
 )
 
-// smallRepo implements only what POST /api/cards/refined touches and counts card creations.
+// smallRepo implements only what POST /api/items/refined touches and counts card creations.
 type smallRepo struct {
 	kanban.Repository
 	created  atomic.Int32
@@ -38,9 +38,9 @@ func (r *smallRepo) GetColumnByName(ctx context.Context, _ string) (kanban.Colum
 	return kanban.Column{ID: 1, Name: "Todo"}, nil
 }
 
-func (r *smallRepo) CreateCard(_ context.Context, in kanban.CardInput) (kanban.Card, error) {
+func (r *smallRepo) CreateItem(_ context.Context, in kanban.ItemInput) (kanban.Item, error) {
 	r.created.Add(1)
-	return kanban.Card{ID: 1, Number: 1, ColumnID: in.ColumnID, Title: in.Title, Description: in.Description}, nil
+	return kanban.Item{ID: 1, Number: 1, ColumnID: in.ColumnID, Title: in.Title, Description: in.Description}, nil
 }
 
 func getenvFrom(values map[string]string) func(string) string {
@@ -82,7 +82,7 @@ func captureLogs(t *testing.T) *safeBuffer {
 
 func postRefined(h http.Handler, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/api/cards/refined", strings.NewReader(body))
+	r := httptest.NewRequest(http.MethodPost, "/api/items/refined", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	h.ServeHTTP(w, r)
 	return w
@@ -142,7 +142,7 @@ func TestWithAKeyTheRefinedEndpointReachesTheModelFromTheEnvironment(t *testing.
 	} {
 		repo := &smallRepo{}
 		w := postRefined(buildHandler(repo, getenvFrom(tc.env), option.WithBaseURL(srv.URL)), `{"title":"下書き"}`)
-		var card kanban.Card
+		var card kanban.Item
 		_ = json.Unmarshal(w.Body.Bytes(), &card)
 		if w.Code != 201 || card.Title != "整えた題名" || repo.created.Load() != 1 || model.Load() != tc.want {
 			t.Fatalf("%s: status=%d card=%+v created=%d model=%v body=%s", name, w.Code, card, repo.created.Load(), model.Load(), w.Body)

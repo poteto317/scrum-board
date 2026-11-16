@@ -12,20 +12,20 @@ func TestMySQLRelatedItemsBidirectional(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	mustInit(t, r)
 
-	a, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "alpha"})
+	a, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "alpha"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "beta"})
+	b, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "beta"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	items := []RelatedItem{
-		{Kind: "card", Number: b.Number, Label: "depends"},
+		{Kind: "item", Number: b.Number, Label: "depends"},
 		{Kind: "url", URL: "https://example.com/doc", Label: "仕様"},
 	}
-	updated, err := r.UpdateCard(ctx, a.ID, CardPatch{RelatedItems: &items})
+	updated, err := r.UpdateItem(ctx, a.ID, ItemPatch{RelatedItems: &items})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestMySQLRelatedItemsBidirectional(t *testing.T) {
 		t.Fatalf("card item: %+v", updated.RelatedItems[0])
 	}
 
-	peer, err := r.GetCard(ctx, b.ID)
+	peer, err := r.GetItem(ctx, b.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,27 +76,27 @@ func TestMySQLRelatedItemsBidirectional(t *testing.T) {
 	}
 
 	titleOnly := "alpha2"
-	kept, err := r.UpdateCard(ctx, a.ID, CardPatch{Title: &titleOnly})
+	kept, err := r.UpdateItem(ctx, a.ID, ItemPatch{Title: &titleOnly})
 	if err != nil || !reflect.DeepEqual(kept.RelatedItems, updated.RelatedItems) {
 		t.Fatalf("omit relatedItems wiped: %+v %v", kept, err)
 	}
 
 	empty := []RelatedItem{}
-	cleared, err := r.UpdateCard(ctx, a.ID, CardPatch{RelatedItems: &empty})
+	cleared, err := r.UpdateItem(ctx, a.ID, ItemPatch{RelatedItems: &empty})
 	if err != nil || len(cleared.RelatedItems) != 0 {
 		t.Fatalf("clear: %+v %v", cleared, err)
 	}
-	peer, err = r.GetCard(ctx, b.ID)
+	peer, err = r.GetItem(ctx, b.ID)
 	if err != nil || len(peer.RelatedItems) != 0 {
 		t.Fatalf("peer after clear: %+v %v", peer, err)
 	}
 
-	self := []RelatedItem{{Kind: "card", Number: a.Number}}
-	if _, err = r.UpdateCard(ctx, a.ID, CardPatch{RelatedItems: &self}); err != ErrRelatedItem {
+	self := []RelatedItem{{Kind: "item", Number: a.Number}}
+	if _, err = r.UpdateItem(ctx, a.ID, ItemPatch{RelatedItems: &self}); err != ErrRelatedItem {
 		t.Fatalf("self: %v", err)
 	}
-	missing := []RelatedItem{{Kind: "card", Number: 999999}}
-	if _, err = r.UpdateCard(ctx, a.ID, CardPatch{RelatedItems: &missing}); err != ErrRelatedItem {
+	missing := []RelatedItem{{Kind: "item", Number: 999999}}
+	if _, err = r.UpdateItem(ctx, a.ID, ItemPatch{RelatedItems: &missing}); err != ErrRelatedItem {
 		t.Fatalf("missing: %v", err)
 	}
 }

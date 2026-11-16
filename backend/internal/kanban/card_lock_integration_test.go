@@ -11,28 +11,28 @@ import (
 )
 
 // newOrderedBoard resets the disposable DB and returns a repository with two cards in Todo.
-func newOrderedBoard(t *testing.T) (MySQLRepository, Card, Card) {
+func newOrderedBoard(t *testing.T) (MySQLRepository, Item, Item) {
 	t.Helper()
 	r := MySQLRepository{DB: mysqlTestDB(t, "")}
 	ctx := context.Background()
-	if err := r.InitializeCardPositions(ctx); err != nil {
+	if err := r.InitializeItemPositions(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.InitializeNumbers(ctx); err != nil {
 		t.Fatal(err)
 	}
-	a, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "a"})
+	a, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "a"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "b"})
+	b, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "b"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return r, a, b
 }
 
-// CreateCard, UpdateCard (status move / edit), DeleteCard, ReorderCards and ReorderBacklog must take locks in the same order,
+// CreateItem, UpdateItem (status move / edit), DeleteItem, ReorderItems and ReorderBacklog must take locks in the same order,
 // otherwise InnoDB reports error 1213 (deadlock) under concurrent use.
 func TestCardWritesDoNotDeadlockMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t)
@@ -51,37 +51,37 @@ func TestCardWritesDoNotDeadlockMySQL(t *testing.T) {
 		moveTo := int64(2 + i%2)
 		title := "edited"
 		run(func() error {
-			_, err := r.CreateCard(ctx, CardInput{ColumnID: col, Title: "n"})
+			_, err := r.CreateItem(ctx, ItemInput{ColumnID: col, Title: "n"})
 			return err
 		})
 		run(func() error {
-			_, err := r.UpdateCard(ctx, b.ID, CardPatch{ColumnID: &moveTo})
+			_, err := r.UpdateItem(ctx, b.ID, ItemPatch{ColumnID: &moveTo})
 			return err
 		})
 		run(func() error {
 			// A reorder that raced with a create/move legitimately reports a stale card set.
-			if err := reverseAllColumns(ctx, r); !errors.Is(err, ErrCardOrderMismatch) {
+			if err := reverseAllColumns(ctx, r); !errors.Is(err, ErrItemOrderMismatch) {
 				return err
 			}
 			return nil
 		})
 		run(func() error {
-			_, err := r.UpdateCard(ctx, a.ID, CardPatch{Title: &title})
+			_, err := r.UpdateItem(ctx, a.ID, ItemPatch{Title: &title})
 			return err
 		})
 		run(func() error {
-			c, err := r.CreateCard(ctx, CardInput{ColumnID: col, Title: "d"})
+			c, err := r.CreateItem(ctx, ItemInput{ColumnID: col, Title: "d"})
 			if err != nil {
 				return err
 			}
-			return r.DeleteCard(ctx, c.ID)
+			return r.DeleteItem(ctx, c.ID)
 		})
 	}
 	wg.Wait()
 	close(errCh)
 	for err := range errCh {
 		// A reorder that raced with a create/move legitimately reports a stale card set.
-		if err != nil && !errors.Is(err, ErrCardOrderMismatch) {
+		if err != nil && !errors.Is(err, ErrItemOrderMismatch) {
 			t.Fatalf("concurrent write failed: %v", err)
 		}
 	}
@@ -89,12 +89,12 @@ func TestCardWritesDoNotDeadlockMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// DeleteCard leaves a gap (positions stay unique and ordered; the next reorder renumbers them densely).
+	// DeleteItem leaves a gap (positions stay unique and ordered; the next reorder renumbers them densely).
 	for _, column := range []int64{1, 2, 3} {
 		prev := -1
-		for _, c := range cardsInColumn(board.Cards, column) {
+		for _, c := range cardsInColumn(board.Items, column) {
 			if c.Position <= prev {
-				t.Fatalf("column %d positions not strictly increasing: %+v", column, cardsInColumn(board.Cards, column))
+				t.Fatalf("column %d positions not strictly increasing: %+v", column, cardsInColumn(board.Items, column))
 			}
 			prev = c.Position
 		}
@@ -122,11 +122,11 @@ func TestSuccessfulReordersRunAlongsideWritesMySQL(t *testing.T) {
 		col := int64(1 + i%3)
 		moveTo := int64(2 + i%2)
 		run(func() error {
-			_, err := r.CreateCard(ctx, CardInput{ColumnID: col, Title: "n"})
+			_, err := r.CreateItem(ctx, ItemInput{ColumnID: col, Title: "n"})
 			return err
 		})
 		run(func() error {
-			_, err := r.UpdateCard(ctx, b.ID, CardPatch{ColumnID: &moveTo})
+			_, err := r.UpdateItem(ctx, b.ID, ItemPatch{ColumnID: &moveTo})
 			return err
 		})
 		run(func() error {
@@ -136,7 +136,7 @@ func TestSuccessfulReordersRunAlongsideWritesMySQL(t *testing.T) {
 					reordered.Add(1)
 					return nil
 				}
-				if !errors.Is(err, ErrCardOrderMismatch) {
+				if !errors.Is(err, ErrItemOrderMismatch) {
 					return err
 				}
 			}
@@ -151,7 +151,7 @@ func TestSuccessfulReordersRunAlongsideWritesMySQL(t *testing.T) {
 		}
 	}
 	if reordered.Load() == 0 {
-		t.Fatal("no ReorderCards succeeded, so the write path after the card-set check never ran concurrently")
+		t.Fatal("no ReorderItems succeeded, so the write path after the card-set check never ran concurrently")
 	}
 	board, err := r.Board(ctx)
 	if err != nil {
@@ -160,9 +160,9 @@ func TestSuccessfulReordersRunAlongsideWritesMySQL(t *testing.T) {
 	// A successful reorder renumbers its columns densely; later creates and moves append at the end.
 	for _, column := range []int64{1, 2, 3} {
 		prev := -1
-		for _, c := range cardsInColumn(board.Cards, column) {
+		for _, c := range cardsInColumn(board.Items, column) {
 			if c.Position <= prev {
-				t.Fatalf("column %d positions not strictly increasing: %+v", column, cardsInColumn(board.Cards, column))
+				t.Fatalf("column %d positions not strictly increasing: %+v", column, cardsInColumn(board.Items, column))
 			}
 			prev = c.Position
 		}
@@ -180,7 +180,7 @@ func TestPositionAndBacklogPositionAreIndependentMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		pos, backlog := map[int64]int{}, map[int64]int{}
-		for _, c := range board.Cards {
+		for _, c := range board.Items {
 			pos[c.ID], backlog[c.ID] = c.Position, c.BacklogPosition
 		}
 		return pos, backlog
@@ -189,12 +189,12 @@ func TestPositionAndBacklogPositionAreIndependentMySQL(t *testing.T) {
 	if len(backlog0) != 3 || backlog0[a.ID] >= backlog0[b.ID] {
 		t.Fatalf("new cards must get increasing backlogPosition: %v", backlog0)
 	}
-	if _, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: reverseIDs(t, r, 1)}}); err != nil {
+	if _, err := r.ReorderItems(ctx, []ItemColumnOrder{{ColumnID: 1, ItemIDs: reverseIDs(t, r, 1)}}); err != nil {
 		t.Fatal(err)
 	}
 	pos1, backlog1 := positions()
 	if fmt.Sprint(backlog1) != fmt.Sprint(backlog0) || fmt.Sprint(pos1) == fmt.Sprint(pos0) {
-		t.Fatalf("ReorderCards must change position only: pos %v -> %v, backlog %v -> %v", pos0, pos1, backlog0, backlog1)
+		t.Fatalf("ReorderItems must change position only: pos %v -> %v, backlog %v -> %v", pos0, pos1, backlog0, backlog1)
 	}
 	if _, err := r.ReorderBacklog(ctx, []int64{b.ID, a.ID, 1}); err != nil {
 		t.Fatal(err)
@@ -211,16 +211,16 @@ func reverseAllColumns(ctx context.Context, r MySQLRepository) error {
 	if err != nil {
 		return err
 	}
-	orders := make([]CardColumnOrder, 0, 3)
+	orders := make([]ItemColumnOrder, 0, 3)
 	for _, column := range []int64{1, 2, 3} {
 		ids := []int64{}
-		cards := cardsInColumn(board.Cards, column)
+		cards := cardsInColumn(board.Items, column)
 		for j := len(cards) - 1; j >= 0; j-- {
 			ids = append(ids, cards[j].ID)
 		}
-		orders = append(orders, CardColumnOrder{ColumnID: column, CardIDs: ids})
+		orders = append(orders, ItemColumnOrder{ColumnID: column, ItemIDs: ids})
 	}
-	_, err = r.ReorderCards(ctx, orders)
+	_, err = r.ReorderItems(ctx, orders)
 	return err
 }
 
@@ -228,11 +228,11 @@ func TestUnknownColumnIsRejectedMySQL(t *testing.T) {
 	r, a, _ := newOrderedBoard(t)
 	ctx := context.Background()
 	missing := int64(9999)
-	if _, err := r.UpdateCard(ctx, a.ID, CardPatch{ColumnID: &missing}); !errors.Is(err, ErrColumn) {
-		t.Fatalf("UpdateCard want ErrColumn, got %v", err)
+	if _, err := r.UpdateItem(ctx, a.ID, ItemPatch{ColumnID: &missing}); !errors.Is(err, ErrColumn) {
+		t.Fatalf("UpdateItem want ErrColumn, got %v", err)
 	}
-	if _, err := r.CreateCard(ctx, CardInput{ColumnID: missing, Title: "x"}); !errors.Is(err, ErrColumn) {
-		t.Fatalf("CreateCard want ErrColumn, got %v", err)
+	if _, err := r.CreateItem(ctx, ItemInput{ColumnID: missing, Title: "x"}); !errors.Is(err, ErrColumn) {
+		t.Fatalf("CreateItem want ErrColumn, got %v", err)
 	}
 }
 
@@ -243,7 +243,7 @@ func updatedAtByID(t *testing.T, r MySQLRepository) map[int64]time.Time {
 		t.Fatal(err)
 	}
 	m := map[int64]time.Time{}
-	for _, c := range board.Cards {
+	for _, c := range board.Items {
 		m[c.ID] = c.UpdatedAt
 	}
 	return m
@@ -253,7 +253,7 @@ func updatedAtByID(t *testing.T, r MySQLRepository) map[int64]time.Time {
 func TestReorderKeepsUpdatedAtOfUnmovedCardsMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t)
 	ctx := context.Background()
-	c, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "c"})
+	c, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "c"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,11 +262,11 @@ func TestReorderKeepsUpdatedAtOfUnmovedCardsMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seed := cardsInColumn(board.Cards, 1)[0]
+	seed := cardsInColumn(board.Items, 1)[0]
 	time.Sleep(20 * time.Millisecond)
 	before := updatedAtByID(t, r)
 
-	if _, err = r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{c.ID, a.ID, b.ID, seed.ID}}}); err != nil {
+	if _, err = r.ReorderItems(ctx, []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{c.ID, a.ID, b.ID, seed.ID}}}); err != nil {
 		t.Fatal(err)
 	}
 	after := updatedAtByID(t, r)
@@ -277,9 +277,9 @@ func TestReorderKeepsUpdatedAtOfUnmovedCardsMySQL(t *testing.T) {
 	}
 
 	// Moving one card to another column through reorder updates that card only.
-	if _, err = r.ReorderCards(ctx, []CardColumnOrder{
-		{ColumnID: 1, CardIDs: []int64{c.ID, b.ID, seed.ID}},
-		{ColumnID: 2, CardIDs: []int64{a.ID}},
+	if _, err = r.ReorderItems(ctx, []ItemColumnOrder{
+		{ColumnID: 1, ItemIDs: []int64{c.ID, b.ID, seed.ID}},
+		{ColumnID: 2, ItemIDs: []int64{a.ID}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -293,10 +293,10 @@ func TestReorderKeepsUpdatedAtOfUnmovedCardsMySQL(t *testing.T) {
 		}
 	}
 
-	// A status change through UpdateCard compacts the source column: the remaining cards keep updatedAt.
+	// A status change through UpdateItem compacts the source column: the remaining cards keep updatedAt.
 	time.Sleep(20 * time.Millisecond)
 	three := int64(3)
-	if _, err = r.UpdateCard(ctx, c.ID, CardPatch{ColumnID: &three}); err != nil {
+	if _, err = r.UpdateItem(ctx, c.ID, ItemPatch{ColumnID: &three}); err != nil {
 		t.Fatal(err)
 	}
 	last := updatedAtByID(t, r)
@@ -307,9 +307,9 @@ func TestReorderKeepsUpdatedAtOfUnmovedCardsMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i, got := range cardsInColumn(board.Cards, 1) {
+	for i, got := range cardsInColumn(board.Items, 1) {
 		if got.Position != i {
-			t.Fatalf("source column not compacted: %+v", cardsInColumn(board.Cards, 1))
+			t.Fatalf("source column not compacted: %+v", cardsInColumn(board.Items, 1))
 		}
 	}
 	for _, id := range []int64{b.ID, seed.ID} {
@@ -319,17 +319,17 @@ func TestReorderKeepsUpdatedAtOfUnmovedCardsMySQL(t *testing.T) {
 	}
 }
 
-// DeleteCard joins the all-columns lock, so it reports a missing card the same way and still cascades.
-func TestDeleteCardMySQL(t *testing.T) {
+// DeleteItem joins the all-columns lock, so it reports a missing card the same way and still cascades.
+func TestDeleteItemMySQL(t *testing.T) {
 	r, a, _ := newOrderedBoard(t)
 	ctx := context.Background()
-	if err := r.DeleteCard(ctx, 99999); !errors.Is(err, ErrNotFound) {
+	if err := r.DeleteItem(ctx, 99999); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing card want ErrNotFound, got %v", err)
 	}
-	if err := r.DeleteCard(ctx, a.ID); err != nil {
+	if err := r.DeleteItem(ctx, a.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.DeleteCard(ctx, a.ID); !errors.Is(err, ErrNotFound) {
+	if err := r.DeleteItem(ctx, a.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second delete want ErrNotFound, got %v", err)
 	}
 	var rest int
@@ -344,39 +344,39 @@ func TestDeleteCardMySQL(t *testing.T) {
 func TestCardWritersQueueOnTheAllColumnsLockMySQL(t *testing.T) {
 	ctx := context.Background()
 	three := int64(3)
-	writers := map[string]func(r MySQLRepository, a, b Card) error{
-		"CreateCard": func(r MySQLRepository, _, _ Card) error {
-			_, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "new"})
+	writers := map[string]func(r MySQLRepository, a, b Item) error{
+		"CreateItem": func(r MySQLRepository, _, _ Item) error {
+			_, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "new"})
 			return err
 		},
-		"UpdateCard moving a card": func(r MySQLRepository, _, b Card) error {
-			_, err := r.UpdateCard(ctx, b.ID, CardPatch{ColumnID: &three})
+		"UpdateItem moving a card": func(r MySQLRepository, _, b Item) error {
+			_, err := r.UpdateItem(ctx, b.ID, ItemPatch{ColumnID: &three})
 			return err
 		},
-		"UpdateCard rewriting the PR links": func(r MySQLRepository, _, b Card) error {
+		"UpdateItem rewriting the PR links": func(r MySQLRepository, _, b Item) error {
 			urls := []string{"https://github.com/o/r/pull/1", "https://github.com/o/r/pull/2"}
-			_, err := r.UpdateCard(ctx, b.ID, CardPatch{PRURLs: &urls})
+			_, err := r.UpdateItem(ctx, b.ID, ItemPatch{PRURLs: &urls})
 			return err
 		},
-		"DeleteCard": func(r MySQLRepository, _, b Card) error { return r.DeleteCard(ctx, b.ID) },
-		"ReorderCards": func(r MySQLRepository, _, _ Card) error {
-			_, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: reverseIDs(t, r, 1)}})
+		"DeleteItem": func(r MySQLRepository, _, b Item) error { return r.DeleteItem(ctx, b.ID) },
+		"ReorderItems": func(r MySQLRepository, _, _ Item) error {
+			_, err := r.ReorderItems(ctx, []ItemColumnOrder{{ColumnID: 1, ItemIDs: reverseIDs(t, r, 1)}})
 			return err
 		},
-		"ReorderBacklog": func(r MySQLRepository, _, _ Card) error {
+		"ReorderBacklog": func(r MySQLRepository, _, _ Item) error {
 			board, err := r.Board(ctx)
 			if err != nil {
 				return err
 			}
-			ids := make([]int64, 0, len(board.Cards))
-			for i := len(board.Cards) - 1; i >= 0; i-- {
-				ids = append(ids, board.Cards[i].ID)
+			ids := make([]int64, 0, len(board.Items))
+			for i := len(board.Items) - 1; i >= 0; i-- {
+				ids = append(ids, board.Items[i].ID)
 			}
 			_, err = r.ReorderBacklog(ctx, ids)
 			return err
 		},
-		"ImportHistory": func(r MySQLRepository, a, _ Card) error {
-			return r.ImportHistory(ctx, []HistoricalRecord{{Number: a.Number, CardID: a.ID, CreatedAt: a.CreatedAt, Key: "k", OccurredAt: a.CreatedAt, Note: "verified import"}})
+		"ImportHistory": func(r MySQLRepository, a, _ Item) error {
+			return r.ImportHistory(ctx, []HistoricalRecord{{Number: a.Number, ItemID: a.ID, CreatedAt: a.CreatedAt, Key: "k", OccurredAt: a.CreatedAt, Note: "verified import"}})
 		},
 	}
 	for name, write := range writers {
@@ -449,7 +449,7 @@ func reverseIDs(t *testing.T, r MySQLRepository, column int64) []int64 {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cards := cardsInColumn(board.Cards, column)
+	cards := cardsInColumn(board.Items, column)
 	ids := make([]int64, 0, len(cards))
 	for i := len(cards) - 1; i >= 0; i-- {
 		ids = append(ids, cards[i].ID)

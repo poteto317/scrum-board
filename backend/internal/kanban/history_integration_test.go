@@ -21,14 +21,14 @@ func TestMySQLHistory(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	mustInit(t, r)
-	before, err := r.GetCard(ctx, 1)
+	before, err := r.GetItem(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = r.InitializeHistory(ctx); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := r.GetCard(ctx, 1)
+	after, _ := r.GetItem(ctx, 1)
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("migration mutated card")
 	}
@@ -56,7 +56,7 @@ func TestMySQLHistory(t *testing.T) {
 	if !reflect.DeepEqual(baseline.Changes, wantBaseline) || baseline.Note == "" || baseline.OccurredAt.Year() < 2020 || baseline.EvidenceURL != "" {
 		t.Fatalf("baseline content: %+v want %+v", baseline, wantBaseline)
 	}
-	c, err := r.CreateCard(ctx, CardInput{Title: "new", Description: "body", ColumnID: 1})
+	c, err := r.CreateItem(ctx, ItemInput{Title: "new", Description: "body", ColumnID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestMySQLHistory(t *testing.T) {
 	}
 	title, desc, url, col := "changed", "changed body", "https://github.com/a/b/pull/1", int64(2)
 	urls := []string{url}
-	if _, err = r.UpdateCard(ctx, c.ID, CardPatch{Title: &title, Description: &desc, PRURLs: &urls, ColumnID: &col}); err != nil {
+	if _, err = r.UpdateItem(ctx, c.ID, ItemPatch{Title: &title, Description: &desc, PRURLs: &urls, ColumnID: &col}); err != nil {
 		t.Fatal(err)
 	}
 	page, err = r.History(ctx, c.Number, 0)
@@ -79,7 +79,7 @@ func TestMySQLHistory(t *testing.T) {
 	if page.Events[0].Changes[2].Before != "Todo" || page.Events[0].Changes[2].After != "Doing" {
 		t.Fatal(page.Events[0])
 	}
-	if _, err = r.UpdateCard(ctx, c.ID, CardPatch{Title: &title}); err != nil {
+	if _, err = r.UpdateItem(ctx, c.ID, ItemPatch{Title: &title}); err != nil {
 		t.Fatal(err)
 	}
 	page, _ = r.History(ctx, c.Number, 0)
@@ -87,7 +87,7 @@ func TestMySQLHistory(t *testing.T) {
 		t.Fatal("no-op added history")
 	}
 	// Breaking only the history table must roll back the preceding card UPDATE.
-	saved, _ := r.GetCard(ctx, c.ID)
+	saved, _ := r.GetItem(ctx, c.ID)
 	if _, err = db.Exec("RENAME TABLE card_history TO hidden_history"); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestMySQLHistory(t *testing.T) {
 	if err = db.QueryRow("SELECT next_number FROM card_number_sequence WHERE singleton=1").Scan(&nextBefore); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = r.CreateCard(ctx, CardInput{Title: "must not exist", ColumnID: 1}); err == nil {
+	if _, err = r.CreateItem(ctx, ItemInput{Title: "must not exist", ColumnID: 1}); err == nil {
 		t.Fatal("create must roll back when history fails")
 	}
 	var nextAfter int64
@@ -105,17 +105,17 @@ func TestMySQLHistory(t *testing.T) {
 		t.Fatal("failed history consumed number", err)
 	}
 	bad := "must rollback"
-	if _, err = r.UpdateCard(ctx, c.ID, CardPatch{Title: &bad}); err == nil {
+	if _, err = r.UpdateItem(ctx, c.ID, ItemPatch{Title: &bad}); err == nil {
 		t.Fatal("history failure must reject update")
 	}
 	if _, err = db.Exec("RENAME TABLE hidden_history TO card_history"); err != nil {
 		t.Fatal(err)
 	}
-	current, _ := r.GetCard(ctx, c.ID)
+	current, _ := r.GetItem(ctx, c.ID)
 	if !reflect.DeepEqual(saved, current) {
 		t.Fatal("partial update")
 	}
-	record := HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: "test-import", OccurredAt: c.CreatedAt.Add(-time.Hour), Note: "known timestamp only", Changes: []HistoryChange{}}
+	record := HistoricalRecord{Number: c.Number, ItemID: c.ID, CreatedAt: c.CreatedAt, Key: "test-import", OccurredAt: c.CreatedAt.Add(-time.Hour), Note: "known timestamp only", Changes: []HistoryChange{}}
 	for range 2 {
 		if err = r.ImportHistory(ctx, []HistoricalRecord{record}); err != nil {
 			t.Fatal(err)
@@ -125,13 +125,13 @@ func TestMySQLHistory(t *testing.T) {
 	if len(page.Events) != 3 || page.Events[2].Kind != "restored" {
 		t.Fatalf("import/order: %+v", page)
 	}
-	original, _ := r.GetCard(ctx, c.ID)
+	original, _ := r.GetItem(ctx, c.ID)
 	if !reflect.DeepEqual(current, original) {
 		t.Fatal("import modified card")
 	}
 	invalid := record
 	invalid.Key = "second"
-	invalid.CardID++
+	invalid.ItemID++
 	record.Key = "rolled-back"
 	if err = r.ImportHistory(ctx, []HistoricalRecord{record, invalid}); err == nil {
 		t.Fatal("identity mismatch accepted")
@@ -169,15 +169,15 @@ func TestMySQLHistory(t *testing.T) {
 		t.Fatal("cross-card cursor accepted")
 	}
 	h := NewHandler(r)
-	for _, path := range []string{"/api/cards/by-number/0/history", "/api/cards/by-number/1/history?before=-1", "/api/cards/by-number/1/history?before=x"} {
+	for _, path := range []string{"/api/items/by-number/0/history", "/api/items/by-number/1/history?before=-1", "/api/items/by-number/1/history?before=x"} {
 		if w := request(h, "GET", path, ""); w.Code != 400 {
 			t.Fatalf("%s: %d", path, w.Code)
 		}
 	}
-	if w := request(h, "GET", "/api/cards/by-number/9999/history", ""); w.Code != 404 {
+	if w := request(h, "GET", "/api/items/by-number/9999/history", ""); w.Code != 404 {
 		t.Fatal(w.Code)
 	}
-	w := request(h, "GET", "/api/cards/by-number/1/history", "")
+	w := request(h, "GET", "/api/items/by-number/1/history", "")
 	if w.Code != http.StatusOK {
 		t.Fatal(w.Code, w.Body)
 	}
@@ -197,14 +197,14 @@ func TestMySQLHistoryParallelAndConflictingImport(t *testing.T) {
 	}
 	title, desc := "parallel title", "parallel description"
 	errs := make(chan error, 2)
-	go func() { _, e := r.UpdateCard(ctx, 1, CardPatch{Title: &title}); errs <- e }()
-	go func() { _, e := r.UpdateCard(ctx, 1, CardPatch{Description: &desc}); errs <- e }()
+	go func() { _, e := r.UpdateItem(ctx, 1, ItemPatch{Title: &title}); errs <- e }()
+	go func() { _, e := r.UpdateItem(ctx, 1, ItemPatch{Description: &desc}); errs <- e }()
 	for range 2 {
 		if e := <-errs; e != nil {
 			t.Fatal(e)
 		}
 	}
-	c, err := r.GetCard(ctx, 1)
+	c, err := r.GetItem(ctx, 1)
 	if err != nil || c.Title != title || c.Description != desc {
 		t.Fatal(c, err)
 	}
@@ -215,7 +215,7 @@ func TestMySQLHistoryParallelAndConflictingImport(t *testing.T) {
 	if len(page.Events[0].Changes) != 1 || len(page.Events[1].Changes) != 1 || page.Events[0].Changes[0].Field == page.Events[1].Changes[0].Field {
 		t.Fatal("parallel history lost independent diff", page)
 	}
-	v := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: c.CreatedAt, Key: "same-key", OccurredAt: c.CreatedAt, Note: "original"}
+	v := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: c.CreatedAt, Key: "same-key", OccurredAt: c.CreatedAt, Note: "original"}
 	if err = r.ImportHistory(ctx, []HistoricalRecord{v}); err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestMySQLHistoryParallelAndConflictingImport(t *testing.T) {
 	if err = r.ImportHistory(ctx, []HistoricalRecord{v}); err == nil {
 		t.Fatal("existing key content was silently ignored")
 	}
-	if err = r.DeleteCard(ctx, 1); err != nil {
+	if err = r.DeleteItem(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	var count int
@@ -237,11 +237,11 @@ func TestMySQLImportNanosecondIdempotency(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	mustInit(t, r)
-	c, err := r.GetCard(ctx, 1)
+	c, err := r.GetItem(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	v := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: c.CreatedAt, Key: "nano", OccurredAt: c.CreatedAt.Add(789 * time.Nanosecond), Note: "nanosecond precision source"}
+	v := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: c.CreatedAt, Key: "nano", OccurredAt: c.CreatedAt.Add(789 * time.Nanosecond), Note: "nanosecond precision source"}
 	for range 2 {
 		if err = r.ImportHistory(ctx, []HistoricalRecord{v}); err != nil {
 			t.Fatal(err)
@@ -254,12 +254,12 @@ func TestMySQLImportRejectsFutureOccurredAtWithoutWriting(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	mustInit(t, r)
-	c, err := r.GetCard(ctx, 1)
+	c, err := r.GetItem(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	before, _ := r.History(ctx, c.Number, 0)
-	ok := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: c.CreatedAt, Key: "valid-in-bad-batch", OccurredAt: c.CreatedAt, Note: "valid source"}
+	ok := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: c.CreatedAt, Key: "valid-in-bad-batch", OccurredAt: c.CreatedAt, Note: "valid source"}
 	typo := ok
 	typo.Key = "typo-year"
 	typo.OccurredAt = time.Date(2062, 11, 12, 0, 0, 0, 0, time.UTC)
@@ -275,7 +275,7 @@ func TestMySQLImportRejectsFutureOccurredAtWithoutWriting(t *testing.T) {
 func TestMySQLImportWorksWithInterpolatedParams(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	mustInit(t, MySQLRepository{DB: db})
-	c, err := MySQLRepository{DB: db}.GetCard(context.Background(), 1)
+	c, err := MySQLRepository{DB: db}.GetItem(context.Background(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestMySQLImportWorksWithInterpolatedParams(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { plain.Close() })
-	v := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: c.CreatedAt, Key: "interpolated", OccurredAt: c.CreatedAt, Changes: []HistoryChange{{Field: "status", Before: "Todo", After: "Done"}}, Note: "client-side parameter interpolation"}
+	v := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: c.CreatedAt, Key: "interpolated", OccurredAt: c.CreatedAt, Changes: []HistoryChange{{Field: "status", Before: "Todo", After: "Done"}}, Note: "client-side parameter interpolation"}
 	if err = (MySQLRepository{DB: plain}).ImportHistory(context.Background(), []HistoricalRecord{v}); err != nil {
 		t.Fatal(err)
 	}
@@ -301,11 +301,11 @@ func TestMySQLConcurrentImportRejectsConflict(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	mustInit(t, r)
-	first, err := r.GetCard(ctx, 1)
+	first, err := r.GetItem(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := r.CreateCard(ctx, CardInput{Title: "second", ColumnID: 1})
+	second, err := r.CreateItem(ctx, ItemInput{Title: "second", ColumnID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,8 +318,8 @@ func TestMySQLConcurrentImportRejectsConflict(t *testing.T) {
 	if err = blocker.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", second.ID).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	a := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: first.CreatedAt, Key: "batch-a-first", OccurredAt: first.CreatedAt, Note: "A"}
-	b := HistoricalRecord{Number: second.Number, CardID: second.ID, CreatedAt: second.CreatedAt, Key: "conflict", OccurredAt: second.CreatedAt, Note: "A expects this"}
+	a := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: first.CreatedAt, Key: "batch-a-first", OccurredAt: first.CreatedAt, Note: "A"}
+	b := HistoricalRecord{Number: second.Number, ItemID: second.ID, CreatedAt: second.CreatedAt, Key: "conflict", OccurredAt: second.CreatedAt, Note: "A expects this"}
 	result := make(chan error, 1)
 	go func() { result <- r.ImportHistory(ctx, []HistoricalRecord{a, b}) }()
 	// Observe A's first INSERT without committing it, so A has an old read view before B commits.
@@ -365,9 +365,9 @@ func TestMySQLImportAndDeleteConcurrent(t *testing.T) {
 	defer cancel()
 	mustInit(t, r)
 	for round := 0; round < 8; round++ {
-		cards := []Card{}
+		cards := []Item{}
 		for i := 0; i < 30; i++ {
-			c, e := r.CreateCard(ctx, CardInput{Title: "concurrent deletion", ColumnID: 1})
+			c, e := r.CreateItem(ctx, ItemInput{Title: "concurrent deletion", ColumnID: 1})
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -376,11 +376,11 @@ func TestMySQLImportAndDeleteConcurrent(t *testing.T) {
 		start := make(chan struct{})
 		results := make(chan error, 2*len(cards))
 		for _, c := range cards {
-			go func(c Card) {
+			go func(c Item) {
 				<-start
-				results <- r.ImportHistory(ctx, []HistoricalRecord{{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: "delete-race", OccurredAt: c.CreatedAt, Note: "verified import"}})
+				results <- r.ImportHistory(ctx, []HistoricalRecord{{Number: c.Number, ItemID: c.ID, CreatedAt: c.CreatedAt, Key: "delete-race", OccurredAt: c.CreatedAt, Note: "verified import"}})
 			}(c)
-			go func(c Card) { <-start; results <- r.DeleteCard(ctx, c.ID) }(c)
+			go func(c Item) { <-start; results <- r.DeleteItem(ctx, c.ID) }(c)
 		}
 		close(start)
 		for range 2 * len(cards) {
@@ -397,8 +397,8 @@ func TestMySQLImportWaitsForCardBeforeNumberOnDelete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	mustInit(t, r)
-	first, _ := r.GetCard(ctx, 1)
-	second, err := r.CreateCard(ctx, CardInput{Title: "delete target", ColumnID: 1})
+	first, _ := r.GetItem(ctx, 1)
+	second, err := r.CreateItem(ctx, ItemInput{Title: "delete target", ColumnID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,8 +411,8 @@ func TestMySQLImportWaitsForCardBeforeNumberOnDelete(t *testing.T) {
 	if err = blocker.QueryRowContext(ctx, "SELECT id FROM cards WHERE id=? FOR UPDATE", second.ID).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	a := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: first.CreatedAt, Key: "before-delete", OccurredAt: first.CreatedAt, Note: "first"}
-	b := HistoricalRecord{Number: second.Number, CardID: second.ID, CreatedAt: second.CreatedAt, Key: "will-delete", OccurredAt: second.CreatedAt, Note: "second"}
+	a := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: first.CreatedAt, Key: "before-delete", OccurredAt: first.CreatedAt, Note: "first"}
+	b := HistoricalRecord{Number: second.Number, ItemID: second.ID, CreatedAt: second.CreatedAt, Key: "will-delete", OccurredAt: second.CreatedAt, Note: "second"}
 	result := make(chan error, 1)
 	go func() { result <- r.ImportHistory(ctx, []HistoricalRecord{a, b}) }()
 	probe, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadUncommitted})
@@ -448,13 +448,13 @@ func TestMySQLImportWaitsForCardBeforeNumberOnDelete(t *testing.T) {
 	}
 }
 
-func newHistoryCard(t *testing.T, r MySQLRepository) Card {
+func newHistoryCard(t *testing.T, r MySQLRepository) Item {
 	t.Helper()
 	mustInit(t, r)
 	if err := r.InitializeHistory(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	c, err := r.CreateCard(context.Background(), CardInput{Title: "history subject", Description: "body", ColumnID: 1})
+	c, err := r.CreateItem(context.Background(), ItemInput{Title: "history subject", Description: "body", ColumnID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +467,7 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 	c := newHistoryCard(t, r)
 	title, desc, url, col := "new title", "new body", "https://github.com/a/b/pull/9", int64(2)
 	urls := []string{url}
-	if _, err := r.UpdateCard(ctx, c.ID, CardPatch{Title: &title, Description: &desc, PRURLs: &urls, ColumnID: &col}); err != nil {
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{Title: &title, Description: &desc, PRURLs: &urls, ColumnID: &col}); err != nil {
 		t.Fatal(err)
 	}
 	page, err := r.History(ctx, c.Number, 0)
@@ -493,7 +493,7 @@ func TestMySQLImportRejectsEachIdentityMismatchWithoutWriting(t *testing.T) {
 	r := MySQLRepository{DB: mysqlTestDB(t, "")}
 	ctx := context.Background()
 	c := newHistoryCard(t, r)
-	base := HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: "identity", OccurredAt: c.CreatedAt, Note: "source"}
+	base := HistoricalRecord{Number: c.Number, ItemID: c.ID, CreatedAt: c.CreatedAt, Key: "identity", OccurredAt: c.CreatedAt, Note: "source"}
 	for name, mutate := range map[string]func(*HistoricalRecord){
 		"number":    func(v *HistoricalRecord) { v.Number++ },
 		"createdAt": func(v *HistoricalRecord) { v.CreatedAt = v.CreatedAt.Add(time.Second) },
@@ -514,7 +514,7 @@ func TestMySQLImportKeyConflictChecksEveryStoredField(t *testing.T) {
 	r := MySQLRepository{DB: mysqlTestDB(t, "")}
 	ctx := context.Background()
 	c := newHistoryCard(t, r)
-	base := HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: "same", OccurredAt: c.CreatedAt, Note: "original", EvidenceURL: "https://github.com/a/b/pull/1", Changes: []HistoryChange{{Field: "status", Before: "Todo", After: "Done"}}}
+	base := HistoricalRecord{Number: c.Number, ItemID: c.ID, CreatedAt: c.CreatedAt, Key: "same", OccurredAt: c.CreatedAt, Note: "original", EvidenceURL: "https://github.com/a/b/pull/1", Changes: []HistoryChange{{Field: "status", Before: "Todo", After: "Done"}}}
 	if err := r.ImportHistory(ctx, []HistoricalRecord{base}); err != nil {
 		t.Fatal(err)
 	}
@@ -533,13 +533,13 @@ func TestMySQLImportKeyConflictChecksEveryStoredField(t *testing.T) {
 		}
 	}
 	// A key owned by a non-restored event (the baseline) is never an idempotent re-run, even when every other field matches.
-	first, err := r.GetCard(ctx, 1)
+	first, err := r.GetItem(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var baseline HistoricalRecord
 	var payload []byte
-	baseline.Number, baseline.CardID, baseline.CreatedAt, baseline.Key = first.Number, first.ID, first.CreatedAt, "baseline-v1"
+	baseline.Number, baseline.ItemID, baseline.CreatedAt, baseline.Key = first.Number, first.ID, first.CreatedAt, "baseline-v1"
 	if err = r.DB.QueryRow("SELECT occurred_at,changes,note,evidence_url FROM card_history WHERE card_id=1 AND event_key='baseline-v1'").Scan(&baseline.OccurredAt, &payload, &baseline.Note, &baseline.EvidenceURL); err != nil {
 		t.Fatal("seed card must have a baseline event:", err)
 	}
@@ -561,7 +561,7 @@ func TestMySQLHistoryPageBoundaries(t *testing.T) {
 	records := func(n int, at time.Time, prefix string) []HistoricalRecord {
 		out := []HistoricalRecord{}
 		for i := 0; i < n; i++ {
-			out = append(out, HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: fmt.Sprintf("%s-%d", prefix, i), OccurredAt: at, Note: "source"})
+			out = append(out, HistoricalRecord{Number: c.Number, ItemID: c.ID, CreatedAt: c.CreatedAt, Key: fmt.Sprintf("%s-%d", prefix, i), OccurredAt: at, Note: "source"})
 		}
 		return out
 	}
@@ -592,12 +592,12 @@ func TestMySQLConcurrentImportsInOppositeOrderDoNotDeadlock(t *testing.T) {
 	r := MySQLRepository{DB: mysqlTestDB(t, "")}
 	ctx := context.Background()
 	a := newHistoryCard(t, r)
-	b, err := r.CreateCard(ctx, CardInput{Title: "second", ColumnID: 1})
+	b, err := r.CreateItem(ctx, ItemInput{Title: "second", ColumnID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := func(c Card, key string) HistoricalRecord {
-		return HistoricalRecord{Number: c.Number, CardID: c.ID, CreatedAt: c.CreatedAt, Key: key, OccurredAt: c.CreatedAt, Note: "source"}
+	record := func(c Item, key string) HistoricalRecord {
+		return HistoricalRecord{Number: c.Number, ItemID: c.ID, CreatedAt: c.CreatedAt, Key: key, OccurredAt: c.CreatedAt, Note: "source"}
 	}
 	for round := 0; round < 20; round++ {
 		key := fmt.Sprintf("round-%d", round)

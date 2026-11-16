@@ -5,8 +5,8 @@ import (
 	"fmt"
 )
 
-// InitializeCardCommandTemplates creates per-card links and new-card defaults tables.
-func (r MySQLRepository) InitializeCardCommandTemplates(ctx context.Context) error {
+// InitializeItemCommandTemplates creates per-card links and new-card defaults tables.
+func (r MySQLRepository) InitializeItemCommandTemplates(ctx context.Context) error {
 	_, err := r.DB.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS card_command_templates (
   card_id BIGINT NOT NULL,
   template_id BIGINT NOT NULL,

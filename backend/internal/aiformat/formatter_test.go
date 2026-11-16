@@ -92,7 +92,7 @@ func (f *fakeAnthropic) formatter() *Formatter {
 	return New(secretKey, "claude-haiku-5-5", option.WithBaseURL(f.srv.URL))
 }
 
-func format(f *Formatter, draft kanban.Draft) (kanban.RefinedCard, error) {
+func format(f *Formatter, draft kanban.Draft) (kanban.RefinedItem, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return f.Format(ctx, draft)
@@ -124,7 +124,7 @@ func assertNoLeak(t *testing.T, label string, err error) {
 func TestFormatSendsTheExpectedRequest(t *testing.T) {
 	f := newFake(t, reply(200, answer("整えた題名", "整えた説明")))
 	got, err := format(f.formatter(), kanban.Draft{Title: "下書き題名", Description: "下書き説明"})
-	if err != nil || got != (kanban.RefinedCard{Title: "整えた題名", Description: "整えた説明"}) {
+	if err != nil || got != (kanban.RefinedItem{Title: "整えた題名", Description: "整えた説明"}) {
 		t.Fatalf("got %+v %v", got, err)
 	}
 	if f.path != "/v1/messages" || f.requests.Load() != 1 {

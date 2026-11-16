@@ -10,18 +10,18 @@ import (
 
 func TestChangeAssigneeByNumber(t *testing.T) {
 	r := fresh()
-	r.cards[22] = Card{
+	r.cards[22] = Item{
 		ID: 22, Number: 7, ColumnID: 1, Title: "keep", Description: "body",
 		PRURLs: []string{}, CreatedAt: time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC),
 	}
-	r.cards[7] = Card{ID: 7, Number: 22, ColumnID: 1, Title: "other", PRURLs: []string{}}
+	r.cards[7] = Item{ID: 7, Number: 22, ColumnID: 1, Title: "other", PRURLs: []string{}}
 	h := NewHandler(r)
 
-	w := request(h, "PATCH", "/api/cards/by-number/7/assignee", `{"assignee":"cursor"}`)
+	w := request(h, "PATCH", "/api/items/by-number/7/assignee", `{"assignee":"cursor"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", w.Code, w.Body.String())
 	}
-	var got Card
+	var got Item
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestChangeAssigneeByNumber(t *testing.T) {
 		t.Fatalf("wrong card updated: %+v", r.cards[7])
 	}
 
-	w = request(h, "PATCH", "/api/cards/by-number/7/assignee", `{"assignee":""}`)
+	w = request(h, "PATCH", "/api/items/by-number/7/assignee", `{"assignee":""}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("clear status %d", w.Code)
 	}
@@ -49,7 +49,7 @@ func TestChangeAssigneeByNumber(t *testing.T) {
 
 func TestChangeAssigneeByNumberValidation(t *testing.T) {
 	r := fresh()
-	r.cards[1] = Card{ID: 1, Number: 1, ColumnID: 1, Title: "t", PRURLs: []string{}}
+	r.cards[1] = Item{ID: 1, Number: 1, ColumnID: 1, Title: "t", PRURLs: []string{}}
 	h := NewHandler(r)
 	cases := []struct {
 		body string
@@ -61,7 +61,7 @@ func TestChangeAssigneeByNumberValidation(t *testing.T) {
 		{`{"assignee":"Claude","extra":1}`, 400},
 	}
 	for _, tc := range cases {
-		w := request(h, "PATCH", "/api/cards/by-number/1/assignee", tc.body)
+		w := request(h, "PATCH", "/api/items/by-number/1/assignee", tc.body)
 		if w.Code != tc.code {
 			t.Fatalf("%s -> %d want %d (%s)", tc.body, w.Code, tc.code, w.Body.String())
 		}
@@ -70,24 +70,24 @@ func TestChangeAssigneeByNumberValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := request(h, "PATCH", "/api/cards/by-number/1/assignee", string(control))
+	w := request(h, "PATCH", "/api/items/by-number/1/assignee", string(control))
 	if w.Code != 400 {
 		t.Fatalf("control char -> %d (%s)", w.Code, w.Body.String())
 	}
-	w = request(h, "PATCH", "/api/cards/by-number/99/assignee", `{"assignee":"Cursor"}`)
+	w = request(h, "PATCH", "/api/items/by-number/99/assignee", `{"assignee":"Cursor"}`)
 	if w.Code != 404 {
 		t.Fatalf("missing card -> %d", w.Code)
 	}
 }
 
-func TestCreateCardAssignee(t *testing.T) {
+func TestCreateItemAssignee(t *testing.T) {
 	r := fresh()
 	h := NewHandler(r)
-	w := request(h, "POST", "/api/cards", `{"title":"n","description":"","columnId":1,"assignee":"cursor"}`)
+	w := request(h, "POST", "/api/items", `{"title":"n","description":"","columnId":1,"assignee":"cursor"}`)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status %d body %s", w.Code, w.Body.String())
 	}
-	var got Card
+	var got Item
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
@@ -100,21 +100,21 @@ func TestCreateCardAssignee(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w = request(h, "POST", "/api/cards", string(control))
+	w = request(h, "POST", "/api/items", string(control))
 	if w.Code != 400 {
 		t.Fatalf("control -> %d", w.Code)
 	}
 }
 
-func TestUpdateCardAssigneeByID(t *testing.T) {
+func TestUpdateItemAssigneeByID(t *testing.T) {
 	r := fresh()
-	r.cards[5] = Card{ID: 5, Number: 9, ColumnID: 1, Title: "t", Description: "d", PRURLs: []string{}}
+	r.cards[5] = Item{ID: 5, Number: 9, ColumnID: 1, Title: "t", Description: "d", PRURLs: []string{}}
 	h := NewHandler(r)
-	w := request(h, "PATCH", "/api/cards/5", `{"assignee":"claude"}`)
+	w := request(h, "PATCH", "/api/items/5", `{"assignee":"claude"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", w.Code, w.Body.String())
 	}
-	var got Card
+	var got Item
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
@@ -125,11 +125,11 @@ func TestUpdateCardAssigneeByID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w = request(h, "PATCH", "/api/cards/5", string(control))
+	w = request(h, "PATCH", "/api/items/5", string(control))
 	if w.Code != 400 {
 		t.Fatalf("control char -> %d", w.Code)
 	}
-	w = request(h, "PATCH", "/api/cards/5", `{"title":"keep","assignee":null}`)
+	w = request(h, "PATCH", "/api/items/5", `{"title":"keep","assignee":null}`)
 	if w.Code != 400 {
 		t.Fatalf("null assignee with title -> %d", w.Code)
 	}

@@ -6,9 +6,9 @@ import (
 	"fmt"
 )
 
-// InitializeCardPositions adds cards.position when missing and backfills only columns
+// InitializeItemPositions adds cards.position when missing and backfills only columns
 // that still have identical positions (so restart never wipes DnD order).
-func (r MySQLRepository) InitializeCardPositions(ctx context.Context) error {
+func (r MySQLRepository) InitializeItemPositions(ctx context.Context) error {
 	var count int
 	err := r.DB.QueryRowContext(ctx, `
 SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -108,7 +108,7 @@ func backfillColumnByCreatedAt(ctx context.Context, db *sql.DB, columnID int64) 
 	return tx.Commit()
 }
 
-// lockExistingColumn takes the same all-columns X lock that ReorderCards takes, so every path that
+// lockExistingColumn takes the same all-columns X lock that ReorderItems takes, so every path that
 // changes card membership/position (create, status move, reorder, delete) serializes on board_columns
 // before touching cards.
 func lockExistingColumn(ctx context.Context, tx *sql.Tx, columnID int64) error {
@@ -175,13 +175,13 @@ func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID int64) err
 	return nil
 }
 
-func listOrderedCards(ctx context.Context, tx *sql.Tx) ([]Card, error) {
+func listOrderedCards(ctx context.Context, tx *sql.Tx) ([]Item, error) {
 	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.position,c.id")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	cards := []Card{}
+	cards := []Item{}
 	for rows.Next() {
 		c, err := scanCard(rows)
 		if err != nil {

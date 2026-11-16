@@ -15,7 +15,7 @@ import (
 
 const maxOutputTokens = 8192
 
-// Formatter implements kanban.CardFormatter on top of the official Anthropic SDK.
+// Formatter implements kanban.ItemFormatter on top of the official Anthropic SDK.
 type Formatter struct {
 	model  string
 	client anthropic.Client
@@ -33,10 +33,10 @@ type output struct {
 }
 
 // Format asks Claude to tidy the draft. Every failure becomes a *Failure without upstream text.
-func (f *Formatter) Format(ctx context.Context, draft kanban.Draft) (kanban.RefinedCard, error) {
+func (f *Formatter) Format(ctx context.Context, draft kanban.Draft) (kanban.RefinedItem, error) {
 	input, err := json.Marshal(draft)
 	if err != nil {
-		return kanban.RefinedCard{}, &Failure{Kind: kindInvalidOutput}
+		return kanban.RefinedItem{}, &Failure{Kind: kindInvalidOutput}
 	}
 	message, err := f.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(f.model),
@@ -49,19 +49,19 @@ func (f *Formatter) Format(ctx context.Context, draft kanban.Draft) (kanban.Refi
 		},
 	})
 	if err != nil {
-		return kanban.RefinedCard{}, classify(err)
+		return kanban.RefinedItem{}, classify(err)
 	}
 	if message == nil { // a gateway can answer 200 with a JSON null body
-		return kanban.RefinedCard{}, &Failure{Kind: kindInvalidOutput}
+		return kanban.RefinedItem{}, &Failure{Kind: kindInvalidOutput}
 	}
 	switch message.StopReason {
 	case anthropic.StopReasonEndTurn:
 	case anthropic.StopReasonRefusal:
-		return kanban.RefinedCard{}, &Failure{Kind: kindRefusal}
+		return kanban.RefinedItem{}, &Failure{Kind: kindRefusal}
 	case anthropic.StopReasonMaxTokens:
-		return kanban.RefinedCard{}, &Failure{Kind: kindTruncated}
+		return kanban.RefinedItem{}, &Failure{Kind: kindTruncated}
 	default:
-		return kanban.RefinedCard{}, &Failure{Kind: kindInvalidOutput}
+		return kanban.RefinedItem{}, &Failure{Kind: kindInvalidOutput}
 	}
 	var text strings.Builder
 	for _, block := range message.Content {
@@ -72,15 +72,15 @@ func (f *Formatter) Format(ctx context.Context, draft kanban.Draft) (kanban.Refi
 	return parse(text.String())
 }
 
-func parse(text string) (kanban.RefinedCard, error) {
+func parse(text string) (kanban.RefinedItem, error) {
 	var out output
 	decoder := json.NewDecoder(bytes.NewReader([]byte(text)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&out); err != nil || out.Title == nil || out.Description == nil {
-		return kanban.RefinedCard{}, &Failure{Kind: kindInvalidOutput}
+		return kanban.RefinedItem{}, &Failure{Kind: kindInvalidOutput}
 	}
 	if _, err := decoder.Token(); err != io.EOF {
-		return kanban.RefinedCard{}, &Failure{Kind: kindInvalidOutput}
+		return kanban.RefinedItem{}, &Failure{Kind: kindInvalidOutput}
 	}
-	return kanban.RefinedCard{Title: *out.Title, Description: *out.Description}, nil
+	return kanban.RefinedItem{Title: *out.Title, Description: *out.Description}, nil
 }

@@ -14,7 +14,7 @@ func TestCardOrderMySQL(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
-	if err := r.InitializeCardPositions(ctx); err != nil {
+	if err := r.InitializeItemPositions(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.InitializeNumbers(ctx); err != nil {
@@ -22,11 +22,11 @@ func TestCardOrderMySQL(t *testing.T) {
 	}
 
 	// Sample card from schema starts at position 0 in Todo.
-	c1, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "second", Description: ""})
+	c1, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "second", Description: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c2, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "third", Description: ""})
+	c2, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "third", Description: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,14 +34,14 @@ func TestCardOrderMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	todo := cardsInColumn(board.Cards, 1)
+	todo := cardsInColumn(board.Items, 1)
 	if len(todo) != 3 || todo[0].Position != 0 || todo[1].ID != c1.ID || todo[2].ID != c2.ID {
 		t.Fatalf("create order: %+v", todo)
 	}
 
 	sampleID := todo[0].ID
-	cards, err := r.ReorderCards(ctx, []CardColumnOrder{
-		{ColumnID: 1, CardIDs: []int64{c2.ID, sampleID, c1.ID}},
+	cards, err := r.ReorderItems(ctx, []ItemColumnOrder{
+		{ColumnID: 1, ItemIDs: []int64{c2.ID, sampleID, c1.ID}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -56,14 +56,14 @@ func TestCardOrderMySQL(t *testing.T) {
 	for _, c := range todo {
 		before[c.ID] = c.Position
 	}
-	if err = r.InitializeCardPositions(ctx); err != nil {
+	if err = r.InitializeItemPositions(ctx); err != nil {
 		t.Fatal(err)
 	}
 	board, err = r.Board(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range cardsInColumn(board.Cards, 1) {
+	for _, c := range cardsInColumn(board.Items, 1) {
 		if before[c.ID] != c.Position {
 			t.Fatalf("backfill wiped position for %d: %d -> %d", c.ID, before[c.ID], c.Position)
 		}
@@ -78,9 +78,9 @@ func TestCardOrderMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r.ReorderCards(ctx, []CardColumnOrder{
-		{ColumnID: 1, CardIDs: []int64{sampleID, c1.ID}},
-		{ColumnID: 2, CardIDs: []int64{c2.ID}},
+	_, err = r.ReorderItems(ctx, []ItemColumnOrder{
+		{ColumnID: 1, ItemIDs: []int64{sampleID, c1.ID}},
+		{ColumnID: 2, ItemIDs: []int64{c2.ID}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -101,8 +101,8 @@ func TestCardOrderMySQL(t *testing.T) {
 		t.Fatalf("a sibling's move must not add history to c1: before=%d after=%d", len(siblingBefore.Events), len(pageSame.Events))
 	}
 
-	_, err = r.ReorderCards(ctx, []CardColumnOrder{
-		{ColumnID: 1, CardIDs: []int64{c1.ID, sampleID}},
+	_, err = r.ReorderItems(ctx, []ItemColumnOrder{
+		{ColumnID: 1, ItemIDs: []int64{c1.ID, sampleID}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -115,8 +115,8 @@ func TestCardOrderMySQL(t *testing.T) {
 		t.Fatalf("within-column reorder must not add history: before=%d after=%d", len(pageSame.Events), len(pageAfterReorder.Events))
 	}
 
-	// UpdateCard column change appends to end.
-	moved, err := r.UpdateCard(ctx, sampleID, CardPatch{ColumnID: int64Ptr(2)})
+	// UpdateItem column change appends to end.
+	moved, err := r.UpdateItem(ctx, sampleID, ItemPatch{ColumnID: int64Ptr(2)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,15 +124,15 @@ func TestCardOrderMySQL(t *testing.T) {
 		t.Fatalf("update move: %+v", moved)
 	}
 
-	if _, err = r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{999}}}); !errors.Is(err, ErrCardOrderMismatch) {
+	if _, err = r.ReorderItems(ctx, []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{999}}}); !errors.Is(err, ErrItemOrderMismatch) {
 		t.Fatalf("want mismatch, got %v", err)
 	}
 
 	h := NewHandler(r)
 	payload, _ := json.Marshal(map[string]any{
-		"columns": []map[string]any{{"columnId": 2, "cardIds": []int64{c2.ID, sampleID}}},
+		"columns": []map[string]any{{"columnId": 2, "itemIds": []int64{c2.ID, sampleID}}},
 	})
-	w := request(h, "PUT", "/api/cards/order", string(payload))
+	w := request(h, "PUT", "/api/items/order", string(payload))
 	if w.Code != 200 {
 		t.Fatalf("http reorder: %d %s", w.Code, w.Body)
 	}
@@ -147,7 +147,7 @@ func TestCardOrderMySQL(t *testing.T) {
 			if i%2 == 0 {
 				order = []int64{sampleID, c2.ID}
 			}
-			_, err := r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 2, CardIDs: order}})
+			_, err := r.ReorderItems(ctx, []ItemColumnOrder{{ColumnID: 2, ItemIDs: order}})
 			errCh <- err
 		}(i)
 	}
@@ -162,7 +162,7 @@ func TestCardOrderMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doing := cardsInColumn(board.Cards, 2)
+	doing := cardsInColumn(board.Items, 2)
 	if len(doing) != 2 {
 		t.Fatalf("doing cards: %+v", doing)
 	}
@@ -187,7 +187,7 @@ func idsByPosition(t *testing.T, r MySQLRepository, column int64) []int64 {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cards := cardsInColumn(board.Cards, column)
+	cards := cardsInColumn(board.Items, column)
 	ids := make([]int64, len(cards))
 	seen := make([]bool, len(cards))
 	for _, c := range cards {
@@ -200,9 +200,9 @@ func idsByPosition(t *testing.T, r MySQLRepository, column int64) []int64 {
 	return ids
 }
 
-// A move between columns through ReorderCards is a status change: it is recorded as an update of that card,
+// A move between columns through ReorderItems is a status change: it is recorded as an update of that card,
 // stamped with the time of the move, and it names the two columns.
-func TestReorderCardsColumnMoveHistoryMySQL(t *testing.T) {
+func TestReorderItemsColumnMoveHistoryMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t)
 	ctx := context.Background()
 	created, err := r.History(ctx, a.Number, 0)
@@ -217,9 +217,9 @@ func TestReorderCardsColumnMoveHistoryMySQL(t *testing.T) {
 
 	time.Sleep(20 * time.Millisecond)
 	start := time.Now().UTC()
-	if _, err = r.ReorderCards(ctx, []CardColumnOrder{
-		{ColumnID: 1, CardIDs: []int64{seed, b.ID}},
-		{ColumnID: 2, CardIDs: []int64{a.ID}},
+	if _, err = r.ReorderItems(ctx, []ItemColumnOrder{
+		{ColumnID: 1, ItemIDs: []int64{seed, b.ID}},
+		{ColumnID: 2, ItemIDs: []int64{a.ID}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestReorderCardsColumnMoveHistoryMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range board.Cards {
+	for _, c := range board.Items {
 		if c.ID == a.ID && !c.UpdatedAt.Equal(move.OccurredAt) {
 			t.Fatalf("occurredAt %v must match the card's updatedAt %v", move.OccurredAt, c.UpdatedAt)
 		}
@@ -272,13 +272,13 @@ func TestReorderCardsColumnMoveHistoryMySQL(t *testing.T) {
 func TestStatusChangeCompactsSourceColumnInPositionOrderMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t)
 	ctx := context.Background()
-	c, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "c"})
+	c, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "c"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	seed := idsByPosition(t, r, 1)[0]
 	// The board reads c, b, a, seed: the reverse of the order the cards were created in.
-	if _, err = r.ReorderCards(ctx, []CardColumnOrder{{ColumnID: 1, CardIDs: []int64{c.ID, b.ID, a.ID, seed}}}); err != nil {
+	if _, err = r.ReorderItems(ctx, []ItemColumnOrder{{ColumnID: 1, ItemIDs: []int64{c.ID, b.ID, a.ID, seed}}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := idsByPosition(t, r, 1); !slices.Equal(got, []int64{c.ID, b.ID, a.ID, seed}) {
@@ -286,7 +286,7 @@ func TestStatusChangeCompactsSourceColumnInPositionOrderMySQL(t *testing.T) {
 	}
 
 	// b sits second; moving it away leaves a gap that must close without reshuffling c, a and seed.
-	if _, err = r.UpdateCard(ctx, b.ID, CardPatch{ColumnID: int64Ptr(2)}); err != nil {
+	if _, err = r.UpdateItem(ctx, b.ID, ItemPatch{ColumnID: int64Ptr(2)}); err != nil {
 		t.Fatal(err)
 	}
 	if got := idsByPosition(t, r, 1); !slices.Equal(got, []int64{c.ID, a.ID, seed}) {
@@ -299,7 +299,7 @@ func TestStatusChangeCompactsSourceColumnInPositionOrderMySQL(t *testing.T) {
 
 // A PATCH that names the card's current column is an edit, not a move: the card keeps its place and nothing
 // is recorded as a status change.
-func TestUpdateCardWithItsCurrentColumnKeepsItsPlaceMySQL(t *testing.T) {
+func TestUpdateItemWithItsCurrentColumnKeepsItsPlaceMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t)
 	ctx := context.Background()
 	seed := idsByPosition(t, r, 1)[0]
@@ -313,7 +313,7 @@ func TestUpdateCardWithItsCurrentColumnKeepsItsPlaceMySQL(t *testing.T) {
 	}
 
 	title := "a, renamed"
-	updated, err := r.UpdateCard(ctx, a.ID, CardPatch{ColumnID: int64Ptr(1), Title: &title})
+	updated, err := r.UpdateItem(ctx, a.ID, ItemPatch{ColumnID: int64Ptr(1), Title: &title})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +327,7 @@ func TestUpdateCardWithItsCurrentColumnKeepsItsPlaceMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range board.Cards {
+	for _, c := range board.Items {
 		if c.ID == b.ID && c.Position != 2 {
 			t.Fatalf("a neighbour's position moved: %+v", c)
 		}

@@ -20,7 +20,7 @@ func TestMySQLNumberingFresh(t *testing.T) {
 	db := mysqlTestDB(t, "_fresh")
 	r := MySQLRepository{DB: db}
 	mustInit(t, r)
-	c, err := r.CreateCard(context.Background(), CardInput{ColumnID: 1, Title: "first user task"})
+	c, err := r.CreateItem(context.Background(), ItemInput{ColumnID: 1, Title: "first user task"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestMySQLNumberingFresh(t *testing.T) {
 		t.Fatalf("first user card number=%d, want 2", c.Number)
 	}
 	mustInit(t, r)
-	c2, err := r.GetCard(context.Background(), c.ID)
+	c2, err := r.GetItem(context.Background(), c.ID)
 	if err != nil || c2.Number != 2 {
 		t.Fatalf("restart changed number: %+v %v", c2, err)
 	}
@@ -50,11 +50,11 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 	}
 	mustInit(t, r)
 	for id, want := range map[int64]int64{1: 1, 50: 2, 51: 3, 40: 4} {
-		if c, err := r.GetCard(ctx, id); err != nil || c.Number != want {
+		if c, err := r.GetItem(ctx, id); err != nil || c.Number != want {
 			t.Fatalf("id %d: number %+v, want %d (%v)", id, c, want, err)
 		}
 	}
-	created, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "after backfill"})
+	created, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "after backfill"})
 	if err != nil || created.Number != 5 {
 		t.Fatalf("number after backfill: %+v %v", created, err)
 	}
@@ -67,7 +67,7 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustInit(t, r)
-	if c, err := r.GetCard(ctx, 60); err != nil || c.Number != 6 {
+	if c, err := r.GetItem(ctx, 60); err != nil || c.Number != 6 {
 		t.Fatalf("stale counter reused a number: %+v %v", c, err)
 	}
 	if _, err = db.Exec("UPDATE card_number_sequence SET next_number=1 WHERE singleton=1"); err != nil {
@@ -113,7 +113,7 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	rows.Close()
 	mustInit(t, r)
 	for index, id := range []int64{1, 17, 18} {
-		c, err := r.GetCard(ctx, id)
+		c, err := r.GetItem(ctx, id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,23 +127,23 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	}
 	// The public number, not the internal ID, selects the card; unissued numbers never fall back to an ID.
 	for number, id := range map[int64]int64{1: 1, 2: 17, 3: 18} {
-		c, err := r.GetCardByNumber(ctx, number)
+		c, err := r.GetItemByNumber(ctx, number)
 		if err != nil || c.ID != id || c.Number != number {
 			t.Fatalf("by-number %d: %+v %v", number, c, err)
 		}
 	}
-	if _, err = r.GetCardByNumber(ctx, 18); !errors.Is(err, ErrNotFound) {
+	if _, err = r.GetItemByNumber(ctx, 18); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("number 18 must not resolve to internal ID 18: %v", err)
 	}
 	mustInit(t, r)
-	if _, err = r.CreateCard(ctx, CardInput{ColumnID: 999999, Title: "invalid column"}); !errors.Is(err, ErrColumn) {
+	if _, err = r.CreateItem(ctx, ItemInput{ColumnID: 999999, Title: "invalid column"}); !errors.Is(err, ErrColumn) {
 		t.Fatalf("wrong failure %v", err)
 	}
 	// A failure after the cards INSERT must roll the card and number back together.
 	if _, err = db.Exec(`ALTER TABLE card_numbers ADD CONSTRAINT reject_new_number CHECK (task_number <= 3)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "must roll back"}); err == nil {
+	if _, err = r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "must roll back"}); err == nil {
 		t.Fatal("expected check constraint failure")
 	}
 	if _, err = db.Exec("ALTER TABLE card_numbers DROP CHECK reject_new_number"); err != nil {
@@ -153,7 +153,7 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	if err = db.QueryRow("SELECT COUNT(*) FROM cards").Scan(&count); err != nil || count != 3 {
 		t.Fatalf("failed create left card: %d %v", count, err)
 	}
-	c, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "number four"})
+	c, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "number four"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,14 +161,14 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 		t.Fatalf("number is tied to internal ID: %+v", c)
 	}
 	const writers = 20
-	result := make(chan Card, writers)
+	result := make(chan Item, writers)
 	errs := make(chan error, writers+4)
 	var wg sync.WaitGroup
 	for range writers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			card, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "parallel"})
+			card, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "parallel"})
 			if err != nil {
 				errs <- err
 				return
@@ -195,7 +195,7 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 		return
 	}
 	numbers := []int{}
-	var highest Card
+	var highest Item
 	for card := range result {
 		numbers = append(numbers, int(card.Number))
 		if card.Number > highest.Number {
@@ -211,22 +211,22 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 			t.Fatalf("non-consecutive numbers %v", numbers)
 		}
 	}
-	if err = r.DeleteCard(ctx, highest.ID); err != nil {
+	if err = r.DeleteItem(ctx, highest.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = r.GetCardByNumber(ctx, highest.Number); !errors.Is(err, ErrNotFound) {
+	if _, err = r.GetItemByNumber(ctx, highest.Number); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("deleted number still resolves: %v", err)
 	}
 	mustInit(t, r)
-	next, err := r.CreateCard(ctx, CardInput{ColumnID: 1, Title: "after deletion"})
+	next, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "after deletion"})
 	if err != nil || next.Number != 25 {
 		t.Fatalf("deleted number reused: %+v %v", next, err)
 	}
-	if byNumber, err := r.GetCardByNumber(ctx, 25); err != nil || byNumber.ID != next.ID {
+	if byNumber, err := r.GetItemByNumber(ctx, 25); err != nil || byNumber.ID != next.ID {
 		t.Fatalf("by-number 25: %+v %v", byNumber, err)
 	}
 	doing := int64(2)
-	updated, err := r.UpdateCard(ctx, 17, CardPatch{ColumnID: &doing})
+	updated, err := r.UpdateItem(ctx, 17, ItemPatch{ColumnID: &doing})
 	if err != nil || updated.Number != 2 || updated.ID != 17 {
 		t.Fatalf("update changed identity: %+v %v", updated, err)
 	}
@@ -234,7 +234,7 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, card := range board.Cards {
+	for _, card := range board.Items {
 		if card.Number < 1 {
 			t.Fatal("board omits number", card)
 		}

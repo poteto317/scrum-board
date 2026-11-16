@@ -8,12 +8,12 @@ import (
 )
 
 func TestHistoricalRecordValidation(t *testing.T) {
-	base := HistoricalRecord{Number: 1, CardID: 1, CreatedAt: time.Now(), OccurredAt: time.Now(), Key: "valid-key", Note: "source"}
+	base := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: time.Now(), OccurredAt: time.Now(), Key: "valid-key", Note: "source"}
 	if !validHistoricalRecord(base, time.Now()) {
 		t.Fatal("valid metadata rejected")
 	}
 	for _, mutate := range []func(*HistoricalRecord){
-		func(v *HistoricalRecord) { v.CardID = 0 }, func(v *HistoricalRecord) { v.CreatedAt = time.Time{} },
+		func(v *HistoricalRecord) { v.ItemID = 0 }, func(v *HistoricalRecord) { v.CreatedAt = time.Time{} },
 		func(v *HistoricalRecord) { v.OccurredAt = time.Time{} }, func(v *HistoricalRecord) { v.Key = "bad key" },
 		func(v *HistoricalRecord) { v.Note = "" }, func(v *HistoricalRecord) { v.EvidenceURL = "javascript:alert(1)" },
 		func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "unknown"}} },
@@ -30,7 +30,7 @@ func TestHistoricalRecordValidation(t *testing.T) {
 func TestHistoricalRecordRejectsFutureOccurredAt(t *testing.T) {
 	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
 	record := func(at time.Time) HistoricalRecord {
-		return HistoricalRecord{Number: 1, CardID: 1, CreatedAt: now.Add(-time.Hour), OccurredAt: at, Key: "valid-key", Note: "source"}
+		return HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: now.Add(-time.Hour), OccurredAt: at, Key: "valid-key", Note: "source"}
 	}
 	for name, tc := range map[string]struct {
 		at   time.Time
@@ -54,7 +54,7 @@ func TestHistoricalRecordRejectsFutureOccurredAt(t *testing.T) {
 func TestHistoricalRecordLimits(t *testing.T) {
 	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
 	valid := func() HistoricalRecord {
-		return HistoricalRecord{Number: 1, CardID: 1, CreatedAt: now.Add(-time.Hour), OccurredAt: now, Key: "valid-key", Note: "source"}
+		return HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: now.Add(-time.Hour), OccurredAt: now, Key: "valid-key", Note: "source"}
 	}
 	long := func(n int) string { return strings.Repeat("あ", n) }
 	for name, tc := range map[string]struct {
@@ -179,9 +179,9 @@ func TestHistoryJSONContract(t *testing.T) {
 		}
 	}
 	// The import manifest uses the same camelCase names as the API.
-	record := `{"number":1,"cardId":2,"createdAt":"2026-01-01T00:00:00Z","key":"k","occurredAt":"2026-01-02T00:00:00Z","changes":[],"note":"n","evidenceUrl":"https://github.com/a/b/pull/1"}`
+	record := `{"number":1,"itemId":2,"createdAt":"2026-01-01T00:00:00Z","key":"k","occurredAt":"2026-01-02T00:00:00Z","changes":[],"note":"n","evidenceUrl":"https://github.com/a/b/pull/1"}`
 	var decoded HistoricalRecord
-	if err = json.Unmarshal([]byte(record), &decoded); err != nil || decoded.CardID != 2 || decoded.EvidenceURL == "" || decoded.Key != "k" || decoded.Note != "n" {
+	if err = json.Unmarshal([]byte(record), &decoded); err != nil || decoded.ItemID != 2 || decoded.EvidenceURL == "" || decoded.Key != "k" || decoded.Note != "n" {
 		t.Fatalf("manifest keys: %+v %v", decoded, err)
 	}
 }

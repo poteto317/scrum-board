@@ -32,21 +32,21 @@ func TestNormalizeRefined(t *testing.T) {
 	long := func(n int) string { return strings.Repeat("あ", n) }
 	for name, tc := range map[string]struct {
 		draft   Draft
-		refined RefinedCard
-		want    RefinedCard
+		refined RefinedItem
+		want    RefinedItem
 		valid   bool
 	}{
-		"trims":                     {Draft{Description: "d"}, RefinedCard{Title: " T ", Description: "\nD\n"}, RefinedCard{Title: "T", Description: "D"}, true},
-		"empty draft description":   {Draft{Title: "t"}, RefinedCard{Title: "T", Description: "invented"}, RefinedCard{Title: "T"}, true},
-		"lost description":          {Draft{Description: "d"}, RefinedCard{Title: "T"}, RefinedCard{}, false},
-		"blank description":         {Draft{Description: "d"}, RefinedCard{Title: "T", Description: " \n"}, RefinedCard{}, false},
-		"empty title":               {Draft{Title: "t"}, RefinedCard{}, RefinedCard{}, false},
-		"title 200":                 {Draft{Title: "t"}, RefinedCard{Title: long(200)}, RefinedCard{Title: long(200)}, true},
-		"title 201":                 {Draft{Title: "t"}, RefinedCard{Title: long(201)}, RefinedCard{}, false},
-		"description 10000":         {Draft{Description: "d"}, RefinedCard{Title: "T", Description: long(10000)}, RefinedCard{Title: "T", Description: long(10000)}, true},
-		"description 10001":         {Draft{Description: "d"}, RefinedCard{Title: "T", Description: long(10001)}, RefinedCard{}, false},
-		"invalid UTF-8 title":       {Draft{Title: "t"}, RefinedCard{Title: "\xff"}, RefinedCard{}, false},
-		"invalid UTF-8 description": {Draft{Description: "d"}, RefinedCard{Title: "T", Description: "\xff"}, RefinedCard{}, false},
+		"trims":                     {Draft{Description: "d"}, RefinedItem{Title: " T ", Description: "\nD\n"}, RefinedItem{Title: "T", Description: "D"}, true},
+		"empty draft description":   {Draft{Title: "t"}, RefinedItem{Title: "T", Description: "invented"}, RefinedItem{Title: "T"}, true},
+		"lost description":          {Draft{Description: "d"}, RefinedItem{Title: "T"}, RefinedItem{}, false},
+		"blank description":         {Draft{Description: "d"}, RefinedItem{Title: "T", Description: " \n"}, RefinedItem{}, false},
+		"empty title":               {Draft{Title: "t"}, RefinedItem{}, RefinedItem{}, false},
+		"title 200":                 {Draft{Title: "t"}, RefinedItem{Title: long(200)}, RefinedItem{Title: long(200)}, true},
+		"title 201":                 {Draft{Title: "t"}, RefinedItem{Title: long(201)}, RefinedItem{}, false},
+		"description 10000":         {Draft{Description: "d"}, RefinedItem{Title: "T", Description: long(10000)}, RefinedItem{Title: "T", Description: long(10000)}, true},
+		"description 10001":         {Draft{Description: "d"}, RefinedItem{Title: "T", Description: long(10001)}, RefinedItem{}, false},
+		"invalid UTF-8 title":       {Draft{Title: "t"}, RefinedItem{Title: "\xff"}, RefinedItem{}, false},
+		"invalid UTF-8 description": {Draft{Description: "d"}, RefinedItem{Title: "T", Description: "\xff"}, RefinedItem{}, false},
 	} {
 		got, valid := normalizeRefined(tc.draft, tc.refined)
 		if valid != tc.valid || (valid && got != tc.want) {

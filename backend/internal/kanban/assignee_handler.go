@@ -23,12 +23,12 @@ func (h handler) changeAssigneeByNumber(w http.ResponseWriter, r *http.Request) 
 		invalid(w, "対応者は60文字以内で、制御文字を含めず入力してください。")
 		return
 	}
-	card, err := h.repo.GetCardByNumber(r.Context(), number)
+	card, err := h.repo.GetItemByNumber(r.Context(), number)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	updated, err := h.repo.UpdateCard(r.Context(), card.ID, CardPatch{Assignee: &value})
+	updated, err := h.repo.UpdateItem(r.Context(), card.ID, ItemPatch{Assignee: &value})
 	if err != nil {
 		fail(w, err)
 		return

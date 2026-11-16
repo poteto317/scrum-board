@@ -10,7 +10,7 @@ import (
 // ErrRelatedItem is a client validation failure for relatedItems (maps to HTTP 400).
 var ErrRelatedItem = errors.New("invalid related item")
 
-const relatedKindCard = "card"
+const relatedKindItem = "item"
 const relatedKindURL = "url"
 const relatedLabelMax = 120
 const relatedURLMax = 2048
@@ -42,7 +42,7 @@ func normalizeRelatedItems(items []RelatedItem) ([]RelatedItem, bool) {
 			}
 		}
 		switch kind {
-		case relatedKindCard:
+		case relatedKindItem:
 			if raw.Number <= 0 {
 				return nil, false
 			}
@@ -50,7 +50,7 @@ func normalizeRelatedItems(items []RelatedItem) ([]RelatedItem, bool) {
 				return nil, false
 			}
 			seenNumbers[raw.Number] = struct{}{}
-			out = append(out, RelatedItem{Kind: relatedKindCard, Number: raw.Number, Label: label})
+			out = append(out, RelatedItem{Kind: relatedKindItem, Number: raw.Number, Label: label})
 		case relatedKindURL:
 			// Reject before TrimSpace: trailing newlines would otherwise be stripped.
 			if strings.ContainsAny(raw.URL, "\r\n") {

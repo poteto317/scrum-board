@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-const record = `{"number":1,"cardId":1,"createdAt":"2026-11-11T00:00:00Z","key":"k","occurredAt":"2026-11-12T00:00:00Z","changes":[],"note":"n","evidenceUrl":""}`
+const record = `{"number":1,"itemId":1,"createdAt":"2026-11-11T00:00:00Z","key":"k","occurredAt":"2026-11-12T00:00:00Z","changes":[],"note":"n","evidenceUrl":""}`
 
 func TestLoadManifest(t *testing.T) {
 	many := "[" + strings.Repeat(record+",", maxManifestRecords) + record + "]"

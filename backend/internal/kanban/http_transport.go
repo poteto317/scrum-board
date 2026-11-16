@@ -20,13 +20,13 @@ func reply(w http.ResponseWriter, status int, data any) {
 func fail(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		reply(w, 404, map[string]string{"message": "カードが見つかりません。"})
+		reply(w, 404, map[string]string{"message": "アイテムが見つかりません。"})
 	case errors.Is(err, ErrColumn):
 		reply(w, 400, map[string]string{"message": "選択したステータスは存在しません。"})
 	case errors.Is(err, ErrColumnOrder):
 		reply(w, 400, map[string]string{"message": "列の並び順を確認してください。"})
-	case errors.Is(err, ErrCardOrder):
-		reply(w, 400, map[string]string{"message": "カードの並び順を確認してください。"})
+	case errors.Is(err, ErrItemOrder):
+		reply(w, 400, map[string]string{"message": "アイテムの並び順を確認してください。"})
 	case errors.Is(err, ErrBacklogOrder):
 		reply(w, 400, map[string]string{"message": "バックログの並び順を確認してください。"})
 	case errors.Is(err, ErrCommandTemplateLimit):
@@ -34,13 +34,13 @@ func fail(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrUnknownCommandTemplateIDs):
 		reply(w, 400, map[string]string{"message": "存在しないコマンドテンプレートが含まれています。"})
 	case errors.Is(err, ErrRelatedItem):
-		reply(w, 400, map[string]string{"message": "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。"})
+		reply(w, 400, map[string]string{"message": "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。"})
 	case errors.Is(err, ErrDuplicate):
 		reply(w, 409, map[string]string{"message": "同じ名前の列がすでにあります。"})
 	case errors.Is(err, ErrColumnMismatch):
 		reply(w, 409, map[string]string{"message": "列の構成が変更されています。最新のボードを読み込んでからやり直してください。"})
-	case errors.Is(err, ErrCardOrderMismatch):
-		reply(w, 409, map[string]string{"message": "カードの構成が変更されています。最新のボードを読み込んでからやり直してください。"})
+	case errors.Is(err, ErrItemOrderMismatch):
+		reply(w, 409, map[string]string{"message": "アイテムの構成が変更されています。最新のボードを読み込んでからやり直してください。"})
 	case errors.Is(err, ErrBacklogMismatch):
 		reply(w, 409, map[string]string{"message": "バックログの構成が変更されています。最新を読み込んでからやり直してください。"})
 	default:
@@ -68,7 +68,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 func id(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	n, e := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if e != nil || n <= 0 {
-		invalid(w, "カードIDが不正です。")
+		invalid(w, "アイテムIDが不正です。")
 		return 0, false
 	}
 	return n, true

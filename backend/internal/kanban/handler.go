@@ -8,7 +8,7 @@ import (
 
 type handler struct {
 	repo         Repository
-	formatter    CardFormatter
+	formatter    ItemFormatter
 	slots        chan struct{}
 	publicOrigin string
 }
@@ -16,8 +16,8 @@ type handler struct {
 // Option customizes NewHandler without changing the call sites that only need the repository.
 type Option func(*handler)
 
-// WithCardFormatter enables POST /api/cards/refined. A nil formatter keeps the endpoint answering 503.
-func WithCardFormatter(f CardFormatter) Option {
+// WithItemFormatter enables POST /api/items/refined. A nil formatter keeps the endpoint answering 503.
+func WithItemFormatter(f ItemFormatter) Option {
 	return func(h *handler) { h.formatter = f }
 }
 
@@ -37,28 +37,28 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/board", h.board)
 	mux.HandleFunc("GET /api/backlog", h.backlog)
 	mux.HandleFunc("PUT /api/backlog/order", h.reorderBacklog)
-	mux.HandleFunc("GET /api/cards/by-number/{number}/history", h.history)
+	mux.HandleFunc("GET /api/items/by-number/{number}/history", h.history)
 	mux.HandleFunc("POST /api/columns", h.createColumn)
 	mux.HandleFunc("PUT /api/columns/order", h.reorderColumns)
-	mux.HandleFunc("PUT /api/cards/order", h.reorderCards)
-	mux.HandleFunc("POST /api/cards", h.createCard)
-	mux.HandleFunc("POST /api/cards/refined", h.createRefinedCard)
-	mux.HandleFunc("GET /api/cards/{id}", h.getCard)
-	mux.HandleFunc("GET /api/cards/by-number/{number}", h.getCardByNumber)
-	mux.HandleFunc("PATCH /api/cards/{id}", h.updateCard)
-	mux.HandleFunc("PATCH /api/cards/by-number/{number}/status", h.changeStatusByNumber)
-	mux.HandleFunc("PATCH /api/cards/by-number/{number}/assignee", h.changeAssigneeByNumber)
-	mux.HandleFunc("DELETE /api/cards/{id}", h.deleteCard)
+	mux.HandleFunc("PUT /api/items/order", h.reorderItems)
+	mux.HandleFunc("POST /api/items", h.createItem)
+	mux.HandleFunc("POST /api/items/refined", h.createRefinedItem)
+	mux.HandleFunc("GET /api/items/{id}", h.getItem)
+	mux.HandleFunc("GET /api/items/by-number/{number}", h.getItemByNumber)
+	mux.HandleFunc("PATCH /api/items/{id}", h.updateItem)
+	mux.HandleFunc("PATCH /api/items/by-number/{number}/status", h.changeStatusByNumber)
+	mux.HandleFunc("PATCH /api/items/by-number/{number}/assignee", h.changeAssigneeByNumber)
+	mux.HandleFunc("DELETE /api/items/{id}", h.deleteItem)
 	mux.HandleFunc("GET /api/command-templates", h.listCommandTemplates)
 	mux.HandleFunc("POST /api/command-templates", h.createCommandTemplate)
 	mux.HandleFunc("PATCH /api/command-templates/{id}", h.updateCommandTemplate)
 	mux.HandleFunc("DELETE /api/command-templates/{id}", h.deleteCommandTemplate)
-	mux.HandleFunc("POST /api/command-templates/apply-to-all-cards", h.applyCommandTemplatesToAllCards)
+	mux.HandleFunc("POST /api/command-templates/apply-to-all-items", h.applyCommandTemplatesToAllItems)
 	mux.HandleFunc("GET /api/command-template-defaults", h.listCommandTemplateDefaults)
 	mux.HandleFunc("PUT /api/command-template-defaults", h.replaceCommandTemplateDefaults)
-	// by-number only: GET /api/cards/{id}/command-templates conflicts with GET /api/cards/by-number/{number} in ServeMux.
-	mux.HandleFunc("GET /api/cards/by-number/{number}/command-templates", h.listCardCommandTemplatesByNumber)
-	mux.HandleFunc("PUT /api/cards/by-number/{number}/command-templates", h.replaceCardCommandTemplatesByNumber)
+	// by-number only: GET /api/items/{id}/command-templates conflicts with GET /api/items/by-number/{number} in ServeMux.
+	mux.HandleFunc("GET /api/items/by-number/{number}/command-templates", h.listItemCommandTemplatesByNumber)
+	mux.HandleFunc("PUT /api/items/by-number/{number}/command-templates", h.replaceItemCommandTemplatesByNumber)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
@@ -71,26 +71,26 @@ func (h handler) backlog(w http.ResponseWriter, r *http.Request) {
 		fail(w, e)
 		return
 	}
-	reply(w, 200, map[string][]Card{"cards": cards})
+	reply(w, 200, map[string][]Item{"items": cards})
 }
 
 func (h handler) reorderBacklog(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		CardIDs []int64 `json:"cardIds"`
+		ItemIDs []int64 `json:"itemIds"`
 	}
 	if !decode(w, r, &in) {
 		return
 	}
-	if err := validateBacklogOrder(in.CardIDs); err != nil {
+	if err := validateBacklogOrder(in.ItemIDs); err != nil {
 		fail(w, err)
 		return
 	}
-	cards, err := h.repo.ReorderBacklog(r.Context(), in.CardIDs)
+	cards, err := h.repo.ReorderBacklog(r.Context(), in.ItemIDs)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	reply(w, 200, map[string][]Card{"cards": cards})
+	reply(w, 200, map[string][]Item{"items": cards})
 }
 
 func (h handler) board(w http.ResponseWriter, r *http.Request) {
@@ -101,24 +101,24 @@ func (h handler) board(w http.ResponseWriter, r *http.Request) {
 	}
 	reply(w, 200, b)
 }
-func (h handler) getCard(w http.ResponseWriter, r *http.Request) {
+func (h handler) getItem(w http.ResponseWriter, r *http.Request) {
 	n, ok := id(w, r)
 	if !ok {
 		return
 	}
-	c, e := h.repo.GetCard(r.Context(), n)
+	c, e := h.repo.GetItem(r.Context(), n)
 	if e != nil {
 		fail(w, e)
 		return
 	}
 	reply(w, 200, c)
 }
-func (h handler) getCardByNumber(w http.ResponseWriter, r *http.Request) {
+func (h handler) getItemByNumber(w http.ResponseWriter, r *http.Request) {
 	n, ok := taskNumber(w, r)
 	if !ok {
 		return
 	}
-	card, err := h.repo.GetCardByNumber(r.Context(), n)
+	card, err := h.repo.GetItemByNumber(r.Context(), n)
 	if err != nil {
 		fail(w, err)
 		return
@@ -164,26 +164,26 @@ func (h handler) reorderColumns(w http.ResponseWriter, r *http.Request) {
 	reply(w, 200, map[string][]Column{"columns": cols})
 }
 
-func (h handler) reorderCards(w http.ResponseWriter, r *http.Request) {
+func (h handler) reorderItems(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Columns []CardColumnOrder `json:"columns"`
+		Columns []ItemColumnOrder `json:"columns"`
 	}
 	if !decode(w, r, &in) {
 		return
 	}
-	if err := validateCardOrder(in.Columns); err != nil {
+	if err := validateItemOrder(in.Columns); err != nil {
 		fail(w, err)
 		return
 	}
-	cards, err := h.repo.ReorderCards(r.Context(), in.Columns)
+	cards, err := h.repo.ReorderItems(r.Context(), in.Columns)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	reply(w, 200, map[string][]Card{"cards": cards})
+	reply(w, 200, map[string][]Item{"items": cards})
 }
-func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
-	var in CardInput
+func (h handler) createItem(w http.ResponseWriter, r *http.Request) {
+	var in ItemInput
 	if !decode(w, r, &in) {
 		return
 	}
@@ -195,7 +195,7 @@ func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
 	}
 	in.RelatedItems, valid = normalizeRelatedItems(in.RelatedItems)
 	if !valid {
-		invalid(w, "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。")
+		invalid(w, "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。")
 		return
 	}
 	in.Title = strings.TrimSpace(in.Title)
@@ -209,14 +209,14 @@ func (h handler) createCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Assignee = assignee
-	c, e := h.repo.CreateCard(r.Context(), in)
+	c, e := h.repo.CreateItem(r.Context(), in)
 	if e != nil {
 		fail(w, e)
 		return
 	}
 	reply(w, 201, c)
 }
-func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
+func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	n, ok := id(w, r)
 	if !ok {
 		return
@@ -232,20 +232,20 @@ func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	p := CardPatch{ColumnID: body.ColumnID, Title: body.Title, Description: body.Description, PRURLs: body.PRURLs}
+	p := ItemPatch{ColumnID: body.ColumnID, Title: body.Title, Description: body.Description, PRURLs: body.PRURLs}
 	if len(body.RelatedItems) > 0 {
 		if string(body.RelatedItems) == "null" {
-			invalid(w, "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。")
+			invalid(w, "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。")
 			return
 		}
 		var raw []RelatedItem
 		if err := json.Unmarshal(body.RelatedItems, &raw); err != nil {
-			invalid(w, "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。")
+			invalid(w, "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。")
 			return
 		}
 		value, valid := normalizeRelatedItems(raw)
 		if !valid {
-			invalid(w, "関連の内容を確認してください（カード番号・URL・重複・自分自身は不可）。")
+			invalid(w, "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。")
 			return
 		}
 		p.RelatedItems = &value
@@ -294,19 +294,19 @@ func (h handler) updateCard(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "ステータスを選んでください。")
 		return
 	}
-	c, e := h.repo.UpdateCard(r.Context(), n, p)
+	c, e := h.repo.UpdateItem(r.Context(), n, p)
 	if e != nil {
 		fail(w, e)
 		return
 	}
 	reply(w, 200, c)
 }
-func (h handler) deleteCard(w http.ResponseWriter, r *http.Request) {
+func (h handler) deleteItem(w http.ResponseWriter, r *http.Request) {
 	n, ok := id(w, r)
 	if !ok {
 		return
 	}
-	if e := h.repo.DeleteCard(r.Context(), n); e != nil {
+	if e := h.repo.DeleteItem(r.Context(), n); e != nil {
 		fail(w, e)
 		return
 	}

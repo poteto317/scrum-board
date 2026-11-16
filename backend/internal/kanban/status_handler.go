@@ -22,7 +22,7 @@ func (h handler) changeStatusByNumber(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "ステータス名は1〜60文字で入力してください。")
 		return
 	}
-	card, err := h.repo.GetCardByNumber(r.Context(), number)
+	card, err := h.repo.GetItemByNumber(r.Context(), number)
 	if err != nil {
 		fail(w, err)
 		return
@@ -32,7 +32,7 @@ func (h handler) changeStatusByNumber(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	updated, err := h.repo.UpdateCard(r.Context(), card.ID, CardPatch{ColumnID: &column.ID})
+	updated, err := h.repo.UpdateItem(r.Context(), card.ID, ItemPatch{ColumnID: &column.ID})
 	if err != nil {
 		fail(w, err)
 		return

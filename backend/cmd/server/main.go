@@ -46,7 +46,7 @@ func run() error {
 	}
 	repo := kanban.MySQLRepository{DB: db}
 	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	err = repo.InitializeCardPositions(migrationCtx)
+	err = repo.InitializeItemPositions(migrationCtx)
 	if err == nil {
 		err = repo.InitializeBacklogPositions(migrationCtx)
 	}
@@ -70,7 +70,7 @@ func run() error {
 		err = repo.InitializeCommandTemplates(migrationCtx)
 	}
 	if err == nil {
-		err = repo.InitializeCardCommandTemplates(migrationCtx)
+		err = repo.InitializeItemCommandTemplates(migrationCtx)
 	}
 	migrationCancel()
 	if err != nil {

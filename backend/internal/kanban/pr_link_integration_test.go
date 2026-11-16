@@ -13,7 +13,7 @@ func TestMySQLPRLinks(t *testing.T) {
 	ctx := context.Background()
 	r := MySQLRepository{DB: db}
 	mustInit(t, r)
-	before, err := r.GetCard(ctx, 1)
+	before, err := r.GetItem(ctx, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,12 +37,12 @@ func TestMySQLPRLinks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	after, err := r.GetCard(ctx, 1)
+	after, err := r.GetItem(ctx, 1)
 	if err != nil || !reflect.DeepEqual(after.PRURLs, []string{kept}) {
 		t.Fatalf("migration lost URL: %+v %v", after, err)
 	}
 	empty := []string{}
-	if _, err = r.UpdateCard(ctx, 1, CardPatch{PRURLs: &empty}); err != nil {
+	if _, err = r.UpdateItem(ctx, 1, ItemPatch{PRURLs: &empty}); err != nil {
 		t.Fatal(err)
 	}
 	var n int
@@ -52,19 +52,19 @@ func TestMySQLPRLinks(t *testing.T) {
 	}
 	url := "https://github.com/poteto317/scrum-board/pull/2"
 	urls := []string{url}
-	c, err := r.UpdateCard(ctx, 1, CardPatch{PRURLs: &urls})
+	c, err := r.UpdateItem(ctx, 1, ItemPatch{PRURLs: &urls})
 	if err != nil || !reflect.DeepEqual(c.PRURLs, urls) || c.Number != before.Number || c.Title != before.Title || !c.CreatedAt.Equal(before.CreatedAt) {
 		t.Fatalf("save: %+v %v", c, err)
 	}
 	if err = r.InitializePRLinks(ctx); err != nil {
 		t.Fatal(err)
 	}
-	byNumber, err := r.GetCardByNumber(ctx, before.Number)
+	byNumber, err := r.GetItemByNumber(ctx, before.Number)
 	if err != nil || !reflect.DeepEqual(byNumber.PRURLs, urls) {
 		t.Fatalf("restart: %+v %v", byNumber, err)
 	}
 	board, err := r.Board(ctx)
-	if err != nil || !reflect.DeepEqual(board.Cards[0].PRURLs, urls) {
+	if err != nil || !reflect.DeepEqual(board.Items[0].PRURLs, urls) {
 		t.Fatalf("board: %+v %v", board, err)
 	}
 	title := "updated title"
@@ -72,9 +72,9 @@ func TestMySQLPRLinks(t *testing.T) {
 	urls2 := []string{url, url2}
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
-	for _, p := range []CardPatch{{Title: &title}, {PRURLs: &urls2}} {
+	for _, p := range []ItemPatch{{Title: &title}, {PRURLs: &urls2}} {
 		wg.Add(1)
-		go func(p CardPatch) { defer wg.Done(); _, e := r.UpdateCard(ctx, 1, p); errs <- e }(p)
+		go func(p ItemPatch) { defer wg.Done(); _, e := r.UpdateItem(ctx, 1, p); errs <- e }(p)
 	}
 	wg.Wait()
 	close(errs)
@@ -83,28 +83,28 @@ func TestMySQLPRLinks(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	c, err = r.GetCard(ctx, 1)
+	c, err = r.GetItem(ctx, 1)
 	if err != nil || c.Title != title || !reflect.DeepEqual(c.PRURLs, urls2) {
 		t.Fatalf("parallel updates: %+v %v", c, err)
 	}
 	tooLong := []string{strings.Repeat("x", 2049)}
 	failedTitle := "must roll back"
-	if _, err = r.UpdateCard(ctx, 1, CardPatch{Title: &failedTitle, PRURLs: &tooLong}); err == nil {
+	if _, err = r.UpdateItem(ctx, 1, ItemPatch{Title: &failedTitle, PRURLs: &tooLong}); err == nil {
 		t.Fatal("expected URL storage failure")
 	}
-	rollback, e := r.GetCard(ctx, 1)
+	rollback, e := r.GetItem(ctx, 1)
 	if e != nil || !reflect.DeepEqual(c, rollback) {
 		t.Fatalf("partial write: %+v %v", rollback, e)
 	}
-	cleared, err := r.UpdateCard(ctx, 1, CardPatch{PRURLs: &empty})
+	cleared, err := r.UpdateItem(ctx, 1, ItemPatch{PRURLs: &empty})
 	if err != nil || len(cleared.PRURLs) != 0 {
 		t.Fatalf("clear: %+v %v", cleared, err)
 	}
-	created, err := r.CreateCard(ctx, CardInput{Title: "new", ColumnID: 1, PRURLs: []string{url, url2}})
+	created, err := r.CreateItem(ctx, ItemInput{Title: "new", ColumnID: 1, PRURLs: []string{url, url2}})
 	if err != nil || !reflect.DeepEqual(created.PRURLs, []string{url, url2}) {
 		t.Fatalf("create: %+v %v", created, err)
 	}
-	if err = r.DeleteCard(ctx, created.ID); err != nil {
+	if err = r.DeleteItem(ctx, created.ID); err != nil {
 		t.Fatal(err)
 	}
 	var count int
@@ -119,7 +119,7 @@ func TestMySQLPRLinksMigrateRecoversNewOnly(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	mustInit(t, r)
 	url := "https://github.com/poteto317/scrum-board/pull/7"
-	if _, err := r.UpdateCard(ctx, 1, CardPatch{PRURLs: &[]string{url}}); err != nil {
+	if _, err := r.UpdateItem(ctx, 1, ItemPatch{PRURLs: &[]string{url}}); err != nil {
 		t.Fatal(err)
 	}
 	// Simulate DROP succeeded but RENAME failed: only __new remains.
@@ -129,7 +129,7 @@ func TestMySQLPRLinksMigrateRecoversNewOnly(t *testing.T) {
 	if err := r.InitializePRLinks(ctx); err != nil {
 		t.Fatal(err)
 	}
-	got, err := r.GetCard(ctx, 1)
+	got, err := r.GetItem(ctx, 1)
 	if err != nil || !reflect.DeepEqual(got.PRURLs, []string{url}) {
 		t.Fatalf("recover: %+v %v", got, err)
 	}
@@ -145,9 +145,9 @@ func TestMySQLPRLinksConcurrentFirstSave(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	mustInit(t, r)
 	ctx := context.Background()
-	var cards []Card
+	var cards []Item
 	for i := 0; i < 30; i++ {
-		c, err := r.CreateCard(ctx, CardInput{Title: "unlinked", ColumnID: 1})
+		c, err := r.CreateItem(ctx, ItemInput{Title: "unlinked", ColumnID: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -160,10 +160,10 @@ func TestMySQLPRLinksConcurrentFirstSave(t *testing.T) {
 	var wg sync.WaitGroup
 	for _, c := range cards {
 		wg.Add(1)
-		go func(c Card) {
+		go func(c Item) {
 			defer wg.Done()
 			<-start
-			_, err := r.UpdateCard(ctx, c.ID, CardPatch{PRURLs: &urls})
+			_, err := r.UpdateItem(ctx, c.ID, ItemPatch{PRURLs: &urls})
 			errs <- err
 		}(c)
 	}
@@ -176,7 +176,7 @@ func TestMySQLPRLinksConcurrentFirstSave(t *testing.T) {
 		}
 	}
 	for _, c := range cards {
-		got, err := r.GetCard(ctx, c.ID)
+		got, err := r.GetItem(ctx, c.ID)
 		if err != nil || !reflect.DeepEqual(got.PRURLs, urls) {
 			t.Errorf("card %d link missing: %+v %v", c.ID, got, err)
 		}

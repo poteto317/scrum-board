@@ -7,21 +7,21 @@ import (
 	"unicode/utf8"
 )
 
-// Draft is the caller's rough title and description; both are already trimmed when they reach a CardFormatter.
+// Draft is the caller's rough title and description; both are already trimmed when they reach a ItemFormatter.
 type Draft struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 }
 
-// RefinedCard is the formatter's result, validated again by the handler before anything is stored.
-type RefinedCard struct {
+// RefinedItem is the formatter's result, validated again by the handler before anything is stored.
+type RefinedItem struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 }
 
-// CardFormatter turns a draft into a tidy title and description (the AI behind POST /api/cards/refined).
-type CardFormatter interface {
-	Format(context.Context, Draft) (RefinedCard, error)
+// ItemFormatter turns a draft into a tidy title and description (the AI behind POST /api/items/refined).
+type ItemFormatter interface {
+	Format(context.Context, Draft) (RefinedItem, error)
 }
 
 // FormatFailure lets a formatter report why it failed without exposing upstream text.
@@ -56,15 +56,15 @@ func normalizeDraft(d Draft) (Draft, string) {
 
 // normalizeRefined applies the storage rules to what the AI returned for a draft: trimmed values, the stored title and
 // description limits, no invented description for an empty draft description, and no lost description otherwise.
-func normalizeRefined(draft Draft, refined RefinedCard) (RefinedCard, bool) {
+func normalizeRefined(draft Draft, refined RefinedItem) (RefinedItem, bool) {
 	title, description := strings.TrimSpace(refined.Title), strings.TrimSpace(refined.Description)
 	if draft.Description == "" {
 		description = ""
 	} else if description == "" {
-		return RefinedCard{}, false
+		return RefinedItem{}, false
 	}
 	if !validTitle(title) || !validDescription(description) {
-		return RefinedCard{}, false
+		return RefinedItem{}, false
 	}
-	return RefinedCard{Title: title, Description: description}, true
+	return RefinedItem{Title: title, Description: description}, true
 }

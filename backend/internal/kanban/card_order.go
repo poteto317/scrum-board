@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-func (r MySQLRepository) ReorderCards(ctx context.Context, orders []CardColumnOrder) ([]Card, error) {
-	if err := validateCardOrder(orders); err != nil {
+func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOrder) ([]Item, error) {
+	if err := validateItemOrder(orders); err != nil {
 		return nil, err
 	}
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -26,15 +26,15 @@ func (r MySQLRepository) ReorderCards(ctx context.Context, orders []CardColumnOr
 	}
 	for _, order := range orders {
 		if _, ok := knownColumns[order.ColumnID]; !ok {
-			return nil, ErrCardOrderMismatch
+			return nil, ErrItemOrderMismatch
 		}
 	}
 
 	requestedSet := make(map[int64]struct{})
 	for _, order := range orders {
-		for _, id := range order.CardIDs {
+		for _, id := range order.ItemIDs {
 			if _, dup := requestedSet[id]; dup {
-				return nil, ErrCardOrder
+				return nil, ErrItemOrder
 			}
 			requestedSet[id] = struct{}{}
 		}
@@ -48,22 +48,22 @@ func (r MySQLRepository) ReorderCards(ctx context.Context, orders []CardColumnOr
 	if err != nil {
 		return nil, err
 	}
-	existingSet := make(map[int64]Card, len(existing))
+	existingSet := make(map[int64]Item, len(existing))
 	for _, c := range existing {
 		existingSet[c.ID] = c
 	}
 	if len(existingSet) != len(requestedSet) {
-		return nil, ErrCardOrderMismatch
+		return nil, ErrItemOrderMismatch
 	}
 	for id := range requestedSet {
 		if _, ok := existingSet[id]; !ok {
-			return nil, ErrCardOrderMismatch
+			return nil, ErrItemOrderMismatch
 		}
 	}
 
 	now := time.Now().UTC()
 	for _, order := range orders {
-		for pos, cardID := range order.CardIDs {
+		for pos, cardID := range order.ItemIDs {
 			before := existingSet[cardID]
 			columnChanged := before.ColumnID != order.ColumnID
 			if !columnChanged && before.Position == pos {
@@ -106,9 +106,9 @@ func (r MySQLRepository) ReorderCards(ctx context.Context, orders []CardColumnOr
 // locks rows in the order the chosen index is scanned (cards_column_position for a large table, the primary key
 // for a tiny one), so the lock order is not guaranteed. Callers are serialized by the all-columns lock
 // (lockColumnRows / lockExistingColumn) taken first, which is what keeps concurrent writers from deadlocking.
-func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]Card, error) {
+func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]Item, error) {
 	if len(columnIDs) == 0 {
-		return nil, ErrCardOrder
+		return nil, ErrItemOrder
 	}
 	query := "SELECT id FROM cards WHERE column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
 	args := make([]any, len(columnIDs))
@@ -133,7 +133,7 @@ func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]C
 		return nil, err
 	}
 	rows.Close()
-	cards := make([]Card, 0, len(ids))
+	cards := make([]Item, 0, len(ids))
 	for _, id := range ids {
 		c, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
 		if err != nil {

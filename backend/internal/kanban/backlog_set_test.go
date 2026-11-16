@@ -2,7 +2,7 @@ package kanban
 
 import "testing"
 
-func TestSameCardIDSet(t *testing.T) {
+func TestSameItemIDSet(t *testing.T) {
 	cases := []struct {
 		name                string
 		existing, requested []int64
@@ -15,8 +15,8 @@ func TestSameCardIDSet(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := sameCardIDSet(tc.existing, tc.requested); got != tc.want {
-				t.Fatalf("sameCardIDSet(%v,%v)=%v want %v", tc.existing, tc.requested, got, tc.want)
+			if got := sameItemIDSet(tc.existing, tc.requested); got != tc.want {
+				t.Fatalf("sameItemIDSet(%v,%v)=%v want %v", tc.existing, tc.requested, got, tc.want)
 			}
 		})
 	}

@@ -33,29 +33,29 @@ func validateColumnOrder(columnIDs []int64) error {
 	return nil
 }
 
-func validateCardOrder(orders []CardColumnOrder) error {
+func validateItemOrder(orders []ItemColumnOrder) error {
 	if len(orders) == 0 {
-		return ErrCardOrder
+		return ErrItemOrder
 	}
 	seenColumns := make(map[int64]struct{}, len(orders))
 	seenCards := make(map[int64]struct{})
 	for _, order := range orders {
 		if order.ColumnID <= 0 {
-			return ErrCardOrder
+			return ErrItemOrder
 		}
 		if _, dup := seenColumns[order.ColumnID]; dup {
-			return ErrCardOrder
+			return ErrItemOrder
 		}
 		seenColumns[order.ColumnID] = struct{}{}
-		if order.CardIDs == nil {
-			return ErrCardOrder
+		if order.ItemIDs == nil {
+			return ErrItemOrder
 		}
-		for _, id := range order.CardIDs {
+		for _, id := range order.ItemIDs {
 			if id <= 0 {
-				return ErrCardOrder
+				return ErrItemOrder
 			}
 			if _, dup := seenCards[id]; dup {
-				return ErrCardOrder
+				return ErrItemOrder
 			}
 			seenCards[id] = struct{}{}
 		}

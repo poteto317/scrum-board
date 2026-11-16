@@ -44,7 +44,7 @@ func backfillIdenticalBacklogPositions(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	defer tx.Rollback()
-	// Lock by primary key order first (same as CreateCard / ReorderBacklog), then decide.
+	// Lock by primary key order first (same as CreateItem / ReorderBacklog), then decide.
 	if _, err = lockAllCards(ctx, tx); err != nil {
 		return err
 	}
