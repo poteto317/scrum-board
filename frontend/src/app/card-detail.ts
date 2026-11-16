@@ -141,6 +141,7 @@ export class CardDetail implements OnInit {
           this.prLinks.reset();
           this.relatedItems.reset();
           this.assignee.reset();
+          this.listDragging.set(false);
           this.deleted = false;
           this.confirmDelete.set(false);
           this.loading.set(true);
