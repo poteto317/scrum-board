@@ -239,6 +239,27 @@ describe('side field preservation', () => {
     expect(edit.card()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
+  it('keeps local prUrls when marked dirty during an in-flight form flush', () => {
+    const response = new Subject<Card>();
+    const api = {
+      updateCard: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [CardAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(CardAutosave);
+    edit.reset(initial);
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    edit.markPrSideDirty();
+    edit.applyPrSave({
+      prUrls: ['https://github.com/poteto317/scrum-board/pull/9'],
+      updatedAt: '2026-11-16T12:00:00Z',
+    });
+    response.next({ ...initial, title: '編集', prUrls: [] });
+    response.complete();
+    expect(edit.card()?.prUrls).toEqual(['https://github.com/poteto317/scrum-board/pull/9']);
+    expect(edit.card()?.title).toBe('編集');
+    TestBed.resetTestingModule();
+  });
   it('adopts a server assignee when the local side field was untouched during flush', () => {
     const response = new Subject<Card>();
     const api = {
