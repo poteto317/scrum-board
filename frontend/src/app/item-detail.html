@@ -161,6 +161,32 @@
       <aside>
         <section class="detail-card properties">
           <div class="section-label">プロパティ</div>
+          <label for="detail-project">プロジェクト</label>
+          <select
+            id="detail-project"
+            [value]="'' + item()!.projectId"
+            [disabled]="projectSaving()"
+            (change)="onProjectChange($event)"
+          >
+            @for (project of projectSession.projects(); track project.id) {
+              <option [value]="'' + project.id">{{ project.name }}</option>
+            }
+          </select>
+          <p class="field-note">別のプロジェクトへ移すと、そのプロジェクトを表示中にします。</p>
+          @if (projectMoveError()) {
+            <p class="form-error" id="detail-project-error" role="alert">{{ projectMoveError() }}</p>
+            @if (item()!.projectId !== projectSession.activeId()) {
+              <button
+                type="button"
+                class="secondary"
+                id="detail-project-retry"
+                [disabled]="projectSaving()"
+                (click)="retryAlignActiveProject()"
+              >
+                再試行
+              </button>
+            }
+          }
           <label for="detail-status">ステータス</label
           ><select
             id="detail-status"

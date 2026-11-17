@@ -6,6 +6,7 @@ import { Api } from './api';
 import { Item, ItemInput } from './models';
 const initial: Item = {
   id: 27,
+  projectId: 0,
   number: 12,
   columnId: 1,
   title: '元のタイトル',

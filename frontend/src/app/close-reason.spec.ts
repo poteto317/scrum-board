@@ -4,6 +4,7 @@ import { Item } from './models';
 
 const base: Item = {
   id: 1,
+  projectId: 0,
   number: 1,
   columnId: 1,
   title: 't',
