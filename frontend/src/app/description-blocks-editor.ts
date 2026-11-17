@@ -61,6 +61,7 @@ export class DescriptionBlocksEditor {
       this.pendingEcho = null;
       this.blocks.set(parseDescriptionBlocks(next));
       this.lengthError.set('');
+      this.resizeAllSoon();
     });
   }
 
@@ -69,6 +70,7 @@ export class DescriptionBlocksEditor {
     this.pendingEcho = text;
     this.blocks.set(parseDescriptionBlocks(text));
     this.lengthError.set('');
+    this.resizeAllSoon();
   }
 
   focusBlock(blockIndex: number, caret: number): void {
@@ -195,5 +197,14 @@ export class DescriptionBlocksEditor {
   private resize(el: HTMLTextAreaElement): void {
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
+  }
+
+  private resizeAllSoon(): void {
+    afterNextRender(
+      () => {
+        for (const ref of this.areas()) this.resize(ref.nativeElement);
+      },
+      { injector: this.injector },
+    );
   }
 }
