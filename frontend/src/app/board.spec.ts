@@ -685,6 +685,7 @@ function sampleBoard(columns: Column[]) {
     items: [
       {
         id: 1,
+        projectId: 0,
         number: 1,
         columnId: columns[0].id,
         title: 'Card 1',
@@ -1198,6 +1199,7 @@ describe('Board card reordering', () => {
       items: [
         {
           id: 1,
+          projectId: 0,
           number: 1,
           columnId: 1,
           title: 'A',
@@ -1215,6 +1217,7 @@ describe('Board card reordering', () => {
         },
         {
           id: 2,
+          projectId: 0,
           number: 2,
           columnId: 1,
           title: 'B',
@@ -1232,6 +1235,7 @@ describe('Board card reordering', () => {
         },
         {
           id: 3,
+          projectId: 0,
           number: 3,
           columnId: 2,
           title: 'C',
@@ -1383,6 +1387,7 @@ describe('Board card reordering', () => {
       items: [
         {
           id: 1,
+          projectId: 0,
           number: 1,
           columnId: 1,
           title: 'A',
@@ -1948,6 +1953,7 @@ describe('Board card identity', () => {
   const crossed = (): BoardData => {
     const base = {
       description: '',
+      projectId: 0,
       backlogPosition: 0,
     offsetY: 0,
       prUrls: [] as string[],
@@ -2077,6 +2083,7 @@ describe('Board live refresh', () => {
         ...initial.items,
         {
           id: 99,
+          projectId: 0,
           number: 99,
           columnId: 1,
           title: 'From poll',
@@ -2331,6 +2338,7 @@ describe('Board list filter', () => {
       items: [
         {
           id: 1,
+          projectId: 0,
           number: 1,
           columnId: 1,
           title: 'Alpha',
@@ -2348,6 +2356,7 @@ describe('Board list filter', () => {
         },
         {
           id: 2,
+          projectId: 0,
           number: 2,
           columnId: 1,
           title: 'Beta',

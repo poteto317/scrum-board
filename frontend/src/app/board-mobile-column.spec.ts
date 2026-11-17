@@ -21,6 +21,7 @@ function sample(settings: { cardLayout: 'pack' | 'free'; mobileBoardColumnId?: n
     items: [
       {
         id: 1,
+        projectId: 0,
         number: 1,
         columnId: 1,
         title: 'A',

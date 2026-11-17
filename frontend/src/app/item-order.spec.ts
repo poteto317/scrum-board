@@ -13,6 +13,7 @@ import { Item } from './models';
 function card(id: number, columnId: number, position: number, offsetY = 0): Item {
   return {
     id,
+    projectId: 0,
     number: id,
     columnId,
     title: `c${id}`,

@@ -22,6 +22,7 @@ function mockPageScroller() {
 function card(id: number, columnId: number, position: number, title: string): Item {
   return {
     id,
+    projectId: 0,
     number: id,
     columnId,
     title,
