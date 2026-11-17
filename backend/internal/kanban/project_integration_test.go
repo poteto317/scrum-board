@@ -44,6 +44,8 @@ func TestInitializeProjectsSeedsMainAndKeepsItemIdentity(t *testing.T) {
 	mustExec(t, db, `ALTER TABLE items DROP FOREIGN KEY fk_item_project`)
 	mustExec(t, db, `ALTER TABLE items DROP INDEX items_project_position`)
 	mustExec(t, db, `ALTER TABLE items DROP COLUMN project_id`)
+	mustExec(t, db, `DROP TABLE IF EXISTS item_number_sequence`)
+	mustExec(t, db, `DROP TABLE IF EXISTS item_numbers`)
 	mustExec(t, db, `DROP TABLE projects`)
 
 	if err := r.InitializeProjects(ctx); err != nil {

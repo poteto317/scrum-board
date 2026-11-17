@@ -214,6 +214,21 @@ func mustReverseColumnsToLegacy(t *testing.T, r MySQLRepository) {
 			if err := dropChecksContaining(ctx, r, s.table, "item_number"); err != nil {
 				t.Fatal(err)
 			}
+			if exists, err := r.foreignKeyExists(ctx, s.table, "fk_item_number_project"); err != nil {
+				t.Fatal(err)
+			} else if exists {
+				mustExec(t, db, "ALTER TABLE `"+s.table+"` DROP FOREIGN KEY `fk_item_number_project`")
+			}
+			if exists, err := r.indexExists(ctx, s.table, "uq_item_numbers_project_number"); err != nil {
+				t.Fatal(err)
+			} else if exists {
+				mustExec(t, db, "ALTER TABLE `"+s.table+"` DROP INDEX `uq_item_numbers_project_number`")
+			}
+			if ok, err := r.columnExists(ctx, s.table, "project_id"); err != nil {
+				t.Fatal(err)
+			} else if ok {
+				mustExec(t, db, "ALTER TABLE `"+s.table+"` DROP COLUMN `project_id`")
+			}
 		}
 		for _, c := range s.cols {
 			exists, err := r.columnExists(ctx, s.table, c.old)

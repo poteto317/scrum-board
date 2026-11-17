@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"reflect"
 	"sort"
@@ -59,7 +60,7 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 		t.Fatalf("number after backfill: %+v %v", created, err)
 	}
 	// A counter behind the highest issued number must never hand out an issued number again.
-	if _, err = db.Exec("UPDATE item_number_sequence SET next_number=2 WHERE singleton=1"); err != nil {
+	if _, err = db.Exec("UPDATE item_number_sequence SET next_number=2 WHERE project_id=1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at,project_id)
@@ -70,12 +71,12 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 	if c, err := r.GetItem(ctx, 60); err != nil || c.Number != 6 {
 		t.Fatalf("stale counter reused a number: %+v %v", c, err)
 	}
-	if _, err = db.Exec("UPDATE item_number_sequence SET next_number=1 WHERE singleton=1"); err != nil {
+	if _, err = db.Exec("UPDATE item_number_sequence SET next_number=1 WHERE project_id=1"); err != nil {
 		t.Fatal(err)
 	}
 	mustInit(t, r)
 	var next int64
-	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&next); err != nil || next != 7 {
+	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE project_id=1").Scan(&next); err != nil || next != 7 {
 		t.Fatalf("counter not repaired: %d %v", next, err)
 	}
 }
@@ -127,12 +128,12 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	}
 	// The public number, not the internal ID, selects the card; unissued numbers never fall back to an ID.
 	for number, id := range map[int64]int64{1: 1, 2: 17, 3: 18} {
-		c, err := r.GetItemByNumber(ctx, number)
+		c, err := r.GetItemByNumber(ctx, number, 1)
 		if err != nil || c.ID != id || c.Number != number {
 			t.Fatalf("by-number %d: %+v %v", number, c, err)
 		}
 	}
-	if _, err = r.GetItemByNumber(ctx, 18); !errors.Is(err, ErrNotFound) {
+	if _, err = r.GetItemByNumber(ctx, 18, 1); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("number 18 must not resolve to internal ID 18: %v", err)
 	}
 	mustInit(t, r)
@@ -214,7 +215,7 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	if err = r.DeleteItem(ctx, highest.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = r.GetItemByNumber(ctx, highest.Number); !errors.Is(err, ErrNotFound) {
+	if _, err = r.GetItemByNumber(ctx, highest.Number, 1); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("deleted number still resolves: %v", err)
 	}
 	mustInit(t, r)
@@ -222,7 +223,7 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	if err != nil || next.Number != 25 {
 		t.Fatalf("deleted number reused: %+v %v", next, err)
 	}
-	if byNumber, err := r.GetItemByNumber(ctx, 25); err != nil || byNumber.ID != next.ID {
+	if byNumber, err := r.GetItemByNumber(ctx, 25, 1); err != nil || byNumber.ID != next.ID {
 		t.Fatalf("by-number 25: %+v %v", byNumber, err)
 	}
 	doing := int64(2)
@@ -238,5 +239,71 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 		if card.Number < 1 {
 			t.Fatal("board omits number", card)
 		}
+	}
+}
+
+func TestMySQLPerProjectNumbers(t *testing.T) {
+	db := mysqlTestDB(t, "_fresh")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustInit(t, r)
+	mainID := int64(1)
+	other, err := r.CreateProject(ctx, "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Schema seed already has ITEM-001 in main; next main card is 2. Other project starts at 1.
+	mainCard, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "main one", ProjectID: &mainID})
+	if err != nil || mainCard.Number != 2 {
+		t.Fatalf("main create: %+v %v", mainCard, err)
+	}
+	otherCard, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "other one", ProjectID: &other.ID})
+	if err != nil || otherCard.Number != 1 {
+		t.Fatalf("other create: %+v %v", otherCard, err)
+	}
+	assertItemNumbersProjectIDSync(t, db)
+	moved, err := r.UpdateItem(ctx, mainCard.ID, ItemPatch{ProjectID: &other.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.Number != 2 {
+		t.Fatalf("moved number=%d want 2", moved.Number)
+	}
+	gotMain, err := r.GetItem(ctx, mainCard.ID)
+	if err != nil || gotMain.Number != 2 || gotMain.ProjectID != other.ID {
+		t.Fatalf("moved item: %+v %v", gotMain, err)
+	}
+	if otherCard.Number != 1 {
+		t.Fatalf("other card renumbered: %+v", otherCard)
+	}
+	if by, err := r.GetItemByNumber(ctx, 2, mainID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("source gap filled? %+v %v", by, err)
+	}
+	if by, err := r.GetItemByNumber(ctx, 1, other.ID); err != nil || by.ID != otherCard.ID {
+		t.Fatalf("other still #1: %+v %v", by, err)
+	}
+	if by, err := r.GetItemByNumber(ctx, 2, other.ID); err != nil || by.ID != mainCard.ID {
+		t.Fatalf("moved resolves as #2: %+v %v", by, err)
+	}
+	idBefore := gotMain.ID
+	numBefore := gotMain.Number
+	mustInit(t, r)
+	after, err := r.GetItem(ctx, mainCard.ID)
+	if err != nil || after.ID != idBefore || after.Number != numBefore {
+		t.Fatalf("second init moved numbers: %+v %v", after, err)
+	}
+	assertItemNumbersProjectIDSync(t, db)
+}
+
+func assertItemNumbersProjectIDSync(t *testing.T, db *sql.DB) {
+	t.Helper()
+	var bad int
+	err := db.QueryRow(`SELECT COUNT(*) FROM item_numbers n
+JOIN items c ON c.id=n.item_id WHERE n.project_id <> c.project_id`).Scan(&bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bad != 0 {
+		t.Fatalf("%d item_numbers rows out of sync with items.project_id", bad)
 	}
 }

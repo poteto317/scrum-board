@@ -130,8 +130,8 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 func (r MySQLRepository) GetItem(ctx context.Context, id int64) (Item, error) {
 	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
 }
-func (r MySQLRepository) GetItemByNumber(ctx context.Context, number int64) (Item, error) {
-	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.item_number=?", number)
+func (r MySQLRepository) GetItemByNumber(ctx context.Context, number, projectID int64) (Item, error) {
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.project_id=? AND n.item_number=?", projectID, number)
 }
 func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -139,10 +139,6 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 		return Item{}, err
 	}
 	defer tx.Rollback()
-	number, err := lockNextNumber(ctx, tx)
-	if err != nil {
-		return Item{}, err
-	}
 	if err = lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
 		return Item{}, err
 	}
@@ -155,6 +151,10 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 		return Item{}, err
 	}
 	projectID, err := resolveCreateProjectID(in, layout, projects)
+	if err != nil {
+		return Item{}, err
+	}
+	number, err := lockNextNumber(ctx, tx, projectID)
 	if err != nil {
 		return Item{}, err
 	}
@@ -181,10 +181,10 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 	if err != nil {
 		return Item{}, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO item_numbers(item_id,item_number) VALUES(?,?)", id, number); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO item_numbers(item_id,item_number,project_id) VALUES(?,?,?)", id, number, projectID); err != nil {
 		return Item{}, dbError(err)
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE item_number_sequence SET next_number=? WHERE singleton=1", number+1); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE item_number_sequence SET next_number=? WHERE project_id=?", number+1, projectID); err != nil {
 		return Item{}, err
 	}
 	if err = replacePRURLs(ctx, tx, id, in.PRURLs); err != nil {
@@ -279,6 +279,17 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		if err = repositionItemForProjectChange(ctx, tx, &c); err != nil {
 			return Item{}, err
 		}
+		number, err := lockNextNumber(ctx, tx, c.ProjectID)
+		if err != nil {
+			return Item{}, err
+		}
+		if _, err = tx.ExecContext(ctx, "UPDATE item_numbers SET project_id=?, item_number=? WHERE item_id=?", c.ProjectID, number, id); err != nil {
+			return Item{}, dbError(err)
+		}
+		if _, err = tx.ExecContext(ctx, "UPDATE item_number_sequence SET next_number=? WHERE project_id=?", number+1, c.ProjectID); err != nil {
+			return Item{}, err
+		}
+		c.Number = number
 	} else if columnChanged {
 		nextPos, err := nextCardPosition(ctx, tx, c.ColumnID, c.ProjectID)
 		if err != nil {
