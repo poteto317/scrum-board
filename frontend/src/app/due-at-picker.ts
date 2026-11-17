@@ -40,7 +40,7 @@ export class DueAtPicker {
   }
 
   years(): number[] {
-    return dueAtYearOptions();
+    return dueAtYearOptions(new Date(), this.parts().year);
   }
 
   days(): number[] {

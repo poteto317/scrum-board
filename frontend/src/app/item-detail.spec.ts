@@ -1787,6 +1787,30 @@ describe('ItemDetail dueAt picker', () => {
     f.destroy();
   });
 
+  it('keeps out-of-range dueAt year on open and unchanged confirm', () => {
+    vi.setSystemTime(new Date(2026, 5, 1, 12, 0, 0));
+    const dueAt = '2099-06-15T03:00:00Z';
+    api.itemByNumber.mockReturnValue(of({ ...card, dueAt }));
+    api.updateItem.mockClear();
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '編集')!.click();
+    f.detectChanges();
+    const local = new Date(dueAt);
+    expect(f.componentInstance.dueAt.draft()?.year).toBe(local.getFullYear());
+    const yearWheel = f.nativeElement.querySelector(
+      '.due-at-wheel[data-unit="year"]',
+    ) as HTMLElement;
+    const years = Array.from(yearWheel.querySelectorAll('[data-value]')).map((el) =>
+      Number((el as HTMLElement).dataset['value']),
+    );
+    expect(years).toContain(2099);
+    buttonByText(dueField(f.nativeElement)!, '確定')!.click();
+    f.detectChanges();
+    expect(api.updateItem).not.toHaveBeenCalled();
+    expect(f.componentInstance.item()?.dueAt).toBe(dueAt);
+    f.destroy();
+  });
+
   it('opens picker with now truncated to the minute when unset', () => {
     vi.setSystemTime(new Date(2026, 10, 17, 17, 45, 30, 500));
     const f = create();
