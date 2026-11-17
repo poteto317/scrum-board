@@ -38,6 +38,8 @@ export class ItemAutosave {
   private retryFields = new Set<Field>();
   private edits: Record<Field, number> = { title: 0, description: 0, columnId: 0, closeReason: 0 };
   private sideDirty = new Set<SideField>();
+  /** Shield projectId from an in-flight title/description flush after a move. */
+  private projectDirty = false;
   private waiters: ((saved: boolean) => void)[] = [];
   /** Blocks debounced/explicit flush while a modal holds uncommitted form state. */
   private suspended = false;
@@ -148,6 +150,17 @@ export class ItemAutosave {
   /** Shield dueAt from an in-flight title/description flush (L-453). */
   markDueSideDirty() {
     this.sideDirty.add('dueAt');
+  }
+  /** Merge a project move without going through the autosave form. */
+  applyProjectSave(updated: Pick<Item, 'projectId' | 'updatedAt'>) {
+    const card = this.item();
+    if (!card) return;
+    this.projectDirty = true;
+    this.item.set({
+      ...card,
+      projectId: updated.projectId,
+      updatedAt: updated.updatedAt || card.updatedAt,
+    });
   }
   /** Merge dueAt side save without string `?? ''` (L-002: keep null). */
   applyDueSave(updated: Pick<Item, 'dueAt' | 'updatedAt'>) {
@@ -261,6 +274,10 @@ export class ItemAutosave {
               merged.prUrls,
             );
           }
+          if (this.projectDirty) {
+            merged.projectId = local.projectId;
+            this.projectDirty = false;
+          }
         }
         this.item.set(merged);
       },
@@ -301,6 +318,7 @@ export class ItemAutosave {
     this.request?.unsubscribe();
     this.request = undefined;
     this.sideDirty.clear();
+    this.projectDirty = false;
     this.saving.set(false);
     for (const resolve of this.waiters.splice(0)) resolve(false);
   }

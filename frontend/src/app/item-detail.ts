@@ -62,6 +62,7 @@ import {
 } from './list-scroll-session';
 import { parseDescriptionLinks } from './description-link';
 import { DescriptionEditor } from './description-editor';
+import { ProjectSession } from './project-session';
 
 @Component({
   selector: 'app-item-detail',
@@ -94,6 +95,7 @@ import { DescriptionEditor } from './description-editor';
 export class ItemDetail implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   private readonly api = inject(Api);
+  readonly projectSession = inject(ProjectSession);
   private readonly appOrigin = inject(AppOrigin);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -122,7 +124,10 @@ export class ItemDetail implements OnInit {
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
   readonly deleting = signal(false);
+  readonly projectSaving = signal(false);
+  readonly projectMoveError = signal('');
   readonly error = signal('');
+  private projectMoveGeneration = 0;
   readonly confirmDelete = signal(false);
   private readonly routeNumber = signal(0);
   private readonly copyStatus = new LatestCopyFeedback(this.destroyRef);
@@ -260,6 +265,9 @@ export class ItemDetail implements OnInit {
           this.listDragging.set(false);
           this.deleted = false;
           this.confirmDelete.set(false);
+          this.projectMoveGeneration++;
+          this.projectSaving.set(false);
+          this.projectMoveError.set('');
           this.loading.set(true);
           this.error.set('');
           return forkJoin({
@@ -279,6 +287,7 @@ export class ItemDetail implements OnInit {
         this.columns.set(board.columns);
         this.autosave.reset({
           ...card,
+          projectId: card.projectId ?? 0,
           prUrls: card.prUrls ?? [],
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
@@ -309,6 +318,7 @@ export class ItemDetail implements OnInit {
         this.columns.set(board.columns);
         const next = {
           ...card,
+          projectId: card.projectId ?? 0,
           prUrls: card.prUrls ?? [],
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
@@ -324,6 +334,79 @@ export class ItemDetail implements OnInit {
   }
   load() {
     this.reload$.next();
+  }
+
+  onProjectChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const nextId = Number(select.value);
+    const card = this.item();
+    if (!card || !Number.isFinite(nextId) || nextId <= 0) return;
+    if (nextId === card.projectId || this.projectSaving()) {
+      select.value = String(card.projectId);
+      return;
+    }
+    this.moveToProject(nextId, select);
+  }
+
+  /**
+   * Move the item, then align the active project when it differs.
+   * A failed settings PATCH is shown once and is not retried automatically (L-001).
+   * Opening this screen does not call this method (no deep-link auto-switch).
+   */
+  moveToProject(nextId: number, select?: HTMLSelectElement) {
+    const card = this.item();
+    if (!card || this.projectSaving()) return;
+    const generation = ++this.projectMoveGeneration;
+    this.projectSaving.set(true);
+    this.projectMoveError.set('');
+    this.error.set('');
+    this.api.updateItem(card.id, { projectId: nextId }).subscribe({
+      next: (updated) => {
+        if (generation !== this.projectMoveGeneration) return;
+        const projectId = typeof updated.projectId === 'number' ? updated.projectId : nextId;
+        this.autosave.applyProjectSave({
+          projectId,
+          updatedAt: updated.updatedAt || card.updatedAt,
+        });
+        if (this.projectSession.activeId() === projectId) {
+          this.projectSaving.set(false);
+          return;
+        }
+        this.alignActiveProject(projectId, generation);
+      },
+      error: (e) => {
+        if (generation !== this.projectMoveGeneration) return;
+        if (select) select.value = String(card.projectId);
+        this.projectMoveError.set(errorMessage(e));
+        this.projectSaving.set(false);
+      },
+    });
+  }
+
+  /** Manual retry of the settings half after the item has already moved. */
+  retryAlignActiveProject() {
+    const card = this.item();
+    if (!card || this.projectSaving()) return;
+    if (this.projectSession.activeId() === card.projectId) return;
+    const generation = ++this.projectMoveGeneration;
+    this.alignActiveProject(card.projectId, generation);
+  }
+
+  private alignActiveProject(projectId: number, generation: number) {
+    this.projectSaving.set(true);
+    this.projectMoveError.set('');
+    this.projectSession.patchActive(projectId).subscribe({
+      next: () => {
+        if (generation !== this.projectMoveGeneration) return;
+        this.projectMoveError.set('');
+        this.projectSaving.set(false);
+      },
+      error: (e) => {
+        if (generation !== this.projectMoveGeneration) return;
+        this.projectMoveError.set(errorMessage(e));
+        this.projectSaving.set(false);
+      },
+    });
   }
   dueAtDisplay(): string {
     const value = this.item()?.dueAt;
@@ -349,6 +432,7 @@ export class ItemDetail implements OnInit {
       this.closeTransition.open() ||
       this.closeTransition.saving() ||
       this.descriptionEditor.open() ||
+      this.projectSaving() ||
       this.deleting()
     );
   }
@@ -362,6 +446,7 @@ export class ItemDetail implements OnInit {
       this.dueAt.saving() ||
       this.itemCommands.saving() ||
       this.closeTransition.saving() ||
+      this.projectSaving() ||
       this.deleting()
     );
   }
@@ -373,7 +458,8 @@ export class ItemDetail implements OnInit {
       this.assignee.saving() ||
       this.dueAt.saving() ||
       this.closeTransition.saving() ||
-      this.itemCommands.saving()
+      this.itemCommands.saving() ||
+      this.projectSaving()
     ) {
       return window.confirm(
         '保存中です。移動すると保存が中断される可能性があります。移動しますか？',
@@ -397,7 +483,8 @@ export class ItemDetail implements OnInit {
         this.assignee.saving() ||
         this.dueAt.saving() ||
         this.closeTransition.saving() ||
-        this.itemCommands.saving())
+        this.itemCommands.saving() ||
+        this.projectSaving())
     ) {
       event.preventDefault();
       event.returnValue = '';

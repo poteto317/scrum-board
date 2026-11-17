@@ -19,5 +19,7 @@ export function mergeCloseTransitionItem(local: Item | null, updated: Item): Ite
     relatedItems: updated.relatedItems ?? local?.relatedItems ?? [],
     assignee: updated.assignee ?? local?.assignee ?? '',
     closeReason: updated.closeReason ?? '',
+    projectId:
+      typeof updated.projectId === 'number' ? updated.projectId : (local?.projectId ?? 0),
   };
 }

@@ -24,6 +24,7 @@ import {
 } from './list-scroll-session';
 const card: Item = {
   id: 18,
+  projectId: 0,
   number: 3,
   columnId: 1,
   title: '学習',
