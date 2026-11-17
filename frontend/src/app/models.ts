@@ -13,10 +13,20 @@ export interface RelatedItem {
 
 export type CardLayout = 'pack' | 'free';
 
+export interface Project {
+  id: number;
+  name: string;
+  position: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface BoardSettings {
   cardLayout: CardLayout;
   /** スマホ1列表示の列 ID。正規化後は number（欠落・無効は resolve 側で補完）。 */
   mobileBoardColumnId?: number;
+  /** 解決後の表示中プロジェクト。欠落・非数は undefined（normalizeBoardData で補完）。 */
+  activeProjectId?: number;
   /** 未知キーは読み書きで捨てない（L-459）。 */
   [key: string]: unknown;
 }
@@ -24,6 +34,8 @@ export interface BoardSettings {
 export interface Item {
   number: number;
   id: number;
+  /** 所属プロジェクト。欠落時は 0（normalizeItem で補完）。 */
+  projectId: number;
   columnId: number;
   title: string;
   description: string;
@@ -51,7 +63,7 @@ export interface BoardData {
 }
 /** POST /api/items body — dueAt は create 非対応（PATCH のみ）。 */
 export type ItemInput = Pick<Item, 'title' | 'description' | 'columnId'> &
-  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason'>>;
+  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason' | 'projectId'>>;
 /** PATCH /api/items/{id} body — dueAt の null クリアを含む。 */
 export type ItemPatch = Partial<ItemInput & Pick<Item, 'dueAt'>>;
 

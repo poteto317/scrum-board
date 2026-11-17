@@ -17,6 +17,7 @@ describe('normalizeBoardData', () => {
       items: [
         {
           id: 2,
+          projectId: 0,
           number: 2,
           columnId: 1,
           title: 'B',
@@ -52,6 +53,24 @@ describe('normalizeBoardData', () => {
     });
     expect(board.settings.mobileBoardColumnId).toBe(3);
   });
+
+  it('keeps activeProjectId and unknown settings keys', () => {
+    const board = normalizeBoardData({
+      settings: { cardLayout: 'pack', activeProjectId: 4.9, futureFlag: true },
+    });
+    expect(board.settings.activeProjectId).toBe(4);
+    expect(board.settings['futureFlag']).toBe(true);
+  });
+
+  it('drops a non-numeric activeProjectId and still keeps unknown keys', () => {
+    const board = normalizeBoardData({
+      settings: { cardLayout: 'free', activeProjectId: '1' as never, futureFlag: 1 },
+    });
+    expect(board.settings.activeProjectId).toBeUndefined();
+    expect('activeProjectId' in board.settings).toBe(false);
+    expect(board.settings['futureFlag']).toBe(1);
+    expect(board.settings.cardLayout).toBe('free');
+  });
 });
 
 describe('normalizeOffsetY / normalizeItem', () => {
@@ -64,6 +83,12 @@ describe('normalizeOffsetY / normalizeItem', () => {
     expect(normalizeItem({ id: 1, offsetY: 200_000 }).offsetY).toBe(100_000);
     expect(normalizeItem({ id: 1 }).closeReason).toBe('');
     expect(normalizeItem({ id: 1, closeReason: 'x' }).closeReason).toBe('x');
+  });
+
+  it('defaults missing projectId to 0 and truncates numeric ids', () => {
+    expect(normalizeItem({ id: 1 }).projectId).toBe(0);
+    expect(normalizeItem({ id: 1, projectId: 3.8 }).projectId).toBe(3);
+    expect(normalizeItem({ id: 1, projectId: '2' as never }).projectId).toBe(0);
   });
 
   it('normalizes missing dueAt to null (not empty string)', () => {
