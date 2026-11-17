@@ -78,16 +78,15 @@
               >
                 <button
                   type="button"
-                  class="backlog-drag-handle"
+                  class="backlog-rank"
                   [attr.aria-label]="
                     formatItemNumber(card.number) + ' を移動（ドラッグまたは上下矢印キー）'
                   "
                   [attr.aria-disabled]="!canReorder() || reordering() ? 'true' : null"
-                  (keydown)="onHandleKeydown($event, i)"
+                  (keydown)="onRankKeydown($event, i)"
                 >
-                  ⋮⋮
+                  {{ i + 1 }}
                 </button>
-                <span class="backlog-rank" aria-hidden="true">{{ i + 1 }}</span>
                 <span class="backlog-number">{{ formatItemNumber(card.number) }}</span>
                 <span class="backlog-title">{{ card.title }}</span>
                 <span class="backlog-status">{{ statusName(card.columnId) }}</span>
@@ -107,7 +106,7 @@
     <footer class="backlog-footer">
       <span
         ><span class="tip-icon" aria-hidden="true">i</span>
-        ハンドルをドラッグ、または上下キーで優先順位を変えられます。</span
+        行をドラッグ、または上下キーで優先順位を変えられます。</span
       >
     </footer>
   }
