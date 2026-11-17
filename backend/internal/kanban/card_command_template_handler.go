@@ -10,7 +10,12 @@ func (h handler) listItemCommandTemplatesByNumber(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
-	card, err := h.repo.GetItemByNumber(r.Context(), n)
+	pid, err := h.resolveByNumberProjectID(r)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	card, err := h.repo.GetItemByNumber(r.Context(), n, pid)
 	if err != nil {
 		fail(w, err)
 		return
@@ -28,7 +33,12 @@ func (h handler) replaceItemCommandTemplatesByNumber(w http.ResponseWriter, r *h
 	if !ok {
 		return
 	}
-	card, err := h.repo.GetItemByNumber(r.Context(), n)
+	pid, err := h.resolveByNumberProjectID(r)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	card, err := h.repo.GetItemByNumber(r.Context(), n, pid)
 	if err != nil {
 		fail(w, err)
 		return

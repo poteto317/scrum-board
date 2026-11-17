@@ -25,7 +25,7 @@ func TestMySQLRefinedItemIsFiledInTodoWithHistory(t *testing.T) {
 	if err != nil || card.ColumnID != todo.ID || card.Title != "整えた題名" || card.Description != "整えた説明" || len(card.PRURLs) != 0 {
 		t.Fatalf("card=%+v todo=%+v err=%v", card, todo, err)
 	}
-	page, err := r.History(ctx, card.Number, 0)
+	page, err := r.History(ctx, card.Number, card.ProjectID, 0)
 	if err != nil || len(page.Events) != 1 || page.Events[0].Kind != "created" {
 		t.Fatalf("history=%+v err=%v", page, err)
 	}
@@ -40,7 +40,7 @@ func TestMySQLRefinedItemFailureWritesNothingAndKeepsTheNumber(t *testing.T) {
 		if err := db.QueryRow("SELECT COUNT(*) FROM items").Scan(&cards); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&next); err != nil {
+		if err := db.QueryRow("SELECT next_number FROM item_number_sequence WHERE project_id=1").Scan(&next); err != nil {
 			t.Fatal(err)
 		}
 		return

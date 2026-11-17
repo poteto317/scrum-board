@@ -23,7 +23,12 @@ func (h handler) history(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	page, err := h.repo.History(r.Context(), number, before)
+	pid, err := h.resolveByNumberProjectID(r)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	page, err := h.repo.History(r.Context(), number, pid, before)
 	if err != nil {
 		fail(w, err)
 		return

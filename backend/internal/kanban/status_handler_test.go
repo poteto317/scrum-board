@@ -75,11 +75,11 @@ type statusFailureRepo struct {
 	cardError, columnError, updateError error
 }
 
-func (r statusFailureRepo) GetItemByNumber(ctx context.Context, n int64) (Item, error) {
+func (r statusFailureRepo) GetItemByNumber(ctx context.Context, n, projectID int64) (Item, error) {
 	if r.cardError != nil {
 		return Item{}, r.cardError
 	}
-	return r.memoryRepo.GetItemByNumber(ctx, n)
+	return r.memoryRepo.GetItemByNumber(ctx, n, projectID)
 }
 func (r statusFailureRepo) GetColumnByName(ctx context.Context, n string) (Column, error) {
 	if r.columnError != nil {

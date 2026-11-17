@@ -25,7 +25,7 @@ func attachRelatedItems(ctx context.Context, q queryable, cards []Item) error {
 		}
 		placeholders = append(placeholders, '?')
 	}
-	query := `SELECT r.item_id, r.kind, r.related_item_id, COALESCE(r.url, ''), r.label, COALESCE(n.item_number, 0), COALESCE(c.title, '')
+	query := `SELECT r.item_id, r.kind, r.related_item_id, COALESCE(r.url, ''), r.label, COALESCE(n.item_number, 0), COALESCE(n.project_id, 0), COALESCE(c.title, '')
  FROM item_related_items r
  LEFT JOIN items c ON c.id = r.related_item_id
  LEFT JOIN item_numbers n ON n.item_id = r.related_item_id
@@ -39,8 +39,8 @@ func attachRelatedItems(ctx context.Context, q queryable, cards []Item) error {
 		var ownerID int64
 		var kind, itemURL, label, title string
 		var relatedID sql.NullInt64
-		var number int64
-		if err := rows.Scan(&ownerID, &kind, &relatedID, &itemURL, &label, &number, &title); err != nil {
+		var number, projectID int64
+		if err := rows.Scan(&ownerID, &kind, &relatedID, &itemURL, &label, &number, &projectID, &title); err != nil {
 			return err
 		}
 		i, ok := index[ownerID]
@@ -50,6 +50,7 @@ func attachRelatedItems(ctx context.Context, q queryable, cards []Item) error {
 		item := RelatedItem{Kind: kind, Label: label}
 		if kind == relatedKindItem {
 			item.Number = number
+			item.ProjectID = projectID
 			item.Title = title
 		} else {
 			item.URL = itemURL

@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-func (r MySQLRepository) History(ctx context.Context, number, before int64) (HistoryPage, error) {
+func (r MySQLRepository) History(ctx context.Context, number, projectID, before int64) (HistoryPage, error) {
 	page := HistoryPage{Events: []HistoryEvent{}}
-	c, err := r.GetItemByNumber(ctx, number)
+	c, err := r.GetItemByNumber(ctx, number, projectID)
 	if err != nil {
 		return page, err
 	}

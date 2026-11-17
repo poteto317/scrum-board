@@ -70,11 +70,11 @@ func TestCardOrderMySQL(t *testing.T) {
 	}
 
 	// Cross-column move + history only on column change.
-	pageBefore, err := r.History(ctx, c2.Number, 0)
+	pageBefore, err := r.History(ctx, c2.Number, c2.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	siblingBefore, err := r.History(ctx, c1.Number, 0)
+	siblingBefore, err := r.History(ctx, c1.Number, c1.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestCardOrderMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pageAfter, err := r.History(ctx, c2.Number, 0)
+	pageAfter, err := r.History(ctx, c2.Number, c2.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestCardOrderMySQL(t *testing.T) {
 		t.Fatalf("history delta for moved card: before=%d after=%d", len(pageBefore.Events), len(pageAfter.Events))
 	}
 	// c1 stays in Todo (its position shifts up) when c2 leaves: no history for it.
-	pageSame, err := r.History(ctx, c1.Number, 0)
+	pageSame, err := r.History(ctx, c1.Number, c1.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestCardOrderMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pageAfterReorder, err := r.History(ctx, c1.Number, 0)
+	pageAfterReorder, err := r.History(ctx, c1.Number, c1.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,11 +205,11 @@ func idsByPosition(t *testing.T, r MySQLRepository, column int64) []int64 {
 func TestReorderItemsColumnMoveHistoryMySQL(t *testing.T) {
 	r, a, b := newOrderedBoard(t)
 	ctx := context.Background()
-	created, err := r.History(ctx, a.Number, 0)
+	created, err := r.History(ctx, a.Number, a.ProjectID, 0)
 	if err != nil || len(created.Events) != 1 || created.Events[0].Kind != "created" {
 		t.Fatalf("history after create: %+v, %v", created, err)
 	}
-	siblingBefore, err := r.History(ctx, b.Number, 0)
+	siblingBefore, err := r.History(ctx, b.Number, b.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestReorderItemsColumnMoveHistoryMySQL(t *testing.T) {
 	}
 	end := time.Now().UTC()
 
-	page, err := r.History(ctx, a.Number, 0)
+	page, err := r.History(ctx, a.Number, a.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestReorderItemsColumnMoveHistoryMySQL(t *testing.T) {
 		}
 	}
 	// The card that only lost a neighbour has nothing new in its history.
-	sibling, err := r.History(ctx, b.Number, 0)
+	sibling, err := r.History(ctx, b.Number, b.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestUpdateItemWithItsCurrentColumnKeepsItsPlaceMySQL(t *testing.T) {
 	if got := idsByPosition(t, r, 1); !slices.Equal(got, want) {
 		t.Fatalf("setup order: %v", got)
 	}
-	before, err := r.History(ctx, a.Number, 0)
+	before, err := r.History(ctx, a.Number, a.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +332,7 @@ func TestUpdateItemWithItsCurrentColumnKeepsItsPlaceMySQL(t *testing.T) {
 			t.Fatalf("a neighbour's position moved: %+v", c)
 		}
 	}
-	after, err := r.History(ctx, a.Number, 0)
+	after, err := r.History(ctx, a.Number, a.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

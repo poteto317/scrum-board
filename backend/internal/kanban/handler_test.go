@@ -255,16 +255,26 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 	if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
 		offsetY = m.nextFreeOffset(in.ColumnID, projectID)
 	}
+	id := m.next
+	m.next++
 	c := Item{
-		Number: m.next, ID: m.next, ColumnID: in.ColumnID, ProjectID: projectID,
+		Number: m.nextItemNumber(projectID), ID: id, ColumnID: in.ColumnID, ProjectID: projectID,
 		Title: in.Title, Description: in.Description, PRURLs: urls, RelatedItems: related,
 		Position: m.nextPosition(in.ColumnID, projectID), OffsetY: offsetY, Assignee: in.Assignee,
 		CloseReason: in.CloseReason, BacklogPosition: m.nextBacklog(projectID),
 	}
-	m.next++
 	m.cards[c.ID] = c
 	m.cardTemplateIDs[c.ID] = append([]int64(nil), m.defaultTemplateIDs...)
 	return c, nil
+}
+func (m *memoryRepo) nextItemNumber(projectID int64) int64 {
+	var max int64
+	for _, card := range m.cards {
+		if m.cardProjectID(card) == projectID && card.Number > max {
+			max = card.Number
+		}
+	}
+	return max + 1
 }
 func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Item, error) {
 	c, err := m.GetItem(ctx, id)
@@ -289,6 +299,7 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 	}
 	if destProject != sourceProject {
 		c.ProjectID = destProject
+		c.Number = m.nextItemNumber(destProject)
 		c.ColumnID = destColumn
 		c.Position = m.nextPosition(destColumn, destProject)
 		c.BacklogPosition = m.nextBacklog(destProject)
@@ -651,9 +662,9 @@ func TestUnicodeValidationBoundaries(t *testing.T) {
 	}
 }
 
-func (m *memoryRepo) GetItemByNumber(_ context.Context, number int64) (Item, error) {
+func (m *memoryRepo) GetItemByNumber(_ context.Context, number, projectID int64) (Item, error) {
 	for _, card := range m.cards {
-		if card.Number == number {
+		if card.Number == number && m.cardProjectID(card) == projectID {
 			return card, nil
 		}
 	}
@@ -695,8 +706,8 @@ func (m *memoryRepo) GetColumnByName(_ context.Context, name string) (Column, er
 	return Column{}, ErrColumn
 }
 
-func (m *memoryRepo) History(ctx context.Context, number, before int64) (HistoryPage, error) {
-	_, err := m.GetItemByNumber(ctx, number)
+func (m *memoryRepo) History(ctx context.Context, number, projectID, before int64) (HistoryPage, error) {
+	_, err := m.GetItemByNumber(ctx, number, projectID)
 	return HistoryPage{Events: []HistoryEvent{}}, err
 }
 

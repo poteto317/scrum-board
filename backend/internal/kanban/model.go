@@ -111,9 +111,9 @@ type Repository interface {
 	DeleteProject(context.Context, int64) error
 	UpdateBoardSettings(context.Context, BoardSettings) (BoardSettings, []Item, error)
 	PatchBoardSettings(context.Context, BoardSettingsPatch) (BoardSettings, []Item, error)
-	History(context.Context, int64, int64) (HistoryPage, error)
+	History(context.Context, int64, int64, int64) (HistoryPage, error)
 	GetItem(context.Context, int64) (Item, error)
-	GetItemByNumber(context.Context, int64) (Item, error)
+	GetItemByNumber(context.Context, int64, int64) (Item, error)
 	GetColumnByName(context.Context, string) (Column, error)
 	CreateItem(context.Context, ItemInput) (Item, error)
 	UpdateItem(context.Context, int64, ItemPatch) (Item, error)

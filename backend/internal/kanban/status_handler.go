@@ -22,7 +22,12 @@ func (h handler) changeStatusByNumber(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "ステータス名は1〜60文字で入力してください。")
 		return
 	}
-	card, err := h.repo.GetItemByNumber(r.Context(), number)
+	pid, err := h.resolveByNumberProjectID(r)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	card, err := h.repo.GetItemByNumber(r.Context(), number, pid)
 	if err != nil {
 		fail(w, err)
 		return
