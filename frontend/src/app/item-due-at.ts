@@ -52,8 +52,12 @@ export class ItemDueAt {
     const card = this.current();
     if (!card || this.saving()) return;
     const existing = parseDueAt(card.dueAt);
-    const base = existing ?? truncateLocalToMinute(new Date());
-    this.draft.set(clampDueAtPartsToYearRange(toLocalParts(base)));
+    if (existing) {
+      // Keep out-of-range years from API (include in picker options); do not silent-rewrite.
+      this.draft.set(toLocalParts(existing));
+    } else {
+      this.draft.set(clampDueAtPartsToYearRange(toLocalParts(truncateLocalToMinute(new Date()))));
+    }
     this.open.set(true);
     this.reportError('');
   }
