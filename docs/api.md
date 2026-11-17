@@ -44,6 +44,26 @@ curl --fail-with-body --request PATCH \
 
 省略または `null` は変更しません。文字列を送ると trim 後に保存し、空文字 `""` でクリアします。2001文字超・不正UTF-8・未知フィールドは400です。作成時の任意プロパティとしても送れます。他列へ戻しても値は保持されます。
 
+## 期限（dueAt）
+
+アイテムJSONの `dueAt` は任意の期限です。未設定は JSON `null`（キーはボード GET・単体 GET・PATCH 応答のいずれにも必ず含まれます）。保存・応答は常に UTC の ISO8601（例 `2026-11-17T08:30:00Z`）で、秒は常に `00` です。
+
+```sh
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"dueAt":"2026-11-17T17:30:00+09:00"}' \
+  http://127.0.0.1:4200/api/items/18
+```
+
+`PATCH /api/items/{id}` での扱い:
+
+- **省略**: 変更しない
+- **`null`**: クリア（未設定にする）
+- **`""`（空文字）**: 400（クリアは `null` のみ）
+- **文字列**: 受理するのは (a) `Z` 付き UTC（例 `2026-11-17T08:30:00Z`）または (b) 数値オフセット付き RFC3339（例 `2026-11-17T17:30:00+09:00`）のみ。いずれも UTC に正規化し、秒・未満を 00 に揃えて保存・応答する。タイムゾーン無し・日付のみ・暦として無効な値は 400
+
+履歴の field は `dueAt` です。before/after は API 応答と同型の UTC `…Z`（秒 00）、未設定は空文字 `""` です。
+
 Goへ直接アクセスする場合はポート8080でも同じパスを利用できます。Dockerの公開ポートを変更した場合はURLも合わせてください。
 
 ## 対象と結果の確認
@@ -102,7 +122,7 @@ number・id・title・description・columnIdなどを混ぜて送ると400にな
 | `PATCH /api/items/by-number/{number}/status` | 公開タスク番号とステータス名 |
 | `PATCH /api/items/by-number/{number}/assignee` | 公開タスク番号と対応者ラベル |
 | `GET /api/items/{id}` | 内部ID |
-| `PATCH /api/items/{id}` | 内部IDとtitle/description/columnId/prUrls/assignee/closeReasonの部分更新 |
+| `PATCH /api/items/{id}` | 内部IDとtitle/description/columnId/prUrls/assignee/closeReason/dueAtの部分更新 |
 
 番号とIDを推測で読み替えません。例のアイテムに `PATCH /api/items/7` を送ると、内部ID7を対象にしてしまいます。生成AIから画面のタスクを変更するときはby-numberを使ってください。
 
@@ -127,7 +147,7 @@ curl --fail-with-body --request PATCH \
 
 ## 変更履歴
 
-`GET /api/items/by-number/{number}/history` は `{events: [...], nextBefore: 0}` を返します。eventsにはid、kind、occurredAt、recordedAt、changes（field/before/after）、note、evidenceUrlがあります。kindはcreated/updated/baseline/restoredです。statusの値は列名、assigneeは対応者ラベル、closeReasonはClose理由です。
+`GET /api/items/by-number/{number}/history` は `{events: [...], nextBefore: 0}` を返します。eventsにはid、kind、occurredAt、recordedAt、changes（field/before/after）、note、evidenceUrlがあります。kindはcreated/updated/baseline/restoredです。statusの値は列名、assigneeは対応者ラベル、closeReasonはClose理由、dueAtはUTCの期限（未設定は空文字）です。
 
 日時降順・同時刻はID降順で最大50件。nextBeforeが0以外なら `?before={nextBefore}` で続けます。別アイテムのカーソルや未存在アイテムは404、不正カーソルは400です。更新成功後は先頭から再取得してください。履歴取得の失敗はアイテム編集を妨げません。
 
