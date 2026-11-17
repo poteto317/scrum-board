@@ -10,7 +10,13 @@ export const DESCRIPTION_LINK_MAX_LEN = 10000;
 export function normalizeDescriptionLinkUrl(value: string): string | null {
   const text = value.trim();
   // Reject C0/C1 controls and `()` so the `)`-terminated markdown parser cannot truncate href (L-018).
-  if (!text || text.length > MAX_URL_LEN || /[\u0000-\u001F\u007F-\u009F()]/.test(text)) return null;
+  if (
+    !text ||
+    text.length > MAX_URL_LEN ||
+    /[\u0000-\u001F\u007F-\u009F\u2028\u2029()]/.test(text)
+  ) {
+    return null;
+  }
   if (!/^https:\/\//.test(text)) return null;
   try {
     const u = new URL(text);
