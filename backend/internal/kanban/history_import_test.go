@@ -99,8 +99,23 @@ func TestHistoricalRecordLimits(t *testing.T) {
 			v.Changes = []HistoryChange{
 				{Field: "title"}, {Field: "description"}, {Field: "status"},
 				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
-				{Field: "assignee"}, {Field: "closeReason"}, {Field: "x"},
+				{Field: "assignee"}, {Field: "closeReason"},
+				{Field: "dueAt", Before: "", After: "2026-11-17T08:30:00Z"},
 			}
+		}, true},
+		"nine changes": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{
+				{Field: "title"}, {Field: "description"}, {Field: "status"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
+				{Field: "assignee"}, {Field: "closeReason"},
+				{Field: "dueAt", Before: "", After: "2026-11-17T08:30:00Z"}, {Field: "x"},
+			}
+		}, false},
+		"dueAt empty ok": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "dueAt", Before: "", After: ""}}
+		}, true},
+		"dueAt invalid": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "dueAt", After: "2026-11-17T08:30:00"}}
 		}, false},
 		"relatedItems not json": {func(v *HistoricalRecord) {
 			v.Changes = []HistoryChange{{Field: "relatedItems", Before: "[]", After: "not-json"}}
