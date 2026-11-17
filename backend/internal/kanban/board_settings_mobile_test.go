@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 )
@@ -169,6 +170,60 @@ func TestPatchPackWhenAlreadyPackOmitsItems(t *testing.T) {
 	}
 	if _, ok := raw["items"]; ok {
 		t.Fatalf("pack→pack must omit items: %s", w.Body)
+	}
+}
+
+func TestBoardEmptyColumnsMobileIdZeroMySQL(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustExec(t, db, `DELETE FROM items`)
+	mustExec(t, db, `DELETE FROM board_columns`)
+	board, err := r.Board(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(board.Columns) != 0 {
+		t.Fatalf("want no columns, got %+v", board.Columns)
+	}
+	if board.Settings.MobileBoardColumnID != 0 {
+		t.Fatalf("mobileBoardColumnId=%d", board.Settings.MobileBoardColumnID)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM board_settings WHERE setting_key='mobile_board_column_id'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	// Seed may have inserted before columns were wiped; GET must not rewrite.
+	_ = n
+}
+
+func TestPatchMobileOnlyKeepsUnknownKeyMySQL(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustExec(t, db, `INSERT INTO board_settings(setting_key, setting_value) VALUES('theme','dark')
+ ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`)
+	mobile := int64(2)
+	settings, items, err := r.PatchBoardSettings(ctx, BoardSettingsPatch{MobileBoardColumnID: &mobile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.MobileBoardColumnID != 2 || settings.CardLayout != CardLayoutPack {
+		t.Fatalf("settings=%+v", settings)
+	}
+	if items != nil {
+		t.Fatalf("mobile-only must omit items: %v", items)
+	}
+	var theme string
+	if err := db.QueryRow(`SELECT setting_value FROM board_settings WHERE setting_key='theme'`).Scan(&theme); err != nil || theme != "dark" {
+		t.Fatalf("theme=%q err=%v", theme, err)
+	}
+	var stored string
+	if err := db.QueryRow(`SELECT setting_value FROM board_settings WHERE setting_key='mobile_board_column_id'`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != "2" {
+		t.Fatalf("stored mobile=%q", stored)
 	}
 }
 
