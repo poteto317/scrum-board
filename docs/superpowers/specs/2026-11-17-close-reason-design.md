@@ -40,7 +40,7 @@
 
 - モデル `Item` と autosave の **form フィールド**に `closeReason` を載せる（`fields` に含める）。
 - ステータス select の change:
-  - 次が Close で現在が非 Close → モーダル（初期値＝現在の `closeReason`）。確定で columnId + closeReason を保存（flush）。失敗時は columnId を変更前に戻し closeReason も確定前のまま（受け入れ 4）。キャンセルで form の columnId を戻し、closeReason は触らない。
+  - 次が Close で現在が非 Close → モーダル（初期値＝現在の `closeReason`）。確定は autosave flush ではなく **専用 PATCH**（`columnId` + `closeReason`）。並走中の form flush は `dropInFlight` で破棄し、応答でローカルを更新する。失敗時は columnId を変更前に戻し closeReason も確定前のまま（受け入れ 4）。キャンセルで form の columnId を戻し、closeReason は触らない。
   - 既に Close 同士／Close 以外への変更 → 既存どおり columnId のみ autosave（理由欄の表示だけ出し分け）。
 - Close 中の理由欄: form の `closeReason` を編集し、title と同じデバウンスで保存。
 - ボード／バックログ UI は変更しない（理由表示・入力なし）。カードに理由を出さない（初版）。
