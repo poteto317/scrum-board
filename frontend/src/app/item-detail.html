@@ -118,12 +118,32 @@
         <section class="detail-card properties">
           <div class="section-label">プロパティ</div>
           <label for="detail-status">ステータス</label
-          ><select id="detail-status" formControlName="columnId" (change)="autosave.flush()">
+          ><select
+            id="detail-status"
+            formControlName="columnId"
+            (change)="closeTransition.onStatusChange()"
+          >
             @for (column of columns(); track column.id) {
               <option [ngValue]="column.id">{{ column.name }}</option>
             }
           </select>
           <p class="field-note">ステータスを選ぶと自動保存され、<br />ボード上の列が変わります。</p>
+          @if (closeTransition.showingReasonField()) {
+            <label for="detail-close-reason">Close理由</label>
+            <textarea
+              id="detail-close-reason"
+              rows="4"
+              formControlName="closeReason"
+              placeholder="任意。Closeした理由を残せます"
+              (compositionstart)="autosave.composition('closeReason', true)"
+              (compositionend)="autosave.composition('closeReason', false)"
+              (blur)="autosave.flush()"
+            ></textarea>
+            <p class="field-note">任意。2000文字以内。空でも保存できます。</p>
+            @if (form.controls.closeReason.invalid) {
+              <p class="form-error">Close理由は2000文字以内で入力してください。</p>
+            }
+          }
           <div class="assignee-field">
             <span class="assignee-label" id="detail-assignee-label">対応</span>
             <div class="assignee-chips" role="group" aria-labelledby="detail-assignee-label">
@@ -483,6 +503,44 @@
     <app-item-history [number]="item()!.number" [revision]="item()!.updatedAt" />
   }
 </main>
+@if (closeTransition.open()) {
+  <dialog
+    appModal
+    class="modal-backdrop"
+    aria-labelledby="close-reason-title"
+    (cancel)="$event.preventDefault(); !closeTransition.saving() && closeTransition.cancel()"
+  >
+    <section class="modal">
+      <h2 id="close-reason-title">Close理由</h2>
+      <p class="field-note">任意です。空のまま確定しても Close できます。</p>
+      <label for="close-reason-modal-input">理由</label>
+      <textarea
+        id="close-reason-modal-input"
+        rows="4"
+        [value]="closeTransition.draft()"
+        (input)="closeTransition.draft.set($any($event.target).value)"
+        [disabled]="closeTransition.saving()"
+        placeholder="任意。Closeした理由を残せます"
+      ></textarea>
+      <div class="form-actions">
+        <button
+          type="button"
+          class="secondary"
+          (click)="closeTransition.cancel()"
+          [disabled]="closeTransition.saving()"
+        >
+          キャンセル</button
+        ><button
+          type="button"
+          (click)="closeTransition.confirm()"
+          [disabled]="closeTransition.saving()"
+        >
+          {{ closeTransition.saving() ? '保存中…' : '確定' }}
+        </button>
+      </div>
+    </section>
+  </dialog>
+}
 @if (confirmDelete()) {
   <dialog
     appModal

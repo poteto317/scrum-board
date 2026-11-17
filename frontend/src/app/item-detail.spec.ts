@@ -33,6 +33,7 @@ const card: Item = {
   prUrls: [],
   relatedItems: [],
   assignee: '',
+  closeReason: '',
   createdAt: '',
   updatedAt: '',
 };
@@ -63,6 +64,7 @@ describe('ItemDetail autosave', () => {
           columns: [
             { id: 1, name: 'Todo', position: 0 },
             { id: 2, name: 'Doing', position: 0 },
+            { id: 3, name: 'Close', position: 0 },
           ],
           items: [],
         }),
@@ -1158,6 +1160,7 @@ describe('ItemDetail live refresh', () => {
           columns: [
             { id: 1, name: 'Todo', position: 0 },
             { id: 2, name: 'Doing', position: 0 },
+            { id: 3, name: 'Close', position: 0 },
           ],
           items: [],
         }),
@@ -1225,6 +1228,7 @@ describe('ItemDetail live refresh', () => {
         columns: [
           { id: 1, name: 'Todo', position: 0 },
           { id: 2, name: 'Doing', position: 0 },
+          { id: 3, name: 'Close', position: 0 },
         ],
         items: [],
       }),
@@ -1236,6 +1240,191 @@ describe('ItemDetail live refresh', () => {
     slow.complete();
     expect(f.componentInstance.item()?.number).toBe(9);
     expect(f.componentInstance.item()?.title).not.toBe('遅延した旧アイテム');
+    f.destroy();
+  });
+});
+
+describe('ItemDetail Close reason', () => {
+  let params: BehaviorSubject<Map<string, string>>;
+  let api: {
+    history: ReturnType<typeof vi.fn>;
+    board: ReturnType<typeof vi.fn>;
+    itemByNumber: ReturnType<typeof vi.fn>;
+    updateItem: ReturnType<typeof vi.fn>;
+    deleteItem: ReturnType<typeof vi.fn>;
+    listCommandTemplates: ReturnType<typeof vi.fn>;
+    listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+  };
+  let restoreDialog: () => void;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    sessionStorage.clear();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    restoreDialog = () => {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    };
+    params = new BehaviorSubject(new Map([['number', '3']]));
+    api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      board: vi.fn(() =>
+        of({
+          columns: [
+            { id: 1, name: 'Todo', position: 0 },
+            { id: 2, name: 'Doing', position: 0 },
+            { id: 3, name: 'Close', position: 0 },
+          ],
+          items: [],
+        }),
+      ),
+      itemByNumber: vi.fn(() => of(card)),
+      updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
+      deleteItem: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+    };
+    TestBed.configureTestingModule({
+      imports: [ItemDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        { provide: Router, useValue: { navigate: vi.fn(), navigateByUrl: vi.fn().mockResolvedValue(true) } },
+      ],
+    });
+  });
+  afterEach(() => {
+    restoreDialog();
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+  });
+  const create = () => {
+    const f = TestBed.createComponent(ItemDetail);
+    f.detectChanges();
+    return f;
+  };
+
+  it('opens Close reason modal when moving to Close and does not save yet', () => {
+    const f = create();
+    f.componentInstance.form.controls.columnId.setValue(3);
+    f.componentInstance.closeTransition.onStatusChange();
+    f.detectChanges();
+    expect(f.componentInstance.closeTransition.open()).toBe(true);
+    expect(api.updateItem).not.toHaveBeenCalled();
+    expect(f.nativeElement.querySelector('#close-reason-modal-input')).toBeTruthy();
+    f.destroy();
+  });
+
+  it('seeds modal draft from saved closeReason', () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, closeReason: '既存理由' }));
+    const f = create();
+    f.componentInstance.form.controls.columnId.setValue(3);
+    f.componentInstance.closeTransition.onStatusChange();
+    expect(f.componentInstance.closeTransition.draft()).toBe('既存理由');
+    f.destroy();
+  });
+
+  it('confirm saves columnId and closeReason then shows reason field', () => {
+    api.updateItem.mockReturnValue(
+      of({ ...card, columnId: 3, closeReason: '完了', updatedAt: '2026-11-17T00:00:00Z' }),
+    );
+    const f = create();
+    f.componentInstance.form.controls.columnId.setValue(3);
+    f.componentInstance.closeTransition.onStatusChange();
+    f.componentInstance.closeTransition.draft.set('完了');
+    f.componentInstance.closeTransition.confirm();
+    f.detectChanges();
+    expect(api.updateItem).toHaveBeenCalledWith(18, { columnId: 3, closeReason: '完了' });
+    expect(f.componentInstance.closeTransition.open()).toBe(false);
+    expect(f.componentInstance.item()?.columnId).toBe(3);
+    expect(f.componentInstance.item()?.closeReason).toBe('完了');
+    expect(f.nativeElement.querySelector('#detail-close-reason')).toBeTruthy();
+    f.destroy();
+  });
+
+  it('cancel restores columnId and does not change closeReason', () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, closeReason: '保持' }));
+    const f = create();
+    f.componentInstance.form.controls.columnId.setValue(3);
+    f.componentInstance.closeTransition.onStatusChange();
+    f.componentInstance.closeTransition.draft.set('破棄される下書き');
+    f.componentInstance.closeTransition.cancel();
+    f.detectChanges();
+    expect(api.updateItem).not.toHaveBeenCalled();
+    expect(f.componentInstance.form.controls.columnId.value).toBe(1);
+    expect(f.componentInstance.item()?.closeReason).toBe('保持');
+    expect(f.componentInstance.closeTransition.open()).toBe(false);
+    f.destroy();
+  });
+
+  it('failed confirm reverts columnId and keeps prior closeReason', () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, closeReason: '旧' }));
+    api.updateItem.mockReturnValue(throwError(() => ({ error: { message: 'Close保存失敗' } })));
+    const f = create();
+    f.componentInstance.form.controls.columnId.setValue(3);
+    f.componentInstance.closeTransition.onStatusChange();
+    f.componentInstance.closeTransition.draft.set('新');
+    f.componentInstance.closeTransition.confirm();
+    f.detectChanges();
+    expect(f.componentInstance.form.controls.columnId.value).toBe(1);
+    expect(f.componentInstance.item()?.closeReason).toBe('旧');
+    expect(f.componentInstance.error()).toBe('Close保存失敗');
+    expect(f.componentInstance.closeTransition.open()).toBe(false);
+    f.destroy();
+  });
+
+  it('shows closeReason textarea while already Close and hides otherwise', () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, columnId: 3, closeReason: 'メモ' }));
+    const f = create();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#detail-close-reason')).toBeTruthy();
+    f.destroy();
+
+    api.itemByNumber.mockReturnValue(of({ ...card, columnId: 1 }));
+    const f2 = create();
+    f2.detectChanges();
+    expect(f2.nativeElement.querySelector('#detail-close-reason')).toBeNull();
+    f2.destroy();
+  });
+
+  it('Close confirm drops in-flight autosave so a late flush cannot rewind Close', () => {
+    const titleFlush = new Subject<Item>();
+    const closeSave = new Subject<Item>();
+    api.updateItem
+      .mockReturnValueOnce(titleFlush)
+      .mockReturnValueOnce(closeSave);
+    const f = create();
+    f.componentInstance.form.controls.title.setValue('編集中');
+    f.componentInstance.autosave.flush();
+    expect(f.componentInstance.autosave.saving()).toBe(true);
+    f.componentInstance.form.controls.columnId.setValue(3);
+    f.componentInstance.closeTransition.onStatusChange();
+    f.componentInstance.closeTransition.draft.set('理由');
+    f.componentInstance.closeTransition.confirm();
+    expect(api.updateItem).toHaveBeenLastCalledWith(18, { columnId: 3, closeReason: '理由' });
+    closeSave.next({
+      ...card,
+      columnId: 3,
+      closeReason: '理由',
+      title: '編集中',
+      updatedAt: '2026-11-17T01:00:00Z',
+    });
+    closeSave.complete();
+    titleFlush.next({ ...card, title: '編集中', columnId: 1, closeReason: '' });
+    titleFlush.complete();
+    f.detectChanges();
+    expect(f.componentInstance.item()?.columnId).toBe(3);
+    expect(f.componentInstance.item()?.closeReason).toBe('理由');
     f.destroy();
   });
 });

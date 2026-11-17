@@ -47,6 +47,7 @@ export class ItemHistory implements OnChanges {
     prUrls: 'GitHub PR',
     relatedItems: '関連',
     assignee: '対応',
+    closeReason: 'Close理由',
   };
   readonly kinds: Record<string, string> = {
     created: '作成',

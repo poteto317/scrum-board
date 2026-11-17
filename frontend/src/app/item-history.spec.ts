@@ -39,6 +39,25 @@ it('labels assignee changes as 対応', () => {
   expect(f.nativeElement.textContent).toContain('対応');
   expect(f.nativeElement.textContent).toContain('Cursor');
 });
+it('labels closeReason changes as Close理由', () => {
+  const f = setup({
+    history: vi.fn(() =>
+      of({
+        events: [
+          {
+            ...event,
+            kind: 'updated',
+            changes: [{ field: 'closeReason', before: '', after: '取り下げ' }],
+            evidenceUrl: '',
+          },
+        ],
+        nextBefore: 0,
+      }),
+    ),
+  });
+  expect(f.nativeElement.textContent).toContain('Close理由');
+  expect(f.nativeElement.textContent).toContain('取り下げ');
+});
 it('shows recovered evidence and appends the next page', () => {
   const api = {
     history: vi
