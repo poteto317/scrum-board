@@ -27,6 +27,7 @@ describe('normalizeBoardData', () => {
           prUrls: [],
           relatedItems: [],
           assignee: '',
+          closeReason: '',
           createdAt: '',
           updatedAt: '',
         },
@@ -53,5 +54,7 @@ describe('normalizeOffsetY / normalizeItem', () => {
     expect(normalizeOffsetY(100_000)).toBe(100_000);
     expect(normalizeItem({ id: 1, offsetY: -1 }).offsetY).toBe(0);
     expect(normalizeItem({ id: 1, offsetY: 200_000 }).offsetY).toBe(100_000);
+    expect(normalizeItem({ id: 1 }).closeReason).toBe('');
+    expect(normalizeItem({ id: 1, closeReason: 'x' }).closeReason).toBe('x');
   });
 });

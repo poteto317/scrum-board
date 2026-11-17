@@ -34,6 +34,8 @@ export interface Item {
   prTitles?: string[];
   relatedItems: RelatedItem[];
   assignee: string;
+  /** Close 理由。欠落時は ''（normalizeItem で補完）。 */
+  closeReason: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,7 +46,7 @@ export interface BoardData {
   settings?: BoardSettings;
 }
 export type ItemInput = Pick<Item, 'title' | 'description' | 'columnId'> &
-  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee'>>;
+  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason'>>;
 
 export interface HistoryChange {
   field: string;

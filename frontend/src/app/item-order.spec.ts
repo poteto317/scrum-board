@@ -23,6 +23,7 @@ function card(id: number, columnId: number, position: number, offsetY = 0): Item
     prUrls: [],
     relatedItems: [],
     assignee: '',
+    closeReason: '',
     createdAt: '',
     updatedAt: '',
   };
