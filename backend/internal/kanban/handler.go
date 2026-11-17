@@ -2,7 +2,6 @@ package kanban
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 )
@@ -138,10 +137,6 @@ func (h handler) updateBoardSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, items, err := h.repo.PatchBoardSettings(r.Context(), in)
 	if err != nil {
-		if errors.Is(err, ErrBoardSettings) && in.MobileBoardColumnID != nil {
-			invalid(w, "mobileBoardColumnId は存在する列の ID を指定してください。")
-			return
-		}
 		fail(w, err)
 		return
 	}
