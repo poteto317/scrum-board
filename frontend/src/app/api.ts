@@ -60,12 +60,16 @@ export class Api {
   deleteProject(id: number) {
     return this.http.delete<void>(`/api/projects/${id}`);
   }
-  itemByNumber(number: number) {
-    return this.http.get<Item>(`/api/items/by-number/${number}`);
+  itemByNumber(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<Item>(`/api/items/by-number/${number}`, params ? { params } : {});
   }
-  history(number: number, before = 0) {
+  history(number: number, before = 0, projectId?: number) {
+    const params: Record<string, string> = {};
+    if (before) params['before'] = String(before);
+    if (projectId && projectId > 0) params['projectId'] = String(projectId);
     return this.http.get<HistoryPage>(`/api/items/by-number/${number}/history`, {
-      params: before ? { before: String(before) } : {},
+      params: Object.keys(params).length ? params : {},
     });
   }
   prTitles(urls: string[]) {
@@ -92,8 +96,13 @@ export class Api {
   updateItem(id: number, input: ItemPatch) {
     return this.http.patch<Item>(`/api/items/${id}`, input);
   }
-  updateAssigneeByNumber(number: number, assignee: string) {
-    return this.http.patch<Item>(`/api/items/by-number/${number}/assignee`, { assignee });
+  updateAssigneeByNumber(number: number, assignee: string, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.patch<Item>(
+      `/api/items/by-number/${number}/assignee`,
+      { assignee },
+      params ? { params } : {},
+    );
   }
   deleteItem(id: number) {
     return this.http.delete<void>(`/api/items/${id}`);
@@ -110,15 +119,19 @@ export class Api {
   deleteCommandTemplate(id: number) {
     return this.http.delete<void>(`/api/command-templates/${id}`);
   }
-  listItemCommandTemplatesByNumber(number: number) {
+  listItemCommandTemplatesByNumber(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.get<{ templates: CommandTemplate[] }>(
       `/api/items/by-number/${number}/command-templates`,
+      params ? { params } : {},
     );
   }
-  replaceItemCommandTemplatesByNumber(number: number, templateIds: number[]) {
+  replaceItemCommandTemplatesByNumber(number: number, templateIds: number[], projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.put<{ templates: CommandTemplate[] }>(
       `/api/items/by-number/${number}/command-templates`,
       { templateIds },
+      params ? { params } : {},
     );
   }
   listCommandTemplateDefaults() {

@@ -22,8 +22,12 @@ export class CopyLinkFeedback {
     this.message = this.state.message;
   }
 
-  async copyItemNumber(number: number, origin = window.location.origin): Promise<void> {
-    const ok = await copyText(itemDetailUrl(origin, number));
+  async copyItemNumber(
+    number: number,
+    origin = window.location.origin,
+    projectId?: number,
+  ): Promise<void> {
+    const ok = await copyText(itemDetailUrl(origin, number, projectId));
     if (this.state.isDestroyed) return;
     this.state.show(ok ? COPY_LINK_SUCCESS : COPY_LINK_FAILURE, ok ? 'success' : 'failure');
   }

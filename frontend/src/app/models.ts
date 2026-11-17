@@ -6,6 +6,7 @@ export interface Column {
 export interface RelatedItem {
   kind: 'item' | 'url';
   number?: number;
+  projectId?: number;
   title?: string;
   url?: string;
   label?: string;
