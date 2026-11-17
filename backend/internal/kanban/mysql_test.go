@@ -22,7 +22,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 	if cfg.DBName != "scrumboard_numbering_test" {
 		t.Fatal("KANBAN_TEST_DSN must target disposable scrumboard_numbering_test")
 	}
-	if suffix != "" && suffix != "_fresh" {
+	switch suffix {
+	case "", "_fresh", "_per_project_numbers":
+	default:
 		t.Fatal("unexpected disposable database suffix")
 	}
 	cfg.DBName += suffix

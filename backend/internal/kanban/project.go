@@ -166,6 +166,9 @@ func (r MySQLRepository) CreateProject(ctx context.Context, name string) (Projec
 	if err != nil {
 		return Project{}, err
 	}
+	if _, err = tx.ExecContext(ctx, `INSERT IGNORE INTO item_number_sequence(project_id, next_number) VALUES(?, 1)`, id); err != nil {
+		return Project{}, err
+	}
 	p, err := loadProject(ctx, tx, id)
 	if err != nil {
 		return Project{}, err
@@ -210,6 +213,10 @@ func (r MySQLRepository) DeleteProject(ctx context.Context, id int64) error {
 	}
 	defer tx.Rollback()
 	if err = assertProjectDeletable(ctx, tx, id); err != nil {
+		return err
+	}
+	// Sequence FK blocks project DELETE; remove the per-project counter first.
+	if _, err = tx.ExecContext(ctx, `DELETE FROM item_number_sequence WHERE project_id=?`, id); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM projects WHERE id=?`, id); err != nil {
