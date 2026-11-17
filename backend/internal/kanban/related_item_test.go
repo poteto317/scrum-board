@@ -49,8 +49,8 @@ func TestNormalizeRelatedItems(t *testing.T) {
 
 func TestRelatedItemsJSONOmitsTitle(t *testing.T) {
 	t.Parallel()
-	got := relatedItemsJSON([]RelatedItem{{Kind: "item", Number: 2, Title: "T", Label: "L"}})
-	if strings.Contains(got, "title") || !strings.Contains(got, `"number":2`) {
+	got := relatedItemsJSON([]RelatedItem{{Kind: "item", Number: 2, ProjectID: 1, Title: "T", Label: "L"}})
+	if strings.Contains(got, "title") || !strings.Contains(got, `"number":2`) || !strings.Contains(got, `"projectId":1`) {
 		t.Fatalf("got %s", got)
 	}
 }

@@ -670,6 +670,26 @@ func (m *memoryRepo) GetItemByNumber(_ context.Context, number, projectID int64)
 	}
 	return Item{}, ErrNotFound
 }
+func TestGetItemByNumberProjectDistinguishesDuplicateNumbers(t *testing.T) {
+	repo := fresh()
+	repo.projects = append(repo.projects, Project{ID: 2, Name: "Other", Position: 1})
+	repo.cards[10] = Item{ID: 10, Number: 5, ColumnID: 1, Title: "main five", ProjectID: 1}
+	repo.cards[20] = Item{ID: 20, Number: 5, ColumnID: 1, Title: "other five", ProjectID: 2}
+	h := NewHandler(repo)
+	for _, tc := range []struct {
+		query string
+		id    int64
+		title string
+	}{{"?projectId=1", 10, "main five"}, {"?projectId=2", 20, "other five"}} {
+		w := request(h, "GET", "/api/items/by-number/5"+tc.query, "")
+		var card Item
+		_ = json.Unmarshal(w.Body.Bytes(), &card)
+		if w.Code != 200 || card.ID != tc.id || card.Title != tc.title {
+			t.Fatalf("%s: %d %+v", tc.query, w.Code, card)
+		}
+	}
+}
+
 func TestGetItemByNumber(t *testing.T) {
 	repo := fresh()
 	repo.cards[18] = Item{ID: 18, Number: 3, ColumnID: 1, Title: "number three"}
