@@ -208,7 +208,7 @@
                         [attr.aria-label]="
                           formatItemNumber(card.number) + ' のコマンド'
                         "
-                        (click)="toggleCommandMenu(card.id, card.number, $event)"
+                        (click)="toggleCommandMenu(card.id, card.number, card.projectId, $event)"
                       >
                         <svg
                           class="copy-command-icon"
@@ -242,7 +242,7 @@
                                 <button
                                   type="button"
                                   role="menuitem"
-                                  (click)="copyCommand(command.template, card.number, $event)"
+                                  (click)="copyCommand(command.template, card.number, card.projectId, $event)"
                                 >
                                   {{ command.name }}
                                 </button>
@@ -259,7 +259,7 @@
                       [attr.aria-label]="
                         formatItemNumber(card.number) + ' のリンクをコピー'
                       "
-                      (click)="copyItemLink(card.number)"
+                      (click)="copyItemLink(card.number, card.projectId)"
                     >
                       <svg
                         class="copy-link-icon"

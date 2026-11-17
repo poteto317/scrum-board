@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BehaviorSubject, of, throwError } from 'rxjs';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { ItemDetail } from './item-detail';
@@ -30,6 +30,7 @@ function card(projectId: number): Item {
 
 describe('ItemDetail project move', () => {
   let params: BehaviorSubject<Map<string, string>>;
+  let query: BehaviorSubject<Map<string, string>>;
   let current: Item;
   let api: {
     history: ReturnType<typeof vi.fn>;
@@ -45,6 +46,7 @@ describe('ItemDetail project move', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     params = new BehaviorSubject(new Map([['number', '3']]));
+    query = new BehaviorSubject(new Map());
     current = card(1);
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
@@ -74,7 +76,10 @@ describe('ItemDetail project move', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: query.asObservable() },
+        },
         {
           provide: Router,
           useValue: { navigate: vi.fn(), navigateByUrl: vi.fn().mockResolvedValue(true) },
@@ -107,6 +112,38 @@ describe('ItemDetail project move', () => {
     expect(api.patchBoardSettings).not.toHaveBeenCalled();
     expect(api.updateItem).not.toHaveBeenCalled();
     expect(session.activeId()).toBe(1);
+  });
+
+  it('switches active project then loads by number when project query is set', () => {
+    query.next(new Map([['project', '2']]));
+    const { session } = create(1);
+    expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
+    expect(api.itemByNumber).toHaveBeenCalledWith(3, 2);
+    expect(session.activeId()).toBe(2);
+    expect(session.switching()).toBe(false);
+  });
+
+  it('does not load the item when project switch PATCH fails', () => {
+    api.patchBoardSettings.mockReturnValue(
+      throwError(() => ({ error: { message: '切替失敗' } })),
+    );
+    query.next(new Map([['project', '2']]));
+    create(1);
+    expect(api.itemByNumber).not.toHaveBeenCalled();
+  });
+
+  it('includes project switching in busy until load completes', () => {
+    const pending = new Subject<Item>();
+    api.itemByNumber.mockReturnValue(pending.asObservable());
+    query.next(new Map([['project', '2']]));
+    const { f, session } = create(1);
+    expect(session.switching()).toBe(true);
+    expect(f.componentInstance.busy()).toBe(true);
+    pending.next(current);
+    pending.complete();
+    f.detectChanges();
+    expect(session.switching()).toBe(false);
+    expect(f.componentInstance.busy()).toBe(false);
   });
 
   it('patches the item and then the active project', () => {

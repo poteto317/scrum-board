@@ -217,7 +217,8 @@ export class ItemDetail implements OnInit {
     const card = this.item();
     if (!card) return;
     const origin = await this.appOrigin.resolve();
-    return this.linkCopy.copyItemNumber(card.number, origin);
+    const projectId = card.projectId > 0 ? card.projectId : undefined;
+    return this.linkCopy.copyItemNumber(card.number, origin, projectId);
   }
 
   ngOnInit() {
@@ -225,9 +226,13 @@ export class ItemDetail implements OnInit {
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       this.routeNumber.set(Number(params.get('number')));
     });
-    combineLatest([this.route.paramMap, this.reload$.pipe(startWith(undefined))])
+    combineLatest([
+      this.route.paramMap,
+      this.route.queryParamMap,
+      this.reload$.pipe(startWith(undefined)),
+    ])
       .pipe(
-        switchMap(([params]) => {
+        switchMap(([params, query]) => {
           this.changed$.next();
           this.autosave.reset(null);
           this.prLinks.reset();
@@ -244,31 +249,25 @@ export class ItemDetail implements OnInit {
           this.projectMoveError.set('');
           this.loading.set(true);
           this.error.set('');
-          return forkJoin({
-            board: this.api.board(),
-            card: this.api.itemByNumber(Number(params.get('number'))),
-          }).pipe(
-            catchError((error) => {
-              this.error.set(errorMessage(error));
-              return EMPTY;
-            }),
-            finalize(() => this.loading.set(false)),
-          );
+          const num = Number(params.get('number'));
+          const queryProjectId = Number(query.get('project'));
+          return this.loadCardForRoute(num, queryProjectId);
         }),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(({ board, card }) => {
         this.columns.set(board.columns);
+        const projectId = card.projectId ?? 0;
         this.autosave.reset({
           ...card,
-          projectId: card.projectId ?? 0,
+          projectId,
           prUrls: card.prUrls ?? [],
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
           dueAt: card.dueAt ?? null,
         });
-        this.itemCommands.load(card.number);
+        this.itemCommands.load(card.number, projectId > 0 ? projectId : undefined);
       });
     const stop = startLiveRefresh({
       enabled: () =>
@@ -280,9 +279,15 @@ export class ItemDetail implements OnInit {
         !this.busy(),
       fetch: () => {
         const number = this.routeNumber();
+        const card = this.item();
+        const projectId =
+          card && card.projectId > 0
+            ? card.projectId
+            : this.projectSession.activeId() ?? undefined;
+        const scopedProjectId = projectId && projectId > 0 ? projectId : undefined;
         return forkJoin({
           board: this.api.board(),
-          card: this.api.itemByNumber(number),
+          card: this.api.itemByNumber(number, scopedProjectId),
         });
       },
       apply: ({ board, card }) => {
@@ -308,6 +313,43 @@ export class ItemDetail implements OnInit {
   }
   load() {
     this.reload$.next();
+  }
+
+  private loadCardForRoute(number: number, projectId: number) {
+    const scopedProjectId = projectId > 0 ? projectId : undefined;
+    const load$ = () =>
+      forkJoin({
+        board: this.api.board(),
+        card: this.api.itemByNumber(number, scopedProjectId),
+      });
+    const settleLoad = (source: ReturnType<typeof load$>) =>
+      source.pipe(
+        catchError((error) => {
+          this.error.set(errorMessage(error));
+          return EMPTY;
+        }),
+        finalize(() => this.loading.set(false)),
+      );
+    if (projectId > 0 && projectId !== this.projectSession.activeId()) {
+      // Temporary listener so switchTo keeps switching until endSwitch (L-037).
+      // Do not leave a permanent onSwitched — that would block header switches.
+      const releaseListener = this.projectSession.onSwitched(() => undefined);
+      return this.projectSession.switchTo(projectId).pipe(
+        switchMap(() => settleLoad(load$())),
+        catchError((error) => {
+          this.error.set(errorMessage(error));
+          this.loading.set(false);
+          return EMPTY;
+        }),
+        finalize(() => {
+          this.projectSession.endSwitch();
+          releaseListener();
+          // switchTo may complete EMPTY (already switching); ensure spinner clears.
+          this.loading.set(false);
+        }),
+      );
+    }
+    return settleLoad(load$());
   }
 
   onProjectChange(event: Event) {
@@ -407,6 +449,7 @@ export class ItemDetail implements OnInit {
       this.closeTransition.saving() ||
       this.descriptionEditor.open() ||
       this.projectSaving() ||
+      this.projectSession.switching() ||
       this.deleting()
     );
   }
@@ -551,7 +594,8 @@ export class ItemDetail implements OnInit {
     if (!current) return;
     this.commandMenuOpen.set(false);
     const origin = await this.appOrigin.resolve();
-    return this.commandCopy.copyResolved(templateText, current.number, origin);
+    const projectId = current.projectId > 0 ? current.projectId : undefined;
+    return this.commandCopy.copyResolved(templateText, current.number, origin, projectId);
   }
 
   openCommandManager() {

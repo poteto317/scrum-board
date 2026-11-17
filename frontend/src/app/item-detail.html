@@ -490,7 +490,12 @@
                     </button>
                   }
                   @if (related.kind === 'item') {
-                    <a class="pr-link" [routerLink]="['/items', related.number]"
+                    <a
+                      class="pr-link"
+                      [routerLink]="['/items', related.number]"
+                      [queryParams]="
+                        related.projectId && related.projectId > 0 ? { project: related.projectId } : null
+                      "
                       >{{ formatItemNumber(related.number!) }} · {{ relatedDisplayLabel(related) }}</a
                     >
                   } @else {
@@ -579,7 +584,11 @@
         </div>
       </div>
     </form>
-    <app-item-history [number]="item()!.number" [revision]="item()!.updatedAt" />
+    <app-item-history
+      [number]="item()!.number"
+      [projectId]="item()!.projectId"
+      [revision]="item()!.updatedAt"
+    />
   }
 </main>
 @if (descriptionEditor.open()) {

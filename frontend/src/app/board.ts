@@ -385,12 +385,13 @@ export class Board implements OnInit {
     );
   }
 
-  async copyItemLink(number: number) {
+  async copyItemLink(number: number, projectId?: number) {
     const origin = await this.appOrigin.resolve();
-    return this.linkCopy.copyItemNumber(number, origin);
+    const scopedProjectId = projectId && projectId > 0 ? projectId : undefined;
+    return this.linkCopy.copyItemNumber(number, origin, scopedProjectId);
   }
 
-  toggleCommandMenu(itemId: number, itemNumber: number, event: Event) {
+  toggleCommandMenu(itemId: number, itemNumber: number, projectId: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
     const opening = this.openCommandItemId() !== itemId;
@@ -401,7 +402,10 @@ export class Board implements OnInit {
     const button = event.currentTarget;
     if (!(button instanceof HTMLElement)) return;
     const generation = ++this.commandMenuLoadGeneration;
-    const listPromise = firstValueFrom(this.api.listItemCommandTemplatesByNumber(itemNumber));
+    const scopedProjectId = projectId > 0 ? projectId : undefined;
+    const listPromise = firstValueFrom(
+      this.api.listItemCommandTemplatesByNumber(itemNumber, scopedProjectId),
+    );
 
     // Preserve user activation: write ClipboardItem during the click, resolve text after fetch.
     if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
@@ -411,7 +415,10 @@ export class Board implements OnInit {
           throw new Error('not-single');
         }
         const origin = await this.appOrigin.resolve();
-        return resolveCommand(templates[0].template, itemDetailUrl(origin, itemNumber));
+        return resolveCommand(
+          templates[0].template,
+          itemDetailUrl(origin, itemNumber, scopedProjectId),
+        );
       });
       void navigator.clipboard
         .write([new ClipboardItem({ 'text/plain': textPromise })])
@@ -425,18 +432,33 @@ export class Board implements OnInit {
         .catch(() => {
           this.zone.run(() => {
             if (generation !== this.commandMenuLoadGeneration) return;
-            this.openCommandMenuAfterList(itemId, itemNumber, button, generation, listPromise);
+            this.openCommandMenuAfterList(
+              itemId,
+              itemNumber,
+              scopedProjectId,
+              button,
+              generation,
+              listPromise,
+            );
           });
         });
       return;
     }
 
-    this.openCommandMenuAfterList(itemId, itemNumber, button, generation, listPromise);
+    this.openCommandMenuAfterList(
+      itemId,
+      itemNumber,
+      scopedProjectId,
+      button,
+      generation,
+      listPromise,
+    );
   }
 
   private openCommandMenuAfterList(
     itemId: number,
     itemNumber: number,
+    projectId: number | undefined,
     button: HTMLElement,
     generation: number,
     listPromise: Promise<{ templates?: CommandTemplate[] }>,
@@ -458,7 +480,7 @@ export class Board implements OnInit {
           this.commandMenuError.set('');
           this.commandMenuLoading.set(false);
           if (templates.length === 1) {
-            void this.closeMenuAndCopyCommand(templates[0].template, itemNumber);
+            void this.closeMenuAndCopyCommand(templates[0].template, itemNumber, projectId);
           }
         });
       },
@@ -512,16 +534,26 @@ export class Board implements OnInit {
     this.commandMenuLoading.set(false);
   }
 
-  async copyCommand(templateText: string, number: number, event: Event) {
+  async copyCommand(
+    templateText: string,
+    number: number,
+    projectId: number | undefined,
+    event: Event,
+  ) {
     event.preventDefault();
     event.stopPropagation();
-    return this.closeMenuAndCopyCommand(templateText, number);
+    return this.closeMenuAndCopyCommand(templateText, number, projectId);
   }
 
-  private async closeMenuAndCopyCommand(templateText: string, number: number) {
+  private async closeMenuAndCopyCommand(
+    templateText: string,
+    number: number,
+    projectId?: number,
+  ) {
     this.closeCommandMenu();
     const origin = await this.appOrigin.resolve();
-    return this.commandCopy.copyResolved(templateText, number, origin);
+    const scopedProjectId = projectId && projectId > 0 ? projectId : undefined;
+    return this.commandCopy.copyResolved(templateText, number, origin, scopedProjectId);
   }
 
   @HostListener('document:click', ['$event'])
@@ -768,7 +800,8 @@ export class Board implements OnInit {
 
   /** Real URL of a card, so the browser's own link features (new tab, copy link, status bar) keep working. */
   itemHref(card: Item): string {
-    return this.location.prepareExternalUrl(itemAppPath(card.number));
+    const projectId = card.projectId > 0 ? card.projectId : undefined;
+    return this.location.prepareExternalUrl(itemAppPath(card.number, projectId));
   }
 
   onItemClick(event: MouseEvent, card: Item) {
@@ -784,7 +817,13 @@ export class Board implements OnInit {
       scrollLeft: boardEl?.scrollLeft ?? 0,
     });
     saveReturnTo('/');
-    void this.router.navigate(['/items', card.number]);
+    if (card.projectId > 0) {
+      void this.router.navigate(['/items', card.number], {
+        queryParams: { project: card.projectId },
+      });
+    } else {
+      void this.router.navigate(['/items', card.number]);
+    }
   }
 
   /**
