@@ -352,14 +352,13 @@ export class ItemDetail implements OnInit {
       this.deleting()
     );
   }
-  /** Saving in flight (excludes delete confirmation UI). */
+  /** Saving in flight (excludes delete confirmation UI / uncommitted picker open). */
   savingBusy() {
     return (
       this.autosave.saving() ||
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
-      this.dueAt.open() ||
       this.dueAt.saving() ||
       this.itemCommands.saving() ||
       this.closeTransition.saving() ||
