@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 type memoryRepo struct {
@@ -241,6 +242,12 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 	}
 	if p.CloseReason != nil {
 		c.CloseReason = *p.CloseReason
+	}
+	if p.ClearDueAt {
+		c.DueAt = nil
+	} else if p.DueAt != nil {
+		u := p.DueAt.UTC().Truncate(time.Minute)
+		c.DueAt = &u
 	}
 	m.cards[id] = c
 	return c, nil

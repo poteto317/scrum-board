@@ -37,9 +37,14 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Item, error) {
 	var c Item
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &c.CreatedAt, &c.UpdatedAt)
+	var dueAt sql.NullTime
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &dueAt, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
+	}
+	if dueAt.Valid {
+		u := TruncateDueAtMinute(dueAt.Time)
+		c.DueAt = &u
 	}
 	c.PRURLs = []string{}
 	c.RelatedItems = []RelatedItem{}
@@ -49,7 +54,7 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.item_number, c.column_id, c.title, c.description, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.created_at, c.updated_at"
+const cardFields = "c.id, n.item_number, c.column_id, c.title, c.description, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.due_at, c.created_at, c.updated_at"
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -255,7 +260,13 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	if p.CloseReason != nil {
 		c.CloseReason = *p.CloseReason
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,position=?,offset_y=?,assignee=?,close_reason=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.OffsetY, c.Assignee, c.CloseReason, now, id)
+	if p.ClearDueAt {
+		c.DueAt = nil
+	} else if p.DueAt != nil {
+		u := TruncateDueAtMinute(*p.DueAt)
+		c.DueAt = &u
+	}
+	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,position=?,offset_y=?,assignee=?,close_reason=?,due_at=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.OffsetY, c.Assignee, c.CloseReason, c.DueAt, now, id)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
