@@ -54,6 +54,7 @@ func TestMySQLHistory(t *testing.T) {
 		{Field: "relatedItems", After: relatedItemsJSON(after.RelatedItems)},
 		{Field: "assignee", After: after.Assignee},
 		{Field: "closeReason", After: after.CloseReason},
+		{Field: "dueAt", After: dueAtHistoryValue(after.DueAt)},
 	}
 	if !reflect.DeepEqual(baseline.Changes, wantBaseline) || baseline.Note == "" || baseline.OccurredAt.Year() < 2020 || baseline.EvidenceURL != "" {
 		t.Fatalf("baseline content: %+v want %+v", baseline, wantBaseline)
@@ -486,7 +487,7 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 		t.Fatalf("changes: %+v", page.Events[0])
 	}
 	created := page.Events[1]
-	if created.Kind != "created" || len(created.Changes) != 7 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
+	if created.Kind != "created" || len(created.Changes) != 8 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
 		t.Fatalf("created event: %+v", created)
 	}
 }
@@ -510,6 +511,43 @@ func TestMySQLHistoryRecordsCloseReasonChange(t *testing.T) {
 	want := HistoryChange{Field: "closeReason", Before: "", After: "wont fix"}
 	if updated.Changes[0] != want {
 		t.Fatalf("closeReason change: %+v", updated.Changes[0])
+	}
+}
+
+func TestMySQLHistoryRecordsDueAtChange(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	due := time.Date(2026, 11, 17, 8, 30, 0, 0, time.UTC)
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{DueAt: &due}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := r.History(ctx, c.Number, 0)
+	if err != nil || len(page.Events) < 1 {
+		t.Fatal(page, err)
+	}
+	updated := page.Events[0]
+	if updated.Kind != "updated" || len(updated.Changes) != 1 {
+		t.Fatalf("updated: %+v", updated)
+	}
+	want := HistoryChange{Field: "dueAt", Before: "", After: "2026-11-17T08:30:00Z"}
+	if updated.Changes[0] != want {
+		t.Fatalf("dueAt set: %+v", updated.Changes[0])
+	}
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{ClearDueAt: true}); err != nil {
+		t.Fatal(err)
+	}
+	page, err = r.History(ctx, c.Number, 0)
+	if err != nil || len(page.Events) < 1 {
+		t.Fatal(page, err)
+	}
+	cleared := page.Events[0]
+	if cleared.Kind != "updated" || len(cleared.Changes) != 1 {
+		t.Fatalf("cleared: %+v", cleared)
+	}
+	wantClear := HistoryChange{Field: "dueAt", Before: "2026-11-17T08:30:00Z", After: ""}
+	if cleared.Changes[0] != wantClear {
+		t.Fatalf("dueAt clear: %+v", cleared.Changes[0])
 	}
 }
 
