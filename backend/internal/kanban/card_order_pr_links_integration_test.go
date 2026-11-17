@@ -74,7 +74,7 @@ func TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(got.PRURLs, c.PRURLs) {
 			t.Fatalf("GetItem %d: %#v %v", c.ID, got.PRURLs, err)
 		}
-		got, err = r.GetItemByNumber(ctx, c.Number)
+		got, err = r.GetItemByNumber(ctx, c.Number, c.ProjectID)
 		if err != nil || !reflect.DeepEqual(got.PRURLs, c.PRURLs) {
 			t.Fatalf("GetItemByNumber %d: %#v %v", c.Number, got.PRURLs, err)
 		}
@@ -115,7 +115,7 @@ func TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL(t *testing.T) {
 	}
 	assertLinkedCards(t, "Board after ReorderItems", board.Items, two, three, none)
 	for _, c := range []Item{two, three} {
-		page, err := r.History(ctx, c.Number, 0)
+		page, err := r.History(ctx, c.Number, c.ProjectID, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -134,7 +134,7 @@ func TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL(t *testing.T) {
 	if moved.ColumnID != 2 || !reflect.DeepEqual(moved.PRURLs, three.PRURLs) {
 		t.Fatalf("UpdateItem move: %+v", moved)
 	}
-	page, err := r.History(ctx, three.Number, 0)
+	page, err := r.History(ctx, three.Number, three.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestMultiPRCardsStayWholeThroughEveryReadAndMoveMySQL(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(edited.PRURLs, urls) {
 		t.Fatalf("UpdateItem links: %#v %v", edited.PRURLs, err)
 	}
-	page, err = r.History(ctx, two.Number, 0)
+	page, err = r.History(ctx, two.Number, two.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

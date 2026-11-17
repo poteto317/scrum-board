@@ -22,7 +22,7 @@ func TestMySQLRelatedItemsBidirectional(t *testing.T) {
 	}
 
 	items := []RelatedItem{
-		{Kind: "item", Number: b.Number, Label: "depends"},
+		{Kind: "item", Number: b.Number, ProjectID: b.ProjectID, Label: "depends"},
 		{Kind: "url", URL: "https://example.com/doc", Label: "仕様"},
 	}
 	updated, err := r.UpdateItem(ctx, a.ID, ItemPatch{RelatedItems: &items})
@@ -44,7 +44,7 @@ func TestMySQLRelatedItemsBidirectional(t *testing.T) {
 		t.Fatalf("peer reverse: %+v", peer.RelatedItems)
 	}
 
-	histA, err := r.History(ctx, a.ID, 0)
+	histA, err := r.History(ctx, a.Number, a.ProjectID, 0)
 	if err != nil || len(histA.Events) == 0 {
 		t.Fatalf("history a: %+v %v", histA, err)
 	}
@@ -59,7 +59,7 @@ func TestMySQLRelatedItemsBidirectional(t *testing.T) {
 	if !foundRelated {
 		t.Fatalf("expected relatedItems in a history: %+v", histA.Events)
 	}
-	histB, err := r.History(ctx, b.ID, 0)
+	histB, err := r.History(ctx, b.Number, b.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,11 +91,11 @@ func TestMySQLRelatedItemsBidirectional(t *testing.T) {
 		t.Fatalf("peer after clear: %+v %v", peer, err)
 	}
 
-	self := []RelatedItem{{Kind: "item", Number: a.Number}}
+	self := []RelatedItem{{Kind: "item", Number: a.Number, ProjectID: a.ProjectID}}
 	if _, err = r.UpdateItem(ctx, a.ID, ItemPatch{RelatedItems: &self}); err != ErrRelatedItem {
 		t.Fatalf("self: %v", err)
 	}
-	missing := []RelatedItem{{Kind: "item", Number: 999999}}
+	missing := []RelatedItem{{Kind: "item", Number: 999999, ProjectID: a.ProjectID}}
 	if _, err = r.UpdateItem(ctx, a.ID, ItemPatch{RelatedItems: &missing}); err != ErrRelatedItem {
 		t.Fatalf("missing: %v", err)
 	}

@@ -68,7 +68,7 @@ func resolveRelatedStored(ctx context.Context, tx *sql.Tx, ownerID int64, items 
 		switch it.Kind {
 		case relatedKindItem:
 			var peerID int64
-			err := tx.QueryRowContext(ctx, "SELECT item_id FROM item_numbers WHERE item_number=?", it.Number).Scan(&peerID)
+			err := tx.QueryRowContext(ctx, "SELECT item_id FROM item_numbers WHERE project_id=? AND item_number=?", it.ProjectID, it.Number).Scan(&peerID)
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, ErrRelatedItem
 			}

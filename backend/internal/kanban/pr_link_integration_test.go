@@ -59,7 +59,7 @@ func TestMySQLPRLinks(t *testing.T) {
 	if err = r.InitializePRLinks(ctx); err != nil {
 		t.Fatal(err)
 	}
-	byNumber, err := r.GetItemByNumber(ctx, before.Number)
+	byNumber, err := r.GetItemByNumber(ctx, before.Number, before.ProjectID)
 	if err != nil || !reflect.DeepEqual(byNumber.PRURLs, urls) {
 		t.Fatalf("restart: %+v %v", byNumber, err)
 	}

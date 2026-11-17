@@ -3,6 +3,7 @@ package kanban
 import (
 	"errors"
 	"net/url"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -17,18 +18,19 @@ const relatedURLMax = 2048
 
 // RelatedItem is one related card or external URL on a card.
 type RelatedItem struct {
-	Kind   string `json:"kind"`
-	Number int64  `json:"number,omitempty"`
-	Title  string `json:"title,omitempty"`
-	URL    string `json:"url,omitempty"`
-	Label  string `json:"label,omitempty"`
+	Kind      string `json:"kind"`
+	Number    int64  `json:"number,omitempty"`
+	ProjectID int64  `json:"projectId,omitempty"`
+	Title     string `json:"title,omitempty"`
+	URL       string `json:"url,omitempty"`
+	Label     string `json:"label,omitempty"`
 }
 
 // normalizeRelatedItems trims and validates client payloads (no DB). Title is dropped.
 // Nil or empty input yields a non-nil empty slice.
 func normalizeRelatedItems(items []RelatedItem) ([]RelatedItem, bool) {
 	out := make([]RelatedItem, 0, len(items))
-	seenNumbers := map[int64]struct{}{}
+	seenItemKeys := map[string]struct{}{}
 	seenURLs := map[string]struct{}{}
 	for _, raw := range items {
 		kind := strings.TrimSpace(raw.Kind)
@@ -43,14 +45,15 @@ func normalizeRelatedItems(items []RelatedItem) ([]RelatedItem, bool) {
 		}
 		switch kind {
 		case relatedKindItem:
-			if raw.Number <= 0 {
+			if raw.Number <= 0 || raw.ProjectID <= 0 {
 				return nil, false
 			}
-			if _, dup := seenNumbers[raw.Number]; dup {
+			key := strconv.FormatInt(raw.ProjectID, 10) + ":" + strconv.FormatInt(raw.Number, 10)
+			if _, dup := seenItemKeys[key]; dup {
 				return nil, false
 			}
-			seenNumbers[raw.Number] = struct{}{}
-			out = append(out, RelatedItem{Kind: relatedKindItem, Number: raw.Number, Label: label})
+			seenItemKeys[key] = struct{}{}
+			out = append(out, RelatedItem{Kind: relatedKindItem, Number: raw.Number, ProjectID: raw.ProjectID, Label: label})
 		case relatedKindURL:
 			// Reject before TrimSpace: trailing newlines would otherwise be stripped.
 			if strings.ContainsAny(raw.URL, "\r\n") {

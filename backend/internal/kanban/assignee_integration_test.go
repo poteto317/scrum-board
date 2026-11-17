@@ -33,7 +33,7 @@ func TestMySQLAssigneeMigrationAndHistory(t *testing.T) {
 	if updated.Assignee != "Cursor" {
 		t.Fatalf("updated=%+v", updated)
 	}
-	page, err := r.History(ctx, card.Number, 0)
+	page, err := r.History(ctx, card.Number, card.ProjectID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

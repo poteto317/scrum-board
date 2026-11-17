@@ -37,7 +37,7 @@ func TestMySQLHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	page, err := r.History(ctx, 1, 0)
+	page, err := r.History(ctx, after.Number, after.ProjectID, 0)
 	if err != nil || len(page.Events) != 1 || page.Events[0].Kind != "baseline" {
 		t.Fatalf("baseline: %+v %v", page, err)
 	}
@@ -66,7 +66,7 @@ func TestMySQLHistory(t *testing.T) {
 	if err = r.InitializeHistory(ctx); err != nil {
 		t.Fatal(err)
 	}
-	page, err = r.History(ctx, c.Number, 0)
+	page, err = r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) != 1 || page.Events[0].Kind != "created" {
 		t.Fatalf("created restart: %+v %v", page, err)
 	}
@@ -75,7 +75,7 @@ func TestMySQLHistory(t *testing.T) {
 	if _, err = r.UpdateItem(ctx, c.ID, ItemPatch{Title: &title, Description: &desc, PRURLs: &urls, ColumnID: &col}); err != nil {
 		t.Fatal(err)
 	}
-	page, err = r.History(ctx, c.Number, 0)
+	page, err = r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) != 2 || len(page.Events[0].Changes) != 4 {
 		t.Fatalf("diff: %+v %v", page, err)
 	}
@@ -85,7 +85,7 @@ func TestMySQLHistory(t *testing.T) {
 	if _, err = r.UpdateItem(ctx, c.ID, ItemPatch{Title: &title}); err != nil {
 		t.Fatal(err)
 	}
-	page, _ = r.History(ctx, c.Number, 0)
+	page, _ = r.History(ctx, c.Number, c.ProjectID, 0)
 	if len(page.Events) != 2 {
 		t.Fatal("no-op added history")
 	}
@@ -97,14 +97,14 @@ func TestMySQLHistory(t *testing.T) {
 	// Never leave the renamed table behind: it keeps a foreign key to cards and would break every later reset.
 	t.Cleanup(func() { _, _ = db.Exec("RENAME TABLE hidden_history TO item_history") })
 	var nextBefore int64
-	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&nextBefore); err != nil {
+	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE project_id=1").Scan(&nextBefore); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = r.CreateItem(ctx, ItemInput{Title: "must not exist", ColumnID: 1}); err == nil {
 		t.Fatal("create must roll back when history fails")
 	}
 	var nextAfter int64
-	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&nextAfter); err != nil || nextAfter != nextBefore {
+	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE project_id=1").Scan(&nextAfter); err != nil || nextAfter != nextBefore {
 		t.Fatal("failed history consumed number", err)
 	}
 	bad := "must rollback"
@@ -124,7 +124,7 @@ func TestMySQLHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	page, _ = r.History(ctx, c.Number, 0)
+	page, _ = r.History(ctx, c.Number, c.ProjectID, 0)
 	if len(page.Events) != 3 || page.Events[2].Kind != "restored" {
 		t.Fatalf("import/order: %+v", page)
 	}
@@ -139,7 +139,7 @@ func TestMySQLHistory(t *testing.T) {
 	if err = r.ImportHistory(ctx, []HistoricalRecord{record, invalid}); err == nil {
 		t.Fatal("identity mismatch accepted")
 	}
-	page, _ = r.History(ctx, c.Number, 0)
+	page, _ = r.History(ctx, c.Number, c.ProjectID, 0)
 	if len(page.Events) != 3 {
 		t.Fatal("partial import")
 	}
@@ -153,11 +153,11 @@ func TestMySQLHistory(t *testing.T) {
 	if err = r.ImportHistory(ctx, records); err != nil {
 		t.Fatal(err)
 	}
-	page, err = r.History(ctx, c.Number, 0)
+	page, err = r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) != 50 || page.NextBefore == 0 {
 		t.Fatalf("first page: %+v %v", page, err)
 	}
-	tail, err := r.History(ctx, c.Number, page.NextBefore)
+	tail, err := r.History(ctx, c.Number, c.ProjectID, page.NextBefore)
 	if err != nil || len(tail.Events) != 8 || tail.NextBefore != 0 {
 		t.Fatalf("tail: %+v %v", tail, err)
 	}
@@ -168,7 +168,7 @@ func TestMySQLHistory(t *testing.T) {
 		}
 		seen[event.ID] = true
 	}
-	if _, err = r.History(ctx, 1, page.Events[0].ID); err == nil {
+	if _, err = r.History(ctx, after.Number, after.ProjectID, page.Events[0].ID); err == nil {
 		t.Fatal("cross-card cursor accepted")
 	}
 	h := NewHandler(r)
@@ -211,7 +211,7 @@ func TestMySQLHistoryParallelAndConflictingImport(t *testing.T) {
 	if err != nil || c.Title != title || c.Description != desc {
 		t.Fatal(c, err)
 	}
-	page, err := r.History(ctx, 1, 0)
+	page, err := r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) != 3 {
 		t.Fatal(page, err)
 	}
@@ -261,7 +261,7 @@ func TestMySQLImportRejectsFutureOccurredAtWithoutWriting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, _ := r.History(ctx, c.Number, 0)
+	before, _ := r.History(ctx, c.Number, c.ProjectID, 0)
 	ok := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: c.CreatedAt, Key: "valid-in-bad-batch", OccurredAt: c.CreatedAt, Note: "valid source"}
 	typo := ok
 	typo.Key = "typo-year"
@@ -269,7 +269,7 @@ func TestMySQLImportRejectsFutureOccurredAtWithoutWriting(t *testing.T) {
 	if err = r.ImportHistory(ctx, []HistoricalRecord{ok, typo}); err == nil {
 		t.Fatal("future occurredAt accepted")
 	}
-	after, _ := r.History(ctx, c.Number, 0)
+	after, _ := r.History(ctx, c.Number, c.ProjectID, 0)
 	if len(after.Events) != len(before.Events) {
 		t.Fatalf("batch with a future record wrote events: %d -> %d", len(before.Events), len(after.Events))
 	}
@@ -473,7 +473,7 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{Title: &title, Description: &desc, PRURLs: &urls, ColumnID: &col}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := r.History(ctx, c.Number, 0)
+	page, err := r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) != 2 {
 		t.Fatal(page, err)
 	}
@@ -500,7 +500,7 @@ func TestMySQLHistoryRecordsCloseReasonChange(t *testing.T) {
 	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{CloseReason: &reason}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := r.History(ctx, c.Number, 0)
+	page, err := r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) < 1 {
 		t.Fatal(page, err)
 	}
@@ -522,7 +522,7 @@ func TestMySQLHistoryRecordsDueAtChange(t *testing.T) {
 	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{DueAt: &due}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := r.History(ctx, c.Number, 0)
+	page, err := r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) < 1 {
 		t.Fatal(page, err)
 	}
@@ -537,7 +537,7 @@ func TestMySQLHistoryRecordsDueAtChange(t *testing.T) {
 	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{ClearDueAt: true}); err != nil {
 		t.Fatal(err)
 	}
-	page, err = r.History(ctx, c.Number, 0)
+	page, err = r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) < 1 {
 		t.Fatal(page, err)
 	}
@@ -566,7 +566,7 @@ func TestMySQLImportRejectsEachIdentityMismatchWithoutWriting(t *testing.T) {
 			t.Fatalf("%s mismatch accepted", name)
 		}
 	}
-	page, _ := r.History(ctx, c.Number, 0)
+	page, _ := r.History(ctx, c.Number, c.ProjectID, 0)
 	if len(page.Events) != 1 {
 		t.Fatalf("mismatched import wrote events: %+v", page)
 	}
@@ -632,7 +632,7 @@ func TestMySQLHistoryPageBoundaries(t *testing.T) {
 	if err := r.ImportHistory(ctx, records(49, tied, "tied")); err != nil {
 		t.Fatal(err)
 	}
-	page, err := r.History(ctx, c.Number, 0)
+	page, err := r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) != 50 || page.NextBefore != 0 {
 		t.Fatalf("exactly one page: len=%d next=%d err=%v", len(page.Events), page.NextBefore, err)
 	}
@@ -640,11 +640,11 @@ func TestMySQLHistoryPageBoundaries(t *testing.T) {
 	if err = r.ImportHistory(ctx, records(1, c.CreatedAt.Add(-2*time.Hour), "older")); err != nil {
 		t.Fatal(err)
 	}
-	page, err = r.History(ctx, c.Number, 0)
+	page, err = r.History(ctx, c.Number, c.ProjectID, 0)
 	if err != nil || len(page.Events) != 50 || page.NextBefore == 0 {
 		t.Fatalf("first page of 51: len=%d next=%d err=%v", len(page.Events), page.NextBefore, err)
 	}
-	tail, err := r.History(ctx, c.Number, page.NextBefore)
+	tail, err := r.History(ctx, c.Number, c.ProjectID, page.NextBefore)
 	if err != nil || len(tail.Events) != 1 || tail.NextBefore != 0 || tail.Events[0].OccurredAt.After(tied) {
 		t.Fatalf("tail must hold the older event: %+v %v", tail, err)
 	}

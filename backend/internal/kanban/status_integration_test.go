@@ -80,7 +80,7 @@ func TestMySQLStatusChange(t *testing.T) {
 		t.Fatal("unrelated card changed", err)
 	}
 	var next int64
-	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE singleton=1").Scan(&next); err != nil || next != 3 {
+	if err = db.QueryRow("SELECT next_number FROM item_number_sequence WHERE project_id=1").Scan(&next); err != nil || next != 3 {
 		t.Fatalf("status consumed a number: %d %v", next, err)
 	}
 }

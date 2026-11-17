@@ -1,8 +1,10 @@
 package kanban
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -167,12 +169,51 @@ func (h handler) getItem(w http.ResponseWriter, r *http.Request) {
 	attachPRTitles(r.Context(), h.prTitleResolver, &c)
 	reply(w, 200, c)
 }
+func (h handler) activeProjectForByNumber(ctx context.Context) (int64, error) {
+	board, err := h.repo.Board(ctx)
+	if err != nil {
+		return 0, err
+	}
+	projects, err := h.repo.ListProjects(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return resolveActiveProjectID(board.Settings.ActiveProjectID, projects), nil
+}
+
+func (h handler) resolveByNumberProjectID(r *http.Request) (int64, error) {
+	ctx := r.Context()
+	if values, exists := r.URL.Query()["projectId"]; exists {
+		if len(values) != 1 {
+			return 0, ErrProject
+		}
+		pid, err := strconv.ParseInt(values[0], 10, 64)
+		if err != nil || pid <= 0 {
+			return 0, ErrProject
+		}
+		projects, err := h.repo.ListProjects(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if !projectIDExists(projects, pid) {
+			return 0, ErrProject
+		}
+		return pid, nil
+	}
+	return h.activeProjectForByNumber(ctx)
+}
+
 func (h handler) getItemByNumber(w http.ResponseWriter, r *http.Request) {
 	n, ok := taskNumber(w, r)
 	if !ok {
 		return
 	}
-	card, err := h.repo.GetItemByNumber(r.Context(), n)
+	pid, err := h.resolveByNumberProjectID(r)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	card, err := h.repo.GetItemByNumber(r.Context(), n, pid)
 	if err != nil {
 		fail(w, err)
 		return
