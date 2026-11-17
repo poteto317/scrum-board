@@ -80,7 +80,7 @@ curl --fail-with-body http://127.0.0.1:4200/api/items/by-number/7
 curl --fail-with-body http://127.0.0.1:4200/api/board
 ```
 
-応答は `columns` / `items` に加え、`settings: { "cardLayout": "pack" | "free", "mobileBoardColumnId": number }` を含みます（`cardLayout` 既定は `pack`。`mobileBoardColumnId` はスマホ1列表示用の列 ID。未保存・無効値は Todo 列、無ければ `position` 昇順・同点は `id` 昇順の先頭。列が無いときは `0`。GET は DB を書き換えません）。各アイテムには列内の並び `position` に加え、自由配置用の `offsetY`（列カードリスト上端からの CSS px・整数 0〜100000。欠落時は 0）が含まれます。応答アイテムのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
+応答は `columns` / `items` に加え、`settings: { "cardLayout": "pack" | "free", "mobileBoardColumnId": number, "activeProjectId": number }` を含みます（`cardLayout` 既定は `pack`。`mobileBoardColumnId` はスマホ1列表示用の列 ID。未保存・無効値は Todo 列、無ければ `position` 昇順・同点は `id` 昇順の先頭。列が無いときは `0`。`activeProjectId` は解決後のアクティブプロジェクト。保存値が欠落・0以下・存在しない id のときは、名称に依存せず `position` 昇順・同点は `id` 昇順の先頭プロジェクト。プロジェクトが0件なら `0`。GET は DB を書き換えません）。`items` はその解決後アクティブに属するアイテムだけです。各アイテムには所属 `projectId`、列内の並び `position` に加え、自由配置用の `offsetY`（列カードリスト上端からの CSS px・整数 0〜100000。欠落時は 0）が含まれます。応答アイテムのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
 
 ## 公開オリジン（本番リンク用）
 
@@ -122,7 +122,7 @@ number・id・title・description・columnIdなどを混ぜて送ると400にな
 | `PATCH /api/items/by-number/{number}/status` | 公開タスク番号とステータス名 |
 | `PATCH /api/items/by-number/{number}/assignee` | 公開タスク番号と対応者ラベル |
 | `GET /api/items/{id}` | 内部ID |
-| `PATCH /api/items/{id}` | 内部IDとtitle/description/columnId/prUrls/assignee/closeReason/dueAtの部分更新 |
+| `PATCH /api/items/{id}` | 内部IDとtitle/description/columnId/projectId/prUrls/assignee/closeReason/dueAtの部分更新 |
 
 番号とIDを推測で読み替えません。例のアイテムに `PATCH /api/items/7` を送ると、内部ID7を対象にしてしまいます。生成AIから画面のタスクを変更するときはby-numberを使ってください。
 
@@ -255,7 +255,7 @@ curl --fail-with-body --request PUT \
 
 # アイテムの並び替え・列間移動
 
-`PUT /api/items/order` で、影響する列ごとのアイテム順を一括更新します。リクエストには、対象列に現在属するアイテム ID の完全な集合を新しい順で含めます。列間移動では、ソース列とデスト列の両方を同じリクエストに含めます。任意で各列に `offsetYs`（`itemIds` と同長の整数配列、各値は 0 以上 100000 以下）を付けられます。省略時は既存の `offset_y` を維持し `position` だけ更新します（上詰め DnD 互換）。
+`PUT /api/items/order` で、影響する列ごとのアイテム順を一括更新します。リクエストには、対象列に現在属し、かつ解決後アクティブプロジェクトに属するアイテム ID の完全な集合を新しい順で含めます。他プロジェクトの ID は含めません。列間移動では、ソース列とデスト列の両方を同じリクエストに含めます。任意で各列に `offsetYs`（`itemIds` と同長の整数配列、各値は 0 以上 100000 以下）を付けられます。省略時は既存の `offset_y` を維持し `position` だけ更新します（上詰め DnD 互換）。サーバはアクティブ外のカードを更新しません。
 
 ```sh
 curl --fail-with-body --request PUT \
@@ -273,20 +273,44 @@ curl --fail-with-body --request PUT \
   http://127.0.0.1:4200/api/items/order
 ```
 
-- 成功時は HTTP 200 で `{"items":[...]}`（ボードと同じく `position`・`id` 昇順の**全アイテム**）を返します。各アイテムに `position` と `offsetY` が含まれます。`GET /api/board` のアイテム順もこれに従います。
+- 成功時は HTTP 200 で `{"items":[...]}`（解決後アクティブプロジェクトのアイテム。`position`・`id` 昇順）を返します。各アイテムに `position`・`offsetY`・`projectId` が含まれます。`GET /api/board` のアイテム順もこれに従います。
 - 空配列の `itemIds` は「その列にアイテムが0枚」を表します。
 - 列（ステータス）が変わったアイテムだけ履歴に `updated`（status 変更）が追加され、更新日時（`updatedAt`）も更新されます。列内の並び替えや、他のアイテムの移動に伴う位置のずれでは、履歴も更新日時も変わりません。
-- アイテムの新規作成、および詳細画面や `PATCH .../status` による列変更では、移動先列の末尾（`MAX(position)+1`）に配置されます。`cardLayout` が `free` のときは `offsetY = COALESCE(MAX(offset_y), -160) + 160`（空列は 0）も付与します。
+- アイテムの新規作成、および詳細画面や `PATCH .../status` による列変更では、移動先の同一プロジェクト×列の末尾（その集合の `MAX(position)+1`）に配置されます。`cardLayout` が `free` のときは、同じ集合の `offsetY = COALESCE(MAX(offset_y), -160) + 160`（空なら 0）も付与します。`POST /api/items` の `projectId` を省略すると解決後アクティブに所属します。存在する id を指定できます。0以下・存在しない id は 400。`PATCH /api/items/{id}` の `projectId` で別プロジェクトへ移せます。移動先ではそのプロジェクト×列の `position` 末尾と、そのプロジェクトの `backlogPosition` 末尾に付きます。移動元の `position` / `backlogPosition` は詰めません。
 - `position` は列内の並び順を表すだけで、連続した値や 0 始まりとは限りません（アイテムの削除で欠番ができます。並び替えのたびに、対象の列は 0 から振り直されます）。クライアントは `position`、同値は `id` の昇順で順序を決め、`position` を添字として使わないでください。
 - HTTP 400: `columns` 未指定・`null`・空配列、`columnId` の重複や 0 以下、`itemIds` が `null`、アイテム ID の重複や 0 以下、`offsetYs` があるとき長さ不一致・負数・非整数・100000 超、不正 JSON、未知のフィールド（トップレベルおよび `columns[]` 要素）。
-- HTTP 409: 指定列に現在属するアイテム集合と `itemIds` の和集合が一致しない場合、または存在しない列・アイテム ID。
+- HTTP 409: 指定列の解決後アクティブなアイテム集合と `itemIds` の和集合が一致しない場合（他プロジェクトの ID、不足、存在しない列・アイテム ID）。
 - HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。
 
-`position`（列内の並び順。アイテムの並び替え・列間移動が更新する）と `backlogPosition`（プロダクトバックログ全体の優先順位。`/api/backlog/order` が更新する）は独立した値で、一方を変えても他方は変わりません。どちらも各アイテムに含まれます。
+`position`（所属プロジェクト×列の並び順。アイテムの並び替え・列間移動が更新する）と `backlogPosition`（所属プロジェクト内の優先順位。`/api/backlog/order` が更新する）は独立した値で、一方を変えても他方は変わりません。どちらも各アイテムに含まれます。
 
-# ボード設定（カード配置・モバイル表示列）
+# プロジェクト
 
-`PATCH /api/board/settings` でボード設定を更新します。本文は `cardLayout`（`"pack"` | `"free"`）と `mobileBoardColumnId`（正の列 ID）を **それぞれ任意**（少なくとも一方必須。未知フィールドは 400）。省略したキーは変更しません。設定は Basic Auth 共有のボード共通です。
+アイテムはちょうど1つのプロジェクトに属します。ボードとバックログの表示・並び替えは、解決後アクティブプロジェクトのアイテムだけが対象です。列・番号・`cardLayout`・モバイル列・リストフィルタはプロジェクトを分けません。
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/projects
+curl --fail-with-body --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"name":"次の仕事"}' \
+  http://127.0.0.1:4200/api/projects
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"name":"改名"}' \
+  http://127.0.0.1:4200/api/projects/2
+curl --fail-with-body --request DELETE \
+  http://127.0.0.1:4200/api/projects/2
+```
+
+- `GET /api/projects` は `{ "projects": [ { "id", "name", "position", "createdAt", "updatedAt" } ] }`。順は `position` 昇順、同点は `id` 昇順。
+- `POST` は 201 と Project。`name` は trim 後 1〜80 Unicode 文字。空白のみは 400。同名は許可（識別は id）。`position` は末尾。削除した id は再利用しません。
+- `PATCH /api/projects/{id}` は `{ "name" }` で改名し、Project を返します。未知フィールド・空名は 400。無い id は 404。
+- `DELETE` は 204。アイテムが1件でもある、または残るプロジェクトがこの1件だけのときは 409。
+- マイグレーションは表示名「メイン」を1件作り、既存アイテムの id / createdAt は変えずにそこへ所属させます。
+
+# ボード設定（カード配置・モバイル表示列・アクティブプロジェクト）
+
+`PATCH /api/board/settings` でボード設定を更新します。本文は `cardLayout`（`"pack"` | `"free"`）、`mobileBoardColumnId`（正の列 ID）、`activeProjectId`（正のプロジェクト ID）を **それぞれ任意**（少なくとも1つ必須。未知フィールドは 400）。省略したキーは変更しません。設定は Basic Auth 共有のボード共通です。マージの基点は DB の生値です。
 
 ```sh
 curl --fail-with-body --request PATCH \
@@ -297,12 +321,16 @@ curl --fail-with-body --request PATCH \
   --header 'Content-Type: application/json' \
   --data '{"mobileBoardColumnId":2}' \
   http://127.0.0.1:4200/api/board/settings
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"activeProjectId":2}' \
+  http://127.0.0.1:4200/api/board/settings
 ```
 
-- 成功時は常に `{ "settings": { "cardLayout": "...", "mobileBoardColumnId": number } }` を返します（変更していないキーも含む）。
-- `free` → `pack` の遷移のときだけ同一トランザクションで全列のアイテムを `offset_y, position, id` 順に `position` を振り直し、応答に **`items`（全件）** も含めます（クライアントは再 GET 不要）。`offsetY` の値自体は残します。`mobileBoardColumnId` のみの PATCH や、すでに `pack` のままの更新では `items` を付けません。
+- 成功時は常に `{ "settings": { "cardLayout": "...", "mobileBoardColumnId": number, "activeProjectId": number } }` を返します（変更していないキーも含む）。`activeProjectId` は応答では解決済みの値です。無効な生値は、ユーザーが有効な id で PATCH したときだけ書き換わります。
+- `free` → `pack` の遷移のときだけ同一トランザクションで全列のアイテムを `offset_y, position, id` 順に `position` を振り直し、応答に **`items`（解決後アクティブのアイテム）** も含めます（クライアントは再 GET 不要）。`offsetY` の値自体は残します。`mobileBoardColumnId` のみ、`activeProjectId` のみの PATCH や、すでに `pack` のままの更新では `items` を付けません。`activeProjectId` だけの PATCH は `cardLayout` とモバイル列を変えません。
 - `pack` → `free` は settings 行のみ更新し、`items` は省略できます。画面上の上詰め結果から `offsetY` を測って先に `PUT /api/items/order`（`offsetYs` 付き）してからこの PATCH する想定です。途中失敗で設定だけ `free` にしないでください。
-- HTTP 400: 両方欠落、`cardLayout` 不正値・空文字、`mobileBoardColumnId` が 0 以下または存在しない列、未知フィールド、不正 JSON。
+- HTTP 400: 3キーすべて欠落、`cardLayout` 不正値・空文字、`mobileBoardColumnId` が 0 以下または存在しない列、`activeProjectId` が 0 以下または存在しないプロジェクト、未知フィールド、不正 JSON。
 - HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。
 
 # 一覧フィルタ（ボード／バックログ共有）
@@ -323,7 +351,7 @@ curl --fail-with-body --request PUT \
 
 # プロダクトバックログ
 
-全アイテムを `backlog_position` 昇順（同値は `id` 昇順）で返します。ステータス（列）に関係なく Done も含みます。
+解決後アクティブプロジェクトのアイテムを `backlog_position` 昇順（同値は `id` 昇順）で返します。ステータス（列）に関係なく Done も含みます。他プロジェクトのアイテムは含めません。
 
 ```sh
 curl --fail-with-body http://127.0.0.1:4200/api/backlog
@@ -331,7 +359,7 @@ curl --fail-with-body http://127.0.0.1:4200/api/backlog
 
 成功時は HTTP 200 で `{"items":[...]}`（各アイテムに `backlogPosition` 付き）を返します。
 
-`PUT /api/backlog/order` で全アイテムの優先順位を更新します。リクエストボディには現在存在するすべてのアイテムIDを新しい順で配列指定します。
+`PUT /api/backlog/order` で解決後アクティブプロジェクトの優先順位を更新します。リクエストボディには、そのプロジェクトに現在存在するすべてのアイテムIDを新しい順で配列指定します。他プロジェクトの ID は含めず、それらの `backlogPosition` は変えません。
 
 ```sh
 curl --fail-with-body --request PUT \
@@ -341,9 +369,9 @@ curl --fail-with-body --request PUT \
 ```
 
 - 成功時は HTTP 200 で `{"items":[...]}`（新しい `backlogPosition` 付き）。
-- 新規アイテム作成（`POST /api/items`）は現在の最大 `backlog_position + 1` を付与するため、並び替え後も常に末尾に追加されます。
+- 新規アイテム作成（`POST /api/items`）は、所属プロジェクト内の最大 `backlog_position + 1` を付与するため、並び替え後もそのプロジェクトの末尾に追加されます。
 - HTTP 400: `itemIds` 未指定・`null`・空配列、0以下のID、重複ID、不正JSON、未知のフィールド。
-- HTTP 409: DBに存在するアイテムの集合と一致しない場合（不足または存在しないアイテムIDの指定）。
+- HTTP 409: 解決後アクティブのアイテム集合と一致しない場合（不足、他プロジェクト、または存在しないアイテムIDの指定）。
 - HTTP 500: DB更新に失敗した場合（トランザクションはロールバックされます）。
 
 # コマンドテンプレート
