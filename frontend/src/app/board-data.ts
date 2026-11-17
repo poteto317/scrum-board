@@ -43,6 +43,7 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
     relatedItems: raw.relatedItems ?? [],
     assignee: raw.assignee ?? '',
     closeReason: raw.closeReason ?? '',
+    dueAt: raw.dueAt ? raw.dueAt : null,
     createdAt: raw.createdAt ?? '',
     updatedAt: raw.updatedAt ?? '',
   };

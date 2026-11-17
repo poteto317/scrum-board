@@ -28,6 +28,7 @@ describe('normalizeBoardData', () => {
           relatedItems: [],
           assignee: '',
           closeReason: '',
+          dueAt: null,
           createdAt: '',
           updatedAt: '',
         },
@@ -56,5 +57,14 @@ describe('normalizeOffsetY / normalizeItem', () => {
     expect(normalizeItem({ id: 1, offsetY: 200_000 }).offsetY).toBe(100_000);
     expect(normalizeItem({ id: 1 }).closeReason).toBe('');
     expect(normalizeItem({ id: 1, closeReason: 'x' }).closeReason).toBe('x');
+  });
+
+  it('normalizes missing dueAt to null (not empty string)', () => {
+    expect(normalizeItem({ id: 1 }).dueAt).toBeNull();
+    expect(normalizeItem({ id: 1, dueAt: null }).dueAt).toBeNull();
+    expect(normalizeItem({ id: 1, dueAt: '' }).dueAt).toBeNull();
+    expect(normalizeItem({ id: 1, dueAt: '2026-11-17T08:30:00Z' }).dueAt).toBe(
+      '2026-11-17T08:30:00Z',
+    );
   });
 });

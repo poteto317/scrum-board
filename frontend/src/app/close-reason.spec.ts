@@ -15,6 +15,7 @@ const base: Item = {
   relatedItems: [],
   assignee: 'Cursor',
   closeReason: '',
+  dueAt: null,
   createdAt: '',
   updatedAt: '',
 };
@@ -37,6 +38,7 @@ describe('mergeCloseTransitionItem', () => {
       ...base,
       columnId: 3,
       closeReason: 'done',
+      dueAt: null,
       prUrls: undefined as unknown as string[],
       assignee: undefined as unknown as string,
     };

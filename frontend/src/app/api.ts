@@ -9,6 +9,7 @@ import {
   CardLayout,
   Item,
   ItemInput,
+  ItemPatch,
   Column,
   HistoryPage,
 } from './models';
@@ -63,7 +64,7 @@ export class Api {
   createItem(input: ItemInput) {
     return this.http.post<Item>('/api/items', input);
   }
-  updateItem(id: number, input: Partial<ItemInput>) {
+  updateItem(id: number, input: ItemPatch) {
     return this.http.patch<Item>(`/api/items/${id}`, input);
   }
   updateAssigneeByNumber(number: number, assignee: string) {

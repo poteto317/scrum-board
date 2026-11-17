@@ -18,6 +18,7 @@ function card(id: number, columnId: number, position: number, offsetY = 0): Item
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    dueAt: null,
     createdAt: '',
     updatedAt: '',
   };
