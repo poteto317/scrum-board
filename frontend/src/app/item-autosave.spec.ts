@@ -387,6 +387,21 @@ describe('closeReason form field', () => {
     TestBed.resetTestingModule();
     vi.useRealTimers();
   });
+  it('dropInFlight resolves settle waiters so navigation is not stuck', async () => {
+    vi.useFakeTimers();
+    const response = new Subject<Item>();
+    const api = { updateItem: vi.fn(() => response) };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset(initial);
+    edit.form.controls.title.setValue('送信中');
+    const settled = edit.settle();
+    expect(edit.saving()).toBe(true);
+    edit.dropInFlight();
+    expect(await settled).toBe(false);
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+  });
 });
 
 describe('server changes to untouched fields', () => {
