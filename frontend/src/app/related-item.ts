@@ -56,12 +56,17 @@ export function displayLabel(item: RelatedItem): string {
 }
 
 export function relatedItemKey(item: RelatedItem): string {
-  if (item.kind === 'item') return `item:${item.number}`;
+  if (item.kind === 'item') {
+    const projectId = item.projectId ?? 0;
+    return `item:${projectId}:${item.number}`;
+  }
   return `url:${item.url}`;
 }
 
 export function sameRelatedItem(a: RelatedItem, b: RelatedItem): boolean {
   if (a.kind !== b.kind) return false;
-  if (a.kind === 'item') return a.number === b.number;
+  if (a.kind === 'item') {
+    return a.number === b.number && (a.projectId ?? 0) === (b.projectId ?? 0);
+  }
   return a.url === b.url;
 }

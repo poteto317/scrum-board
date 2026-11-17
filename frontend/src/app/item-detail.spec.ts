@@ -426,7 +426,7 @@ describe('ItemDetail autosave', () => {
     f.nativeElement.querySelector('.related-add button').click();
     f.detectChanges();
     expect(api.updateItem).toHaveBeenCalledWith(18, {
-      relatedItems: [...related, { kind: 'item', number: 7, label: '' }],
+      relatedItems: [...related, { kind: 'item', number: 7, label: '', projectId: 0 }],
     });
     expect(list().querySelectorAll('.pr-link')).toHaveLength(2);
     list().querySelectorAll('.pr-remove')[1].click();

@@ -64,7 +64,7 @@ export class ItemRelatedItems {
     const label = this.labelDraft.value.trim();
     const item: RelatedItem =
       parsed.kind === 'item'
-        ? { kind: 'item', number: parsed.number, label }
+        ? { kind: 'item', number: parsed.number, label, projectId: card.projectId }
         : { kind: 'url', url: parsed.url, label };
     const existing = card.relatedItems ?? [];
     if (existing.some((row) => sameRelatedItem(row, item))) {
@@ -98,6 +98,14 @@ export class ItemRelatedItems {
     this.reorder(index, index + delta);
   }
 
+  private relatedItemsForPatch(card: Item, relatedItems: RelatedItem[]): RelatedItem[] {
+    return relatedItems.map((row) => {
+      if (row.kind !== 'item') return row;
+      if (row.projectId && row.projectId > 0) return row;
+      return { ...row, projectId: card.projectId };
+    });
+  }
+
   private save(relatedItems: RelatedItem[], onSuccess?: () => void, previous?: RelatedItem[]) {
     const card = this.current();
     if (!card || !this.cancel$) return;
@@ -105,7 +113,7 @@ export class ItemRelatedItems {
     this.markDirty();
     this.reportError('');
     this.api
-      .updateItem(card.id, { relatedItems })
+      .updateItem(card.id, { relatedItems: this.relatedItemsForPatch(card, relatedItems) })
       .pipe(
         takeUntil(this.cancel$),
         takeUntilDestroyed(this.destroyRef),
