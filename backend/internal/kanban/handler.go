@@ -267,6 +267,12 @@ func (h handler) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Assignee = assignee
+	closeReason, closeOK := NormalizeCloseReason(in.CloseReason)
+	if !closeOK {
+		invalid(w, "Close理由は2000文字以内で入力してください。")
+		return
+	}
+	in.CloseReason = closeReason
 	c, e := h.repo.CreateItem(r.Context(), in)
 	if e != nil {
 		fail(w, e)
@@ -286,6 +292,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		PRURLs       *[]string       `json:"prUrls"`
 		RelatedItems json.RawMessage `json:"relatedItems"`
 		Assignee     json.RawMessage `json:"assignee"`
+		CloseReason  json.RawMessage `json:"closeReason"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -325,7 +332,20 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		}
 		p.Assignee = &value
 	}
-	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil {
+	if len(body.CloseReason) > 0 && string(body.CloseReason) != "null" {
+		var raw string
+		if err := json.Unmarshal(body.CloseReason, &raw); err != nil {
+			invalid(w, "Close理由は2000文字以内で入力してください。")
+			return
+		}
+		value, valid := NormalizeCloseReason(raw)
+		if !valid {
+			invalid(w, "Close理由は2000文字以内で入力してください。")
+			return
+		}
+		p.CloseReason = &value
+	}
+	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}
