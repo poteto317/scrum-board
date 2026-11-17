@@ -103,7 +103,7 @@ export class ItemDetail implements OnInit {
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
   readonly closeTransition = inject(ItemCloseTransition);
-  readonly descriptionLink = inject(DescriptionEditor);
+  readonly descriptionEditor = inject(DescriptionEditor);
   private readonly descArea = viewChild<ElementRef<HTMLTextAreaElement>>('descArea');
   readonly relatedDisplayLabel = displayLabel;
   readonly commands = inject(CommandTemplatesSession);
@@ -140,33 +140,30 @@ export class ItemDetail implements OnInit {
     return parseDescriptionLinks(this.form.controls.description.value ?? '');
   }
   startDescriptionEdit() {
-    this.descriptionLink.startEdit();
+    this.descriptionEditor.startEdit();
     this.focusDescriptionArea();
   }
   onDescriptionBlur(event: FocusEvent) {
     const next = event.relatedTarget as HTMLElement | null;
     // Keep editing when focus moves to the link toolbar or the link dialog.
-    if (next?.closest('.description-edit-toolbar, dialog.modal-backdrop, .modal')) return;
-    this.descriptionLink.endEditIfIdle();
-    if (!this.descriptionLink.open()) this.autosave.flush();
+    if (next?.closest('.description-edit-toolbar, .description-link-dialog')) return;
+    this.descriptionEditor.endEditIfIdle();
+    if (!this.descriptionEditor.open()) this.autosave.flush();
   }
   onDescriptionViewClick(event: MouseEvent) {
-    this.startEditUnlessLink(event.target);
-  }
-  onDescriptionViewKeydown(event: Event) {
     this.startEditUnlessLink(event.target);
   }
   openDescriptionLink(area: HTMLTextAreaElement) {
     const start = area.selectionStart ?? 0;
     const end = area.selectionEnd ?? 0;
-    this.descriptionLink.begin({
+    this.descriptionEditor.begin({
       start,
       end,
       selectedText: area.value.slice(start, end),
     });
   }
   confirmDescriptionLink() {
-    const result = this.descriptionLink.apply(this.form.controls.description.value ?? '');
+    const result = this.descriptionEditor.apply(this.form.controls.description.value ?? '');
     if (!result) return;
     this.form.controls.description.setValue(result.text);
     this.form.controls.description.markAsDirty();
@@ -244,7 +241,7 @@ export class ItemDetail implements OnInit {
           this.relatedItems.reset();
           this.assignee.reset();
           this.closeTransition.reset();
-          this.descriptionLink.reset();
+          this.descriptionEditor.reset();
           this.listDragging.set(false);
           this.deleted = false;
           this.confirmDelete.set(false);
@@ -322,7 +319,7 @@ export class ItemDetail implements OnInit {
       this.confirmDelete() ||
       this.closeTransition.open() ||
       this.closeTransition.saving() ||
-      this.descriptionLink.open() ||
+      this.descriptionEditor.open() ||
       this.deleting()
     );
   }

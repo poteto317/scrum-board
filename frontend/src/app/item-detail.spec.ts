@@ -1542,10 +1542,7 @@ describe('ItemDetail description text links', () => {
     link.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     f.detectChanges();
     expect(f.nativeElement.querySelector('#detail-description')).toBeNull();
-    expect(f.componentInstance.descriptionLink.editing()).toBe(false);
-    link.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    f.detectChanges();
-    expect(f.componentInstance.descriptionLink.editing()).toBe(false);
+    expect(f.componentInstance.descriptionEditor.editing()).toBe(false);
     f.destroy();
   });
 
@@ -1554,7 +1551,7 @@ describe('ItemDetail description text links', () => {
     buttonByText(f.nativeElement, '編集')!.click();
     f.detectChanges();
     expect(f.nativeElement.querySelector('#detail-description')).not.toBeNull();
-    f.componentInstance.descriptionLink.editing.set(false);
+    f.componentInstance.descriptionEditor.editing.set(false);
     f.detectChanges();
     (f.nativeElement.querySelector('.description-view') as HTMLElement).click();
     f.detectChanges();
@@ -1581,11 +1578,11 @@ describe('ItemDetail description text links', () => {
     area.setSelectionRange(0, 0);
     buttonByText(f.nativeElement, 'リンク')!.click();
     f.detectChanges();
-    expect(f.componentInstance.descriptionLink.label()).toBe('');
-    expect(f.componentInstance.descriptionLink.url()).toBe('');
+    expect(f.componentInstance.descriptionEditor.label()).toBe('');
+    expect(f.componentInstance.descriptionEditor.url()).toBe('');
     expect(f.componentInstance.busy()).toBe(true);
-    f.componentInstance.descriptionLink.setLabel('Docs');
-    f.componentInstance.descriptionLink.setUrl('https://example.com');
+    f.componentInstance.descriptionEditor.setLabel('Docs');
+    f.componentInstance.descriptionEditor.setUrl('https://example.com');
     f.componentInstance.confirmDescriptionLink();
     f.detectChanges();
     expect(f.componentInstance.form.controls.description.value).toBe(
@@ -1594,12 +1591,12 @@ describe('ItemDetail description text links', () => {
     expect(api.updateItem).toHaveBeenCalledWith(18, {
       description: '[Docs](https://example.com)hello world',
     });
-    expect(f.componentInstance.descriptionLink.open()).toBe(false);
+    expect(f.componentInstance.descriptionEditor.open()).toBe(false);
 
     area.setSelectionRange(0, 5);
     f.componentInstance.openDescriptionLink(area);
-    expect(f.componentInstance.descriptionLink.label()).toBe('[Docs');
-    f.componentInstance.descriptionLink.cancel();
+    expect(f.componentInstance.descriptionEditor.label()).toBe('[Docs');
+    f.componentInstance.descriptionEditor.cancel();
     f.destroy();
   });
 
@@ -1610,19 +1607,19 @@ describe('ItemDetail description text links', () => {
     f.detectChanges();
     const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
     f.componentInstance.openDescriptionLink(area);
-    f.componentInstance.descriptionLink.setLabel('');
-    f.componentInstance.descriptionLink.setUrl('https://example.com');
+    f.componentInstance.descriptionEditor.setLabel('');
+    f.componentInstance.descriptionEditor.setUrl('https://example.com');
     expect(f.componentInstance.confirmDescriptionLink()).toBeUndefined();
     expect(f.componentInstance.form.controls.description.value).toBe('body');
-    expect(f.componentInstance.descriptionLink.error()).toContain('表示名');
-    f.componentInstance.descriptionLink.setLabel('a]b');
+    expect(f.componentInstance.descriptionEditor.error()).toContain('表示名');
+    f.componentInstance.descriptionEditor.setLabel('a]b');
     f.componentInstance.confirmDescriptionLink();
     expect(f.componentInstance.form.controls.description.value).toBe('body');
-    f.componentInstance.descriptionLink.setLabel('ok');
-    f.componentInstance.descriptionLink.setUrl('http://example.com');
+    f.componentInstance.descriptionEditor.setLabel('ok');
+    f.componentInstance.descriptionEditor.setUrl('http://example.com');
     f.componentInstance.confirmDescriptionLink();
     expect(f.componentInstance.form.controls.description.value).toBe('body');
-    expect(f.componentInstance.descriptionLink.error()).toContain('https');
+    expect(f.componentInstance.descriptionEditor.error()).toContain('https');
     f.destroy();
   });
 
@@ -1634,11 +1631,11 @@ describe('ItemDetail description text links', () => {
     f.componentInstance.openDescriptionLink(area);
     area.dispatchEvent(new FocusEvent('blur', { relatedTarget: null }));
     f.detectChanges();
-    expect(f.componentInstance.descriptionLink.editing()).toBe(true);
-    f.componentInstance.descriptionLink.cancel();
+    expect(f.componentInstance.descriptionEditor.editing()).toBe(true);
+    f.componentInstance.descriptionEditor.cancel();
     area.dispatchEvent(new FocusEvent('blur', { relatedTarget: null }));
     f.detectChanges();
-    expect(f.componentInstance.descriptionLink.editing()).toBe(false);
+    expect(f.componentInstance.descriptionEditor.editing()).toBe(false);
     f.destroy();
   });
 
@@ -1650,7 +1647,7 @@ describe('ItemDetail description text links', () => {
     const linkBtn = buttonByText(f.nativeElement, 'リンク')!;
     area.dispatchEvent(new FocusEvent('blur', { relatedTarget: linkBtn }));
     f.detectChanges();
-    expect(f.componentInstance.descriptionLink.editing()).toBe(true);
+    expect(f.componentInstance.descriptionEditor.editing()).toBe(true);
     f.destroy();
   });
 
@@ -1660,10 +1657,10 @@ describe('ItemDetail description text links', () => {
     f.detectChanges();
     const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
     f.componentInstance.openDescriptionLink(area);
-    expect(f.componentInstance.descriptionLink.open()).toBe(true);
+    expect(f.componentInstance.descriptionEditor.open()).toBe(true);
     params.next(new Map([['number', '9']]));
     f.detectChanges();
-    expect(f.componentInstance.descriptionLink.open()).toBe(false);
+    expect(f.componentInstance.descriptionEditor.open()).toBe(false);
     f.destroy();
   });
 
@@ -1674,11 +1671,11 @@ describe('ItemDetail description text links', () => {
     f.detectChanges();
     const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
     f.componentInstance.openDescriptionLink(area);
-    f.componentInstance.descriptionLink.setLabel('lab');
-    f.componentInstance.descriptionLink.setUrl('https://a.com');
+    f.componentInstance.descriptionEditor.setLabel('lab');
+    f.componentInstance.descriptionEditor.setUrl('https://a.com');
     f.componentInstance.confirmDescriptionLink();
     expect(f.componentInstance.form.controls.description.value).toBe('a'.repeat(9990));
-    expect(f.componentInstance.descriptionLink.error()).toContain('10000');
+    expect(f.componentInstance.descriptionEditor.error()).toContain('10000');
     f.destroy();
   });
 });

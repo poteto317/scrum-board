@@ -100,14 +100,18 @@
           <p class="form-error">タイトルを1〜200文字で入力してください。</p>
         }
         <div class="description-header">
-          <label for="detail-description">説明 <span class="optional">任意</span></label>
-          @if (!descriptionLink.editing()) {
+          @if (descriptionEditor.editing()) {
+            <label for="detail-description">説明 <span class="optional">任意</span></label>
+          } @else {
+            <span class="description-label">説明 <span class="optional">任意</span></span>
+          }
+          @if (!descriptionEditor.editing()) {
             <button type="button" class="secondary description-edit-btn" (click)="startDescriptionEdit()">
               編集
             </button>
           }
         </div>
-        @if (descriptionLink.editing()) {
+        @if (descriptionEditor.editing()) {
           <div class="description-edit-toolbar">
             <button
               type="button"
@@ -129,13 +133,7 @@
             placeholder="背景、取り組む内容、完了の条件など"
           ></textarea>
         } @else {
-          <div
-            class="description-view"
-            role="button"
-            tabindex="0"
-            (click)="onDescriptionViewClick($event)"
-            (keydown.enter)="onDescriptionViewKeydown($event)"
-          >
+          <div class="description-view" (click)="onDescriptionViewClick($event)">
             @if (!form.controls.description.value.trim()) {
               <span class="description-placeholder">背景、取り組む内容、完了の条件など</span>
             } @else {
@@ -146,7 +144,6 @@
                     target="_blank"
                     rel="noopener noreferrer"
                     (click)="$event.stopPropagation()"
-                    (keydown)="$event.stopPropagation()"
                     >{{ seg.label }}</a
                   >
                 } @else {
@@ -550,12 +547,12 @@
     <app-item-history [number]="item()!.number" [revision]="item()!.updatedAt" />
   }
 </main>
-@if (descriptionLink.open()) {
+@if (descriptionEditor.open()) {
   <dialog
     appModal
-    class="modal-backdrop"
+    class="modal-backdrop description-link-dialog"
     aria-labelledby="description-link-title"
-    (cancel)="$event.preventDefault(); descriptionLink.cancel()"
+    (cancel)="$event.preventDefault(); descriptionEditor.cancel()"
   >
     <section class="modal">
       <h2 id="description-link-title">リンクを追加</h2>
@@ -563,23 +560,23 @@
       <input
         id="description-link-label"
         type="text"
-        [value]="descriptionLink.label()"
-        (input)="descriptionLink.setLabel($any($event.target).value)"
+        [value]="descriptionEditor.label()"
+        (input)="descriptionEditor.setLabel($any($event.target).value)"
         placeholder="リンクの表示名"
       />
       <label for="description-link-url">URL</label>
       <input
         id="description-link-url"
         type="url"
-        [value]="descriptionLink.url()"
-        (input)="descriptionLink.setUrl($any($event.target).value)"
+        [value]="descriptionEditor.url()"
+        (input)="descriptionEditor.setUrl($any($event.target).value)"
         placeholder="https://example.com"
       />
-      @if (descriptionLink.error()) {
-        <p class="form-error">{{ descriptionLink.error() }}</p>
+      @if (descriptionEditor.error()) {
+        <p class="form-error">{{ descriptionEditor.error() }}</p>
       }
       <div class="form-actions">
-        <button type="button" class="secondary" (click)="descriptionLink.cancel()">キャンセル</button>
+        <button type="button" class="secondary" (click)="descriptionEditor.cancel()">キャンセル</button>
         <button type="button" (click)="confirmDescriptionLink()">確定</button>
       </div>
     </section>
