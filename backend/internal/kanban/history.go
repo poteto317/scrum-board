@@ -65,6 +65,7 @@ func historyValues(ctx context.Context, tx *sql.Tx, c Item) (map[string]string, 
 	return map[string]string{
 		"title": c.Title, "description": c.Description, "status": name,
 		"prUrls": prURLsJSON(c.PRURLs), "relatedItems": relatedItemsJSON(c.RelatedItems), "assignee": c.Assignee,
+		"closeReason": c.CloseReason,
 	}, nil
 }
 func appendHistory(ctx context.Context, tx *sql.Tx, before *Item, after Item, kind string) error {
@@ -80,7 +81,7 @@ func appendHistory(ctx context.Context, tx *sql.Tx, before *Item, after Item, ki
 		}
 	}
 	changes := []HistoryChange{}
-	for _, field := range []string{"title", "description", "status", "prUrls", "relatedItems", "assignee"} {
+	for _, field := range []string{"title", "description", "status", "prUrls", "relatedItems", "assignee", "closeReason"} {
 		if before == nil || old[field] != values[field] {
 			changes = append(changes, HistoryChange{field, old[field], values[field]})
 		}

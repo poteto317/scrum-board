@@ -92,7 +92,14 @@ func TestHistoricalRecordLimits(t *testing.T) {
 			v.Changes = []HistoryChange{
 				{Field: "title"}, {Field: "description"}, {Field: "status"},
 				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
-				{Field: "assignee"}, {Field: "x"},
+				{Field: "assignee"}, {Field: "closeReason"},
+			}
+		}, true},
+		"eight changes": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{
+				{Field: "title"}, {Field: "description"}, {Field: "status"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
+				{Field: "assignee"}, {Field: "closeReason"}, {Field: "x"},
 			}
 		}, false},
 		"relatedItems not json": {func(v *HistoricalRecord) {
@@ -106,6 +113,12 @@ func TestHistoricalRecordLimits(t *testing.T) {
 		}, false},
 		"assignee control": {func(v *HistoricalRecord) {
 			v.Changes = []HistoryChange{{Field: "assignee", After: "a\nb"}}
+		}, false},
+		"closeReason 2000": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "closeReason", After: long(2000)}}
+		}, true},
+		"closeReason 2001": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "closeReason", After: long(2001)}}
 		}, false},
 		"title before 200":       {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "title", Before: long(200)}} }, true},
 		"title before 201":       {func(v *HistoricalRecord) { v.Changes = []HistoryChange{{Field: "title", Before: long(201)}} }, false},

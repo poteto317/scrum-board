@@ -68,7 +68,7 @@ var importKey = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,128}$`)
 const importClockSkew = 5 * time.Minute
 
 func validHistoricalRecord(v HistoricalRecord, now time.Time) bool {
-	if v.Number <= 0 || v.ItemID <= 0 || v.CreatedAt.IsZero() || v.OccurredAt.IsZero() || v.OccurredAt.Year() < 1000 || v.OccurredAt.Year() > 9999 || v.OccurredAt.Truncate(time.Microsecond).After(now.Add(importClockSkew)) || !importKey.MatchString(v.Key) || len(v.Changes) > 6 || len(v.Note) == 0 || utf8.RuneCountInString(v.Note) > 4000 || !validPRURL(v.EvidenceURL) {
+	if v.Number <= 0 || v.ItemID <= 0 || v.CreatedAt.IsZero() || v.OccurredAt.IsZero() || v.OccurredAt.Year() < 1000 || v.OccurredAt.Year() > 9999 || v.OccurredAt.Truncate(time.Microsecond).After(now.Add(importClockSkew)) || !importKey.MatchString(v.Key) || len(v.Changes) > 7 || len(v.Note) == 0 || utf8.RuneCountInString(v.Note) > 4000 || !validPRURL(v.EvidenceURL) {
 		return false
 	}
 	seen := map[string]bool{}
@@ -112,6 +112,13 @@ func validHistoricalRecord(v HistoricalRecord, now time.Time) bool {
 						return false
 					}
 				}
+			}
+		case "closeReason":
+			if utf8.RuneCountInString(c.Before) > maxCloseReasonLen || utf8.RuneCountInString(c.After) > maxCloseReasonLen {
+				return false
+			}
+			if !utf8.ValidString(c.Before) || !utf8.ValidString(c.After) {
+				return false
 			}
 		default:
 			return false
