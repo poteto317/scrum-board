@@ -77,6 +77,9 @@ func run() error {
 		err = repo.InitializeAssignee(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeCloseReason(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeHistory(migrationCtx)
 	}
 	if err == nil {
