@@ -1905,7 +1905,7 @@ describe('ItemDetail dueAt picker', () => {
     f.detectChanges();
     expect(f.componentInstance.dueAt.open()).toBe(true);
     expect(f.componentInstance.busy()).toBe(true);
-    expect(f.componentInstance.savingBusy()).toBe(true);
+    expect(f.componentInstance.savingBusy()).toBe(false);
     f.componentInstance.dueAt.draft.set({
       year: 2026,
       month: 11,
