@@ -24,6 +24,7 @@ import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
 import { ItemAssignee } from './item-assignee';
 import { ItemAutosave } from './item-autosave';
+import { ItemCloseTransition } from './item-close-transition';
 import { ItemPrLinks } from './item-pr-links';
 import { ItemRelatedItems } from './item-related-items';
 import { displayLabel } from './related-item';
@@ -63,6 +64,7 @@ import {
     ItemPrLinks,
     ItemRelatedItems,
     ItemAssignee,
+    ItemCloseTransition,
     CommandTemplatesSession,
     ItemCommandsSession,
   ],
@@ -84,6 +86,7 @@ export class ItemDetail implements OnInit {
   readonly prLinks = inject(ItemPrLinks);
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
+  readonly closeTransition = inject(ItemCloseTransition);
   readonly relatedDisplayLabel = displayLabel;
   prLabel(url: string, index: number) {
     return prDisplayLabel(url, this.item()?.prTitles, index);
@@ -136,6 +139,17 @@ export class ItemDetail implements OnInit {
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
+    this.closeTransition.bind({
+      item: () => this.item(),
+      columns: () => this.columns(),
+      columnId: this.form.controls.columnId,
+      suspendFlush: (active) => this.autosave.suspendFlush(active),
+      dropInFlight: () => this.autosave.dropInFlight(),
+      flush: () => this.autosave.flush(),
+      applyCloseSave: (updated) => this.autosave.applyCloseSave(updated),
+      onError: (message) => this.error.set(message),
+      cancel$: this.changed$,
+    });
   }
 
   async copyItemLink(): Promise<void> {
@@ -158,6 +172,7 @@ export class ItemDetail implements OnInit {
           this.prLinks.reset();
           this.relatedItems.reset();
           this.assignee.reset();
+          this.closeTransition.reset();
           this.listDragging.set(false);
           this.deleted = false;
           this.confirmDelete.set(false);
@@ -183,6 +198,7 @@ export class ItemDetail implements OnInit {
           prUrls: card.prUrls ?? [],
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
+          closeReason: card.closeReason ?? '',
         });
         this.itemCommands.load(card.number);
       });
@@ -211,6 +227,7 @@ export class ItemDetail implements OnInit {
           prUrls: card.prUrls ?? [],
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
+          closeReason: card.closeReason ?? '',
         };
         if (this.item() && sameJson(this.item(), next)) return;
         this.autosave.reset(next);
@@ -231,6 +248,8 @@ export class ItemDetail implements OnInit {
       this.assignee.saving() ||
       this.itemCommands.saving() ||
       this.confirmDelete() ||
+      this.closeTransition.open() ||
+      this.closeTransition.saving() ||
       this.deleting()
     );
   }
@@ -242,6 +261,7 @@ export class ItemDetail implements OnInit {
       this.relatedItems.saving() ||
       this.assignee.saving() ||
       this.itemCommands.saving() ||
+      this.closeTransition.saving() ||
       this.deleting()
     );
   }
@@ -251,6 +271,7 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.closeTransition.saving() ||
       this.itemCommands.saving()
     ) {
       return window.confirm(
@@ -273,6 +294,7 @@ export class ItemDetail implements OnInit {
         this.prLinks.saving() ||
         this.relatedItems.saving() ||
         this.assignee.saving() ||
+        this.closeTransition.saving() ||
         this.itemCommands.saving())
     ) {
       event.preventDefault();
