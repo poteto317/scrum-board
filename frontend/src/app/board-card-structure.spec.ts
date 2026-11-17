@@ -23,6 +23,7 @@ function card(id: number, position: number): Item {
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    dueAt: null,
     createdAt: '',
     updatedAt: '',
   };

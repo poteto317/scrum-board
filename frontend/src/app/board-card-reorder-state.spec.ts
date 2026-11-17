@@ -33,6 +33,7 @@ function card(id: number, columnId: number, position: number, title: string): It
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    dueAt: null,
     createdAt: '',
     updatedAt: '',
   };
