@@ -1,5 +1,5 @@
 .app-header {
-  height: 67px;
+  min-height: 67px;
   display: flex;
   align-items: center;
   padding: 0 40px;
@@ -65,9 +65,32 @@
   color: var(--ink);
   background: #e9ede7;
 }
-.workspace-name {
+.project-switcher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.project-switcher select {
+  max-width: 180px;
   font-size: 14px;
-  color: var(--muted);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.project-switcher .secondary {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.project-error {
+  color: var(--feedback-error-ink);
+  font-size: 12px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .header-end {
   margin-left: auto;
@@ -100,9 +123,11 @@
     padding: 0 20px;
     height: 59px;
   }
-  .workspace-name,
   .header-divider,
   .header-end {
+    display: none;
+  }
+  .project-switcher .project-error {
     display: none;
   }
   .app-nav {
