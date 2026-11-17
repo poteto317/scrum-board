@@ -41,14 +41,15 @@ func relatedItemsJSON(items []RelatedItem) string {
 		items = []RelatedItem{}
 	}
 	type hist struct {
-		Kind   string `json:"kind"`
-		Number int64  `json:"number,omitempty"`
-		URL    string `json:"url,omitempty"`
-		Label  string `json:"label,omitempty"`
+		Kind      string `json:"kind"`
+		Number    int64  `json:"number,omitempty"`
+		ProjectID int64  `json:"projectId,omitempty"`
+		URL       string `json:"url,omitempty"`
+		Label     string `json:"label,omitempty"`
 	}
 	rows := make([]hist, 0, len(items))
 	for _, it := range items {
-		rows = append(rows, hist{Kind: it.Kind, Number: it.Number, URL: it.URL, Label: it.Label})
+		rows = append(rows, hist{Kind: it.Kind, Number: it.Number, ProjectID: it.ProjectID, URL: it.URL, Label: it.Label})
 	}
 	payload, err := json.Marshal(rows)
 	if err != nil {
