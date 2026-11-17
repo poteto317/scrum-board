@@ -3,7 +3,7 @@ import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
-import { Item, ItemInput } from './models';
+import { Item, ItemInput, ItemPatch } from './models';
 import { textLimit, trimmedTextLimit } from './form-validation';
 import { errorMessage } from './api-error';
 import { alignPrTitles } from './pr-display';
@@ -12,7 +12,7 @@ import { mergeCloseTransitionItem } from './close-reason';
 const fields = ['title', 'description', 'columnId', 'closeReason'] as const;
 type Field = (typeof fields)[number];
 /** Item fields updated outside the autosave form; prefer local on form flush. */
-const sideFields = ['prUrls', 'relatedItems', 'assignee'] as const;
+const sideFields = ['prUrls', 'relatedItems', 'assignee', 'dueAt'] as const;
 type SideField = (typeof sideFields)[number];
 
 // Provided by ItemDetail: drafts and timers never survive a detail screen.
@@ -116,6 +116,7 @@ export class ItemAutosave {
       // Shield when a form flush is in flight. applyPrSave / applyRelatedSave also mark their
       // fields so optimistic side edits before mark*SideDirty still win over a concurrent flush.
       if (this.saving()) this.sideDirty.add(key);
+      if (key === 'dueAt') continue; // null-safe merge lives in applyDueSave only
       if (key === 'prUrls') next.prUrls = [...(updated.prUrls ?? [])];
       else if (key === 'relatedItems') next.relatedItems = [...(updated.relatedItems ?? [])];
       else next[key] = (updated[key] as string) ?? '';
@@ -144,6 +145,22 @@ export class ItemAutosave {
   applyAssigneeSave(updated: Pick<Item, 'assignee' | 'updatedAt'>) {
     this.applySideSave(updated);
   }
+  /** Shield dueAt from an in-flight title/description flush (L-453). */
+  markDueSideDirty() {
+    this.sideDirty.add('dueAt');
+  }
+  /** Merge dueAt side save without string `?? ''` (L-002: keep null). */
+  applyDueSave(updated: Pick<Item, 'dueAt' | 'updatedAt'>) {
+    this.sideDirty.add('dueAt');
+    const card = this.item();
+    if (!card) return;
+    if (this.saving()) this.sideDirty.add('dueAt');
+    this.item.set({
+      ...card,
+      dueAt: updated.dueAt ?? null,
+      updatedAt: updated.updatedAt || card.updatedAt,
+    });
+  }
   private value(field: Field) {
     const raw = this.form.controls[field].value;
     return field === 'title' || field === 'closeReason' ? String(raw).trim() : raw;
@@ -154,7 +171,7 @@ export class ItemAutosave {
     const card = this.item();
     return !!card && fields.some((field) => this.value(field) !== card[field]);
   }
-  private patch(): Partial<ItemInput> {
+  private patch(): ItemPatch {
     const card = this.item();
     const patch: Record<string, string | number> = {};
     if (card)
@@ -232,6 +249,7 @@ export class ItemAutosave {
             if (!this.sideDirty.has(key)) continue;
             if (key === 'prUrls') merged.prUrls = [...(local.prUrls ?? [])];
             else if (key === 'relatedItems') merged.relatedItems = [...(local.relatedItems ?? [])];
+            else if (key === 'dueAt') merged.dueAt = local.dueAt ?? null;
             else merged[key] = local[key];
             this.sideDirty.delete(key);
           }

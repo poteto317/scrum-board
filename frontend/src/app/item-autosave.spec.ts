@@ -17,6 +17,7 @@ const initial: Item = {
   relatedItems: [],
   assignee: '',
   closeReason: '',
+  dueAt: null,
   createdAt: '',
   updatedAt: '',
 };
@@ -311,6 +312,49 @@ describe('side field preservation', () => {
     expect(edit.item()?.assignee).toBe('');
     TestBed.resetTestingModule();
   });
+
+  it('keeps null dueAt clear over a stale in-flight form flush via applyDueSave', () => {
+    const response = new Subject<Item>();
+    const api = {
+      updateItem: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset({ ...initial, dueAt: '2026-11-17T08:30:00Z' });
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    edit.markDueSideDirty();
+    edit.applyDueSave({ dueAt: null, updatedAt: '2026-11-17T12:00:00Z' });
+    expect(edit.item()?.dueAt).toBeNull();
+    response.next({
+      ...initial,
+      title: '編集',
+      dueAt: '2026-11-17T08:30:00Z',
+    });
+    response.complete();
+    expect(edit.item()?.dueAt).toBeNull();
+    expect(edit.item()?.title).toBe('編集');
+    TestBed.resetTestingModule();
+  });
+
+  it('keeps a local dueAt set during an in-flight form flush via applyDueSave', () => {
+    const response = new Subject<Item>();
+    const api = {
+      updateItem: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset({ ...initial, dueAt: null });
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    edit.markDueSideDirty();
+    edit.applyDueSave({ dueAt: '2026-11-17T08:30:00Z', updatedAt: '2026-11-17T12:00:00Z' });
+    response.next({ ...initial, title: '編集', dueAt: null });
+    response.complete();
+    expect(edit.item()?.dueAt).toBe('2026-11-17T08:30:00Z');
+    expect(edit.item()?.title).toBe('編集');
+    TestBed.resetTestingModule();
+  });
 });
 
 describe('closeReason form field', () => {
@@ -397,11 +441,13 @@ describe('closeReason form field', () => {
       prUrls: [url],
       prTitles: ['表示名'],
       closeReason: '',
+      dueAt: null,
     });
     edit.applyCloseSave({
       ...initial,
       columnId: 3,
       closeReason: '理由',
+      dueAt: null,
       prUrls: [url],
       updatedAt: '2026-11-17T02:00:00Z',
     });
