@@ -119,6 +119,9 @@ describe('Board mobile column select', () => {
     expect(f.nativeElement.querySelector('.layout-toggle')).toBeNull();
     expect(f.componentInstance.isFreeLayout()).toBe(false);
     expect(f.nativeElement.querySelector('.card-list-free')).toBeNull();
+    expect(f.componentInstance.canReorderItems()).toBe(true);
+    expect(f.componentInstance.canReorder()).toBe(false);
+    expect(f.nativeElement.querySelector('[cdkdragdisabled="true"]')).toBeNull();
   });
 
   it('mobile: empty columns disables select', async () => {
@@ -185,19 +188,38 @@ describe('Board mobile column select', () => {
     expect(f.componentInstance.isFreeLayout()).toBe(false);
   });
 
-  it('does not apply poll while settingsSaving', async () => {
+  it('blocks live refresh while settingsSaving', async () => {
     matchMediaMatches = true;
     const f = mount({
       board: () => of(sample({ cardLayout: 'pack', mobileBoardColumnId: 1 })),
     });
     await f.whenStable();
-    f.componentInstance.settingsSaving.set(true);
-    f.componentInstance.data.set(
-      sample({ cardLayout: 'pack', mobileBoardColumnId: 2 }),
-    );
-    // Live refresh enabled() must be false while settingsSaving.
-    expect(f.componentInstance.settingsSaving()).toBe(true);
-    expect(f.componentInstance.selectedMobileColumnId()).toBe(2);
+    const board = f.componentInstance;
+    board.settingsSaving.set(false);
+    expect(
+      !board.loading() &&
+        !board.reordering() &&
+        !board.saving() &&
+        !board.settingsSaving() &&
+        !board.layoutSwitching() &&
+        board.modal() === null &&
+        board.draggingColumnId() === null &&
+        board.draggingItemId() === null,
+    ).toBe(true);
+    board.settingsSaving.set(true);
+    expect(board.settingsSaving()).toBe(true);
+    // Same predicate as startLiveRefresh enabled() in ngOnInit.
+    expect(
+      !board.loading() &&
+        !board.reordering() &&
+        !board.saving() &&
+        !board.settingsSaving() &&
+        !board.layoutSwitching() &&
+        board.modal() === null &&
+        board.draggingColumnId() === null &&
+        board.draggingItemId() === null,
+    ).toBe(false);
   });
 });
+
 
