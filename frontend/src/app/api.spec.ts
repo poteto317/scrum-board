@@ -34,6 +34,12 @@ describe('Api', () => {
     expect(req.request.method).toBe('GET');
     req.flush({ id: 18, number: 3, columnId: 1, title: 'Task', description: '' });
   });
+  it('passes projectId when resolving by number within a project', () => {
+    api.itemByNumber(5, 3).subscribe();
+    const req = http.expectOne('/api/items/by-number/5?projectId=3');
+    expect(req.request.method).toBe('GET');
+    req.flush({ id: 18, number: 5, projectId: 3, columnId: 1, title: 'Task', description: '' });
+  });
   it('patches assignee by public number', () => {
     api.updateAssigneeByNumber(7, 'Claude').subscribe((card) => expect(card.assignee).toBe('Claude'));
     const req = http.expectOne('/api/items/by-number/7/assignee');

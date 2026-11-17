@@ -5,6 +5,8 @@ describe('itemAppPath', () => {
   it('builds the app-relative item detail path', () => {
     expect(itemAppPath(27)).toBe('/items/27');
     expect(itemAppPath(3)).toBe('/items/3');
+    expect(itemAppPath(3, 2)).toBe('/items/3?project=2');
+    expect(itemAppPath(3, 0)).toBe('/items/3');
   });
 });
 
@@ -12,6 +14,9 @@ describe('itemDetailUrl', () => {
   it('builds an absolute card detail URL from origin and public number', () => {
     expect(itemDetailUrl('http://127.0.0.1:4200', 27)).toBe('http://127.0.0.1:4200/items/27');
     expect(itemDetailUrl('http://127.0.0.1:4200/', 3)).toBe('http://127.0.0.1:4200/items/3');
+    expect(itemDetailUrl('http://127.0.0.1:4200', 3, 2)).toBe(
+      'http://127.0.0.1:4200/items/3?project=2',
+    );
   });
 });
 

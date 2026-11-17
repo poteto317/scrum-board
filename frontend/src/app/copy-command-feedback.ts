@@ -24,8 +24,9 @@ export class CopyCommandFeedback {
     template: string,
     number: number,
     origin = window.location.origin,
+    projectId?: number,
   ): Promise<void> {
-    const ok = await copyText(resolveCommand(template, itemDetailUrl(origin, number)));
+    const ok = await copyText(resolveCommand(template, itemDetailUrl(origin, number, projectId)));
     if (this.state.isDestroyed) return;
     this.announce(ok);
   }
