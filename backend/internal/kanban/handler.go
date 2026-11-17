@@ -293,6 +293,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		RelatedItems json.RawMessage `json:"relatedItems"`
 		Assignee     json.RawMessage `json:"assignee"`
 		CloseReason  json.RawMessage `json:"closeReason"`
+		DueAt        json.RawMessage `json:"dueAt"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -345,7 +346,28 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		}
 		p.CloseReason = &value
 	}
-	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil {
+	if len(body.DueAt) > 0 {
+		if string(body.DueAt) == "null" {
+			p.ClearDueAt = true
+		} else {
+			var raw string
+			if err := json.Unmarshal(body.DueAt, &raw); err != nil {
+				invalid(w, "期限はタイムゾーン付きの日時（例: 2026-11-17T08:30:00Z）で指定してください。")
+				return
+			}
+			if raw == "" {
+				invalid(w, "期限はタイムゾーン付きの日時（例: 2026-11-17T08:30:00Z）で指定してください。")
+				return
+			}
+			value, err := NormalizeDueAt(raw)
+			if err != nil {
+				invalid(w, "期限はタイムゾーン付きの日時（例: 2026-11-17T08:30:00Z）で指定してください。")
+				return
+			}
+			p.DueAt = &value
+		}
+	}
+	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.DueAt == nil && !p.ClearDueAt {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}
