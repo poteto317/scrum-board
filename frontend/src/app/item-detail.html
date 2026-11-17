@@ -85,11 +85,11 @@
       </div>
     </section>
     <form [formGroup]="form" (submit)="$event.preventDefault()" class="detail-layout">
-      <section class="detail-card">
-        <div class="section-label">タスクの内容</div>
-        <label for="detail-title">タイトル <span class="required">必須</span></label
-        ><input
+      <section class="detail-page-doc">
+        <label class="sr-only" for="detail-title">タイトル（必須）</label>
+        <input
           id="detail-title"
+          class="page-title"
           formControlName="title"
           placeholder="何に取り組みますか？"
           (blur)="autosave.flush()"
@@ -99,67 +99,21 @@
         @if (form.controls.title.touched && form.controls.title.invalid) {
           <p class="form-error">タイトルを1〜200文字で入力してください。</p>
         }
-        <div class="description-header">
-          @if (descriptionEditor.editing()) {
-            <label for="detail-description">説明 <span class="optional">任意</span></label>
-          } @else {
-            <span class="description-label">説明 <span class="optional">任意</span></span>
-          }
-          @if (!descriptionEditor.editing()) {
-            <button type="button" class="secondary description-edit-btn" (click)="startDescriptionEdit()">
-              編集
-            </button>
-          }
-        </div>
-        @if (descriptionEditor.editing()) {
-          <div class="description-edit-toolbar">
-            <button
-              type="button"
-              class="secondary description-link-btn"
-              (mousedown)="$event.preventDefault()"
-              (click)="openDescriptionLink(descArea)"
-            >
-              リンク
-            </button>
-          </div>
-          <textarea
-            #descArea
-            id="detail-description"
-            formControlName="description"
-            (blur)="onDescriptionBlur($event)"
-            (compositionstart)="autosave.composition('description', true)"
-            (compositionend)="autosave.composition('description', false)"
-            rows="10"
-            placeholder="背景、取り組む内容、完了の条件など"
-          ></textarea>
-        } @else {
-          <div class="description-view" (click)="onDescriptionViewClick($event)">
-            @if (!form.controls.description.value.trim()) {
-              <span class="description-placeholder">背景、取り組む内容、完了の条件など</span>
-            } @else {
-              @for (seg of descriptionSegments(); track $index) {
-                @if (seg.kind === 'link') {
-                  <a
-                    [href]="seg.url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    (click)="$event.stopPropagation()"
-                    >{{ seg.label }}</a
-                  >
-                } @else {
-                  <span class="description-text">{{ seg.text }}</span>
-                }
-              }
-            }
-          </div>
-        }
-        <p class="field-note">タスクの背景や完了条件を残しておきましょう。10000文字以内。リンクは https のみ。</p>
+        <app-description-blocks-editor
+          [value]="form.controls.description.value"
+          [disabled]="form.disabled"
+          (textChange)="onDescriptionText($event)"
+          (compositionChange)="onDescriptionComposition($event)"
+          (linkRequest)="onDescriptionLinkRequest($event)"
+          (blurLeave)="autosave.flush()"
+        />
+        <p class="field-note">10000文字以内。リンクは https のみ。Enter で段落を分けます。</p>
         @if (form.controls.description.invalid) {
           <p class="form-error">説明は10000文字以内で入力してください。</p>
         }
       </section>
       <aside>
-        <section class="detail-card properties">
+        <section class="properties properties-list">
           <div class="section-label">プロパティ</div>
           <label for="detail-project">プロジェクト</label>
           <select

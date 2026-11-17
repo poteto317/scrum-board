@@ -2,13 +2,10 @@ import { formatItemNumber } from './item-number';
 import { ItemHistory } from './item-history';
 import { Modal } from './modal';
 import {
-  afterNextRender,
   Component,
   DestroyRef,
-  ElementRef,
   HostListener,
   inject,
-  Injector,
   NgZone,
   OnInit,
   signal,
@@ -60,8 +57,8 @@ import {
   ListReturnTo,
   readReturnTo,
 } from './list-scroll-session';
-import { parseDescriptionLinks } from './description-link';
 import { DescriptionEditor } from './description-editor';
+import { DescriptionBlocksEditor } from './description-blocks-editor';
 import { ProjectSession } from './project-session';
 
 @Component({
@@ -77,6 +74,7 @@ import { ProjectSession } from './project-session';
     CdkDragHandle,
     CopyFeedbackBanner,
     DueAtPicker,
+    DescriptionBlocksEditor,
   ],
   providers: [
     ItemAutosave,
@@ -101,7 +99,6 @@ export class ItemDetail implements OnInit {
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly injector = inject(Injector);
   private readonly zone = inject(NgZone);
   private readonly reload$ = new Subject<void>();
   private readonly changed$ = new Subject<void>();
@@ -112,7 +109,7 @@ export class ItemDetail implements OnInit {
   readonly dueAt = inject(ItemDueAt);
   readonly closeTransition = inject(ItemCloseTransition);
   readonly descriptionEditor = inject(DescriptionEditor);
-  private readonly descArea = viewChild<ElementRef<HTMLTextAreaElement>>('descArea');
+  private readonly blocksEditor = viewChild(DescriptionBlocksEditor);
   private readonly dueAtPicker = viewChild(DueAtPicker);
   readonly relatedDisplayLabel = displayLabel;
   readonly commands = inject(CommandTemplatesSession);
@@ -148,54 +145,31 @@ export class ItemDetail implements OnInit {
   prLabel(url: string, index: number) {
     return prDisplayLabel(url, this.item()?.prTitles, index);
   }
-  descriptionSegments() {
-    return parseDescriptionLinks(this.form.controls.description.value ?? '');
-  }
-  startDescriptionEdit() {
-    this.descriptionEditor.startEdit();
-    this.focusDescriptionArea();
-  }
-  onDescriptionBlur(event: FocusEvent) {
-    const next = event.relatedTarget as HTMLElement | null;
-    // Keep editing when focus moves to the link toolbar or the link dialog.
-    if (next?.closest('.description-edit-toolbar, .description-link-dialog')) return;
-    this.descriptionEditor.endEditIfIdle();
-    if (!this.descriptionEditor.open()) this.autosave.flush();
-  }
-  onDescriptionViewClick(event: MouseEvent) {
-    this.startEditUnlessLink(event.target);
-  }
-  openDescriptionLink(area: HTMLTextAreaElement) {
-    const start = area.selectionStart ?? 0;
-    const end = area.selectionEnd ?? 0;
-    this.descriptionEditor.begin({
-      start,
-      end,
-      selectedText: area.value.slice(start, end),
-    });
-  }
-  confirmDescriptionLink() {
-    const result = this.descriptionEditor.apply(this.form.controls.description.value ?? '');
-    if (!result) return;
-    this.form.controls.description.setValue(result.text);
+  onDescriptionText(text: string): void {
+    this.form.controls.description.setValue(text, { emitEvent: true });
     this.form.controls.description.markAsDirty();
+  }
+  onDescriptionComposition(composing: boolean): void {
+    this.autosave.composition('description', composing);
+  }
+  onDescriptionLinkRequest(sel: {
+    blockIndex: number;
+    start: number;
+    end: number;
+    selectedText: string;
+  }): void {
+    this.descriptionEditor.begin(sel);
+  }
+  confirmDescriptionLink(): void {
+    const editor = this.blocksEditor();
+    const blocks = editor?.blocks() ?? [this.form.controls.description.value ?? ''];
+    const result = this.descriptionEditor.apply(blocks);
+    if (!result) return;
+    this.form.controls.description.setValue(result.text, { emitEvent: true });
+    this.form.controls.description.markAsDirty();
+    editor?.syncFromSerialized(result.text);
     this.autosave.flush();
-    this.focusDescriptionArea(result.caret);
-  }
-  private startEditUnlessLink(target: EventTarget | null) {
-    if ((target as HTMLElement | null)?.closest('a')) return;
-    this.startDescriptionEdit();
-  }
-  private focusDescriptionArea(caret?: number) {
-    afterNextRender(
-      () => {
-        const el = this.descArea()?.nativeElement;
-        if (!el) return;
-        el.focus();
-        if (caret != null) el.setSelectionRange(caret, caret);
-      },
-      { injector: this.injector },
-    );
+    editor?.focusBlock(result.blockIndex, result.caret);
   }
 
   constructor() {
