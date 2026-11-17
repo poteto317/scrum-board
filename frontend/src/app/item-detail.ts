@@ -143,7 +143,10 @@ export class ItemDetail implements OnInit {
     this.descriptionLink.startEdit();
     this.focusDescriptionArea();
   }
-  onDescriptionBlur() {
+  onDescriptionBlur(event: FocusEvent) {
+    const next = event.relatedTarget as HTMLElement | null;
+    // Keep editing when focus moves to the link toolbar or the link dialog.
+    if (next?.closest('.description-edit-toolbar, dialog.modal-backdrop, .modal')) return;
     this.descriptionLink.endEditIfIdle();
     if (!this.descriptionLink.open()) this.autosave.flush();
   }

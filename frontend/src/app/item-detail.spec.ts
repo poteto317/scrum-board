@@ -1591,6 +1591,9 @@ describe('ItemDetail description text links', () => {
     expect(f.componentInstance.form.controls.description.value).toBe(
       '[Docs](https://example.com)hello world',
     );
+    expect(api.updateItem).toHaveBeenCalledWith(18, {
+      description: '[Docs](https://example.com)hello world',
+    });
     expect(f.componentInstance.descriptionLink.open()).toBe(false);
 
     area.setSelectionRange(0, 5);
@@ -1629,13 +1632,25 @@ describe('ItemDetail description text links', () => {
     f.detectChanges();
     const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
     f.componentInstance.openDescriptionLink(area);
-    area.dispatchEvent(new Event('blur'));
+    area.dispatchEvent(new FocusEvent('blur', { relatedTarget: null }));
     f.detectChanges();
     expect(f.componentInstance.descriptionLink.editing()).toBe(true);
     f.componentInstance.descriptionLink.cancel();
-    area.dispatchEvent(new Event('blur'));
+    area.dispatchEvent(new FocusEvent('blur', { relatedTarget: null }));
     f.detectChanges();
     expect(f.componentInstance.descriptionLink.editing()).toBe(false);
+    f.destroy();
+  });
+
+  it('keeps editing when blur moves focus to the link toolbar button', () => {
+    const f = create();
+    f.componentInstance.startDescriptionEdit();
+    f.detectChanges();
+    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
+    const linkBtn = buttonByText(f.nativeElement, 'リンク')!;
+    area.dispatchEvent(new FocusEvent('blur', { relatedTarget: linkBtn }));
+    f.detectChanges();
+    expect(f.componentInstance.descriptionLink.editing()).toBe(true);
     f.destroy();
   });
 
