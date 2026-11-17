@@ -4,6 +4,7 @@ import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ItemDetail } from './item-detail';
 import { Api } from './api';
+import { formatDueAtUtc, fromLocalParts } from './due-at';
 import { Item } from './models';
 import { itemDetailUrl } from './item-link';
 import { COPY_LINK_SUCCESS } from './copy-link-feedback';
@@ -34,6 +35,7 @@ const card: Item = {
   relatedItems: [],
   assignee: '',
   closeReason: '',
+  dueAt: null,
   createdAt: '',
   updatedAt: '',
 };
@@ -1433,6 +1435,7 @@ describe('ItemDetail Close reason', () => {
       ...card,
       columnId: 3,
       closeReason: '理由',
+      dueAt: null,
       title: '編集中',
       updatedAt: '2026-11-17T01:00:00Z',
     });
@@ -1677,5 +1680,341 @@ describe('ItemDetail description text links', () => {
     expect(f.componentInstance.form.controls.description.value).toBe('a'.repeat(9990));
     expect(f.componentInstance.descriptionEditor.error()).toContain('10000');
     f.destroy();
+  });
+});
+
+describe('ItemDetail dueAt picker', () => {
+  let params: BehaviorSubject<Map<string, string>>;
+  let api: {
+    history: ReturnType<typeof vi.fn>;
+    board: ReturnType<typeof vi.fn>;
+    itemByNumber: ReturnType<typeof vi.fn>;
+    updateItem: ReturnType<typeof vi.fn>;
+    deleteItem: ReturnType<typeof vi.fn>;
+    listCommandTemplates: ReturnType<typeof vi.fn>;
+    listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    params = new BehaviorSubject(new Map([['number', '3']]));
+    api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      board: vi.fn(() =>
+        of({
+          columns: [
+            { id: 1, name: 'Todo', position: 0 },
+            { id: 2, name: 'Doing', position: 0 },
+            { id: 3, name: 'Close', position: 0 },
+          ],
+          items: [],
+        }),
+      ),
+      itemByNumber: vi.fn(() => of(card)),
+      updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
+      deleteItem: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+    };
+    TestBed.configureTestingModule({
+      imports: [ItemDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: Router,
+          useValue: { navigate: vi.fn(), navigateByUrl: vi.fn().mockResolvedValue(true) },
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+  });
+
+  const create = () => {
+    const f = TestBed.createComponent(ItemDetail);
+    f.detectChanges();
+    return f;
+  };
+
+  const dueField = (root: HTMLElement) =>
+    root.querySelector('.due-at-field') as HTMLElement | null;
+
+  const buttonByText = (root: ParentNode, text: string) =>
+    Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text) as
+      | HTMLButtonElement
+      | undefined;
+
+  it('shows 期限なし when dueAt is unset', () => {
+    const f = create();
+    const field = dueField(f.nativeElement);
+    expect(field).not.toBeNull();
+    expect(field!.textContent).toContain('期限なし');
+    expect(buttonByText(field!, '設定')).toBeTruthy();
+    f.destroy();
+  });
+
+  it('shows local YYYY/MM/DD HH:mm when dueAt is set', () => {
+    const dueAt = '2026-11-17T08:30:00Z';
+    api.itemByNumber.mockReturnValue(of({ ...card, dueAt }));
+    const f = create();
+    const local = new Date(dueAt);
+    const expected = `${local.getFullYear()}/${String(local.getMonth() + 1).padStart(2, '0')}/${String(local.getDate()).padStart(2, '0')} ${String(local.getHours()).padStart(2, '0')}:${String(local.getMinutes()).padStart(2, '0')}`;
+    expect(dueField(f.nativeElement)!.textContent).toContain(expected);
+    expect(buttonByText(dueField(f.nativeElement)!, '編集')).toBeTruthy();
+    f.destroy();
+  });
+
+  it('opens picker with existing dueAt as local parts', () => {
+    const dueAt = '2026-11-17T08:30:00Z';
+    api.itemByNumber.mockReturnValue(of({ ...card, dueAt }));
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '編集')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.dueAt.open()).toBe(true);
+    const local = new Date(dueAt);
+    expect(f.componentInstance.dueAt.draft()).toEqual({
+      year: local.getFullYear(),
+      month: local.getMonth() + 1,
+      day: local.getDate(),
+      hour: local.getHours(),
+      minute: local.getMinutes(),
+    });
+    expect(f.nativeElement.querySelector('app-due-at-picker')).not.toBeNull();
+    f.destroy();
+  });
+
+  it('opens picker with now truncated to the minute when unset', () => {
+    vi.setSystemTime(new Date(2026, 10, 17, 17, 45, 30, 500));
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.dueAt.open()).toBe(true);
+    expect(f.componentInstance.dueAt.draft()).toEqual({
+      year: 2026,
+      month: 11,
+      day: 17,
+      hour: 17,
+      minute: 45,
+    });
+    f.destroy();
+  });
+
+  it('offers year options from currentYear-1 through currentYear+5', () => {
+    vi.setSystemTime(new Date(2026, 5, 1, 12, 0, 0));
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    const yearWheel = f.nativeElement.querySelector(
+      '.due-at-wheel[data-unit="year"]',
+    ) as HTMLElement;
+    const years = Array.from(yearWheel.querySelectorAll('[data-value]')).map((el) =>
+      Number((el as HTMLElement).dataset['value']),
+    );
+    expect(years).toEqual([2025, 2026, 2027, 2028, 2029, 2030, 2031]);
+    f.destroy();
+  });
+
+  it('confirm PATCHes updateItem with dueAt UTC', () => {
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    f.componentInstance.dueAt.draft.set({
+      year: 2026,
+      month: 11,
+      day: 17,
+      hour: 17,
+      minute: 30,
+    });
+    buttonByText(dueField(f.nativeElement)!, '確定')!.click();
+    f.detectChanges();
+    const expected = formatDueAtUtc(fromLocalParts({ year: 2026, month: 11, day: 17, hour: 17, minute: 30 }));
+    expect(api.updateItem).toHaveBeenCalledWith(18, { dueAt: expected });
+    expect(f.componentInstance.item()?.dueAt).toBe(expected);
+    expect(f.componentInstance.dueAt.open()).toBe(false);
+    f.destroy();
+  });
+
+  it('clear PATCHes updateItem with dueAt null', () => {
+    const dueAt = '2026-11-17T08:30:00Z';
+    api.itemByNumber.mockReturnValue(of({ ...card, dueAt }));
+    api.updateItem.mockReturnValue(of({ ...card, dueAt: null }));
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, 'クリア')!.click();
+    f.detectChanges();
+    expect(api.updateItem).toHaveBeenCalledWith(18, { dueAt: null });
+    expect(f.componentInstance.item()?.dueAt).toBeNull();
+    expect(dueField(f.nativeElement)!.textContent).toContain('期限なし');
+    f.destroy();
+  });
+
+  it('rolls back display and shows error when dueAt PATCH fails (L-001)', () => {
+    api.updateItem.mockReturnValue(throwError(() => ({ error: { message: '期限の保存失敗' } })));
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    f.componentInstance.dueAt.draft.set({
+      year: 2026,
+      month: 11,
+      day: 17,
+      hour: 17,
+      minute: 30,
+    });
+    buttonByText(dueField(f.nativeElement)!, '確定')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.item()?.dueAt).toBeNull();
+    expect(f.componentInstance.dueAt.open()).toBe(false);
+    expect(dueField(f.nativeElement)!.textContent).toContain('期限なし');
+    expect(f.nativeElement.textContent).toContain('期限の保存失敗');
+    f.destroy();
+  });
+
+  it('busy includes picker open and dueAt saving', () => {
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValue(pending);
+    const f = create();
+    expect(f.componentInstance.busy()).toBe(false);
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.dueAt.open()).toBe(true);
+    expect(f.componentInstance.busy()).toBe(true);
+    expect(f.componentInstance.savingBusy()).toBe(true);
+    f.componentInstance.dueAt.draft.set({
+      year: 2026,
+      month: 11,
+      day: 17,
+      hour: 10,
+      minute: 0,
+    });
+    buttonByText(dueField(f.nativeElement)!, '確定')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.dueAt.saving()).toBe(true);
+    expect(f.componentInstance.busy()).toBe(true);
+    expect(f.componentInstance.savingBusy()).toBe(true);
+    pending.next({
+      ...card,
+      dueAt: formatDueAtUtc(fromLocalParts({ year: 2026, month: 11, day: 17, hour: 10, minute: 0 })),
+    });
+    pending.complete();
+    f.detectChanges();
+    expect(f.componentInstance.busy()).toBe(false);
+    f.destroy();
+  });
+
+  it('does not overwrite dueAt draft while picker is open (L-037)', async () => {
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    const draft = {
+      year: 2026,
+      month: 11,
+      day: 17,
+      hour: 17,
+      minute: 30,
+    };
+    f.componentInstance.dueAt.draft.set(draft);
+    expect(f.componentInstance.busy()).toBe(true);
+    api.itemByNumber.mockReturnValue(
+      of({ ...card, dueAt: '2026-11-17T00:00:00Z', title: 'サーバ側' }),
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.dueAt.open()).toBe(true);
+    expect(f.componentInstance.dueAt.draft()).toEqual(draft);
+    expect(f.componentInstance.item()?.dueAt).toBeNull();
+    expect(f.componentInstance.item()?.title).not.toBe('サーバ側');
+    f.destroy();
+  });
+
+  it('does not overwrite item while dueAt saving (L-037)', async () => {
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValue(pending);
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    f.componentInstance.dueAt.draft.set({
+      year: 2026,
+      month: 11,
+      day: 17,
+      hour: 10,
+      minute: 0,
+    });
+    buttonByText(dueField(f.nativeElement)!, '確定')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.dueAt.saving()).toBe(true);
+    api.itemByNumber.mockReturnValue(
+      of({ ...card, dueAt: '2099-01-01T00:00:00Z', title: 'サーバ側' }),
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.item()?.dueAt).toBeNull();
+    expect(f.componentInstance.item()?.title).not.toBe('サーバ側');
+    pending.next({
+      ...card,
+      dueAt: formatDueAtUtc(fromLocalParts({ year: 2026, month: 11, day: 17, hour: 10, minute: 0 })),
+    });
+    pending.complete();
+    f.destroy();
+  });
+
+  it('closes the picker when switching cards', () => {
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.dueAt.open()).toBe(true);
+    api.itemByNumber.mockReturnValue(of({ ...card, id: 99, number: 9, title: '別' }));
+    params.next(new Map([['number', '9']]));
+    f.detectChanges();
+    expect(f.componentInstance.dueAt.open()).toBe(false);
+    expect(f.componentInstance.dueAt.draft()).toBeNull();
+    f.destroy();
+  });
+
+  it('unsubscribes in-flight dueAt PATCH on card switch via cancel$', () => {
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValue(pending);
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    f.componentInstance.dueAt.draft.set({
+      year: 2026,
+      month: 11,
+      day: 17,
+      hour: 12,
+      minute: 0,
+    });
+    buttonByText(dueField(f.nativeElement)!, '確定')!.click();
+    expect(api.updateItem).toHaveBeenCalledWith(18, {
+      dueAt: formatDueAtUtc(
+        fromLocalParts({ year: 2026, month: 11, day: 17, hour: 12, minute: 0 }),
+      ),
+    });
+    api.itemByNumber.mockReturnValue(of({ ...card, id: 99, number: 9, title: '別', dueAt: null }));
+    params.next(new Map([['number', '9']]));
+    f.detectChanges();
+    pending.next({
+      ...card,
+      dueAt: formatDueAtUtc(
+        fromLocalParts({ year: 2026, month: 11, day: 17, hour: 12, minute: 0 }),
+      ),
+      updatedAt: 'late',
+    });
+    pending.complete();
+    expect(f.componentInstance.item()?.id).toBe(99);
+    expect(f.componentInstance.item()?.dueAt).toBeNull();
+    f.destroy();
+  });
+
+  it('closes the picker when the detail screen is destroyed', () => {
+    const f = create();
+    buttonByText(dueField(f.nativeElement)!, '設定')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.dueAt.open()).toBe(true);
+    f.destroy();
+    // Destroy tears down ItemDueAt (takeUntilDestroyed); recreate must start closed.
+    const f2 = create();
+    expect(f2.componentInstance.dueAt.open()).toBe(false);
+    f2.destroy();
   });
 });

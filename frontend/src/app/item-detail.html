@@ -238,6 +238,61 @@
               <p class="field-note">未設定。プリセットか自由テキストで設定できます。</p>
             }
           </div>
+          <div class="due-at-field">
+            <span class="due-at-label" id="detail-due-at-label">期限</span>
+            @if (!dueAt.open()) {
+              <p class="due-at-display" aria-labelledby="detail-due-at-label">{{ dueAtDisplay() }}</p>
+              <div class="due-at-actions">
+                @if (item()!.dueAt) {
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="dueAt.saving() || !item()"
+                    (click)="dueAt.start()"
+                  >
+                    編集
+                  </button>
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="dueAt.saving() || !item()"
+                    (click)="dueAt.clear()"
+                  >
+                    クリア
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="dueAt.saving() || !item()"
+                    (click)="dueAt.start()"
+                  >
+                    設定
+                  </button>
+                }
+              </div>
+              <p class="field-note">任意。スクロールで日時を選びます。</p>
+            } @else {
+              <app-due-at-picker
+                [parts]="dueAt.draft()!"
+                [disabled]="dueAt.saving()"
+                (partsChange)="dueAt.draft.set($event)"
+              />
+              <div class="due-at-actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="dueAt.saving()"
+                  (click)="dueAt.cancel()"
+                >
+                  キャンセル
+                </button>
+                <button type="button" [disabled]="dueAt.saving()" (click)="confirmDueAt()">
+                  {{ dueAt.saving() ? '保存中…' : '確定' }}
+                </button>
+              </div>
+            }
+          </div>
           <div class="card-commands-picker">
             <div class="section-label">このアイテムで出すコマンド</div>
             <p class="field-note">カタログから、このアイテムのメニューに出すものを選びます。</p>

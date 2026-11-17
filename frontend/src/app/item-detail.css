@@ -253,6 +253,27 @@ h1 {
 .assignee-clear {
   margin-top: 8px;
 }
+.due-at-field {
+  margin: 18px 0 8px;
+}
+.due-at-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+  margin-bottom: 8px;
+}
+.due-at-display {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.due-at-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 .pr-add,
 .related-add {
   display: flex;

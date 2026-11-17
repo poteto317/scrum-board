@@ -34,9 +34,12 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
+import { formatDueAtLocal } from './due-at';
+import { DueAtPicker } from './due-at-picker';
 import { ItemAssignee } from './item-assignee';
 import { ItemAutosave } from './item-autosave';
 import { ItemCloseTransition } from './item-close-transition';
+import { ItemDueAt } from './item-due-at';
 import { ItemPrLinks } from './item-pr-links';
 import { ItemRelatedItems } from './item-related-items';
 import { displayLabel } from './related-item';
@@ -72,12 +75,14 @@ import { DescriptionEditor } from './description-editor';
     CdkDrag,
     CdkDragHandle,
     CopyFeedbackBanner,
+    DueAtPicker,
   ],
   providers: [
     ItemAutosave,
     ItemPrLinks,
     ItemRelatedItems,
     ItemAssignee,
+    ItemDueAt,
     ItemCloseTransition,
     DescriptionEditor,
     CommandTemplatesSession,
@@ -102,9 +107,11 @@ export class ItemDetail implements OnInit {
   readonly prLinks = inject(ItemPrLinks);
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
+  readonly dueAt = inject(ItemDueAt);
   readonly closeTransition = inject(ItemCloseTransition);
   readonly descriptionEditor = inject(DescriptionEditor);
   private readonly descArea = viewChild<ElementRef<HTMLTextAreaElement>>('descArea');
+  private readonly dueAtPicker = viewChild(DueAtPicker);
   readonly relatedDisplayLabel = displayLabel;
   readonly commands = inject(CommandTemplatesSession);
   readonly itemCommands = inject(ItemCommandsSession);
@@ -207,6 +214,13 @@ export class ItemDetail implements OnInit {
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
+    this.dueAt.bind({
+      item: () => this.item(),
+      applyDueSave: (updated) => this.autosave.applyDueSave(updated),
+      markDueSideDirty: () => this.autosave.markDueSideDirty(),
+      onError: (message) => this.error.set(message),
+      cancel$: this.changed$,
+    });
     this.closeTransition.bind({
       item: () => this.item(),
       columns: () => this.columns(),
@@ -240,6 +254,7 @@ export class ItemDetail implements OnInit {
           this.prLinks.reset();
           this.relatedItems.reset();
           this.assignee.reset();
+          this.dueAt.reset();
           this.closeTransition.reset();
           this.descriptionEditor.reset();
           this.listDragging.set(false);
@@ -268,6 +283,7 @@ export class ItemDetail implements OnInit {
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
+          dueAt: card.dueAt ?? null,
         });
         this.itemCommands.load(card.number);
       });
@@ -297,6 +313,7 @@ export class ItemDetail implements OnInit {
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
+          dueAt: card.dueAt ?? null,
         };
         if (this.item() && sameJson(this.item(), next)) return;
         this.autosave.reset(next);
@@ -308,6 +325,16 @@ export class ItemDetail implements OnInit {
   load() {
     this.reload$.next();
   }
+  dueAtDisplay(): string {
+    const value = this.item()?.dueAt;
+    if (value == null) return '期限なし';
+    return formatDueAtLocal(value) || '期限なし';
+  }
+
+  confirmDueAt() {
+    this.dueAt.confirm(this.dueAtPicker()?.readPartsFromWheels() ?? null);
+  }
+
   /** True while any immediate save or destructive action is in flight. */
   busy() {
     return (
@@ -315,6 +342,8 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.dueAt.open() ||
+      this.dueAt.saving() ||
       this.itemCommands.saving() ||
       this.confirmDelete() ||
       this.closeTransition.open() ||
@@ -330,6 +359,8 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.dueAt.open() ||
+      this.dueAt.saving() ||
       this.itemCommands.saving() ||
       this.closeTransition.saving() ||
       this.deleting()
@@ -341,6 +372,7 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.dueAt.saving() ||
       this.closeTransition.saving() ||
       this.itemCommands.saving()
     ) {
@@ -364,6 +396,7 @@ export class ItemDetail implements OnInit {
         this.prLinks.saving() ||
         this.relatedItems.saving() ||
         this.assignee.saving() ||
+        this.dueAt.saving() ||
         this.closeTransition.saving() ||
         this.itemCommands.saving())
     ) {
@@ -378,6 +411,7 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.dueAt.saving() ||
       !this.item()
     )
       return;
