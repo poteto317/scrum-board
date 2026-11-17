@@ -30,6 +30,14 @@ import { errorMessage } from './api-error';
 import { assigneeKind } from './assignee';
 import { itemAppPath, itemDetailUrl } from './item-link';
 import { normalizeBoardData, NormalizedBoardData, normalizeItem } from './board-data';
+import {
+  applyBoardMobileSettings,
+  boardMobileMediaQuery,
+  resolveMobileColumnId,
+  visibleMobileColumns,
+  withResolvedMobileColumnId,
+} from './board-mobile';
+import { saveMobileBoardColumn } from './board-mobile-settings';
 import { cardLayoutToggleGate } from './board-layout-settings';
 import {
   measurePackOffsetsAsItems,
@@ -169,8 +177,10 @@ export class Board implements OnInit {
   readonly dropSlot = signal<number | null>(null);
   readonly modal = signal<'column' | 'item' | null>(null);
   readonly formError = signal('');
+  readonly isBoardMobile = signal(false);
   readonly canReorder = computed(
     () =>
+      !this.isBoardMobile() &&
       !this.loading() &&
       !this.saving() &&
       !this.reordering() &&
@@ -198,7 +208,18 @@ export class Board implements OnInit {
   readonly cardLayout = computed(() =>
     this.data().settings.cardLayout === 'free' ? 'free' : 'pack',
   );
-  readonly isFreeLayout = computed(() => this.cardLayout() === 'free');
+  /** Effective layout: mobile 1-column mode always pack (persisted cardLayout unchanged). */
+  readonly isFreeLayout = computed(() => !this.isBoardMobile() && this.cardLayout() === 'free');
+  readonly selectedMobileColumnId = computed(() =>
+    resolveMobileColumnId(this.data().settings.mobileBoardColumnId, this.data().columns),
+  );
+  readonly visibleColumns = computed(() =>
+    visibleMobileColumns(
+      this.data().columns,
+      this.isBoardMobile(),
+      this.selectedMobileColumnId(),
+    ),
+  );
   readonly boardLoadState = computed(() => {
     if (this.loading()) return 'loading' as const;
     if (this.error()) return 'failed' as const;
@@ -214,7 +235,7 @@ export class Board implements OnInit {
     }),
   );
   readonly canToggleCardLayout = computed(() => this.layoutToggleGate().allowed);
-  readonly dropListIds = computed(() => this.data().columns.map((c) => this.dropListId(c.id)));
+  readonly dropListIds = computed(() => this.visibleColumns().map((c) => this.dropListId(c.id)));
   readonly columnForm = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [textLimit(60, true)] }),
   });
@@ -251,8 +272,10 @@ export class Board implements OnInit {
     return dropListIdForColumn(columnId);
   }
   connectedLists(columnId: number) {
+    if (this.isBoardMobile()) return [];
     return this.dropListIds().filter((id) => id !== dropListIdForColumn(columnId));
   }
+
   freeListMinHeight(columnId: number): number {
     return freeListMinHeightPx(this.grouped().get(columnId) ?? [], this.cardHeights());
   }
@@ -262,6 +285,7 @@ export class Board implements OnInit {
   });
 
   ngOnInit() {
+    this.bindBoardMobileMedia();
     this.load();
     this.listFilter.load();
     this.destroyRef.onDestroy(() => {
@@ -287,6 +311,15 @@ export class Board implements OnInit {
       ...zoneAwareTimers(this.zone),
     });
     this.destroyRef.onDestroy(stop);
+  }
+
+  private bindBoardMobileMedia() {
+    if (typeof matchMedia !== 'function') return;
+    const mq = matchMedia(boardMobileMediaQuery());
+    const sync = () => this.isBoardMobile.set(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    this.destroyRef.onDestroy(() => mq.removeEventListener('change', sync));
   }
 
   private scheduleBoardScrollRestore() {
@@ -333,7 +366,7 @@ export class Board implements OnInit {
   private pollBoard() {
     const requestedFor = this.data();
     return this.api.board().pipe(
-      map((raw) => normalizeBoardData(raw)),
+      map((raw) => applyBoardMobileSettings(raw)),
       filter(() => this.data() === requestedFor),
     );
   }
@@ -506,7 +539,7 @@ export class Board implements OnInit {
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (d) => {
-          this.data.set(normalizeBoardData(d));
+          this.data.set(applyBoardMobileSettings(d));
           // Schedule after data arrives so the first afterNextRender sees #boardScroll
           // (not the loading-only first paint).
           this.scheduleBoardScrollRestore();
@@ -514,6 +547,22 @@ export class Board implements OnInit {
         },
         error: (e) => this.error.set(errorMessage(e)),
       });
+  }
+
+  onMobileColumnChange(rawId: string): Promise<void> | void {
+    const columnId = Number(rawId);
+    return saveMobileBoardColumn(
+      {
+        isBusy: () => this.settingsSaving() || this.layoutSwitching() || this.reordering(),
+        setSettingsSaving: (busy) => this.settingsSaving.set(busy),
+        getData: () => this.data(),
+        setData: (data) => this.data.set(data),
+        setReorderError: (message) => this.reorderError.set(message),
+        setReorderConflict: (conflict) => this.reorderConflict.set(conflict),
+        patchBoardSettings: (body) => this.api.patchBoardSettings(body),
+      },
+      columnId,
+    );
   }
 
   onCardLayoutToggle(checked: boolean): Promise<void> | void {
@@ -827,15 +876,17 @@ export class Board implements OnInit {
       setLayoutSwitching: (busy: boolean) => this.layoutSwitching.set(busy),
       setSettingsSaving: (busy: boolean) => this.settingsSaving.set(busy),
       getData: () => this.data(),
-      setData: (data: NormalizedBoardData) => this.data.set(data),
-      updateData: (fn: (data: NormalizedBoardData) => NormalizedBoardData) => this.data.update(fn),
+      setData: (data: NormalizedBoardData) => this.data.set(withResolvedMobileColumnId(data)),
+      updateData: (fn: (data: NormalizedBoardData) => NormalizedBoardData) =>
+        this.data.update((d) => withResolvedMobileColumnId(fn(d))),
       setReorderError: (message: string) => this.reorderError.set(message),
       setReorderConflict: (conflict: boolean) => this.reorderConflict.set(conflict),
       setReorderAnnouncement: (message: string) => this.reorderAnnouncement.set(message),
       measurePackOffsetsAsItems: () => this.measurePackOffsetsAsItems(),
       scheduleCardHeightMeasure: () => this.scheduleCardHeightMeasure(),
       reorderItems: (columns: ItemOrderColumn[]) => this.api.reorderItems(columns),
-      patchBoardSettings: (body: { cardLayout: CardLayout }) => this.api.patchBoardSettings(body),
+      patchBoardSettings: (body: { cardLayout?: CardLayout; mobileBoardColumnId?: number }) =>
+        this.api.patchBoardSettings(body),
     };
   }
 

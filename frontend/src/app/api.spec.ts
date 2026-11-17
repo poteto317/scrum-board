@@ -98,6 +98,16 @@ describe('Api', () => {
     req.flush(payload);
     expect(result).toEqual(payload);
   });
+  it('patches board settings with mobileBoardColumnId only', () => {
+    let result: unknown;
+    api.patchBoardSettings({ mobileBoardColumnId: 2 }).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/board/settings');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ mobileBoardColumnId: 2 });
+    const payload = { settings: { cardLayout: 'pack', mobileBoardColumnId: 2 } };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
   it('accepts pack settings responses that include items', () => {
     let result: unknown;
     api.patchBoardSettings({ cardLayout: 'pack' }).subscribe((res) => (result = res));

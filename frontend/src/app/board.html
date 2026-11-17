@@ -1,4 +1,4 @@
-<main class="board-page">
+<main class="board-page" [class.board-mobile]="isBoardMobile()">
   <div class="breadcrumb">ワークスペース <span>/</span> <strong>かんばん</strong></div>
   <section class="page-heading">
     <div>
@@ -12,23 +12,39 @@
       <span class="board-icon" aria-hidden="true">▥</span> かんばんボード
     </div>
     <span class="toolbar-count">{{ filteredItemCount() }} アイテム</span>
-    <label
-      class="layout-toggle"
-      [class.layout-toggle-disabled]="!canToggleCardLayout()"
-      [attr.title]="canToggleCardLayout() ? null : layoutToggleGate().reason"
-    >
-      <input
-        type="checkbox"
-        [checked]="isFreeLayout()"
-        [disabled]="!canToggleCardLayout()"
-        [attr.aria-disabled]="!canToggleCardLayout()"
-        [attr.aria-describedby]="canToggleCardLayout() ? null : 'layout-toggle-reason'"
-        (change)="onCardLayoutToggle($any($event.target).checked)"
-      />
-      <span>自由配置</span>
-    </label>
-    @if (!canToggleCardLayout() && layoutToggleGate().reason) {
-      <span id="layout-toggle-reason" class="sr-only">{{ layoutToggleGate().reason }}</span>
+    @if (isBoardMobile()) {
+      <label class="mobile-column-select">
+        <span class="sr-only">表示するステータス</span>
+        <select
+          aria-label="表示するステータス"
+          [disabled]="data().columns.length === 0 || selectedMobileColumnId() === 0 || settingsSaving()"
+          [value]="selectedMobileColumnId()"
+          (change)="onMobileColumnChange($any($event.target).value)"
+        >
+          @for (column of data().columns; track column.id) {
+            <option [value]="column.id">{{ column.name }}</option>
+          }
+        </select>
+      </label>
+    } @else {
+      <label
+        class="layout-toggle"
+        [class.layout-toggle-disabled]="!canToggleCardLayout()"
+        [attr.title]="canToggleCardLayout() ? null : layoutToggleGate().reason"
+      >
+        <input
+          type="checkbox"
+          [checked]="isFreeLayout()"
+          [disabled]="!canToggleCardLayout()"
+          [attr.aria-disabled]="!canToggleCardLayout()"
+          [attr.aria-describedby]="canToggleCardLayout() ? null : 'layout-toggle-reason'"
+          (change)="onCardLayoutToggle($any($event.target).checked)"
+        />
+        <span>自由配置</span>
+      </label>
+      @if (!canToggleCardLayout() && layoutToggleGate().reason) {
+        <span id="layout-toggle-reason" class="sr-only">{{ layoutToggleGate().reason }}</span>
+      }
     }
     <span class="board-summary"
       >{{ done() }} 完了 <span>／</span> {{ data().columns.length }} ステータス</span
@@ -49,6 +65,8 @@
     <p id="card-drag-help" class="sr-only">
       @if (!canReorderItems()) {
         保存中などのため、いまはアイテムを移動できません。
+      } @else if (isBoardMobile()) {
+        左端のハンドルをドラッグして列内の位置を変えられます。ハンドルで上下矢印キーを押すと列内を移動できます。他のステータスへ移す場合は、表示するステータスを切り替えてから移動するか、アイテムを開いてステータスを変更してください。
       } @else if (isFreeLayout()) {
         左端のハンドルをドラッグして位置やステータスを変えられます。自由配置中は上下矢印キーでの並べ替えはできません。キーボードだけで別ステータスへ移す場合は、アイテムを開いてステータスを変更してください。
       } @else {
@@ -79,14 +97,18 @@
       class="board-scroll"
       tabindex="0"
       role="region"
-      aria-label="かんばんボード。列が多い場合は横スクロールできます。"
+      [attr.aria-label]="
+        isBoardMobile()
+          ? 'かんばんボード。表示するステータスを切り替えて列を選べます。'
+          : 'かんばんボード。列が多い場合は横スクロールできます。'
+      "
       (scroll)="closeCommandMenuOnViewportChange()"
       (dragover)="onColumnsDragOver($event)"
       (dragleave)="onColumnsDragLeave($event)"
       (drop)="onColumnsDrop($event)"
     >
       <div #columnsContainer class="board-columns">
-        @for (column of data().columns; track column.id; let index = $index) {
+        @for (column of visibleColumns(); track column.id; let index = $index) {
           <section
             #colSection
             class="kanban-column"

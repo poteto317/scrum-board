@@ -30,10 +30,13 @@ export class Api {
   board() {
     return this.http.get<BoardData>('/api/board');
   }
-  patchBoardSettings(body: { cardLayout: CardLayout }) {
-    return this.http.patch<BoardSettingsPatchResponse>('/api/board/settings', {
-      cardLayout: body.cardLayout,
-    });
+  patchBoardSettings(body: { cardLayout?: CardLayout; mobileBoardColumnId?: number }) {
+    const payload: { cardLayout?: CardLayout; mobileBoardColumnId?: number } = {};
+    if (body.cardLayout !== undefined) payload.cardLayout = body.cardLayout;
+    if (body.mobileBoardColumnId !== undefined) {
+      payload.mobileBoardColumnId = body.mobileBoardColumnId;
+    }
+    return this.http.patch<BoardSettingsPatchResponse>('/api/board/settings', payload);
   }
   itemByNumber(number: number) {
     return this.http.get<Item>(`/api/items/by-number/${number}`);

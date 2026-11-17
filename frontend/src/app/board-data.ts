@@ -52,11 +52,25 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
 export type NormalizedBoardData = BoardData & { settings: BoardSettings; items: Item[] };
 
 /** API / poll 応答を FE 用に正規化。settings・offsetY 欠落時は pack / 0（要件 6）。 */
+function normalizeMobileBoardColumnId(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+  return undefined;
+}
+
 export function normalizeBoardData(raw: Partial<BoardData> | null | undefined): NormalizedBoardData {
   const settingsRaw: BoardSettings =
     raw?.settings && typeof raw.settings === 'object'
-      ? { ...raw.settings, cardLayout: normalizeCardLayout(raw.settings.cardLayout) }
+      ? {
+          ...raw.settings,
+          cardLayout: normalizeCardLayout(raw.settings.cardLayout),
+          mobileBoardColumnId: normalizeMobileBoardColumnId(raw.settings.mobileBoardColumnId),
+        }
       : { cardLayout: 'pack' };
+  if (settingsRaw.mobileBoardColumnId === undefined) {
+    delete settingsRaw.mobileBoardColumnId;
+  }
   return {
     columns: raw?.columns ? [...raw.columns] : [],
     items: (raw?.items ?? []).map((item) => normalizeItem(item)),
