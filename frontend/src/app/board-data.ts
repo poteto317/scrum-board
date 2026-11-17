@@ -38,6 +38,7 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
     description: raw.description ?? '',
     position: raw.position ?? 0,
     backlogPosition: raw.backlogPosition ?? 0,
+    projectId: normalizeOptionalInt(raw.projectId) ?? 0,
     offsetY: normalizeOffsetY(raw.offsetY),
     prUrls: raw.prUrls ?? [],
     relatedItems: raw.relatedItems ?? [],
@@ -52,7 +53,7 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
 export type NormalizedBoardData = BoardData & { settings: BoardSettings; items: Item[] };
 
 /** API / poll 応答を FE 用に正規化。settings・offsetY 欠落時は pack / 0（要件 6）。 */
-function normalizeMobileBoardColumnId(value: unknown): number | undefined {
+function normalizeOptionalInt(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.trunc(value);
   }
@@ -65,11 +66,15 @@ export function normalizeBoardData(raw: Partial<BoardData> | null | undefined): 
       ? {
           ...raw.settings,
           cardLayout: normalizeCardLayout(raw.settings.cardLayout),
-          mobileBoardColumnId: normalizeMobileBoardColumnId(raw.settings.mobileBoardColumnId),
+          mobileBoardColumnId: normalizeOptionalInt(raw.settings.mobileBoardColumnId),
+          activeProjectId: normalizeOptionalInt(raw.settings.activeProjectId),
         }
       : { cardLayout: 'pack' };
   if (settingsRaw.mobileBoardColumnId === undefined) {
     delete settingsRaw.mobileBoardColumnId;
+  }
+  if (settingsRaw.activeProjectId === undefined) {
+    delete settingsRaw.activeProjectId;
   }
   return {
     columns: raw?.columns ? [...raw.columns] : [],

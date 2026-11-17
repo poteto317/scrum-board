@@ -218,6 +218,41 @@ describe('Api', () => {
     expect(req.request.body).toEqual({ templateIds: [1] });
     req.flush(null);
   });
+  it('patches board settings with activeProjectId only', () => {
+    let result: unknown;
+    api.patchBoardSettings({ activeProjectId: 3 }).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/board/settings');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ activeProjectId: 3 });
+    const payload = {
+      settings: { cardLayout: 'pack', mobileBoardColumnId: 1, activeProjectId: 3 },
+    };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
+  it('lists, creates, renames, and deletes projects', () => {
+    api.listProjects().subscribe();
+    const list = http.expectOne('/api/projects');
+    expect(list.request.method).toBe('GET');
+    list.flush({ projects: [{ id: 1, name: 'メイン', position: 0 }] });
+
+    api.createProject('次').subscribe();
+    const created = http.expectOne('/api/projects');
+    expect(created.request.method).toBe('POST');
+    expect(created.request.body).toEqual({ name: '次' });
+    created.flush({ id: 2, name: '次', position: 1 });
+
+    api.patchProject(2, '改名').subscribe();
+    const renamed = http.expectOne('/api/projects/2');
+    expect(renamed.request.method).toBe('PATCH');
+    expect(renamed.request.body).toEqual({ name: '改名' });
+    renamed.flush({ id: 2, name: '改名', position: 1 });
+
+    api.deleteProject(2).subscribe();
+    const removed = http.expectOne('/api/projects/2');
+    expect(removed.request.method).toBe('DELETE');
+    removed.flush(null);
+  });
   it('gets and puts list filter', () => {
     api.listFilter().subscribe();
     http.expectOne('/api/list-filter').flush({ query: '', statusIds: [] });

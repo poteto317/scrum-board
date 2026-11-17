@@ -12,6 +12,7 @@ import {
   ItemPatch,
   Column,
   HistoryPage,
+  Project,
 } from './models';
 
 export type { ItemOrderColumn };
@@ -30,13 +31,34 @@ export class Api {
   board() {
     return this.http.get<BoardData>('/api/board');
   }
-  patchBoardSettings(body: { cardLayout?: CardLayout; mobileBoardColumnId?: number }) {
-    const payload: { cardLayout?: CardLayout; mobileBoardColumnId?: number } = {};
+  patchBoardSettings(body: {
+    cardLayout?: CardLayout;
+    mobileBoardColumnId?: number;
+    activeProjectId?: number;
+  }) {
+    const payload: {
+      cardLayout?: CardLayout;
+      mobileBoardColumnId?: number;
+      activeProjectId?: number;
+    } = {};
     if (body.cardLayout !== undefined) payload.cardLayout = body.cardLayout;
     if (body.mobileBoardColumnId !== undefined) {
       payload.mobileBoardColumnId = body.mobileBoardColumnId;
     }
+    if (body.activeProjectId !== undefined) payload.activeProjectId = body.activeProjectId;
     return this.http.patch<BoardSettingsPatchResponse>('/api/board/settings', payload);
+  }
+  listProjects() {
+    return this.http.get<{ projects: Project[] }>('/api/projects');
+  }
+  createProject(name: string) {
+    return this.http.post<Project>('/api/projects', { name });
+  }
+  patchProject(id: number, name: string) {
+    return this.http.patch<Project>(`/api/projects/${id}`, { name });
+  }
+  deleteProject(id: number) {
+    return this.http.delete<void>(`/api/projects/${id}`);
   }
   itemByNumber(number: number) {
     return this.http.get<Item>(`/api/items/by-number/${number}`);
