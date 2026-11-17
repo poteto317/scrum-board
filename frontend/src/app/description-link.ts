@@ -27,10 +27,10 @@ export function normalizeDescriptionLinkUrl(value: string): string | null {
   return text;
 }
 
-/** Trimmed label, or null when empty or contains `]`. */
+/** Trimmed label, or null when empty, contains `]`, or contains a newline (breaks block split). */
 export function normalizeDescriptionLinkLabel(value: string): string | null {
   const text = value.trim();
-  if (!text || text.includes(']')) return null;
+  if (!text || text.includes(']') || text.includes('\n')) return null;
   return text;
 }
 

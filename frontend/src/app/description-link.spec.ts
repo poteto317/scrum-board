@@ -40,6 +40,10 @@ describe('normalizeDescriptionLinkLabel', () => {
     expect(normalizeDescriptionLinkLabel('   ')).toBeNull();
     expect(normalizeDescriptionLinkLabel('a]b')).toBeNull();
   });
+
+  it('rejects labels that contain newlines', () => {
+    expect(normalizeDescriptionLinkLabel('a\nb')).toBeNull();
+  });
 });
 
 describe('formatDescriptionLink / insertDescriptionLink', () => {
