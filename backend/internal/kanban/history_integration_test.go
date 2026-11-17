@@ -53,6 +53,7 @@ func TestMySQLHistory(t *testing.T) {
 		{Field: "prUrls", After: prURLsJSON(after.PRURLs)},
 		{Field: "relatedItems", After: relatedItemsJSON(after.RelatedItems)},
 		{Field: "assignee", After: after.Assignee},
+		{Field: "closeReason", After: after.CloseReason},
 	}
 	if !reflect.DeepEqual(baseline.Changes, wantBaseline) || baseline.Note == "" || baseline.OccurredAt.Year() < 2020 || baseline.EvidenceURL != "" {
 		t.Fatalf("baseline content: %+v want %+v", baseline, wantBaseline)
@@ -485,8 +486,30 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 		t.Fatalf("changes: %+v", page.Events[0])
 	}
 	created := page.Events[1]
-	if created.Kind != "created" || len(created.Changes) != 6 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
+	if created.Kind != "created" || len(created.Changes) != 7 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
 		t.Fatalf("created event: %+v", created)
+	}
+}
+
+func TestMySQLHistoryRecordsCloseReasonChange(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	reason := "wont fix"
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{CloseReason: &reason}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := r.History(ctx, c.Number, 0)
+	if err != nil || len(page.Events) < 1 {
+		t.Fatal(page, err)
+	}
+	updated := page.Events[0]
+	if updated.Kind != "updated" || len(updated.Changes) != 1 {
+		t.Fatalf("updated: %+v", updated)
+	}
+	want := HistoryChange{Field: "closeReason", Before: "", After: "wont fix"}
+	if updated.Changes[0] != want {
+		t.Fatalf("closeReason change: %+v", updated.Changes[0])
 	}
 }
 
