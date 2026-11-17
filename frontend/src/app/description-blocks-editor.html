@@ -1,0 +1,33 @@
+<div class="blocks-editor">
+  <div class="blocks-toolbar">
+    <button
+      type="button"
+      class="secondary blocks-link-btn"
+      [disabled]="disabled()"
+      (mousedown)="$event.preventDefault()"
+      (click)="requestLink()"
+    >
+      リンク
+    </button>
+  </div>
+  @for (block of blocks(); track trackBlock($index)) {
+    <textarea
+      #blockArea
+      class="block-input"
+      rows="1"
+      [value]="block"
+      [disabled]="disabled()"
+      [attr.aria-label]="'説明ブロック ' + ($index + 1)"
+      placeholder="背景、取り組む内容、完了の条件など"
+      (focus)="onFocus($index)"
+      (blur)="onBlur($event)"
+      (input)="onInput($index, $event)"
+      (keydown)="onKeydown($index, $event)"
+      (compositionstart)="onComposition(true)"
+      (compositionend)="onComposition(false)"
+    ></textarea>
+  }
+  @if (lengthError()) {
+    <p class="form-error" role="alert">{{ lengthError() }}</p>
+  }
+</div>
