@@ -36,19 +36,20 @@ type Column struct {
 	Position int    `json:"position"`
 }
 type Item struct {
-	Number          int64     `json:"number"`
-	ID              int64     `json:"id"`
-	ColumnID        int64     `json:"columnId"`
-	Title           string    `json:"title"`
-	Description     string    `json:"description"`
-	Position        int       `json:"position"`
-	OffsetY         int       `json:"offsetY"`
-	BacklogPosition int       `json:"backlogPosition"`
+	Number          int64         `json:"number"`
+	ID              int64         `json:"id"`
+	ColumnID        int64         `json:"columnId"`
+	Title           string        `json:"title"`
+	Description     string        `json:"description"`
+	Position        int           `json:"position"`
+	OffsetY         int           `json:"offsetY"`
+	BacklogPosition int           `json:"backlogPosition"`
 	PRURLs          []string      `json:"prUrls"`
 	PRTitles        []string      `json:"prTitles"`
 	RelatedItems    []RelatedItem `json:"relatedItems"`
 	Assignee        string        `json:"assignee"`
 	CloseReason     string        `json:"closeReason"`
+	DueAt           *time.Time    `json:"dueAt"`
 	CreatedAt       time.Time     `json:"createdAt"`
 	UpdatedAt       time.Time     `json:"updatedAt"`
 }
@@ -83,6 +84,8 @@ type ItemPatch struct {
 	RelatedItems *[]RelatedItem `json:"relatedItems"`
 	Assignee     *string        `json:"assignee"`
 	CloseReason  *string        `json:"closeReason"`
+	DueAt        *time.Time     `json:"dueAt"`
+	ClearDueAt   bool           `json:"-"`
 }
 
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.
