@@ -188,7 +188,8 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 	c := Item{
 		Number: m.next, ID: m.next, ColumnID: in.ColumnID,
 		Title: in.Title, Description: in.Description, PRURLs: urls, RelatedItems: related,
-		Position: m.nextPosition(in.ColumnID), OffsetY: offsetY, Assignee: in.Assignee, BacklogPosition: maxBacklog + 1,
+		Position: m.nextPosition(in.ColumnID), OffsetY: offsetY, Assignee: in.Assignee,
+		CloseReason: in.CloseReason, BacklogPosition: maxBacklog + 1,
 	}
 	m.next++
 	m.cards[c.ID] = c
@@ -237,6 +238,9 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 	}
 	if p.Assignee != nil {
 		c.Assignee = *p.Assignee
+	}
+	if p.CloseReason != nil {
+		c.CloseReason = *p.CloseReason
 	}
 	m.cards[id] = c
 	return c, nil

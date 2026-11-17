@@ -48,6 +48,7 @@ type Item struct {
 	PRTitles        []string      `json:"prTitles"`
 	RelatedItems    []RelatedItem `json:"relatedItems"`
 	Assignee        string        `json:"assignee"`
+	CloseReason     string        `json:"closeReason"`
 	CreatedAt       time.Time     `json:"createdAt"`
 	UpdatedAt       time.Time     `json:"updatedAt"`
 }
@@ -72,6 +73,7 @@ type ItemInput struct {
 	PRURLs       []string      `json:"prUrls"`
 	RelatedItems []RelatedItem `json:"relatedItems"`
 	Assignee     string        `json:"assignee"`
+	CloseReason  string        `json:"closeReason"`
 }
 type ItemPatch struct {
 	ColumnID     *int64         `json:"columnId"`
@@ -80,6 +82,7 @@ type ItemPatch struct {
 	PRURLs       *[]string      `json:"prUrls"`
 	RelatedItems *[]RelatedItem `json:"relatedItems"`
 	Assignee     *string        `json:"assignee"`
+	CloseReason  *string        `json:"closeReason"`
 }
 
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.

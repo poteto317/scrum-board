@@ -37,7 +37,7 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Item, error) {
 	var c Item
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CreatedAt, &c.UpdatedAt)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
 	}
@@ -49,7 +49,7 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.item_number, c.column_id, c.title, c.description, c.position, c.offset_y, c.backlog_position, c.assignee, c.created_at, c.updated_at"
+const cardFields = "c.id, n.item_number, c.column_id, c.title, c.description, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.created_at, c.updated_at"
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -147,7 +147,7 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 	if err != nil {
 		return Item{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO items(column_id,title,description,position,offset_y,backlog_position,assignee) VALUES(?,?,?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, offsetY, nextBacklog, in.Assignee)
+	result, err := tx.ExecContext(ctx, "INSERT INTO items(column_id,title,description,position,offset_y,backlog_position,assignee,close_reason) VALUES(?,?,?,?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
@@ -252,7 +252,10 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	if p.Assignee != nil {
 		c.Assignee = *p.Assignee
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,position=?,offset_y=?,assignee=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.OffsetY, c.Assignee, now, id)
+	if p.CloseReason != nil {
+		c.CloseReason = *p.CloseReason
+	}
+	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,position=?,offset_y=?,assignee=?,close_reason=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.OffsetY, c.Assignee, c.CloseReason, now, id)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
