@@ -70,7 +70,16 @@ export class ItemAutosave {
   }
   /** Apply Close transition response: merge side fields and sync columnId/closeReason controls. */
   applyCloseSave(updated: Item) {
-    const merged = mergeCloseTransitionItem(this.item(), updated);
+    const local = this.item();
+    const merged = mergeCloseTransitionItem(local, updated);
+    // PATCH omits prTitles; keep/remap local enrichment like form flush (L-002).
+    if (local?.prTitles?.length || updated.prTitles?.length) {
+      merged.prTitles = alignPrTitles(
+        local?.prUrls ?? updated.prUrls ?? [],
+        local?.prTitles ?? updated.prTitles,
+        merged.prUrls,
+      );
+    }
     this.item.set(merged);
     this.form.controls.columnId.setValue(merged.columnId, { emitEvent: false });
     this.form.controls.closeReason.setValue(merged.closeReason ?? '', { emitEvent: false });
