@@ -36,8 +36,10 @@ export PORT="${PORT:-8080}"
 /server &
 api_pid=$!
 
+# Migrations (e.g. per-project numbering ALTER/renumber) can take well over a few seconds.
+# Match server migration budget (~2m) so the probe does not kill a healthy still-migrating API.
 i=0
-while [ "$i" -lt 30 ]; do
+while [ "$i" -lt 120 ]; do
     if wget -q -O /dev/null http://127.0.0.1:8081/api/public-config 2>/dev/null; then
         break
     fi
@@ -47,7 +49,7 @@ while [ "$i" -lt 30 ]; do
         exit 1
     fi
     i=$((i + 1))
-    sleep 0.2
+    sleep 1
 done
 
 if ! wget -q -O /dev/null http://127.0.0.1:8081/api/public-config 2>/dev/null; then

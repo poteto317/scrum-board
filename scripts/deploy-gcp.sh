@@ -96,7 +96,10 @@ gcloud run deploy "$SERVICE_NAME" \
   --min-instances=0 \
   --max-instances=2 \
   --cpu=1 \
-  --memory=512Mi
+  --memory=512Mi \
+  --cpu-boost \
+  --timeout=300 \
+  --startup-probe=tcpSocket.port=8080,periodSeconds=5,failureThreshold=48,timeoutSeconds=3
 
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
   --region="$GCP_REGION" \
