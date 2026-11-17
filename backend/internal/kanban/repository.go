@@ -90,6 +90,7 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	if err != nil {
 		return b, err
 	}
+	b.Settings.MobileBoardColumnID = resolveMobileBoardColumnID(b.Settings.MobileBoardColumnID, b.Columns)
 	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.position,c.id")
 	if err != nil {
 		return b, err

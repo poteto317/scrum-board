@@ -29,6 +29,9 @@ func TestUpdateBoardSettingsHandler(t *testing.T) {
 	if out.Settings.CardLayout != CardLayoutPack {
 		t.Fatalf("settings: %+v", out.Settings)
 	}
+	if out.Settings.MobileBoardColumnID != 1 {
+		t.Fatalf("mobileBoardColumnId: %+v", out.Settings)
+	}
 	if len(out.Items) != 3 {
 		t.Fatalf("want items on pack response, got %d", len(out.Items))
 	}
@@ -115,5 +118,8 @@ func TestBoardIncludesSettings(t *testing.T) {
 	}
 	if settings["cardLayout"] != CardLayoutFree {
 		t.Fatalf("cardLayout=%v", settings["cardLayout"])
+	}
+	if settings["mobileBoardColumnId"] != float64(1) {
+		t.Fatalf("mobileBoardColumnId=%v", settings["mobileBoardColumnId"])
 	}
 }

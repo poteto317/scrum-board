@@ -169,7 +169,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 | POST | `/api/columns` | `{name}`で列を追加 |
 | POST | `/api/items` | `{title, description, columnId, prUrls?, assignee?}`でアイテム追加 |
 | PUT | `/api/items/order` | `{columns:[{columnId, itemIds, offsetYs?}]}`でアイテムの列内並べ替え・列間移動（[詳細](docs/api.md#アイテムの並び替え列間移動)） |
-| PATCH | `/api/board/settings` | `{cardLayout:"pack"|"free"}`でボード全体のカード配置設定を更新（[詳細](docs/api.md#ボード設定カード配置)） |
+| PATCH | `/api/board/settings` | `{cardLayout?, mobileBoardColumnId?}`でボード設定を部分更新（[詳細](docs/api.md#ボード設定カード配置モバイル表示列)） |
 | POST | `/api/items/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてアイテムを起票する)） |
 | GET | `/api/items/{id}` | 内部IDによるアイテム詳細 |
 | GET | `/api/items/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
@@ -189,7 +189,7 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 
 タイトルは1〜200文字、説明は10000文字以内。タイトル・列名の前後の空白は削除します。絵文字を含むUnicode文字数で検証します。空のPATCH、未知のプロパティ、不正なJSONも拒否します。エラー形式は`{"message":"..."}`。不正入力400、未存在404、重複列409、内部エラー500です。
 
-列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のアイテムは`position`・ID順で、`GET /api/board`もこの順です（応答に `settings.cardLayout` と各アイテムの `offsetY` も含みます）。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます（自由配置時の `offsetY` はサーバーが近似値を付与）。ドラッグ&ドロップは`PUT /api/items/order`で保存し、`items.position` / `offset_y` と `board_settings` はAPI起動時に冪等に用意されます。
+列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のアイテムは`position`・ID順で、`GET /api/board`もこの順です（応答に `settings.cardLayout` / `settings.mobileBoardColumnId` と各アイテムの `offsetY` も含みます）。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます（自由配置時の `offsetY` はサーバーが近似値を付与）。ドラッグ&ドロップは`PUT /api/items/order`で保存し、`items.position` / `offset_y` と `board_settings` はAPI起動時に冪等に用意されます。
 
 ## 検証
 

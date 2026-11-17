@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 )
@@ -117,21 +118,35 @@ func (h handler) board(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) updateBoardSettings(w http.ResponseWriter, r *http.Request) {
-	var in BoardSettings
+	var in BoardSettingsPatch
 	if !decode(w, r, &in) {
 		return
 	}
-	if in.CardLayout != CardLayoutPack && in.CardLayout != CardLayoutFree {
-		invalid(w, "cardLayout は pack または free を指定してください。")
+	if in.CardLayout == nil && in.MobileBoardColumnID == nil {
+		invalid(w, "cardLayout または mobileBoardColumnId を指定してください。")
 		return
 	}
-	settings, items, err := h.repo.UpdateBoardSettings(r.Context(), in)
+	if in.CardLayout != nil {
+		if *in.CardLayout != CardLayoutPack && *in.CardLayout != CardLayoutFree {
+			invalid(w, "cardLayout は pack または free を指定してください。")
+			return
+		}
+	}
+	if in.MobileBoardColumnID != nil && *in.MobileBoardColumnID <= 0 {
+		invalid(w, "mobileBoardColumnId は存在する列の ID を指定してください。")
+		return
+	}
+	settings, items, err := h.repo.PatchBoardSettings(r.Context(), in)
 	if err != nil {
+		if errors.Is(err, ErrBoardSettings) && in.MobileBoardColumnID != nil {
+			invalid(w, "mobileBoardColumnId は存在する列の ID を指定してください。")
+			return
+		}
 		fail(w, err)
 		return
 	}
 	out := map[string]any{"settings": settings}
-	if settings.CardLayout == CardLayoutPack {
+	if items != nil {
 		out["items"] = items
 	}
 	reply(w, 200, out)

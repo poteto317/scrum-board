@@ -80,7 +80,7 @@ curl --fail-with-body http://127.0.0.1:4200/api/items/by-number/7
 curl --fail-with-body http://127.0.0.1:4200/api/board
 ```
 
-応答は `columns` / `items` に加え、`settings: { "cardLayout": "pack" | "free" }` を含みます（既定は `pack`）。各アイテムには列内の並び `position` に加え、自由配置用の `offsetY`（列カードリスト上端からの CSS px・整数 0〜100000。欠落時は 0）が含まれます。応答アイテムのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
+応答は `columns` / `items` に加え、`settings: { "cardLayout": "pack" | "free", "mobileBoardColumnId": number }` を含みます（`cardLayout` 既定は `pack`。`mobileBoardColumnId` はスマホ1列表示用の列 ID。未保存・無効値は Todo 列、無ければ `position` 昇順・同点は `id` 昇順の先頭。列が無いときは `0`。GET は DB を書き換えません）。各アイテムには列内の並び `position` に加え、自由配置用の `offsetY`（列カードリスト上端からの CSS px・整数 0〜100000。欠落時は 0）が含まれます。応答アイテムのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
 
 ## 公開オリジン（本番リンク用）
 
@@ -284,21 +284,25 @@ curl --fail-with-body --request PUT \
 
 `position`（列内の並び順。アイテムの並び替え・列間移動が更新する）と `backlogPosition`（プロダクトバックログ全体の優先順位。`/api/backlog/order` が更新する）は独立した値で、一方を変えても他方は変わりません。どちらも各アイテムに含まれます。
 
-# ボード設定（カード配置）
+# ボード設定（カード配置・モバイル表示列）
 
-`PATCH /api/board/settings` でボード全体の `cardLayout` を更新します。本文は `{ "cardLayout": "pack" | "free" }` のみ（未知フィールドは 400）。設定は Basic Auth 共有のボード共通です。
+`PATCH /api/board/settings` でボード設定を更新します。本文は `cardLayout`（`"pack"` | `"free"`）と `mobileBoardColumnId`（正の列 ID）を **それぞれ任意**（少なくとも一方必須。未知フィールドは 400）。省略したキーは変更しません。設定は Basic Auth 共有のボード共通です。
 
 ```sh
 curl --fail-with-body --request PATCH \
   --header 'Content-Type: application/json' \
   --data '{"cardLayout":"free"}' \
   http://127.0.0.1:4200/api/board/settings
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"mobileBoardColumnId":2}' \
+  http://127.0.0.1:4200/api/board/settings
 ```
 
-- 成功時は常に `{ "settings": { "cardLayout": "..." } }` を返します。
-- `free` → `pack` のときは同一トランザクションで全列のアイテムを `offset_y, position, id` 順に `position` を振り直し、応答に **`items`（全件）** も含めます（クライアントは再 GET 不要）。`offsetY` の値自体は残します。
+- 成功時は常に `{ "settings": { "cardLayout": "...", "mobileBoardColumnId": number } }` を返します（変更していないキーも含む）。
+- `free` → `pack` の遷移のときだけ同一トランザクションで全列のアイテムを `offset_y, position, id` 順に `position` を振り直し、応答に **`items`（全件）** も含めます（クライアントは再 GET 不要）。`offsetY` の値自体は残します。`mobileBoardColumnId` のみの PATCH や、すでに `pack` のままの更新では `items` を付けません。
 - `pack` → `free` は settings 行のみ更新し、`items` は省略できます。画面上の上詰め結果から `offsetY` を測って先に `PUT /api/items/order`（`offsetYs` 付き）してからこの PATCH する想定です。途中失敗で設定だけ `free` にしないでください。
-- HTTP 400: `cardLayout` 欠落・不正値、未知フィールド、不正 JSON。
+- HTTP 400: 両方欠落、`cardLayout` 不正値・空文字、`mobileBoardColumnId` が 0 以下または存在しない列、未知フィールド、不正 JSON。
 - HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。
 
 # 一覧フィルタ（ボード／バックログ共有）

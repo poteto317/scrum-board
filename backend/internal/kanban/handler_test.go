@@ -32,7 +32,7 @@ func fresh() *memoryRepo {
 		next:            1,
 		nextTemplateID:  1,
 		cardTemplateIDs: map[int64][]int64{},
-		settings:        BoardSettings{CardLayout: CardLayoutPack},
+		settings:        BoardSettings{CardLayout: CardLayoutPack, MobileBoardColumnID: 1},
 	}
 }
 func (m *memoryRepo) Board(context.Context) (Board, error) {
@@ -47,7 +47,11 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 	if layout == "" {
 		layout = CardLayoutPack
 	}
-	b := Board{Columns: cols, Items: []Item{}, Settings: BoardSettings{CardLayout: normalizeCardLayout(layout)}}
+	settings := BoardSettings{
+		CardLayout:          normalizeCardLayout(layout),
+		MobileBoardColumnID: resolveMobileBoardColumnID(m.settings.MobileBoardColumnID, cols),
+	}
+	b := Board{Columns: cols, Items: []Item{}, Settings: settings}
 	for _, c := range m.cards {
 		b.Items = append(b.Items, c)
 	}
@@ -59,45 +63,65 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 	})
 	return b, nil
 }
-func (m *memoryRepo) UpdateBoardSettings(_ context.Context, in BoardSettings) (BoardSettings, []Item, error) {
+func (m *memoryRepo) PatchBoardSettings(_ context.Context, patch BoardSettingsPatch) (BoardSettings, []Item, error) {
 	if m.settingsFail != nil {
 		return BoardSettings{}, nil, m.settingsFail
 	}
-	if in.CardLayout != CardLayoutPack && in.CardLayout != CardLayoutFree {
-		return BoardSettings{}, nil, ErrBoardSettings
-	}
 	prev := normalizeCardLayout(m.settings.CardLayout)
-	m.settings.CardLayout = in.CardLayout
-	if in.CardLayout != CardLayoutPack {
-		return m.settings, nil, nil
+	next, err := applyBoardSettingsPatch(m.settings, m.columns, patch)
+	if err != nil {
+		return BoardSettings{}, nil, err
 	}
-	if prev == CardLayoutFree {
-		for _, col := range m.columns {
-			var ids []int64
-			for _, c := range m.cards {
-				if c.ColumnID == col.ID {
-					ids = append(ids, c.ID)
-				}
+	if patch.CardLayout != nil {
+		if *patch.CardLayout != CardLayoutPack && *patch.CardLayout != CardLayoutFree {
+			return BoardSettings{}, nil, ErrBoardSettings
+		}
+		m.settings.CardLayout = next.CardLayout
+	}
+	if patch.MobileBoardColumnID != nil {
+		m.settings.MobileBoardColumnID = next.MobileBoardColumnID
+	}
+	settings := BoardSettings{
+		CardLayout:          m.settings.CardLayout,
+		MobileBoardColumnID: resolveMobileBoardColumnID(m.settings.MobileBoardColumnID, m.columns),
+	}
+	if !(prev == CardLayoutFree && m.settings.CardLayout == CardLayoutPack) {
+		return settings, nil, nil
+	}
+	for _, col := range m.columns {
+		var ids []int64
+		for _, c := range m.cards {
+			if c.ColumnID == col.ID {
+				ids = append(ids, c.ID)
 			}
-			slices.SortFunc(ids, func(a, b int64) int {
-				ca, cb := m.cards[a], m.cards[b]
-				if c := cmp.Compare(ca.OffsetY, cb.OffsetY); c != 0 {
-					return c
-				}
-				if c := cmp.Compare(ca.Position, cb.Position); c != 0 {
-					return c
-				}
-				return cmp.Compare(a, b)
-			})
-			for pos, id := range ids {
-				c := m.cards[id]
-				c.Position = pos
-				m.cards[id] = c
+		}
+		slices.SortFunc(ids, func(a, b int64) int {
+			ca, cb := m.cards[a], m.cards[b]
+			if c := cmp.Compare(ca.OffsetY, cb.OffsetY); c != 0 {
+				return c
 			}
+			if c := cmp.Compare(ca.Position, cb.Position); c != 0 {
+				return c
+			}
+			return cmp.Compare(a, b)
+		})
+		for pos, id := range ids {
+			c := m.cards[id]
+			c.Position = pos
+			m.cards[id] = c
 		}
 	}
 	board, _ := m.Board(context.Background())
-	return m.settings, board.Items, nil
+	return settings, board.Items, nil
+}
+
+func (m *memoryRepo) UpdateBoardSettings(ctx context.Context, in BoardSettings) (BoardSettings, []Item, error) {
+	patch := BoardSettingsPatch{CardLayout: &in.CardLayout}
+	if in.MobileBoardColumnID > 0 {
+		id := in.MobileBoardColumnID
+		patch.MobileBoardColumnID = &id
+	}
+	return m.PatchBoardSettings(ctx, patch)
 }
 func (m *memoryRepo) GetItem(_ context.Context, id int64) (Item, error) {
 	c, ok := m.cards[id]

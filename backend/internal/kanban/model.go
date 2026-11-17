@@ -60,7 +60,8 @@ type ItemColumnOrder struct {
 	OffsetYs *[]int  `json:"offsetYs,omitempty"`
 }
 type BoardSettings struct {
-	CardLayout string `json:"cardLayout"`
+	CardLayout           string `json:"cardLayout"`
+	MobileBoardColumnID  int64  `json:"mobileBoardColumnId"`
 }
 type Board struct {
 	Columns  []Column      `json:"columns"`
@@ -92,6 +93,7 @@ type ItemPatch struct {
 type Repository interface {
 	Board(context.Context) (Board, error)
 	UpdateBoardSettings(context.Context, BoardSettings) (BoardSettings, []Item, error)
+	PatchBoardSettings(context.Context, BoardSettingsPatch) (BoardSettings, []Item, error)
 	History(context.Context, int64, int64) (HistoryPage, error)
 	GetItem(context.Context, int64) (Item, error)
 	GetItemByNumber(context.Context, int64) (Item, error)
