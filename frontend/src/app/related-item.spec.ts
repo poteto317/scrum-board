@@ -38,6 +38,12 @@ describe('related-item helpers', () => {
     ).toBe(true);
     expect(
       sameRelatedItem(
+        { kind: 'item', number: 1, projectId: 1 },
+        { kind: 'item', number: 1, projectId: 2 },
+      ),
+    ).toBe(false);
+    expect(
+      sameRelatedItem(
         { kind: 'url', url: 'https://a.com' },
         { kind: 'url', url: 'https://b.com' },
       ),
