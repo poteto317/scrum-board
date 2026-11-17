@@ -66,6 +66,7 @@ export class ItemAutosave {
     this.request?.unsubscribe();
     this.request = undefined;
     this.saving.set(false);
+    for (const resolve of this.waiters.splice(0)) resolve(false);
   }
   /** Apply Close transition response: merge side fields and sync columnId/closeReason controls. */
   applyCloseSave(updated: Item) {
