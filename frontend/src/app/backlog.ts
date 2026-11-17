@@ -329,7 +329,7 @@ export class Backlog implements OnInit {
     this.resetDragState();
   }
 
-  onHandleKeydown(event: KeyboardEvent, cardIndex: number) {
+  onRankKeydown(event: KeyboardEvent, cardIndex: number) {
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
     const cards = this.items();
     if (!this.canReorder() || cardIndex < 0 || cardIndex >= cards.length) return;
@@ -369,7 +369,7 @@ export class Backlog implements OnInit {
     const next = moveItem(previous, fromIndex, toIndex);
     const moved = next[toIndex];
     const restoreFocus = () => {
-      if (focusItemId !== undefined) this.focusHandleAfterRender(focusItemId);
+      if (focusItemId !== undefined) this.focusRankAfterRender(focusItemId);
     };
     this.reordering.set(true);
     this.reorderError.set('');
@@ -396,17 +396,17 @@ export class Backlog implements OnInit {
       });
   }
 
-  private focusHandleAfterRender(cardId: number) {
+  private focusRankAfterRender(cardId: number) {
     if (this.destroyRef.destroyed || this.modal() !== null) return;
     afterNextRender(
       () => {
         if (this.destroyRef.destroyed || this.modal() !== null) return;
         const container = this.listContainer()?.nativeElement;
         if (!container) return;
-        const handles = Array.from(
-          container.querySelectorAll<HTMLButtonElement>('.backlog-drag-handle'),
+        const ranks = Array.from(
+          container.querySelectorAll<HTMLButtonElement>('.backlog-rank'),
         );
-        const target = handles.find(
+        const target = ranks.find(
           (el) => Number(el.closest('[data-card-id]')?.getAttribute('data-card-id')) === cardId,
         );
         if (!target) return;

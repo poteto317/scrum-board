@@ -249,21 +249,30 @@ describe('Backlog reordering', () => {
     const f = TestBed.createComponent(Backlog);
     f.detectChanges();
     await f.whenStable();
-    const handles = Array.from(
-      f.nativeElement.querySelectorAll('.backlog-drag-handle') as NodeListOf<HTMLButtonElement>,
-    );
-    handles[2].focus();
-    handles[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', cancelable: true }));
+    expect(f.nativeElement.textContent).not.toContain('⋮⋮');
+    expect(f.nativeElement.querySelector('.backlog-drag-handle')).toBeNull();
+    const getRanks = () =>
+      Array.from(
+        f.nativeElement.querySelectorAll('.backlog-rank') as NodeListOf<HTMLButtonElement>,
+      );
+    expect(getRanks()[2].tagName).toBe('BUTTON');
+    getRanks()[2].focus();
+    getRanks()[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', cancelable: true }));
     f.detectChanges();
+    await f.whenStable();
     expect(reorderBacklog).toHaveBeenCalledWith([1, 3, 2, 9]);
+    expect(document.activeElement).toBe(getRanks()[1]);
+    const footerText = f.nativeElement.querySelector('.backlog-footer')?.textContent ?? '';
+    expect(footerText).toContain('行をドラッグ');
+    expect(footerText).not.toContain('ハンドル');
 
     f.componentInstance.items.set([cards[0]]);
     f.detectChanges();
     expect(f.componentInstance.canReorder()).toBe(false);
     const singleZone = f.nativeElement.querySelector('.backlog-drag-zone') as HTMLElement;
-    const singleHandle = f.nativeElement.querySelector('.backlog-drag-handle') as HTMLButtonElement;
+    const singleRank = f.nativeElement.querySelector('.backlog-rank') as HTMLButtonElement;
     expect(singleZone.getAttribute('draggable')).toBeNull();
-    expect(singleHandle.getAttribute('aria-disabled')).toBe('true');
+    expect(singleRank.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('rolls back optimistic order on save failure and shows reload on conflict', async () => {
@@ -290,18 +299,24 @@ describe('Backlog reordering', () => {
     const f = TestBed.createComponent(Backlog);
     f.detectChanges();
     await f.whenStable();
-    const handles = Array.from(
-      f.nativeElement.querySelectorAll('.backlog-drag-handle') as NodeListOf<HTMLButtonElement>,
-    );
-    handles[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }));
+    const getRanks = () =>
+      Array.from(
+        f.nativeElement.querySelectorAll('.backlog-rank') as NodeListOf<HTMLButtonElement>,
+      );
+    getRanks()[0].focus();
+    getRanks()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }));
     f.detectChanges();
+    await f.whenStable();
     expect(f.componentInstance.items().map((c) => c.id)).toEqual([2, 1, 3, 9]);
+    expect(document.activeElement).toBe(getRanks()[1]);
     fail.error({ status: 409, error: { message: '構成が変更されています' } });
     f.detectChanges();
+    await f.whenStable();
     expect(f.componentInstance.items().map((c) => c.id)).toEqual([1, 2, 3, 9]);
     expect(f.componentInstance.reorderConflict()).toBe(true);
     expect(f.nativeElement.querySelector('.reorder-reload')).not.toBeNull();
     expect(f.nativeElement.querySelector('.reorder-dismiss')).toBeNull();
+    expect(document.activeElement).toBe(getRanks()[0]);
   });
 
   it('creates a card from the backlog modal always in Todo without a status select', async () => {

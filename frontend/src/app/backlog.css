@@ -126,7 +126,7 @@ h1 {
 }
 .backlog-drag-zone {
   display: grid;
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
@@ -134,34 +134,28 @@ h1 {
 .backlog-drag-zone[draggable='true']:active {
   cursor: grabbing;
 }
-.backlog-drag-handle {
+.backlog-rank {
   border: none;
   background: transparent;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--muted);
-  font-size: 10px;
-  letter-spacing: -2px;
-  padding: 0;
-  min-width: 24px;
+  min-width: 1.5rem;
   min-height: 24px;
+  padding: 0;
+  text-align: right;
   display: inline-grid;
   place-items: center;
   cursor: grab;
   border-radius: 6px;
 }
-.backlog-drag-handle:hover {
+.backlog-rank:hover {
   background: #eef1ea;
   color: var(--ink);
 }
-.backlog-drag-handle[aria-disabled='true'] {
+.backlog-rank[aria-disabled='true'] {
   cursor: default;
   opacity: 0.45;
-}
-.backlog-rank {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  min-width: 1.5rem;
-  text-align: right;
 }
 .backlog-number {
   font-size: 12px;
@@ -237,14 +231,11 @@ h1 {
     font-size: 28px;
   }
   .backlog-drag-zone {
-    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas:
-      'handle rank title detail'
-      'handle rank status detail';
+      'rank title detail'
+      'rank status detail';
     gap: 6px 10px;
-  }
-  .backlog-drag-handle {
-    grid-area: handle;
   }
   .backlog-rank {
     grid-area: rank;
