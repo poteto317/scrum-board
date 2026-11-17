@@ -1,7 +1,19 @@
 import { formatItemNumber } from './item-number';
 import { ItemHistory } from './item-history';
 import { Modal } from './modal';
-import { Component, DestroyRef, HostListener, inject, NgZone, OnInit, signal } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  DestroyRef,
+  ElementRef,
+  HostListener,
+  inject,
+  Injector,
+  NgZone,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { DatePipe, Location } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -45,6 +57,8 @@ import {
   ListReturnTo,
   readReturnTo,
 } from './list-scroll-session';
+import { parseDescriptionLinks } from './description-link';
+import { DescriptionEditor } from './description-editor';
 
 @Component({
   selector: 'app-item-detail',
@@ -65,6 +79,7 @@ import {
     ItemRelatedItems,
     ItemAssignee,
     ItemCloseTransition,
+    DescriptionEditor,
     CommandTemplatesSession,
     ItemCommandsSession,
   ],
@@ -79,6 +94,7 @@ export class ItemDetail implements OnInit {
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private readonly zone = inject(NgZone);
   private readonly reload$ = new Subject<void>();
   private readonly changed$ = new Subject<void>();
@@ -87,10 +103,9 @@ export class ItemDetail implements OnInit {
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
   readonly closeTransition = inject(ItemCloseTransition);
+  readonly descriptionLink = inject(DescriptionEditor);
+  private readonly descArea = viewChild<ElementRef<HTMLTextAreaElement>>('descArea');
   readonly relatedDisplayLabel = displayLabel;
-  prLabel(url: string, index: number) {
-    return prDisplayLabel(url, this.item()?.prTitles, index);
-  }
   readonly commands = inject(CommandTemplatesSession);
   readonly itemCommands = inject(ItemCommandsSession);
   readonly presets = ASSIGNEE_PRESETS;
@@ -117,6 +132,59 @@ export class ItemDetail implements OnInit {
   /** True while a PR/related list item is being dragged (pause live refresh). */
   readonly listDragging = signal(false);
   private deleted = false;
+
+  prLabel(url: string, index: number) {
+    return prDisplayLabel(url, this.item()?.prTitles, index);
+  }
+  descriptionSegments() {
+    return parseDescriptionLinks(this.form.controls.description.value ?? '');
+  }
+  startDescriptionEdit() {
+    this.descriptionLink.startEdit();
+    this.focusDescriptionArea();
+  }
+  onDescriptionBlur() {
+    this.descriptionLink.endEditIfIdle();
+    if (!this.descriptionLink.open()) this.autosave.flush();
+  }
+  onDescriptionViewClick(event: MouseEvent) {
+    this.startEditUnlessLink(event.target);
+  }
+  onDescriptionViewKeydown(event: Event) {
+    this.startEditUnlessLink(event.target);
+  }
+  openDescriptionLink(area: HTMLTextAreaElement) {
+    const start = area.selectionStart ?? 0;
+    const end = area.selectionEnd ?? 0;
+    this.descriptionLink.begin({
+      start,
+      end,
+      selectedText: area.value.slice(start, end),
+    });
+  }
+  confirmDescriptionLink() {
+    const result = this.descriptionLink.apply(this.form.controls.description.value ?? '');
+    if (!result) return;
+    this.form.controls.description.setValue(result.text);
+    this.form.controls.description.markAsDirty();
+    this.autosave.flush();
+    this.focusDescriptionArea(result.caret);
+  }
+  private startEditUnlessLink(target: EventTarget | null) {
+    if ((target as HTMLElement | null)?.closest('a')) return;
+    this.startDescriptionEdit();
+  }
+  private focusDescriptionArea(caret?: number) {
+    afterNextRender(
+      () => {
+        const el = this.descArea()?.nativeElement;
+        if (!el) return;
+        el.focus();
+        if (caret != null) el.setSelectionRange(caret, caret);
+      },
+      { injector: this.injector },
+    );
+  }
 
   constructor() {
     this.prLinks.bind({
@@ -173,6 +241,7 @@ export class ItemDetail implements OnInit {
           this.relatedItems.reset();
           this.assignee.reset();
           this.closeTransition.reset();
+          this.descriptionLink.reset();
           this.listDragging.set(false);
           this.deleted = false;
           this.confirmDelete.set(false);
@@ -250,6 +319,7 @@ export class ItemDetail implements OnInit {
       this.confirmDelete() ||
       this.closeTransition.open() ||
       this.closeTransition.saving() ||
+      this.descriptionLink.open() ||
       this.deleting()
     );
   }

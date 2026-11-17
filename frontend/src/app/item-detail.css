@@ -3,6 +3,35 @@
   margin: auto;
   padding: 32px 40px 60px;
 }
+.description-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.description-edit-toolbar {
+  margin: 0 0 6px;
+}
+.description-view {
+  min-height: 10em;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #d0d5dd);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+  background: var(--surface, #fff);
+  line-height: 1.5;
+}
+.description-view a {
+  color: var(--accent);
+}
+.description-placeholder {
+  color: var(--muted);
+}
+.description-text {
+  white-space: pre-wrap;
+}
 .back-link {
   font-size: 14px;
   color: var(--muted);

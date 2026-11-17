@@ -190,6 +190,10 @@ describe('ItemDetail autosave', () => {
     (field) => {
       const [selector, value, patch] = typed[field];
       const f = create();
+      if (field === 'description') {
+        f.componentInstance.startDescriptionEdit();
+        f.detectChanges();
+      }
       const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
       input.dispatchEvent(new Event('compositionstart'));
       input.value = value;
@@ -205,6 +209,10 @@ describe('ItemDetail autosave', () => {
   it.each(['title', 'description'] as const)('saves %s immediately on blur', (field) => {
     const [selector, value, patch] = typed[field];
     const f = create();
+    if (field === 'description') {
+      f.componentInstance.startDescriptionEdit();
+      f.detectChanges();
+    }
     const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
     input.value = value;
     input.dispatchEvent(new Event('input'));
@@ -1116,21 +1124,30 @@ describe('ItemDetail IME response handling', () => {
       });
       const f = TestBed.createComponent(ItemDetail);
       f.detectChanges();
+      if (field === 'description') {
+        f.componentInstance.startDescriptionEdit();
+        f.detectChanges();
+      }
       const input = f.nativeElement.querySelector(`#detail-${field}`) as HTMLInputElement;
       const sent = field === 'title' ? '送信するタイトル' : '送信する本文';
       input.value = sent;
       input.dispatchEvent(new Event('input'));
       input.dispatchEvent(new Event('blur'));
-      input.dispatchEvent(new Event('compositionstart'));
-      input.value = '変換途中の日本語';
-      input.dispatchEvent(new Event('input'));
+      if (field === 'description') {
+        f.componentInstance.startDescriptionEdit();
+        f.detectChanges();
+      }
+      const composing = f.nativeElement.querySelector(`#detail-${field}`) as HTMLInputElement;
+      composing.dispatchEvent(new Event('compositionstart'));
+      composing.value = '変換途中の日本語';
+      composing.dispatchEvent(new Event('input'));
       expect(f.componentInstance.form.controls[field].value).toBe(sent);
       // The response differs from what the user sees, so only the composing guard keeps the DOM value.
       const serverValue = '別の人の編集';
       pending.next({ ...card, [field]: serverValue });
       pending.complete();
-      expect(input.value).toBe('変換途中の日本語');
-      input.dispatchEvent(new Event('compositionend'));
+      expect(composing.value).toBe('変換途中の日本語');
+      composing.dispatchEvent(new Event('compositionend'));
       expect(f.componentInstance.form.controls[field].value).toBe('変換途中の日本語');
       f.destroy();
     },
@@ -1425,6 +1442,228 @@ describe('ItemDetail Close reason', () => {
     f.detectChanges();
     expect(f.componentInstance.item()?.columnId).toBe(3);
     expect(f.componentInstance.item()?.closeReason).toBe('理由');
+    f.destroy();
+  });
+});
+
+describe('ItemDetail description text links', () => {
+  let params: BehaviorSubject<Map<string, string>>;
+  let api: {
+    history: ReturnType<typeof vi.fn>;
+    board: ReturnType<typeof vi.fn>;
+    itemByNumber: ReturnType<typeof vi.fn>;
+    updateItem: ReturnType<typeof vi.fn>;
+    deleteItem: ReturnType<typeof vi.fn>;
+    listCommandTemplates: ReturnType<typeof vi.fn>;
+    listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+  };
+  const buttonByText = (root: ParentNode, text: string) =>
+    Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text) as
+      | HTMLButtonElement
+      | undefined;
+  let restoreDialog: (() => void) | undefined;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    sessionStorage.clear();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    restoreDialog = () => {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    };
+    params = new BehaviorSubject(new Map([['number', '3']]));
+    api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      board: vi.fn(() =>
+        of({
+          columns: [
+            { id: 1, name: 'Todo', position: 0 },
+            { id: 2, name: 'Doing', position: 0 },
+            { id: 3, name: 'Close', position: 0 },
+          ],
+          items: [],
+        }),
+      ),
+      itemByNumber: vi.fn(() =>
+        of({
+          ...card,
+          description: 'see [Docs](https://example.com) end',
+        }),
+      ),
+      updateItem: vi.fn((_id, patch) =>
+        of({ ...card, description: 'see [Docs](https://example.com) end', ...patch }),
+      ),
+      deleteItem: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+    };
+    TestBed.configureTestingModule({
+      imports: [ItemDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: Router,
+          useValue: { navigate: vi.fn(), navigateByUrl: vi.fn().mockResolvedValue(true) },
+        },
+      ],
+    });
+  });
+  afterEach(() => {
+    restoreDialog?.();
+    sessionStorage.clear();
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+  const create = () => {
+    const f = TestBed.createComponent(ItemDetail);
+    f.detectChanges();
+    return f;
+  };
+
+  it('renders clickable https links in the view and stays in view after link click', () => {
+    const f = create();
+    const link = f.nativeElement.querySelector('.description-view a') as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute('href')).toBe('https://example.com');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.textContent).toBe('Docs');
+    link.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#detail-description')).toBeNull();
+    expect(f.componentInstance.descriptionLink.editing()).toBe(false);
+    link.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    f.detectChanges();
+    expect(f.componentInstance.descriptionLink.editing()).toBe(false);
+    f.destroy();
+  });
+
+  it('enters edit via the edit button or non-link view click', () => {
+    const f = create();
+    buttonByText(f.nativeElement, '編集')!.click();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#detail-description')).not.toBeNull();
+    f.componentInstance.descriptionLink.editing.set(false);
+    f.detectChanges();
+    (f.nativeElement.querySelector('.description-view') as HTMLElement).click();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#detail-description')).not.toBeNull();
+    f.destroy();
+  });
+
+  it('does not linkify non-https markdown', () => {
+    api.itemByNumber.mockReturnValue(
+      of({ ...card, description: '[x](javascript:alert(1))' }),
+    );
+    const f = create();
+    expect(f.nativeElement.querySelector('.description-view a')).toBeNull();
+    expect(f.nativeElement.textContent).toContain('[x](javascript:alert(1))');
+    f.destroy();
+  });
+
+  it('inserts a markdown link from an empty dialog and keeps selection prefill', () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, description: 'hello world' }));
+    const f = create();
+    f.componentInstance.startDescriptionEdit();
+    f.detectChanges();
+    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
+    area.setSelectionRange(0, 0);
+    buttonByText(f.nativeElement, 'リンク')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.descriptionLink.label()).toBe('');
+    expect(f.componentInstance.descriptionLink.url()).toBe('');
+    expect(f.componentInstance.busy()).toBe(true);
+    f.componentInstance.descriptionLink.setLabel('Docs');
+    f.componentInstance.descriptionLink.setUrl('https://example.com');
+    f.componentInstance.confirmDescriptionLink();
+    f.detectChanges();
+    expect(f.componentInstance.form.controls.description.value).toBe(
+      '[Docs](https://example.com)hello world',
+    );
+    expect(f.componentInstance.descriptionLink.open()).toBe(false);
+
+    area.setSelectionRange(0, 5);
+    f.componentInstance.openDescriptionLink(area);
+    expect(f.componentInstance.descriptionLink.label()).toBe('[Docs');
+    f.componentInstance.descriptionLink.cancel();
+    f.destroy();
+  });
+
+  it('rejects bad label/url without changing the form', () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, description: 'body' }));
+    const f = create();
+    f.componentInstance.startDescriptionEdit();
+    f.detectChanges();
+    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
+    f.componentInstance.openDescriptionLink(area);
+    f.componentInstance.descriptionLink.setLabel('');
+    f.componentInstance.descriptionLink.setUrl('https://example.com');
+    expect(f.componentInstance.confirmDescriptionLink()).toBeUndefined();
+    expect(f.componentInstance.form.controls.description.value).toBe('body');
+    expect(f.componentInstance.descriptionLink.error()).toContain('表示名');
+    f.componentInstance.descriptionLink.setLabel('a]b');
+    f.componentInstance.confirmDescriptionLink();
+    expect(f.componentInstance.form.controls.description.value).toBe('body');
+    f.componentInstance.descriptionLink.setLabel('ok');
+    f.componentInstance.descriptionLink.setUrl('http://example.com');
+    f.componentInstance.confirmDescriptionLink();
+    expect(f.componentInstance.form.controls.description.value).toBe('body');
+    expect(f.componentInstance.descriptionLink.error()).toContain('https');
+    f.destroy();
+  });
+
+  it('keeps editing while the dialog is open across blur, then returns to view after close+blur', () => {
+    const f = create();
+    f.componentInstance.startDescriptionEdit();
+    f.detectChanges();
+    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
+    f.componentInstance.openDescriptionLink(area);
+    area.dispatchEvent(new Event('blur'));
+    f.detectChanges();
+    expect(f.componentInstance.descriptionLink.editing()).toBe(true);
+    f.componentInstance.descriptionLink.cancel();
+    area.dispatchEvent(new Event('blur'));
+    f.detectChanges();
+    expect(f.componentInstance.descriptionLink.editing()).toBe(false);
+    f.destroy();
+  });
+
+  it('closes the link dialog when the card number changes', () => {
+    const f = create();
+    f.componentInstance.startDescriptionEdit();
+    f.detectChanges();
+    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
+    f.componentInstance.openDescriptionLink(area);
+    expect(f.componentInstance.descriptionLink.open()).toBe(true);
+    params.next(new Map([['number', '9']]));
+    f.detectChanges();
+    expect(f.componentInstance.descriptionLink.open()).toBe(false);
+    f.destroy();
+  });
+
+  it('rejects inserts that would exceed 10000 characters', () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, description: 'a'.repeat(9990) }));
+    const f = create();
+    f.componentInstance.startDescriptionEdit();
+    f.detectChanges();
+    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
+    f.componentInstance.openDescriptionLink(area);
+    f.componentInstance.descriptionLink.setLabel('lab');
+    f.componentInstance.descriptionLink.setUrl('https://a.com');
+    f.componentInstance.confirmDescriptionLink();
+    expect(f.componentInstance.form.controls.description.value).toBe('a'.repeat(9990));
+    expect(f.componentInstance.descriptionLink.error()).toContain('10000');
     f.destroy();
   });
 });
