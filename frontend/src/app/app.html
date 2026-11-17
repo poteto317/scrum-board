@@ -16,7 +16,52 @@
     >
     <a routerLink="/backlog" routerLinkActive="active" ariaCurrentWhenActive="page">バックログ</a>
   </nav>
-  <span class="header-divider"></span><span class="workspace-name">マイワークスペース</span>
+  <span class="header-divider"></span>
+  <div class="project-switcher">
+    <label class="sr-only" for="project-select">プロジェクト</label>
+    <select
+      id="project-select"
+      [value]="projectSession.activeId() == null ? '' : '' + projectSession.activeId()"
+      [disabled]="projectSession.switching() || projectSession.projects().length === 0"
+      [attr.aria-busy]="projectSession.switching() ? 'true' : 'false'"
+      (change)="onProjectChange($event)"
+    >
+      @for (project of projectSession.projects(); track project.id) {
+        <option [value]="'' + project.id">{{ project.name }}</option>
+      }
+    </select>
+    <button
+      type="button"
+      class="secondary"
+      id="project-add"
+      [disabled]="projectSession.switching() || projectSession.mutating()"
+      (click)="addProject()"
+    >
+      追加
+    </button>
+    <button
+      type="button"
+      class="secondary"
+      id="project-rename"
+      [disabled]="!projectSession.canRename()"
+      (click)="renameProject()"
+    >
+      名称変更
+    </button>
+    <button
+      type="button"
+      class="secondary"
+      id="project-delete"
+      [disabled]="!projectSession.canDelete()"
+      title="アイテムが無いプロジェクトだけ削除できます"
+      (click)="deleteProject()"
+    >
+      削除
+    </button>
+    @if (projectSession.error()) {
+      <span class="project-error" role="alert">{{ projectSession.error() }}</span>
+    }
+  </div>
   <span class="header-end"
     ><span class="local-dot"></span>Personal workspace
     <span class="avatar" aria-label="個人用">S</span></span
