@@ -5,7 +5,8 @@ import (
 	"fmt"
 )
 
-// InitializeBoardSettings creates board_settings when missing and ensures card_layout=pack exists.
+// InitializeBoardSettings creates board_settings when missing and ensures card_layout=pack
+// and mobile_board_column_id (when columns exist) are seeded.
 func (r MySQLRepository) InitializeBoardSettings(ctx context.Context) error {
 	_, err := r.DB.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS board_settings (
@@ -17,12 +18,24 @@ CREATE TABLE IF NOT EXISTS board_settings (
 	}
 	_, err = r.DB.ExecContext(ctx, `
 INSERT INTO board_settings(setting_key, setting_value)
-SELECT 'card_layout', ?
+SELECT ?, ?
  WHERE NOT EXISTS (
-  SELECT 1 FROM board_settings WHERE setting_key='card_layout'
-)`, CardLayoutPack)
+  SELECT 1 FROM board_settings WHERE setting_key=?
+)`, settingKeyCardLayout, CardLayoutPack, settingKeyCardLayout)
 	if err != nil {
 		return fmt.Errorf("seed board_settings.card_layout: %w", err)
 	}
-	return nil
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	columns, err := listOrderedColumns(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if err = seedMobileBoardColumnID(ctx, tx, columns); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

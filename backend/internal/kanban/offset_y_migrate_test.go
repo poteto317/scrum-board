@@ -65,4 +65,21 @@ func TestInitializeBoardSettingsIdempotentMySQL(t *testing.T) {
 	if err := db.QueryRow(`SELECT setting_value FROM board_settings WHERE setting_key='theme'`).Scan(&theme); err != nil || theme != "dark" {
 		t.Fatalf("unknown key must be kept: %q err=%v", theme, err)
 	}
+	var mobile string
+	if err := db.QueryRow(`SELECT setting_value FROM board_settings WHERE setting_key='mobile_board_column_id'`).Scan(&mobile); err != nil {
+		t.Fatalf("mobile_board_column_id seed: %v", err)
+	}
+	if mobile == "" || mobile == "0" {
+		t.Fatalf("mobile_board_column_id=%q", mobile)
+	}
+	mustExec(t, db, `UPDATE board_settings SET setting_value='999' WHERE setting_key='mobile_board_column_id'`)
+	if err := r.InitializeBoardSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT setting_value FROM board_settings WHERE setting_key='mobile_board_column_id'`).Scan(&mobile); err != nil {
+		t.Fatal(err)
+	}
+	if mobile != "999" {
+		t.Fatalf("re-run must not overwrite mobile_board_column_id: %q", mobile)
+	}
 }
