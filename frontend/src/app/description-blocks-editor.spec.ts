@@ -168,4 +168,14 @@ describe('DescriptionBlocksEditor', () => {
     f.detectChanges();
     expect(f.componentInstance.blocks()).toEqual(['other']);
   });
+
+  it('schedules resize after loading blocks so overflow:hidden does not leave height unset', async () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', 'hello world');
+    f.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    f.detectChanges();
+    const area = f.nativeElement.querySelector('textarea.block-input') as HTMLTextAreaElement;
+    expect(area.style.height).toMatch(/px$/);
+  });
 });
