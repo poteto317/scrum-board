@@ -20,17 +20,22 @@ export class ItemCommandsSession {
   readonly loading = signal(false);
   private loadGeneration = 0;
   private cardNumber: number | null = null;
+  private cardProjectId: number | undefined;
 
-  load(cardNumber: number) {
+  load(cardNumber: number, projectId?: number) {
     this.cardNumber = cardNumber;
+    this.cardProjectId = projectId && projectId > 0 ? projectId : undefined;
     const generation = ++this.loadGeneration;
     this.loading.set(true);
     this.loadError.set('');
     this.saveMessage.set('');
     this.templates.set([]);
     this.selectedIds.set([]);
-    this.api
-      .listItemCommandTemplatesByNumber(cardNumber)
+    const list$ =
+      this.cardProjectId != null
+        ? this.api.listItemCommandTemplatesByNumber(cardNumber, this.cardProjectId)
+        : this.api.listItemCommandTemplatesByNumber(cardNumber);
+    list$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
@@ -79,8 +84,11 @@ export class ItemCommandsSession {
     this.saving.set(true);
     this.saveMessage.set('');
     const ids = this.selectedIds();
-    this.api
-      .replaceItemCommandTemplatesByNumber(number, ids)
+    const save$ =
+      this.cardProjectId != null
+        ? this.api.replaceItemCommandTemplatesByNumber(number, ids, this.cardProjectId)
+        : this.api.replaceItemCommandTemplatesByNumber(number, ids);
+    save$
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.saving.set(false)),

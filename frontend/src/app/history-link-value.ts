@@ -36,7 +36,11 @@ import { renderLinkChange } from './history-link-change';
             @for (related of block.items; track relatedKey(related)) {
               <li>
                 @if (related.kind === 'item' && related.number) {
-                  <a [routerLink]="['/items', related.number]"
+                  <a
+                    [routerLink]="['/items', related.number]"
+                    [queryParams]="
+                      related.projectId && related.projectId > 0 ? { project: related.projectId } : null
+                    "
                     >{{ formatItemNumber(related.number) }} · {{ relatedDisplayLabel(related) }}</a
                   >
                 } @else if (related.kind === 'url' && related.url) {

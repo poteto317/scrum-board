@@ -235,7 +235,8 @@ export class Backlog implements OnInit {
 
   /** Real URL so modifier-clicks / copy-link keep working via href. */
   itemHref(card: Item): string {
-    return this.location.prepareExternalUrl(itemAppPath(card.number));
+    const projectId = card.projectId > 0 ? card.projectId : undefined;
+    return this.location.prepareExternalUrl(itemAppPath(card.number, projectId));
   }
 
   onDetailClick(event: MouseEvent, card: Item) {
@@ -249,7 +250,13 @@ export class Backlog implements OnInit {
       scrollLeft: el?.scrollLeft ?? 0,
     });
     saveReturnTo('/backlog');
-    void this.router.navigate(['/items', card.number]);
+    if (card.projectId > 0) {
+      void this.router.navigate(['/items', card.number], {
+        queryParams: { project: card.projectId },
+      });
+    } else {
+      void this.router.navigate(['/items', card.number]);
+    }
   }
 
   statusName(columnId: number): string {

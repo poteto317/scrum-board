@@ -81,7 +81,10 @@ describe('ItemDetail autosave', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
+        },
         { provide: Router, useValue: router },
       ],
     });
@@ -585,7 +588,10 @@ describe('ItemDetail copy card link', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
+        },
         { provide: Router, useValue: { navigate: vi.fn() } },
       ],
     });
@@ -732,7 +738,10 @@ describe('ItemDetail copy command menu and management', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
+        },
         { provide: Router, useValue: router },
       ],
     });
@@ -1113,7 +1122,13 @@ describe('ItemDetail IME response handling', () => {
               listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
             },
           },
-          { provide: ActivatedRoute, useValue: { paramMap: of(new Map([['number', '3']])) } },
+          {
+            provide: ActivatedRoute,
+            useValue: {
+              paramMap: of(new Map([['number', '3']])),
+              queryParamMap: of(new Map()),
+            },
+          },
           { provide: Router, useValue: { navigate: vi.fn() } },
         ],
       });
@@ -1178,7 +1193,10 @@ describe('ItemDetail live refresh', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
+        },
         { provide: Router, useValue: router },
       ],
     });
@@ -1302,7 +1320,10 @@ describe('ItemDetail Close reason', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
+        },
         { provide: Router, useValue: { navigate: vi.fn(), navigateByUrl: vi.fn().mockResolvedValue(true) } },
       ],
     });
@@ -1499,7 +1520,10 @@ describe('ItemDetail description text links', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
+        },
         {
           provide: Router,
           useValue: { navigate: vi.fn(), navigateByUrl: vi.fn().mockResolvedValue(true) },
@@ -1725,7 +1749,10 @@ describe('ItemDetail dueAt picker', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
+        },
         {
           provide: Router,
           useValue: { navigate: vi.fn(), navigateByUrl: vi.fn().mockResolvedValue(true) },

@@ -26,6 +26,7 @@ const PR_TITLE_MAX_URLS = 100;
 })
 export class ItemHistory implements OnChanges {
   @Input({ required: true }) number = 0;
+  @Input() projectId?: number;
   @Input() revision = '';
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
@@ -95,7 +96,12 @@ export class ItemHistory implements OnChanges {
     this.loading.set(true);
     this.error.set(false);
     this.failedBefore = before;
-    this.request = this.api.history(this.number, before).subscribe({
+    const scopedProjectId = this.projectId && this.projectId > 0 ? this.projectId : undefined;
+    const history$ =
+      scopedProjectId != null
+        ? this.api.history(this.number, before, scopedProjectId)
+        : this.api.history(this.number, before);
+    this.request = history$.subscribe({
       next: (page) => {
         if (generation !== this.generation) return;
         if (before) {
