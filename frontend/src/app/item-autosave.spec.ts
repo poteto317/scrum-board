@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { Subject } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { ItemAutosave } from './item-autosave';
 import { Api } from './api';
@@ -16,6 +16,7 @@ const initial: Item = {
   prUrls: [],
   relatedItems: [],
   assignee: '',
+  closeReason: '',
   createdAt: '',
   updatedAt: '',
 };
@@ -309,6 +310,82 @@ describe('side field preservation', () => {
     response.complete();
     expect(edit.item()?.assignee).toBe('');
     TestBed.resetTestingModule();
+  });
+});
+
+describe('closeReason form field', () => {
+  it('debounces closeReason like title and is not a side field', () => {
+    vi.useFakeTimers();
+    const requests: { patch: Partial<ItemInput>; response: Subject<Item> }[] = [];
+    const api = {
+      updateItem: vi.fn((_id: number, patch: Partial<ItemInput>) => {
+        const response = new Subject<Item>();
+        requests.push({ patch, response });
+        return response;
+      }),
+    };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset({ ...initial, closeReason: '' });
+    edit.form.controls.closeReason.setValue('  終わった  ');
+    vi.advanceTimersByTime(599);
+    expect(requests).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(api.updateItem).toHaveBeenCalledWith(27, { closeReason: '終わった' });
+    requests[0].response.next({ ...initial, closeReason: '終わった' });
+    requests[0].response.complete();
+    expect(edit.hasChanges()).toBe(false);
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+  });
+  it('suspendFlush blocks schedule and flush until released', () => {
+    vi.useFakeTimers();
+    const api = { updateItem: vi.fn(() => of({ ...initial, columnId: 3 })) };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset(initial);
+    edit.suspendFlush(true);
+    edit.form.controls.columnId.setValue(3);
+    vi.advanceTimersByTime(2500);
+    edit.flush();
+    expect(api.updateItem).not.toHaveBeenCalled();
+    edit.suspendFlush(false);
+    edit.flush();
+    expect(api.updateItem).toHaveBeenCalledWith(27, { columnId: 3 });
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+  });
+  it('suspendFlush(false) reschedules when form is still dirty', () => {
+    vi.useFakeTimers();
+    const api = { updateItem: vi.fn(() => of({ ...initial, title: '編集' })) };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset(initial);
+    edit.suspendFlush(true);
+    edit.form.controls.title.setValue('編集');
+    edit.suspendFlush(false);
+    vi.advanceTimersByTime(600);
+    expect(api.updateItem).toHaveBeenCalledWith(27, { title: '編集' });
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+  });
+  it('dropInFlight ignores a late form flush response', () => {
+    vi.useFakeTimers();
+    const response = new Subject<Item>();
+    const api = { updateItem: vi.fn(() => response) };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset(initial);
+    edit.form.controls.title.setValue('送信中');
+    edit.flush();
+    expect(edit.saving()).toBe(true);
+    edit.dropInFlight();
+    expect(edit.saving()).toBe(false);
+    response.next({ ...initial, title: '送信中', columnId: 1, closeReason: '' });
+    response.complete();
+    expect(edit.item()?.title).toBe(initial.title);
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
   });
 });
 

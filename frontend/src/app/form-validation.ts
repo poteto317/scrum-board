@@ -8,3 +8,9 @@ export const textLimit =
     if (required && !value.trim()) return { required: true };
     return [...(required ? value.trim() : value)].length > max ? { maxlength: true } : null;
   };
+
+/** Max length after trim (matches server NormalizeCloseReason). Empty allowed. */
+export const trimmedTextLimit =
+  (max: number): ValidatorFn =>
+  (control: AbstractControl): ValidationErrors | null =>
+    [...String(control.value ?? '').trim()].length > max ? { maxlength: true } : null;

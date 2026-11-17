@@ -32,6 +32,7 @@ function card(id: number, columnId: number, position: number, title: string): It
     prUrls: [],
     relatedItems: [],
     assignee: '',
+    closeReason: '',
     createdAt: '',
     updatedAt: '',
   };

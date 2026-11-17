@@ -42,6 +42,7 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
     prUrls: raw.prUrls ?? [],
     relatedItems: raw.relatedItems ?? [],
     assignee: raw.assignee ?? '',
+    closeReason: raw.closeReason ?? '',
     createdAt: raw.createdAt ?? '',
     updatedAt: raw.updatedAt ?? '',
   };

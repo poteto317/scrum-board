@@ -4,11 +4,12 @@ import { Subscription } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { Item, ItemInput } from './models';
-import { textLimit } from './form-validation';
+import { textLimit, trimmedTextLimit } from './form-validation';
 import { errorMessage } from './api-error';
 import { alignPrTitles } from './pr-display';
+import { mergeCloseTransitionItem } from './close-reason';
 
-const fields = ['title', 'description', 'columnId'] as const;
+const fields = ['title', 'description', 'columnId', 'closeReason'] as const;
 type Field = (typeof fields)[number];
 /** Item fields updated outside the autosave form; prefer local on form flush. */
 const sideFields = ['prUrls', 'relatedItems', 'assignee'] as const;
@@ -27,6 +28,7 @@ export class ItemAutosave {
     title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
     columnId: new FormControl(0, { nonNullable: true, validators: [Validators.min(1)] }),
+    closeReason: new FormControl('', { nonNullable: true, validators: [trimmedTextLimit(2000)] }),
   });
   private timer?: ReturnType<typeof setTimeout>;
   private maxTimer?: ReturnType<typeof setTimeout>;
@@ -34,9 +36,11 @@ export class ItemAutosave {
   private generation = 0;
   private composing = new Set<Field>();
   private retryFields = new Set<Field>();
-  private edits: Record<Field, number> = { title: 0, description: 0, columnId: 0 };
+  private edits: Record<Field, number> = { title: 0, description: 0, columnId: 0, closeReason: 0 };
   private sideDirty = new Set<SideField>();
   private waiters: ((saved: boolean) => void)[] = [];
+  /** Blocks debounced/explicit flush while a modal holds uncommitted form state. */
+  private suspended = false;
 
   constructor() {
     for (const field of fields) {
@@ -48,6 +52,27 @@ export class ItemAutosave {
       this.schedule();
     });
     this.destroyRef.onDestroy(() => this.cancel());
+  }
+  /** Pause/resume autosave (e.g. while a confirm modal owns the form draft). */
+  suspendFlush(active: boolean) {
+    this.suspended = active;
+    if (active) this.clearTimers();
+    else if (this.hasChanges()) this.schedule();
+  }
+  /** Drop in-flight form flush so a parallel dedicated PATCH cannot be overwritten by a stale response. */
+  dropInFlight() {
+    this.generation++;
+    this.clearTimers();
+    this.request?.unsubscribe();
+    this.request = undefined;
+    this.saving.set(false);
+  }
+  /** Apply Close transition response: merge side fields and sync columnId/closeReason controls. */
+  applyCloseSave(updated: Item) {
+    const merged = mergeCloseTransitionItem(this.item(), updated);
+    this.item.set(merged);
+    this.form.controls.columnId.setValue(merged.columnId, { emitEvent: false });
+    this.form.controls.closeReason.setValue(merged.closeReason ?? '', { emitEvent: false });
   }
   reset(item: Item | null) {
     this.cancel();
@@ -63,6 +88,7 @@ export class ItemAutosave {
           title: item.title,
           description: item.description,
           columnId: item.columnId,
+          closeReason: item.closeReason ?? '',
         },
         { emitEvent: false },
       );
@@ -110,7 +136,7 @@ export class ItemAutosave {
   }
   private value(field: Field) {
     const raw = this.form.controls[field].value;
-    return field === 'title' ? String(raw).trim() : raw;
+    return field === 'title' || field === 'closeReason' ? String(raw).trim() : raw;
   }
   hasChanges(): boolean {
     // Even a reverted draft must wait for an earlier in-flight write to settle.
@@ -140,7 +166,7 @@ export class ItemAutosave {
     }
   }
   private schedule() {
-    if (!this.item()) return;
+    if (this.suspended || !this.item()) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), 600);
     this.maxTimer ??= setTimeout(() => this.flush(), 2000);
@@ -153,7 +179,7 @@ export class ItemAutosave {
   }
   flush() {
     this.clearTimers();
-    if (this.saving() || !this.item()) return;
+    if (this.suspended || this.saving() || !this.item()) return;
     const patch = this.patch();
     if (!Object.keys(patch).length) {
       this.resolveWaiters();
@@ -242,6 +268,7 @@ export class ItemAutosave {
   }
   cancel() {
     this.generation++;
+    this.suspended = false;
     this.clearTimers();
     this.request?.unsubscribe();
     this.request = undefined;
