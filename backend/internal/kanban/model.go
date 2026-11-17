@@ -17,6 +17,8 @@ var (
 	ErrBacklogOrder      = errors.New("invalid backlog order")
 	ErrBacklogMismatch   = errors.New("backlog set mismatch")
 	ErrBoardSettings     = errors.New("invalid board settings")
+	ErrProject           = errors.New("invalid project")
+	ErrProjectConflict   = errors.New("project conflict")
 )
 
 const (
@@ -35,10 +37,18 @@ type Column struct {
 	Name     string `json:"name"`
 	Position int    `json:"position"`
 }
+type Project struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Position  int       `json:"position"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
 type Item struct {
 	Number          int64         `json:"number"`
 	ID              int64         `json:"id"`
 	ColumnID        int64         `json:"columnId"`
+	ProjectID       int64         `json:"projectId"`
 	Title           string        `json:"title"`
 	Description     string        `json:"description"`
 	Position        int           `json:"position"`
@@ -60,8 +70,9 @@ type ItemColumnOrder struct {
 	OffsetYs *[]int  `json:"offsetYs,omitempty"`
 }
 type BoardSettings struct {
-	CardLayout           string `json:"cardLayout"`
-	MobileBoardColumnID  int64  `json:"mobileBoardColumnId"`
+	CardLayout          string `json:"cardLayout"`
+	MobileBoardColumnID int64  `json:"mobileBoardColumnId"`
+	ActiveProjectID     int64  `json:"activeProjectId"`
 }
 type Board struct {
 	Columns  []Column      `json:"columns"`
@@ -70,6 +81,7 @@ type Board struct {
 }
 type ItemInput struct {
 	ColumnID     int64         `json:"columnId"`
+	ProjectID    *int64        `json:"projectId,omitempty"`
 	Title        string        `json:"title"`
 	Description  string        `json:"description"`
 	PRURLs       []string      `json:"prUrls"`
@@ -79,6 +91,7 @@ type ItemInput struct {
 }
 type ItemPatch struct {
 	ColumnID     *int64         `json:"columnId"`
+	ProjectID    *int64         `json:"projectId,omitempty"`
 	Title        *string        `json:"title"`
 	Description  *string        `json:"description"`
 	PRURLs       *[]string      `json:"prUrls"`
@@ -92,6 +105,10 @@ type ItemPatch struct {
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.
 type Repository interface {
 	Board(context.Context) (Board, error)
+	ListProjects(context.Context) ([]Project, error)
+	CreateProject(context.Context, string) (Project, error)
+	UpdateProject(context.Context, int64, string) (Project, error)
+	DeleteProject(context.Context, int64) error
 	UpdateBoardSettings(context.Context, BoardSettings) (BoardSettings, []Item, error)
 	PatchBoardSettings(context.Context, BoardSettingsPatch) (BoardSettings, []Item, error)
 	History(context.Context, int64, int64) (HistoryPage, error)

@@ -11,7 +11,11 @@ func (r MySQLRepository) Backlog(ctx context.Context) ([]Item, error) {
 		return nil, err
 	}
 	defer tx.Rollback()
-	cards, err := listBacklogCards(ctx, tx)
+	active, err := resolvedActiveProjectID(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	cards, err := listBacklogCards(ctx, tx, active)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +36,11 @@ func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([
 	if _, err = lockColumnRows(ctx, tx); err != nil {
 		return nil, err
 	}
-	existing, err := lockAllCards(ctx, tx)
+	active, err := resolvedActiveProjectID(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := lockProjectCards(ctx, tx, active)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +52,7 @@ func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([
 			return nil, err
 		}
 	}
-	cards, err := listBacklogCards(ctx, tx)
+	cards, err := listBacklogCards(ctx, tx, active)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +62,8 @@ func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([
 	return cards, nil
 }
 
-func nextBacklogPosition(ctx context.Context, tx *sql.Tx) (int, error) {
-	ids, err := lockAllCards(ctx, tx)
+func nextBacklogPosition(ctx context.Context, tx *sql.Tx, projectID int64) (int, error) {
+	ids, err := lockProjectCards(ctx, tx, projectID)
 	if err != nil {
 		return 0, err
 	}
@@ -63,11 +71,28 @@ func nextBacklogPosition(ctx context.Context, tx *sql.Tx) (int, error) {
 		return 0, nil
 	}
 	var maxPos int
-	err = tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(backlog_position), -1) FROM items").Scan(&maxPos)
+	err = tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(backlog_position), -1) FROM items WHERE project_id=?", projectID).Scan(&maxPos)
 	if err != nil {
 		return 0, err
 	}
 	return maxPos + 1, nil
+}
+
+func lockProjectCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE project_id=? ORDER BY id FOR UPDATE", projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err = rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func lockAllCards(ctx context.Context, tx *sql.Tx) ([]int64, error) {
@@ -87,8 +112,8 @@ func lockAllCards(ctx context.Context, tx *sql.Tx) ([]int64, error) {
 	return ids, rows.Err()
 }
 
-func listBacklogCards(ctx context.Context, tx *sql.Tx) ([]Item, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.backlog_position,c.id")
+func listBacklogCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? ORDER BY c.backlog_position,c.id", projectID)
 	if err != nil {
 		return nil, err
 	}

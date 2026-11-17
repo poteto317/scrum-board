@@ -81,7 +81,11 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 	for i, order := range orders {
 		columnIDs[i] = order.ColumnID
 	}
-	existing, err := lockCardsInColumns(ctx, tx, columnIDs)
+	active, err := resolvedActiveProjectID(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := lockCardsInColumns(ctx, tx, columnIDs, active)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +130,7 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 		}
 	}
 
-	cards, err := listOrderedCards(ctx, tx)
+	cards, err := listOrderedCards(ctx, tx, active)
 	if err != nil {
 		return nil, err
 	}
@@ -140,14 +144,15 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 // locks rows in the order the chosen index is scanned (items_column_position for a large table, the primary key
 // for a tiny one), so the lock order is not guaranteed. Callers are serialized by the all-columns lock
 // (lockColumnRows / lockExistingColumn) taken first, which is what keeps concurrent writers from deadlocking.
-func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64) ([]Item, error) {
+func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64, projectID int64) ([]Item, error) {
 	if len(columnIDs) == 0 {
 		return nil, ErrItemOrder
 	}
-	query := "SELECT id FROM items WHERE column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
-	args := make([]any, len(columnIDs))
-	for i, id := range columnIDs {
-		args[i] = id
+	query := "SELECT id FROM items WHERE project_id=? AND column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
+	args := make([]any, 0, len(columnIDs)+1)
+	args = append(args, projectID)
+	for _, id := range columnIDs {
+		args = append(args, id)
 	}
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {

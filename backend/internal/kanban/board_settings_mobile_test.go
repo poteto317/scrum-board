@@ -32,19 +32,19 @@ func TestApplyBoardSettingsPatch(t *testing.T) {
 	current := BoardSettings{CardLayout: CardLayoutPack, MobileBoardColumnID: 1}
 	layout := CardLayoutFree
 	mobile := int64(2)
-	next, err := applyBoardSettingsPatch(current, cols, BoardSettingsPatch{MobileBoardColumnID: &mobile})
+	next, err := applyBoardSettingsPatch(current, cols, nil, BoardSettingsPatch{MobileBoardColumnID: &mobile})
 	if err != nil || next.CardLayout != CardLayoutPack || next.MobileBoardColumnID != 2 {
 		t.Fatalf("mobile only: %+v err=%v", next, err)
 	}
-	next, err = applyBoardSettingsPatch(current, cols, BoardSettingsPatch{CardLayout: &layout})
+	next, err = applyBoardSettingsPatch(current, cols, nil, BoardSettingsPatch{CardLayout: &layout})
 	if err != nil || next.CardLayout != CardLayoutFree || next.MobileBoardColumnID != 1 {
 		t.Fatalf("layout only: %+v err=%v", next, err)
 	}
 	bad := int64(0)
-	if _, err = applyBoardSettingsPatch(current, cols, BoardSettingsPatch{MobileBoardColumnID: &bad}); err == nil {
+	if _, err = applyBoardSettingsPatch(current, cols, nil, BoardSettingsPatch{MobileBoardColumnID: &bad}); err == nil {
 		t.Fatal("want error for id 0")
 	}
-	if _, err = applyBoardSettingsPatch(current, cols, BoardSettingsPatch{}); err == nil {
+	if _, err = applyBoardSettingsPatch(current, cols, nil, BoardSettingsPatch{}); err == nil {
 		t.Fatal("want error for empty patch")
 	}
 }
@@ -73,9 +73,9 @@ func TestPatchMobileBoardColumnIdOnly(t *testing.T) {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}
 	var out struct {
-		Settings BoardSettings     `json:"settings"`
-		Items    []Item            `json:"items"`
-		Raw      map[string]any    `json:"-"`
+		Settings BoardSettings  `json:"settings"`
+		Items    []Item         `json:"items"`
+		Raw      map[string]any `json:"-"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)

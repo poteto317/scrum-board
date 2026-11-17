@@ -124,8 +124,8 @@ func lockExistingColumn(ctx context.Context, tx *sql.Tx, columnID int64) error {
 	return ErrColumn
 }
 
-func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID int64) (int, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT id,position FROM items WHERE column_id=? ORDER BY id FOR UPDATE", columnID)
+func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID, projectID int64) (int, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT id,position FROM items WHERE column_id=? AND project_id=? ORDER BY id FOR UPDATE", columnID, projectID)
 	if err != nil {
 		return 0, err
 	}
@@ -149,9 +149,9 @@ func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID int64) (int, err
 
 // nextFreeOffsetY places a new/moved card below the current max offset in a free layout.
 // Empty column: 0. Non-empty: max(offset_y)+freePlacementStepY.
-func nextFreeOffsetY(ctx context.Context, tx *sql.Tx, columnID int64) (int, error) {
+func nextFreeOffsetY(ctx context.Context, tx *sql.Tx, columnID, projectID int64) (int, error) {
 	var max sql.NullInt64
-	if err := tx.QueryRowContext(ctx, "SELECT MAX(offset_y) FROM items WHERE column_id=?", columnID).Scan(&max); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT MAX(offset_y) FROM items WHERE column_id=? AND project_id=?", columnID, projectID).Scan(&max); err != nil {
 		return 0, err
 	}
 	if !max.Valid {
@@ -164,45 +164,52 @@ func nextFreeOffsetY(ctx context.Context, tx *sql.Tx, columnID int64) (int, erro
 	return next, nil
 }
 
-// reassignPositionsByOffsetY renumbers each column's positions by (offset_y, position, id).
-// Used when switching free → pack so pack order matches the free visual order.
+// reassignPositionsByOffsetY renumbers positions by (offset_y, position, id)
+// within each (project_id, column_id) group. Used when switching free → pack so
+// pack order matches the free visual order without mixing projects (L-460).
 func reassignPositionsByOffsetY(ctx context.Context, tx *sql.Tx) error {
 	cols, err := listOrderedColumns(ctx, tx)
 	if err != nil {
 		return err
 	}
-	for _, col := range cols {
-		rows, err := tx.QueryContext(ctx, `
-SELECT id FROM items WHERE column_id=?
- ORDER BY offset_y, position, id FOR UPDATE`, col.ID)
-		if err != nil {
-			return err
-		}
-		var ids []int64
-		for rows.Next() {
-			var id int64
-			if err = rows.Scan(&id); err != nil {
+	projects, err := listProjects(ctx, tx)
+	if err != nil {
+		return err
+	}
+	for _, project := range projects {
+		for _, col := range cols {
+			rows, err := tx.QueryContext(ctx, `
+SELECT id FROM items WHERE column_id=? AND project_id=?
+ ORDER BY offset_y, position, id FOR UPDATE`, col.ID, project.ID)
+			if err != nil {
+				return err
+			}
+			var ids []int64
+			for rows.Next() {
+				var id int64
+				if err = rows.Scan(&id); err != nil {
+					rows.Close()
+					return err
+				}
+				ids = append(ids, id)
+			}
+			if err = rows.Err(); err != nil {
 				rows.Close()
 				return err
 			}
-			ids = append(ids, id)
-		}
-		if err = rows.Err(); err != nil {
 			rows.Close()
-			return err
-		}
-		rows.Close()
-		for pos, id := range ids {
-			if _, err = tx.ExecContext(ctx, "UPDATE items SET position=?, updated_at=updated_at WHERE id=? AND position<>?", pos, id, pos); err != nil {
-				return err
+			for pos, id := range ids {
+				if _, err = tx.ExecContext(ctx, "UPDATE items SET position=?, updated_at=updated_at WHERE id=? AND position<>?", pos, id, pos); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
 }
 
-func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID int64) error {
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE column_id=? ORDER BY position,id FOR UPDATE", columnID)
+func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID, projectID int64) error {
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE column_id=? AND project_id=? ORDER BY position,id FOR UPDATE", columnID, projectID)
 	if err != nil {
 		return err
 	}
@@ -229,8 +236,8 @@ func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID int64) err
 	return nil
 }
 
-func listOrderedCards(ctx context.Context, tx *sql.Tx) ([]Item, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.position,c.id")
+func listOrderedCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? ORDER BY c.position,c.id", projectID)
 	if err != nil {
 		return nil, err
 	}

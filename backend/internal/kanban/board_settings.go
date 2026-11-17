@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	settingKeyCardLayout           = "card_layout"
-	settingKeyMobileBoardColumnID  = "mobile_board_column_id"
+	settingKeyCardLayout          = "card_layout"
+	settingKeyMobileBoardColumnID = "mobile_board_column_id"
+	settingKeyActiveProjectID     = "active_project_id"
 )
 
 func normalizeCardLayout(v string) string {
@@ -62,12 +63,15 @@ func columnIDExists(columns []Column, id int64) bool {
 type BoardSettingsPatch struct {
 	CardLayout          *string `json:"cardLayout"`
 	MobileBoardColumnID *int64  `json:"mobileBoardColumnId"`
+	ActiveProjectID     *int64  `json:"activeProjectId"`
 }
 
 // applyBoardSettingsPatch merges a partial patch onto current (raw) settings.
-// Invalid cardLayout values must be rejected by the caller before calling.
-func applyBoardSettingsPatch(current BoardSettings, columns []Column, in BoardSettingsPatch) (BoardSettings, error) {
-	if in.CardLayout == nil && in.MobileBoardColumnID == nil {
+// At least one of the three keys is required. Invalid cardLayout values must be
+// rejected by the caller before calling. activeProjectId must be a positive id
+// that exists in projects. Omitted keys stay at their raw values (L-841).
+func applyBoardSettingsPatch(current BoardSettings, columns []Column, projects []Project, in BoardSettingsPatch) (BoardSettings, error) {
+	if in.CardLayout == nil && in.MobileBoardColumnID == nil && in.ActiveProjectID == nil {
 		return BoardSettings{}, ErrBoardSettings
 	}
 	next := current
@@ -80,6 +84,13 @@ func applyBoardSettingsPatch(current BoardSettings, columns []Column, in BoardSe
 			return BoardSettings{}, ErrBoardSettings
 		}
 		next.MobileBoardColumnID = id
+	}
+	if in.ActiveProjectID != nil {
+		id := *in.ActiveProjectID
+		if id <= 0 || !projectIDExists(projects, id) {
+			return BoardSettings{}, ErrBoardSettings
+		}
+		next.ActiveProjectID = id
 	}
 	return next, nil
 }
@@ -106,6 +117,16 @@ func loadBoardSettings(ctx context.Context, q interface {
 			settings.MobileBoardColumnID = id
 		}
 	}
+	var active string
+	err = q.QueryRowContext(ctx, "SELECT setting_value FROM board_settings WHERE setting_key=?", settingKeyActiveProjectID).Scan(&active)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return BoardSettings{}, err
+	}
+	if err == nil {
+		if id, parseErr := strconv.ParseInt(active, 10, 64); parseErr == nil {
+			settings.ActiveProjectID = id
+		}
+	}
 	return settings, nil
 }
 
@@ -123,11 +144,15 @@ func (r MySQLRepository) PatchBoardSettings(ctx context.Context, patch BoardSett
 	if err != nil {
 		return BoardSettings{}, nil, err
 	}
+	projects, err := listProjects(ctx, tx)
+	if err != nil {
+		return BoardSettings{}, nil, err
+	}
 	current, err := loadBoardSettings(ctx, tx)
 	if err != nil {
 		return BoardSettings{}, nil, err
 	}
-	next, err := applyBoardSettingsPatch(current, columns, patch)
+	next, err := applyBoardSettingsPatch(current, columns, projects, patch)
 	if err != nil {
 		return BoardSettings{}, nil, err
 	}
@@ -148,9 +173,17 @@ ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`, settingKeyMobileBo
 			return BoardSettings{}, nil, err
 		}
 	}
+	if patch.ActiveProjectID != nil {
+		if _, err = tx.ExecContext(ctx, `
+INSERT INTO board_settings(setting_key, setting_value) VALUES(?, ?)
+ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`, settingKeyActiveProjectID, strconv.FormatInt(next.ActiveProjectID, 10)); err != nil {
+			return BoardSettings{}, nil, err
+		}
+	}
 	settings := BoardSettings{
 		CardLayout:          next.CardLayout,
 		MobileBoardColumnID: resolveMobileBoardColumnID(next.MobileBoardColumnID, columns),
+		ActiveProjectID:     resolveActiveProjectID(next.ActiveProjectID, projects),
 	}
 	transitionToPack := current.CardLayout == CardLayoutFree && next.CardLayout == CardLayoutPack
 	if !transitionToPack {
@@ -159,7 +192,7 @@ ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`, settingKeyMobileBo
 	if err = reassignPositionsByOffsetY(ctx, tx); err != nil {
 		return BoardSettings{}, nil, err
 	}
-	cards, err := listOrderedCards(ctx, tx)
+	cards, err := listOrderedCards(ctx, tx, settings.ActiveProjectID)
 	if err != nil {
 		return BoardSettings{}, nil, err
 	}
@@ -175,6 +208,10 @@ func (r MySQLRepository) UpdateBoardSettings(ctx context.Context, in BoardSettin
 	if in.MobileBoardColumnID > 0 {
 		id := in.MobileBoardColumnID
 		patch.MobileBoardColumnID = &id
+	}
+	if in.ActiveProjectID > 0 {
+		id := in.ActiveProjectID
+		patch.ActiveProjectID = &id
 	}
 	return r.PatchBoardSettings(ctx, patch)
 }
@@ -195,6 +232,36 @@ SELECT ?, ?
 )`, settingKeyMobileBoardColumnID, strconv.FormatInt(id, 10), settingKeyMobileBoardColumnID)
 	if err != nil {
 		return fmt.Errorf("seed board_settings.mobile_board_column_id: %w", err)
+	}
+	return nil
+}
+
+// seedActiveProjectID inserts the first project's id when the row is missing.
+// An existing row, including an invalid id, is left unchanged (L-841).
+func seedActiveProjectID(ctx context.Context, db *sql.DB) error {
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM board_settings WHERE setting_key=?`, settingKeyActiveProjectID).Scan(&n); err != nil {
+		return fmt.Errorf("check board_settings.active_project_id: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	var id int64
+	err := db.QueryRowContext(ctx, `SELECT id FROM projects ORDER BY position, id LIMIT 1`).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("seed board_settings.active_project_id: %w", err)
+	}
+	_, err = db.ExecContext(ctx, `
+INSERT INTO board_settings(setting_key, setting_value)
+SELECT ?, ?
+ WHERE NOT EXISTS (
+  SELECT 1 FROM board_settings WHERE setting_key=?
+)`, settingKeyActiveProjectID, strconv.FormatInt(id, 10), settingKeyActiveProjectID)
+	if err != nil {
+		return fmt.Errorf("seed board_settings.active_project_id: %w", err)
 	}
 	return nil
 }

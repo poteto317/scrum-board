@@ -37,5 +37,8 @@ SELECT ?, ?
 	if err = seedMobileBoardColumnID(ctx, tx, columns); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	return seedActiveProjectID(ctx, r.DB)
 }
