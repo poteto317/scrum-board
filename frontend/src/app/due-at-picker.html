@@ -1,0 +1,134 @@
+<div
+  class="due-at-picker"
+  role="group"
+  aria-label="期限の選択"
+  [class.disabled]="disabled()"
+  [attr.aria-disabled]="disabled()"
+>
+  <div class="due-at-picker-frame" aria-hidden="true"></div>
+  <div
+    #wheel
+    class="due-at-wheel"
+    data-unit="year"
+    role="listbox"
+    aria-label="年"
+    (scroll)="onWheelScroll('year', $event)"
+  >
+    <div class="due-at-wheel-spacer"></div>
+    @for (y of years(); track y) {
+      <button
+        type="button"
+        class="due-at-wheel-item"
+        role="option"
+        [attr.data-value]="y"
+        [attr.aria-selected]="parts().year === y"
+        [class.selected]="parts().year === y"
+        [disabled]="disabled()"
+        (click)="select('year', y)"
+      >
+        {{ y }}
+      </button>
+    }
+    <div class="due-at-wheel-spacer"></div>
+  </div>
+  <div
+    #wheel
+    class="due-at-wheel"
+    data-unit="month"
+    role="listbox"
+    aria-label="月"
+    (scroll)="onWheelScroll('month', $event)"
+  >
+    <div class="due-at-wheel-spacer"></div>
+    @for (m of months; track m) {
+      <button
+        type="button"
+        class="due-at-wheel-item"
+        role="option"
+        [attr.data-value]="m"
+        [attr.aria-selected]="parts().month === m"
+        [class.selected]="parts().month === m"
+        [disabled]="disabled()"
+        (click)="select('month', m)"
+      >
+        {{ pad2(m) }}
+      </button>
+    }
+    <div class="due-at-wheel-spacer"></div>
+  </div>
+  <div
+    #wheel
+    class="due-at-wheel"
+    data-unit="day"
+    role="listbox"
+    aria-label="日"
+    (scroll)="onWheelScroll('day', $event)"
+  >
+    <div class="due-at-wheel-spacer"></div>
+    @for (d of days(); track d) {
+      <button
+        type="button"
+        class="due-at-wheel-item"
+        role="option"
+        [attr.data-value]="d"
+        [attr.aria-selected]="parts().day === d"
+        [class.selected]="parts().day === d"
+        [disabled]="disabled()"
+        (click)="select('day', d)"
+      >
+        {{ pad2(d) }}
+      </button>
+    }
+    <div class="due-at-wheel-spacer"></div>
+  </div>
+  <div
+    #wheel
+    class="due-at-wheel"
+    data-unit="hour"
+    role="listbox"
+    aria-label="時"
+    (scroll)="onWheelScroll('hour', $event)"
+  >
+    <div class="due-at-wheel-spacer"></div>
+    @for (h of hours; track h) {
+      <button
+        type="button"
+        class="due-at-wheel-item"
+        role="option"
+        [attr.data-value]="h"
+        [attr.aria-selected]="parts().hour === h"
+        [class.selected]="parts().hour === h"
+        [disabled]="disabled()"
+        (click)="select('hour', h)"
+      >
+        {{ pad2(h) }}
+      </button>
+    }
+    <div class="due-at-wheel-spacer"></div>
+  </div>
+  <div
+    #wheel
+    class="due-at-wheel"
+    data-unit="minute"
+    role="listbox"
+    aria-label="分"
+    (scroll)="onWheelScroll('minute', $event)"
+  >
+    <div class="due-at-wheel-spacer"></div>
+    @for (min of minutes; track min) {
+      <button
+        type="button"
+        class="due-at-wheel-item"
+        role="option"
+        [attr.data-value]="min"
+        [attr.aria-selected]="parts().minute === min"
+        [class.selected]="parts().minute === min"
+        [disabled]="disabled()"
+        (click)="select('minute', min)"
+      >
+        {{ pad2(min) }}
+      </button>
+    }
+    <div class="due-at-wheel-spacer"></div>
+  </div>
+</div>
