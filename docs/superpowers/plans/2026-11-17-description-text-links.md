@@ -24,7 +24,7 @@
 | 領域 | パス |
 |------|------|
 | URL／Markdown 純粋関数 | Create: `frontend/src/app/description-link.ts`／`description-link.spec.ts` |
-| リンクダイアログ状態 | Create: `frontend/src/app/description-link-dialog.ts`（下記 Interfaces） |
+| 説明編集セッション | Create: `frontend/src/app/description-editor.ts`（editing＋リンクダイアログ状態） |
 | 詳細 UI | Modify: `item-detail.ts`／`.html`／`.css`／`.spec.ts` — ツールバー、描画ビュー、ダイアログ、`busy()` に open を追加 |
 | （触らない） | backend、ボード／バックログ、related／PR |
 
@@ -75,27 +75,30 @@ export function parseDescriptionLinks(text: string): DescriptionSegment[];
 ### Task 2: ダイアログ状態＋詳細 UI（描画／編集／挿入）
 
 **Files:**
-- Create: `frontend/src/app/description-link-dialog.ts`
-- Modify: `frontend/src/app/item-detail.ts` — `descriptionEditing`；`busy()` に `descriptionLink.open()`；**ルート番号／カード切替および destroy で `cancel()`**；挿入で form description 更新
-- Modify: `item-detail.html` — 非編集: セグメント描画＋**「編集」ボタン**；描画の**非リンク領域クリックで編集開始**；編集時: textarea＋「リンク」；リンクダイアログ（`appmodal`／`<dialog>`）
+- Create: `frontend/src/app/description-editor.ts`
+- Modify: `frontend/src/app/item-detail.ts` — `descriptionEditor`；`busy()` に `open()`；**ルート切替で `reset()`**；挿入で form description 更新
+- Modify: `item-detail.html` — 非編集: セグメント描画＋**「編集」ボタン**；描画の**非リンク領域クリックで編集開始**；編集時: textarea＋「リンク」；リンクダイアログ（`appmodal`／`<dialog class="description-link-dialog">`）
 - Modify: `item-detail.css` — 描画ビュー・リンク・ダイアログの最低限スタイル
 - Modify: `item-detail.spec.ts`
 
-**Interfaces（description-link-dialog.ts）:**
+**Interfaces（description-editor.ts）:**
 ```ts
-class DescriptionLinkDialog {
+class DescriptionEditor {
+  readonly editing: Signal<boolean>;
   readonly open: Signal<boolean>;
   readonly label: Signal<string>;
   readonly url: Signal<string>;
   readonly error: Signal<string>;
   readonly selectionStart: Signal<number>;
   readonly selectionEnd: Signal<number>;
-  begin(selection: { start: number; end: number; selectedText: string }): void; // open=true, 選択なしなら label/url 空
+  startEdit(): void;
+  endEditIfIdle(): void;
+  begin(selection: { start: number; end: number; selectedText: string }): void;
   setLabel(v: string): void;
   setUrl(v: string): void;
-  /** 成功時 { text, caret }。失敗時 null（error をセット、form は触らない） */
   apply(currentDescription: string): { text: string; caret: number } | null;
-  cancel(): void; // open=false、draft/error/selection クリア
+  cancel(): void;
+  reset(): void;
 }
 ```
 
