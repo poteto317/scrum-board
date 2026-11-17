@@ -186,17 +186,13 @@ describe('ItemDetail autosave', () => {
   });
   const typed: Record<'title' | 'description', [string, string, unknown]> = {
     title: ['#detail-title', '新しいタイトル', { title: '新しいタイトル' }],
-    description: ['#detail-description', '新しい本文', { description: '新しい本文' }],
+    description: ['textarea.block-input', '新しい本文', { description: '新しい本文' }],
   };
   it.each(['title', 'description'] as const)(
     'holds %s while composing and saves it after compositionend',
     (field) => {
       const [selector, value, patch] = typed[field];
       const f = create();
-      if (field === 'description') {
-        f.componentInstance.startDescriptionEdit();
-        f.detectChanges();
-      }
       const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
       input.dispatchEvent(new Event('compositionstart'));
       input.value = value;
@@ -212,10 +208,6 @@ describe('ItemDetail autosave', () => {
   it.each(['title', 'description'] as const)('saves %s immediately on blur', (field) => {
     const [selector, value, patch] = typed[field];
     const f = create();
-    if (field === 'description') {
-      f.componentInstance.startDescriptionEdit();
-      f.detectChanges();
-    }
     const input = f.nativeElement.querySelector(selector) as HTMLInputElement;
     input.value = value;
     input.dispatchEvent(new Event('input'));
@@ -1127,20 +1119,12 @@ describe('ItemDetail IME response handling', () => {
       });
       const f = TestBed.createComponent(ItemDetail);
       f.detectChanges();
-      if (field === 'description') {
-        f.componentInstance.startDescriptionEdit();
-        f.detectChanges();
-      }
-      const input = f.nativeElement.querySelector(`#detail-${field}`) as HTMLInputElement;
+      const input = f.nativeElement.querySelector(field === 'description' ? 'textarea.block-input' : `#detail-${field}`) as HTMLInputElement;
       const sent = field === 'title' ? '送信するタイトル' : '送信する本文';
       input.value = sent;
       input.dispatchEvent(new Event('input'));
       input.dispatchEvent(new Event('blur'));
-      if (field === 'description') {
-        f.componentInstance.startDescriptionEdit();
-        f.detectChanges();
-      }
-      const composing = f.nativeElement.querySelector(`#detail-${field}`) as HTMLInputElement;
+      const composing = f.nativeElement.querySelector(field === 'description' ? 'textarea.block-input' : `#detail-${field}`) as HTMLInputElement;
       composing.dispatchEvent(new Event('compositionstart'));
       composing.value = '変換途中の日本語';
       composing.dispatchEvent(new Event('input'));
@@ -1536,54 +1520,26 @@ describe('ItemDetail description text links', () => {
     return f;
   };
 
-  it('renders clickable https links in the view and stays in view after link click', () => {
+  it('always shows borderless block inputs with raw markdown (no description-view)', () => {
     const f = create();
-    const link = f.nativeElement.querySelector('.description-view a') as HTMLAnchorElement;
-    expect(link).not.toBeNull();
-    expect(link.getAttribute('href')).toBe('https://example.com');
-    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
-    expect(link.textContent).toBe('Docs');
-    link.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    f.detectChanges();
-    expect(f.nativeElement.querySelector('#detail-description')).toBeNull();
-    expect(f.componentInstance.descriptionEditor.editing()).toBe(false);
+    expect(f.nativeElement.querySelector('.description-view')).toBeNull();
+    const area = f.nativeElement.querySelector('textarea.block-input') as HTMLTextAreaElement;
+    expect(area).not.toBeNull();
+    expect(area.value).toContain('[Docs](https://example.com)');
+    expect(f.nativeElement.querySelector('.page-title')).not.toBeNull();
     f.destroy();
   });
 
-  it('enters edit via the edit button or non-link view click', () => {
-    const f = create();
-    buttonByText(f.nativeElement, '編集')!.click();
-    f.detectChanges();
-    expect(f.nativeElement.querySelector('#detail-description')).not.toBeNull();
-    f.componentInstance.descriptionEditor.editing.set(false);
-    f.detectChanges();
-    (f.nativeElement.querySelector('.description-view') as HTMLElement).click();
-    f.detectChanges();
-    expect(f.nativeElement.querySelector('#detail-description')).not.toBeNull();
-    f.destroy();
-  });
-
-  it('does not linkify non-https markdown', () => {
-    api.itemByNumber.mockReturnValue(
-      of({ ...card, description: '[x](javascript:alert(1))' }),
-    );
-    const f = create();
-    expect(f.nativeElement.querySelector('.description-view a')).toBeNull();
-    expect(f.nativeElement.textContent).toContain('[x](javascript:alert(1))');
-    f.destroy();
-  });
-
-  it('inserts a markdown link from an empty dialog and keeps selection prefill', () => {
+  it('inserts a markdown link and flushes; prefill uses block selection', () => {
     api.itemByNumber.mockReturnValue(of({ ...card, description: 'hello world' }));
     const f = create();
-    f.componentInstance.startDescriptionEdit();
     f.detectChanges();
-    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
+    const area = f.nativeElement.querySelector('textarea.block-input') as HTMLTextAreaElement;
+    area.focus();
     area.setSelectionRange(0, 0);
     buttonByText(f.nativeElement, 'リンク')!.click();
     f.detectChanges();
     expect(f.componentInstance.descriptionEditor.label()).toBe('');
-    expect(f.componentInstance.descriptionEditor.url()).toBe('');
     expect(f.componentInstance.busy()).toBe(true);
     f.componentInstance.descriptionEditor.setLabel('Docs');
     f.componentInstance.descriptionEditor.setUrl('https://example.com');
@@ -1598,19 +1554,50 @@ describe('ItemDetail description text links', () => {
     expect(f.componentInstance.descriptionEditor.open()).toBe(false);
 
     area.setSelectionRange(0, 5);
-    f.componentInstance.openDescriptionLink(area);
+    f.componentInstance.onDescriptionLinkRequest({
+      blockIndex: 0,
+      start: 0,
+      end: 5,
+      selectedText: area.value.slice(0, 5),
+    });
     expect(f.componentInstance.descriptionEditor.label()).toBe('[Docs');
     f.componentInstance.descriptionEditor.cancel();
+    f.destroy();
+  });
+
+  it('inserts a link into the second block without using absolute offsets', () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, description: 'first\nhello' }));
+    const f = create();
+    f.detectChanges();
+    f.componentInstance.onDescriptionLinkRequest({
+      blockIndex: 1,
+      start: 0,
+      end: 5,
+      selectedText: 'hello',
+    });
+    f.componentInstance.descriptionEditor.setLabel('Docs');
+    f.componentInstance.descriptionEditor.setUrl('https://example.com');
+    f.componentInstance.confirmDescriptionLink();
+    f.detectChanges();
+    expect(f.componentInstance.form.controls.description.value).toBe(
+      'first\n[Docs](https://example.com)',
+    );
+    expect(api.updateItem).toHaveBeenCalledWith(18, {
+      description: 'first\n[Docs](https://example.com)',
+    });
     f.destroy();
   });
 
   it('rejects bad label/url without changing the form', () => {
     api.itemByNumber.mockReturnValue(of({ ...card, description: 'body' }));
     const f = create();
-    f.componentInstance.startDescriptionEdit();
     f.detectChanges();
-    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
-    f.componentInstance.openDescriptionLink(area);
+    f.componentInstance.onDescriptionLinkRequest({
+      blockIndex: 0,
+      start: 0,
+      end: 0,
+      selectedText: '',
+    });
     f.componentInstance.descriptionEditor.setLabel('');
     f.componentInstance.descriptionEditor.setUrl('https://example.com');
     expect(f.componentInstance.confirmDescriptionLink()).toBeUndefined();
@@ -1627,40 +1614,30 @@ describe('ItemDetail description text links', () => {
     f.destroy();
   });
 
-  it('keeps editing while the dialog is open across blur, then returns to view after close+blur', () => {
+  it('keeps busy while the link dialog is open, then clears after cancel', () => {
     const f = create();
-    f.componentInstance.startDescriptionEdit();
     f.detectChanges();
-    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
-    f.componentInstance.openDescriptionLink(area);
-    area.dispatchEvent(new FocusEvent('blur', { relatedTarget: null }));
-    f.detectChanges();
-    expect(f.componentInstance.descriptionEditor.editing()).toBe(true);
+    f.componentInstance.onDescriptionLinkRequest({
+      blockIndex: 0,
+      start: 0,
+      end: 0,
+      selectedText: '',
+    });
+    expect(f.componentInstance.busy()).toBe(true);
     f.componentInstance.descriptionEditor.cancel();
-    area.dispatchEvent(new FocusEvent('blur', { relatedTarget: null }));
-    f.detectChanges();
-    expect(f.componentInstance.descriptionEditor.editing()).toBe(false);
-    f.destroy();
-  });
-
-  it('keeps editing when blur moves focus to the link toolbar button', () => {
-    const f = create();
-    f.componentInstance.startDescriptionEdit();
-    f.detectChanges();
-    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
-    const linkBtn = buttonByText(f.nativeElement, 'リンク')!;
-    area.dispatchEvent(new FocusEvent('blur', { relatedTarget: linkBtn }));
-    f.detectChanges();
-    expect(f.componentInstance.descriptionEditor.editing()).toBe(true);
+    expect(f.componentInstance.busy()).toBe(false);
     f.destroy();
   });
 
   it('closes the link dialog when the card number changes', () => {
     const f = create();
-    f.componentInstance.startDescriptionEdit();
     f.detectChanges();
-    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
-    f.componentInstance.openDescriptionLink(area);
+    f.componentInstance.onDescriptionLinkRequest({
+      blockIndex: 0,
+      start: 0,
+      end: 0,
+      selectedText: '',
+    });
     expect(f.componentInstance.descriptionEditor.open()).toBe(true);
     params.next(new Map([['number', '9']]));
     f.detectChanges();
@@ -1668,13 +1645,40 @@ describe('ItemDetail description text links', () => {
     f.destroy();
   });
 
+  it('re-parses description blocks when navigating to another card', () => {
+    api.itemByNumber.mockImplementation((n: number) =>
+      of({
+        ...card,
+        number: n,
+        description: n === 3 ? 'see [Docs](https://example.com) end' : 'other\ncard',
+      }),
+    );
+    const f = create();
+    f.detectChanges();
+    expect(
+      (f.nativeElement.querySelector('textarea.block-input') as HTMLTextAreaElement).value,
+    ).toContain('[Docs]');
+    params.next(new Map([['number', '9']]));
+    f.detectChanges();
+    const areas = f.nativeElement.querySelectorAll(
+      'textarea.block-input',
+    ) as NodeListOf<HTMLTextAreaElement>;
+    expect(areas.length).toBe(2);
+    expect(areas[0]!.value).toBe('other');
+    expect(areas[1]!.value).toBe('card');
+    f.destroy();
+  });
+
   it('rejects inserts that would exceed 10000 characters', () => {
     api.itemByNumber.mockReturnValue(of({ ...card, description: 'a'.repeat(9990) }));
     const f = create();
-    f.componentInstance.startDescriptionEdit();
     f.detectChanges();
-    const area = f.nativeElement.querySelector('#detail-description') as HTMLTextAreaElement;
-    f.componentInstance.openDescriptionLink(area);
+    f.componentInstance.onDescriptionLinkRequest({
+      blockIndex: 0,
+      start: 0,
+      end: 0,
+      selectedText: '',
+    });
     f.componentInstance.descriptionEditor.setLabel('lab');
     f.componentInstance.descriptionEditor.setUrl('https://a.com');
     f.componentInstance.confirmDescriptionLink();
