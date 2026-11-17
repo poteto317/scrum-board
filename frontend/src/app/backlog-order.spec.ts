@@ -5,6 +5,7 @@ import { Item } from './models';
 const items: Item[] = [
   {
     id: 1,
+    projectId: 0,
     number: 1,
     columnId: 1,
     title: 'A',
@@ -22,6 +23,7 @@ dueAt: null,
   },
   {
     id: 2,
+    projectId: 0,
     number: 2,
     columnId: 1,
     title: 'B',
@@ -39,6 +41,7 @@ dueAt: null,
   },
   {
     id: 3,
+    projectId: 0,
     number: 3,
     columnId: 2,
     title: 'C',
@@ -56,6 +59,7 @@ dueAt: null,
   },
   {
     id: 9,
+    projectId: 0,
     number: 9,
     columnId: 3,
     title: 'D',

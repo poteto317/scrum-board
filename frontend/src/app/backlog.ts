@@ -15,7 +15,7 @@ import {
 import { Location } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { finalize, forkJoin } from 'rxjs';
+import { Subscription, finalize, forkJoin } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
@@ -37,6 +37,8 @@ import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
 import { Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
+import { ProjectSession } from './project-session';
+import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
@@ -48,6 +50,9 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 export class Backlog implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   private readonly api = inject(Api);
+  private readonly projectSession = inject(ProjectSession);
+  private backlogLoadGeneration = 0;
+  private projectSwitchSub?: Subscription;
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly injector = inject(Injector);
@@ -93,6 +98,7 @@ export class Backlog implements OnInit {
       !this.loading() &&
       !this.saving() &&
       !this.reordering() &&
+      !this.projectSession.switching() &&
       this.modal() === null &&
       this.filteredItems().length > 1 &&
       !this.filterActive(),
@@ -110,14 +116,20 @@ export class Backlog implements OnInit {
   ngOnInit() {
     this.load();
     this.listFilter.load();
+    bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadAfterProjectSwitch());
     this.destroyRef.onDestroy(() => {
       this.scrollRestoreGeneration++;
+      this.backlogLoadGeneration++;
+      this.projectSwitchSub?.unsubscribe();
+      // Navigating away mid-switch must not leave the board stuck in `switching`.
+      this.projectSession.endSwitch();
     });
     const stop = startLiveRefresh({
       enabled: () =>
         !this.loading() &&
         !this.reordering() &&
         !this.saving() &&
+        !this.projectSession.switching() &&
         this.modal() === null &&
         this.draggingItemId() === null,
       fetch: () => forkJoin({ backlog: this.api.backlog(), board: this.api.board() }),
@@ -165,21 +177,59 @@ export class Backlog implements OnInit {
   }
 
   load() {
+    const generation = ++this.backlogLoadGeneration;
     this.loading.set(true);
     this.error.set('');
     this.reorderError.set('');
     this.reorderConflict.set(false);
     forkJoin({ backlog: this.api.backlog(), board: this.api.board() })
-      .pipe(finalize(() => this.loading.set(false)))
+      .pipe(
+        finalize(() => {
+          if (generation === this.backlogLoadGeneration) this.loading.set(false);
+        }),
+      )
       .subscribe({
         next: ({ backlog, board }) => {
+          if (generation !== this.backlogLoadGeneration) return;
           this.items.set(backlog.items);
           this.columns.set(board.columns);
           // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
           // (not the loading-only first paint).
           this.scheduleBacklogScrollRestore();
         },
-        error: (e) => this.error.set(errorMessage(e)),
+        error: (e) => {
+          if (generation !== this.backlogLoadGeneration) return;
+          this.error.set(errorMessage(e));
+        },
+      });
+  }
+
+  /**
+   * Reload after ProjectSession.switchTo. `switching` stays true until this
+   * request settles so a poll of the previous project cannot apply (L-040).
+   */
+  private reloadAfterProjectSwitch() {
+    const generation = ++this.backlogLoadGeneration;
+    this.projectSwitchSub?.unsubscribe();
+    this.projectSwitchSub = forkJoin({ backlog: this.api.backlog(), board: this.api.board() })
+      .pipe(
+        finalize(() => {
+          if (generation !== this.backlogLoadGeneration) return;
+          this.loading.set(false);
+          this.projectSession.endSwitch();
+        }),
+      )
+      .subscribe({
+        next: ({ backlog, board }) => {
+          if (generation !== this.backlogLoadGeneration) return;
+          this.error.set('');
+          this.items.set(backlog.items);
+          this.columns.set(board.columns);
+        },
+        error: (e) => {
+          if (generation !== this.backlogLoadGeneration) return;
+          this.error.set(errorMessage(e));
+        },
       });
   }
 
@@ -211,6 +261,7 @@ export class Backlog implements OnInit {
       this.loading() ||
       this.reordering() ||
       this.saving() ||
+      this.projectSession.switching() ||
       this.error() ||
       this.columns().length === 0
     ) {
@@ -231,7 +282,7 @@ export class Backlog implements OnInit {
   }
 
   addItem() {
-    if (this.itemForm.invalid || this.saving()) {
+    if (this.itemForm.invalid || this.saving() || this.projectSession.switching()) {
       this.itemForm.markAllAsTouched();
       return;
     }

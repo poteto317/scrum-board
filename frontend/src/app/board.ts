@@ -24,7 +24,7 @@ import {
   CdkDragStart,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
-import { filter, finalize, firstValueFrom, map } from 'rxjs';
+import { Subscription, filter, finalize, firstValueFrom, map } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { assigneeKind } from './assignee';
@@ -92,6 +92,8 @@ import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-f
 import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
+import { ProjectSession } from './project-session';
+import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
@@ -122,6 +124,9 @@ export class Board implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   readonly assigneeKind = assigneeKind;
   private readonly api = inject(Api);
+  private readonly projectSession = inject(ProjectSession);
+  private boardLoadGeneration = 0;
+  private projectSwitchSub?: Subscription;
   private readonly appOrigin = inject(AppOrigin);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
@@ -202,6 +207,7 @@ export class Board implements OnInit {
       !this.reordering() &&
       !this.layoutSwitching() &&
       !this.settingsSaving() &&
+      !this.projectSession.switching() &&
       this.modal() === null &&
       !this.filterActive(),
   );
@@ -234,7 +240,9 @@ export class Board implements OnInit {
       itemDragging: this.draggingItemId() !== null ? 'dragging' : 'idle',
     }),
   );
-  readonly canToggleCardLayout = computed(() => this.layoutToggleGate().allowed);
+  readonly canToggleCardLayout = computed(
+    () => this.layoutToggleGate().allowed && !this.projectSession.switching(),
+  );
   readonly dropListIds = computed(() => this.visibleColumns().map((c) => this.dropListId(c.id)));
   readonly columnForm = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [textLimit(60, true)] }),
@@ -288,8 +296,13 @@ export class Board implements OnInit {
     this.bindBoardMobileMedia();
     this.load();
     this.listFilter.load();
+    bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadAfterProjectSwitch());
     this.destroyRef.onDestroy(() => {
       this.scrollRestoreGeneration++;
+      this.boardLoadGeneration++;
+      this.projectSwitchSub?.unsubscribe();
+      // Navigating away mid-switch must not leave the next view stuck in `switching`.
+      this.projectSession.endSwitch();
     });
     const stop = startLiveRefresh({
       enabled: () =>
@@ -298,6 +311,7 @@ export class Board implements OnInit {
         !this.saving() &&
         !this.settingsSaving() &&
         !this.layoutSwitching() &&
+        !this.projectSession.switching() &&
         this.modal() === null &&
         this.draggingColumnId() === null &&
         this.draggingItemId() === null,
@@ -530,22 +544,61 @@ export class Board implements OnInit {
   }
 
   load() {
+    const generation = ++this.boardLoadGeneration;
     this.loading.set(true);
     this.error.set('');
     this.reorderError.set('');
     this.reorderConflict.set(false);
     this.api
       .board()
-      .pipe(finalize(() => this.loading.set(false)))
+      .pipe(
+        finalize(() => {
+          if (generation === this.boardLoadGeneration) this.loading.set(false);
+        }),
+      )
       .subscribe({
         next: (d) => {
+          if (generation !== this.boardLoadGeneration) return;
           this.data.set(applyBoardMobileSettings(d));
           // Schedule after data arrives so the first afterNextRender sees #boardScroll
           // (not the loading-only first paint).
           this.scheduleBoardScrollRestore();
           this.scheduleCardHeightMeasure();
         },
-        error: (e) => this.error.set(errorMessage(e)),
+        error: (e) => {
+          if (generation !== this.boardLoadGeneration) return;
+          this.error.set(errorMessage(e));
+        },
+      });
+  }
+
+  /**
+   * Reload after ProjectSession.switchTo. `switching` stays true until this
+   * request settles so a poll of the previous project cannot apply (L-040).
+   */
+  private reloadAfterProjectSwitch() {
+    const generation = ++this.boardLoadGeneration;
+    this.projectSwitchSub?.unsubscribe();
+    this.projectSwitchSub = this.api
+      .board()
+      .pipe(
+        finalize(() => {
+          if (generation !== this.boardLoadGeneration) return;
+          this.loading.set(false);
+          this.projectSession.endSwitch();
+        }),
+      )
+      .subscribe({
+        next: (d) => {
+          if (generation !== this.boardLoadGeneration) return;
+          this.error.set('');
+          this.data.set(applyBoardMobileSettings(d));
+          this.scheduleCardHeightMeasure();
+        },
+        error: (e) => {
+          if (generation !== this.boardLoadGeneration) return;
+          this.error.set(errorMessage(e));
+        },
       });
   }
 
@@ -582,7 +635,7 @@ export class Board implements OnInit {
   }
 
   openItem(_columnId?: number) {
-    if (this.reordering()) return;
+    if (this.reordering() || this.projectSession.switching()) return;
     this.itemForm.reset({ title: '', description: '' });
     this.formError.set('');
     this.modal.set('item');
@@ -624,7 +677,12 @@ export class Board implements OnInit {
   }
 
   addItem() {
-    if (this.itemForm.invalid || this.saving() || this.reordering()) {
+    if (
+      this.itemForm.invalid ||
+      this.saving() ||
+      this.reordering() ||
+      this.projectSession.switching()
+    ) {
       this.itemForm.markAllAsTouched();
       return;
     }

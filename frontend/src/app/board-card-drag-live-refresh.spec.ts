@@ -14,6 +14,7 @@ const POLL_MS = 5000;
 function card(id: number, position: number, title: string): Item {
   return {
     id,
+    projectId: 0,
     number: id,
     columnId: 1,
     title,

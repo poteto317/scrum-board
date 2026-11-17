@@ -12,6 +12,7 @@ import { BoardData, Item } from './models';
 function card(id: number, position: number): Item {
   return {
     id,
+    projectId: 0,
     number: id,
     columnId: 1,
     title: `card ${id}`,

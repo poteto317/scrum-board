@@ -17,6 +17,7 @@ function makeCards(): Item[] {
   return [
     {
       id: 1,
+      projectId: 0,
       number: 1,
       columnId: 1,
       title: 'A',
@@ -34,6 +35,7 @@ function makeCards(): Item[] {
     },
     {
       id: 2,
+      projectId: 0,
       number: 2,
       columnId: 2,
       title: 'B',
@@ -51,6 +53,7 @@ function makeCards(): Item[] {
     },
     {
       id: 3,
+      projectId: 0,
       number: 3,
       columnId: 3,
       title: 'C',
@@ -68,6 +71,7 @@ function makeCards(): Item[] {
     },
     {
       id: 9,
+      projectId: 0,
       number: 9,
       columnId: 1,
       title: 'D',
@@ -332,6 +336,7 @@ describe('Backlog reordering', () => {
     const columns = makeColumns();
     const created: Item = {
       id: 10,
+      projectId: 0,
       number: 10,
       columnId: 1,
       title: 'New',
