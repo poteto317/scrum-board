@@ -9,6 +9,9 @@
   justify-content: space-between;
   gap: 8px;
 }
+.description-label {
+  font-weight: inherit;
+}
 .description-edit-toolbar {
   margin: 0 0 6px;
 }
