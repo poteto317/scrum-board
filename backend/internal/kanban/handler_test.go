@@ -23,6 +23,8 @@ type memoryRepo struct {
 	settings           BoardSettings
 	settingsFail       error
 	listFilter         *ListFilter
+	projects           []Project
+	nextProject        int64
 }
 
 func fresh() *memoryRepo {
@@ -32,7 +34,9 @@ func fresh() *memoryRepo {
 		next:            1,
 		nextTemplateID:  1,
 		cardTemplateIDs: map[int64][]int64{},
-		settings:        BoardSettings{CardLayout: CardLayoutPack, MobileBoardColumnID: 1},
+		settings:        BoardSettings{CardLayout: CardLayoutPack, MobileBoardColumnID: 1, ActiveProjectID: 1},
+		projects:        []Project{{ID: 1, Name: "メイン", Position: 0}},
+		nextProject:     2,
 	}
 }
 func (m *memoryRepo) Board(context.Context) (Board, error) {
@@ -43,17 +47,13 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 		}
 		return cmp.Compare(a.ID, b.ID)
 	})
-	layout := m.settings.CardLayout
-	if layout == "" {
-		layout = CardLayoutPack
-	}
-	settings := BoardSettings{
-		CardLayout:          normalizeCardLayout(layout),
-		MobileBoardColumnID: resolveMobileBoardColumnID(m.settings.MobileBoardColumnID, cols),
-	}
+	active := m.resolvedActive()
+	settings := m.resolvedSettings(cols)
 	b := Board{Columns: cols, Items: []Item{}, Settings: settings}
 	for _, c := range m.cards {
-		b.Items = append(b.Items, c)
+		if m.cardProjectID(c) == active {
+			b.Items = append(b.Items, c)
+		}
 	}
 	slices.SortFunc(b.Items, func(a, b Item) int {
 		if c := cmp.Compare(a.Position, b.Position); c != 0 {
@@ -68,7 +68,7 @@ func (m *memoryRepo) PatchBoardSettings(_ context.Context, patch BoardSettingsPa
 		return BoardSettings{}, nil, m.settingsFail
 	}
 	prev := normalizeCardLayout(m.settings.CardLayout)
-	next, err := applyBoardSettingsPatch(m.settings, m.columns, patch)
+	next, err := applyBoardSettingsPatch(m.settings, m.columns, m.projects, patch)
 	if err != nil {
 		return BoardSettings{}, nil, err
 	}
@@ -81,10 +81,10 @@ func (m *memoryRepo) PatchBoardSettings(_ context.Context, patch BoardSettingsPa
 	if patch.MobileBoardColumnID != nil {
 		m.settings.MobileBoardColumnID = next.MobileBoardColumnID
 	}
-	settings := BoardSettings{
-		CardLayout:          m.settings.CardLayout,
-		MobileBoardColumnID: resolveMobileBoardColumnID(m.settings.MobileBoardColumnID, m.columns),
+	if patch.ActiveProjectID != nil {
+		m.settings.ActiveProjectID = next.ActiveProjectID
 	}
+	settings := m.resolvedSettings(m.columns)
 	if !(prev == CardLayoutFree && m.settings.CardLayout == CardLayoutPack) {
 		return settings, nil, nil
 	}
@@ -112,7 +112,7 @@ func (m *memoryRepo) PatchBoardSettings(_ context.Context, patch BoardSettingsPa
 		}
 	}
 	board, _ := m.Board(context.Background())
-	return settings, board.Items, nil
+	return m.resolvedSettings(m.columns), board.Items, nil
 }
 
 func (m *memoryRepo) UpdateBoardSettings(ctx context.Context, in BoardSettings) (BoardSettings, []Item, error) {
@@ -121,7 +121,39 @@ func (m *memoryRepo) UpdateBoardSettings(ctx context.Context, in BoardSettings) 
 		id := in.MobileBoardColumnID
 		patch.MobileBoardColumnID = &id
 	}
+	if in.ActiveProjectID > 0 {
+		id := in.ActiveProjectID
+		patch.ActiveProjectID = &id
+	}
 	return m.PatchBoardSettings(ctx, patch)
+}
+func (m *memoryRepo) resolvedActive() int64 {
+	return resolveActiveProjectID(m.settings.ActiveProjectID, m.projects)
+}
+func (m *memoryRepo) resolvedSettings(cols []Column) BoardSettings {
+	layout := m.settings.CardLayout
+	if layout == "" {
+		layout = CardLayoutPack
+	}
+	return BoardSettings{
+		CardLayout:          normalizeCardLayout(layout),
+		MobileBoardColumnID: resolveMobileBoardColumnID(m.settings.MobileBoardColumnID, cols),
+		ActiveProjectID:     m.resolvedActive(),
+	}
+}
+func (m *memoryRepo) cardProjectID(c Item) int64 {
+	if c.ProjectID != 0 {
+		return c.ProjectID
+	}
+	return 1
+}
+func (m *memoryRepo) validProject(id int64) bool {
+	for _, p := range m.projects {
+		if p.ID == id {
+			return true
+		}
+	}
+	return false
 }
 func (m *memoryRepo) GetItem(_ context.Context, id int64) (Item, error) {
 	c, ok := m.cards[id]
@@ -138,20 +170,29 @@ func (m *memoryRepo) validColumn(id int64) bool {
 	}
 	return false
 }
-func (m *memoryRepo) nextPosition(columnID int64) int {
+func (m *memoryRepo) nextPosition(columnID, projectID int64) int {
 	maxPos := -1
 	for _, c := range m.cards {
-		if c.ColumnID == columnID && c.Position > maxPos {
+		if c.ColumnID == columnID && m.cardProjectID(c) == projectID && c.Position > maxPos {
 			maxPos = c.Position
 		}
 	}
 	return maxPos + 1
 }
-func (m *memoryRepo) nextFreeOffset(columnID int64) int {
+func (m *memoryRepo) nextBacklog(projectID int64) int {
+	maxBacklog := -1
+	for _, c := range m.cards {
+		if m.cardProjectID(c) == projectID && c.BacklogPosition > maxBacklog {
+			maxBacklog = c.BacklogPosition
+		}
+	}
+	return maxBacklog + 1
+}
+func (m *memoryRepo) nextFreeOffset(columnID, projectID int64) int {
 	maxOffset := -freePlacementStepY
 	found := false
 	for _, c := range m.cards {
-		if c.ColumnID != columnID {
+		if c.ColumnID != columnID || m.cardProjectID(c) != projectID {
 			continue
 		}
 		found = true
@@ -168,10 +209,10 @@ func (m *memoryRepo) nextFreeOffset(columnID int64) int {
 	}
 	return next
 }
-func (m *memoryRepo) compactColumn(columnID int64) {
+func (m *memoryRepo) compactColumn(columnID, projectID int64) {
 	var ids []int64
 	for _, c := range m.cards {
-		if c.ColumnID == columnID {
+		if c.ColumnID == columnID && m.cardProjectID(c) == projectID {
 			ids = append(ids, c.ID)
 		}
 	}
@@ -192,11 +233,15 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 	if !m.validColumn(in.ColumnID) {
 		return Item{}, ErrColumn
 	}
-	maxBacklog := -1
-	for _, existing := range m.cards {
-		if existing.BacklogPosition > maxBacklog {
-			maxBacklog = existing.BacklogPosition
+	projectID := m.resolvedActive()
+	if in.ProjectID != nil {
+		if *in.ProjectID <= 0 || !m.validProject(*in.ProjectID) {
+			return Item{}, ErrProject
 		}
+		projectID = *in.ProjectID
+	}
+	if projectID <= 0 {
+		return Item{}, ErrProject
 	}
 	urls := append([]string(nil), in.PRURLs...)
 	if urls == nil {
@@ -208,13 +253,13 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 	}
 	offsetY := 0
 	if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
-		offsetY = m.nextFreeOffset(in.ColumnID)
+		offsetY = m.nextFreeOffset(in.ColumnID, projectID)
 	}
 	c := Item{
-		Number: m.next, ID: m.next, ColumnID: in.ColumnID,
+		Number: m.next, ID: m.next, ColumnID: in.ColumnID, ProjectID: projectID,
 		Title: in.Title, Description: in.Description, PRURLs: urls, RelatedItems: related,
-		Position: m.nextPosition(in.ColumnID), OffsetY: offsetY, Assignee: in.Assignee,
-		CloseReason: in.CloseReason, BacklogPosition: maxBacklog + 1,
+		Position: m.nextPosition(in.ColumnID, projectID), OffsetY: offsetY, Assignee: in.Assignee,
+		CloseReason: in.CloseReason, BacklogPosition: m.nextBacklog(projectID),
 	}
 	m.next++
 	m.cards[c.ID] = c
@@ -226,21 +271,39 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 	if err != nil {
 		return c, err
 	}
+	if p.ColumnID != nil && !m.validColumn(*p.ColumnID) {
+		return c, ErrColumn
+	}
+	if p.ProjectID != nil && (*p.ProjectID <= 0 || !m.validProject(*p.ProjectID)) {
+		return c, ErrProject
+	}
+	sourceColumn := c.ColumnID
+	sourceProject := m.cardProjectID(c)
+	destColumn := sourceColumn
 	if p.ColumnID != nil {
-		if !m.validColumn(*p.ColumnID) {
-			return c, ErrColumn
+		destColumn = *p.ColumnID
+	}
+	destProject := sourceProject
+	if p.ProjectID != nil {
+		destProject = *p.ProjectID
+	}
+	if destProject != sourceProject {
+		c.ProjectID = destProject
+		c.ColumnID = destColumn
+		c.Position = m.nextPosition(destColumn, destProject)
+		c.BacklogPosition = m.nextBacklog(destProject)
+		if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
+			c.OffsetY = m.nextFreeOffset(destColumn, destProject)
 		}
-		if *p.ColumnID != c.ColumnID {
-			source := c.ColumnID
-			c.ColumnID = *p.ColumnID
-			c.Position = m.nextPosition(*p.ColumnID)
-			if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
-				c.OffsetY = m.nextFreeOffset(*p.ColumnID)
-			}
-			m.cards[id] = c
-			m.compactColumn(source)
-			c = m.cards[id]
+	} else if destColumn != sourceColumn {
+		c.ColumnID = destColumn
+		c.Position = m.nextPosition(destColumn, destProject)
+		if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
+			c.OffsetY = m.nextFreeOffset(destColumn, destProject)
 		}
+		m.cards[id] = c
+		m.compactColumn(sourceColumn, sourceProject)
+		c = m.cards[id]
 	}
 	if p.Title != nil {
 		c.Title = *p.Title
@@ -295,9 +358,10 @@ func (m *memoryRepo) ReorderItems(_ context.Context, orders []ItemColumnOrder) (
 	for _, order := range orders {
 		listed[order.ColumnID] = struct{}{}
 	}
+	active := m.resolvedActive()
 	existing := map[int64]Item{}
 	for _, c := range m.cards {
-		if _, ok := listed[c.ColumnID]; ok {
+		if _, ok := listed[c.ColumnID]; ok && m.cardProjectID(c) == active {
 			existing[c.ID] = c
 		}
 	}
@@ -374,9 +438,12 @@ func (m *memoryRepo) ReorderColumns(_ context.Context, columnIDs []int64) ([]Col
 }
 
 func (m *memoryRepo) Backlog(context.Context) ([]Item, error) {
-	cards := make([]Item, 0, len(m.cards))
+	active := m.resolvedActive()
+	cards := []Item{}
 	for _, c := range m.cards {
-		cards = append(cards, c)
+		if m.cardProjectID(c) == active {
+			cards = append(cards, c)
+		}
 	}
 	slices.SortFunc(cards, func(a, b Item) int {
 		if c := cmp.Compare(a.BacklogPosition, b.BacklogPosition); c != 0 {
@@ -391,22 +458,103 @@ func (m *memoryRepo) ReorderBacklog(_ context.Context, cardIDs []int64) ([]Item,
 	if err := validateBacklogOrder(cardIDs); err != nil {
 		return nil, err
 	}
-	if len(cardIDs) != len(m.cards) {
+	active := m.resolvedActive()
+	byID := map[int64]Item{}
+	for _, c := range m.cards {
+		if m.cardProjectID(c) == active {
+			byID[c.ID] = c
+		}
+	}
+	if len(cardIDs) != len(byID) {
 		return nil, ErrBacklogMismatch
 	}
-	byID := make(map[int64]Item, len(m.cards))
-	for _, c := range m.cards {
-		byID[c.ID] = c
-	}
 	for i, id := range cardIDs {
-		c, ok := byID[id]
-		if !ok {
+		if _, ok := byID[id]; !ok {
 			return nil, ErrBacklogMismatch
 		}
+		c := m.cards[id]
 		c.BacklogPosition = i
 		m.cards[id] = c
 	}
 	return m.Backlog(context.Background())
+}
+func (m *memoryRepo) ListProjects(context.Context) ([]Project, error) {
+	out := slices.Clone(m.projects)
+	slices.SortFunc(out, func(a, b Project) int {
+		if c := cmp.Compare(a.Position, b.Position); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	if out == nil {
+		out = []Project{}
+	}
+	return out, nil
+}
+func (m *memoryRepo) CreateProject(_ context.Context, name string) (Project, error) {
+	name, err := normalizeProjectName(name)
+	if err != nil {
+		return Project{}, err
+	}
+	maxPos := -1
+	for _, p := range m.projects {
+		if p.Position > maxPos {
+			maxPos = p.Position
+		}
+	}
+	now := time.Now().UTC()
+	id := m.nextProject
+	if id <= 0 {
+		id = 1
+	}
+	m.nextProject = id + 1
+	p := Project{ID: id, Name: name, Position: maxPos + 1, CreatedAt: now, UpdatedAt: now}
+	m.projects = append(m.projects, p)
+	return p, nil
+}
+func (m *memoryRepo) UpdateProject(_ context.Context, id int64, name string) (Project, error) {
+	name, err := normalizeProjectName(name)
+	if err != nil {
+		return Project{}, err
+	}
+	for i, p := range m.projects {
+		if p.ID == id {
+			p.Name = name
+			p.UpdatedAt = time.Now().UTC()
+			m.projects[i] = p
+			return p, nil
+		}
+	}
+	return Project{}, ErrNotFound
+}
+func (m *memoryRepo) DeleteProject(_ context.Context, id int64) error {
+	found := false
+	for _, p := range m.projects {
+		if p.ID == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ErrNotFound
+	}
+	var n int
+	for _, c := range m.cards {
+		if m.cardProjectID(c) == id {
+			n++
+		}
+	}
+	if n > 0 || len(m.projects) <= 1 {
+		return ErrProjectConflict
+	}
+	next := make([]Project, 0, len(m.projects)-1)
+	for _, p := range m.projects {
+		if p.ID != id {
+			next = append(next, p)
+		}
+	}
+	m.projects = next
+	return nil
 }
 func request(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()

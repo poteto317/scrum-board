@@ -13,7 +13,7 @@ func TestRenameCardColumnsToItemsMigratesLegacyNames(t *testing.T) {
 	mustPrepareColumnRenameTables(t, r)
 
 	mustReverseColumnsToLegacy(t, r)
-	mustExec(t, db, `INSERT INTO items(id,column_id,title,description) VALUES (101,1,'col-rename','')`)
+	mustExec(t, db, `INSERT INTO items(id,column_id,title,description,project_id) VALUES (101,1,'col-rename','',1)`)
 	mustExec(t, db, `INSERT INTO item_numbers(card_id,task_number) VALUES (101,42)`)
 	mustExec(t, db, `INSERT INTO item_history(card_id,kind,occurred_at,changes,note,evidence_url) VALUES (101,'created',UTC_TIMESTAMP(6),'[]','','')`)
 	mustExec(t, db, `INSERT INTO item_pr_links(card_id,position,pr_url) VALUES (101,0,'https://example.com/pr/1')`)
@@ -57,7 +57,7 @@ func TestRenameCardColumnsToItemsResumesPartialColumnRename(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	mustPrepareColumnRenameTables(t, r)
 	mustReverseColumnsToLegacy(t, r)
-	mustExec(t, db, `INSERT INTO items(id,column_id,title,description) VALUES (202,1,'partial','')`)
+	mustExec(t, db, `INSERT INTO items(id,column_id,title,description,project_id) VALUES (202,1,'partial','',1)`)
 	mustExec(t, db, `INSERT INTO item_numbers(card_id,task_number) VALUES (202,7)`)
 
 	// Simulate mid-migrate: only card_id→item_id done; task_number still legacy.

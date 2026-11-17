@@ -46,6 +46,10 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/public-config", h.publicConfig)
 	mux.HandleFunc("GET /api/board", h.board)
 	mux.HandleFunc("PATCH /api/board/settings", h.updateBoardSettings)
+	mux.HandleFunc("GET /api/projects", h.listProjects)
+	mux.HandleFunc("POST /api/projects", h.createProject)
+	mux.HandleFunc("PATCH /api/projects/{id}", h.updateProject)
+	mux.HandleFunc("DELETE /api/projects/{id}", h.deleteProject)
 	mux.HandleFunc("GET /api/backlog", h.backlog)
 	mux.HandleFunc("PUT /api/backlog/order", h.reorderBacklog)
 	mux.HandleFunc("GET /api/items/by-number/{number}/history", h.history)
@@ -121,8 +125,8 @@ func (h handler) updateBoardSettings(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	if in.CardLayout == nil && in.MobileBoardColumnID == nil {
-		invalid(w, "cardLayout または mobileBoardColumnId を指定してください。")
+	if in.CardLayout == nil && in.MobileBoardColumnID == nil && in.ActiveProjectID == nil {
+		invalid(w, "cardLayout、mobileBoardColumnId、activeProjectId のいずれかを指定してください。")
 		return
 	}
 	if in.CardLayout != nil {
@@ -133,6 +137,10 @@ func (h handler) updateBoardSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.MobileBoardColumnID != nil && *in.MobileBoardColumnID <= 0 {
 		invalid(w, "mobileBoardColumnId は存在する列の ID を指定してください。")
+		return
+	}
+	if in.ActiveProjectID != nil && *in.ActiveProjectID <= 0 {
+		invalid(w, "activeProjectId は正のプロジェクト ID を指定してください。")
 		return
 	}
 	settings, items, err := h.repo.PatchBoardSettings(r.Context(), in)
@@ -271,6 +279,10 @@ func (h handler) createItem(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "タイトルは1〜200文字、説明は10000文字以内で入力し、ステータスを選んでください。")
 		return
 	}
+	if in.ProjectID != nil && *in.ProjectID <= 0 {
+		invalid(w, "プロジェクトを確認してください。")
+		return
+	}
 	assignee, assigneeOK := NormalizeAssignee(in.Assignee)
 	if !assigneeOK {
 		invalid(w, "対応者は60文字以内で、制御文字を含めず入力してください。")
@@ -297,6 +309,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		ColumnID     *int64          `json:"columnId"`
+		ProjectID    *int64          `json:"projectId"`
 		Title        *string         `json:"title"`
 		Description  *string         `json:"description"`
 		PRURLs       *[]string       `json:"prUrls"`
@@ -308,7 +321,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	p := ItemPatch{ColumnID: body.ColumnID, Title: body.Title, Description: body.Description, PRURLs: body.PRURLs}
+	p := ItemPatch{ColumnID: body.ColumnID, ProjectID: body.ProjectID, Title: body.Title, Description: body.Description, PRURLs: body.PRURLs}
 	if len(body.RelatedItems) > 0 {
 		if string(body.RelatedItems) == "null" {
 			invalid(w, "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。")
@@ -377,7 +390,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 			p.DueAt = &value
 		}
 	}
-	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.DueAt == nil && !p.ClearDueAt {
+	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.ProjectID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.DueAt == nil && !p.ClearDueAt {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}
@@ -402,6 +415,10 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if p.ColumnID != nil && *p.ColumnID <= 0 {
 		invalid(w, "ステータスを選んでください。")
+		return
+	}
+	if p.ProjectID != nil && *p.ProjectID <= 0 {
+		invalid(w, "プロジェクトを確認してください。")
 		return
 	}
 	c, e := h.repo.UpdateItem(r.Context(), n, p)

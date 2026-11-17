@@ -43,8 +43,8 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 		id      int64
 		minutes int
 	}{{40, 3}, {50, 1}, {51, 1}} {
-		if _, err := db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at)
- SELECT ?,1,'unnumbered','',DATE_ADD(created_at,INTERVAL ? MINUTE),DATE_ADD(created_at,INTERVAL ? MINUTE) FROM items WHERE id=1`, c.id, c.minutes, c.minutes); err != nil {
+		if _, err := db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at,project_id)
+ SELECT ?,1,'unnumbered','',DATE_ADD(created_at,INTERVAL ? MINUTE),DATE_ADD(created_at,INTERVAL ? MINUTE),1 FROM items WHERE id=1`, c.id, c.minutes, c.minutes); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -62,8 +62,8 @@ func TestMySQLNumberingBackfillsPartiallyNumberedCards(t *testing.T) {
 	if _, err = db.Exec("UPDATE item_number_sequence SET next_number=2 WHERE singleton=1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at)
- SELECT 60,1,'behind counter','',created_at,updated_at FROM items WHERE id=1`); err != nil {
+	if _, err = db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at,project_id)
+ SELECT 60,1,'behind counter','',created_at,updated_at,1 FROM items WHERE id=1`); err != nil {
 		t.Fatal(err)
 	}
 	mustInit(t, r)
@@ -84,8 +84,8 @@ func TestMySQLNumberingLegacyAndConcurrency(t *testing.T) {
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
 	for _, id := range []int64{17, 18} {
-		_, err := db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at)
- SELECT ?,1,?, 'keep description',DATE_ADD(created_at,INTERVAL 1 MINUTE),DATE_ADD(created_at,INTERVAL 1 MINUTE) FROM items WHERE id=1`, id, "legacy title")
+		_, err := db.Exec(`INSERT INTO items(id,column_id,title,description,created_at,updated_at,project_id)
+ SELECT ?,1,?, 'keep description',DATE_ADD(created_at,INTERVAL 1 MINUTE),DATE_ADD(created_at,INTERVAL 1 MINUTE),1 FROM items WHERE id=1`, id, "legacy title")
 		if err != nil {
 			t.Fatal(err)
 		}

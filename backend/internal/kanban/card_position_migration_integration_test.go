@@ -20,7 +20,7 @@ func TestInitializeItemPositionsOnLegacySchemaMySQL(t *testing.T) {
 	exec("ALTER TABLE items ADD INDEX cards_column (column_id), ADD INDEX cards_order (created_at,id), DROP INDEX items_column_position, DROP COLUMN position")
 	exec("DELETE FROM items")
 	// ids ascend while created_at descends in column 1; ids 12 and 13 tie on created_at.
-	exec("INSERT INTO items(id,column_id,title,description,created_at) VALUES (10,1,'c','','2026-01-03 00:00:00'),(11,1,'b','','2026-01-02 00:00:00'),(12,1,'a','','2026-01-01 00:00:00'),(13,1,'a2','','2026-01-01 00:00:00'),(20,2,'solo','','2026-01-01 00:00:00')")
+	exec("INSERT INTO items(id,column_id,title,description,created_at,project_id) VALUES (10,1,'c','','2026-01-03 00:00:00',1),(11,1,'b','','2026-01-02 00:00:00',1),(12,1,'a','','2026-01-01 00:00:00',1),(13,1,'a2','','2026-01-01 00:00:00',1),(20,2,'solo','','2026-01-01 00:00:00',1)")
 	r := MySQLRepository{DB: db}
 	updatedAt := func() map[int64]string {
 		rows, err := db.QueryContext(ctx, "SELECT id,CAST(updated_at AS CHAR) FROM items")
@@ -107,7 +107,7 @@ func TestBackfillColumnKeepsOrderChangedAfterSelectionMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Manual order (30, 10, 20 by position) differs from created_at order (10, 20, 30).
-	if _, err := db.ExecContext(ctx, "INSERT INTO items(id,column_id,title,description,position,created_at) VALUES (10,1,'a','',1,'2026-01-01 00:00:00'),(20,1,'b','',2,'2026-01-02 00:00:00'),(30,1,'c','',0,'2026-01-03 00:00:00')"); err != nil {
+	if _, err := db.ExecContext(ctx, "INSERT INTO items(id,column_id,title,description,position,created_at,project_id) VALUES (10,1,'a','',1,'2026-01-01 00:00:00',1),(20,1,'b','',2,'2026-01-02 00:00:00',1),(30,1,'c','',0,'2026-01-03 00:00:00',1)"); err != nil {
 		t.Fatal(err)
 	}
 	if err := backfillColumnByCreatedAt(ctx, db, 1); err != nil {

@@ -15,7 +15,7 @@ func TestRewriteLocalBoardOrigins_Integration(t *testing.T) {
 	}
 	target := "https://prod.example"
 
-	res, err := db.Exec(`INSERT INTO items (column_id, title, description, position) VALUES (1, ?, ?, 0)`,
+	res, err := db.Exec(`INSERT INTO items (column_id, title, description, position, project_id) VALUES (1, ?, ?, 0, 1)`,
 		"see http://127.0.0.1:4200/cards/1",
 		"also http://localhost:4200/")
 	if err != nil {

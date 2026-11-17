@@ -47,6 +47,7 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
+		"projects",
 		"board_settings",
 		"board_columns",
 	} {
@@ -65,6 +66,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeItemOffsetY(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeProjects(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeBoardSettings(t.Context()); err != nil {

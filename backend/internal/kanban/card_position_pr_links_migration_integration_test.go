@@ -25,7 +25,7 @@ func TestStartupMigrationsFromLegacySchemaMySQL(t *testing.T) {
 	exec("DROP TABLE IF EXISTS item_number_sequence")
 	exec("ALTER TABLE items ADD INDEX cards_column (column_id), DROP INDEX items_column_position, DROP COLUMN position")
 	exec("DELETE FROM items")
-	exec("INSERT INTO items(id,column_id,title,description,created_at) VALUES (10,1,'older','','2026-01-01 00:00:00'),(11,1,'linked','','2026-01-02 00:00:00'),(12,1,'newer','','2026-01-03 00:00:00')")
+	exec("INSERT INTO items(id,column_id,title,description,created_at,project_id) VALUES (10,1,'older','','2026-01-01 00:00:00',1),(11,1,'linked','','2026-01-02 00:00:00',1),(12,1,'newer','','2026-01-03 00:00:00',1)")
 	exec(`CREATE TABLE item_pr_links (
  card_id BIGINT NOT NULL PRIMARY KEY,
  pr_url VARCHAR(2048) NOT NULL,

@@ -26,7 +26,12 @@ func dbError(err error) error {
 				return ErrRelatedItem
 			}
 			return ErrDuplicate
+		case 1451:
+			return ErrProjectConflict
 		case 1452:
+			if strings.Contains(m.Message, "fk_item_project") || strings.Contains(m.Message, "project_id") {
+				return ErrProject
+			}
 			return ErrColumn
 		}
 	}
@@ -38,7 +43,7 @@ type scanner interface{ Scan(...any) error }
 func scanCard(s scanner) (Item, error) {
 	var c Item
 	var dueAt sql.NullTime
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.Title, &c.Description, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &dueAt, &c.CreatedAt, &c.UpdatedAt)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.ProjectID, &c.Title, &c.Description, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &dueAt, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
 	}
@@ -54,7 +59,7 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.item_number, c.column_id, c.title, c.description, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.due_at, c.created_at, c.updated_at"
+const cardFields = "c.id, n.item_number, c.column_id, c.project_id, c.title, c.description, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.due_at, c.created_at, c.updated_at"
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -86,12 +91,19 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	if err != nil {
 		return b, err
 	}
-	b.Settings, err = loadBoardSettings(ctx, tx)
+	rawSettings, err := loadBoardSettings(ctx, tx)
 	if err != nil {
 		return b, err
 	}
-	b.Settings.MobileBoardColumnID = resolveMobileBoardColumnID(b.Settings.MobileBoardColumnID, b.Columns)
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" ORDER BY c.position,c.id")
+	projects, err := listProjects(ctx, tx)
+	if err != nil {
+		return b, err
+	}
+	b.Settings = rawSettings
+	b.Settings.MobileBoardColumnID = resolveMobileBoardColumnID(rawSettings.MobileBoardColumnID, b.Columns)
+	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
+	b.Settings.ActiveProjectID = active
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? ORDER BY c.position,c.id", active)
 	if err != nil {
 		return b, err
 	}
@@ -138,22 +150,30 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 	if err != nil {
 		return Item{}, err
 	}
-	nextPos, err := nextCardPosition(ctx, tx, in.ColumnID)
+	projects, err := listProjects(ctx, tx)
+	if err != nil {
+		return Item{}, err
+	}
+	projectID, err := resolveCreateProjectID(in, layout, projects)
+	if err != nil {
+		return Item{}, err
+	}
+	nextPos, err := nextCardPosition(ctx, tx, in.ColumnID, projectID)
 	if err != nil {
 		return Item{}, err
 	}
 	offsetY := 0
 	if layout.CardLayout == CardLayoutFree {
-		offsetY, err = nextFreeOffsetY(ctx, tx, in.ColumnID)
+		offsetY, err = nextFreeOffsetY(ctx, tx, in.ColumnID, projectID)
 		if err != nil {
 			return Item{}, err
 		}
 	}
-	nextBacklog, err := nextBacklogPosition(ctx, tx)
+	nextBacklog, err := nextBacklogPosition(ctx, tx, projectID)
 	if err != nil {
 		return Item{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO items(column_id,title,description,position,offset_y,backlog_position,assignee,close_reason) VALUES(?,?,?,?,?,?,?,?)", in.ColumnID, in.Title, in.Description, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason)
+	result, err := tx.ExecContext(ctx, "INSERT INTO items(column_id,project_id,title,description,position,offset_y,backlog_position,assignee,close_reason) VALUES(?,?,?,?,?,?,?,?,?)", in.ColumnID, projectID, in.Title, in.Description, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
@@ -205,6 +225,10 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		if err = lockExistingColumn(ctx, tx, *p.ColumnID); err != nil {
 			return Item{}, err
 		}
+	case p.ProjectID != nil:
+		if _, err = lockColumnRows(ctx, tx); err != nil {
+			return Item{}, err
+		}
 	case p.PRURLs != nil, p.RelatedItems != nil:
 		if _, err = lockColumnRows(ctx, tx); err != nil {
 			return Item{}, err
@@ -233,10 +257,30 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	if p.Description != nil {
 		c.Description = *p.Description
 	}
-	moved := false
 	sourceColumnID := c.ColumnID
-	if p.ColumnID != nil && *p.ColumnID != c.ColumnID {
-		nextPos, err := nextCardPosition(ctx, tx, *p.ColumnID)
+	sourceProjectID := c.ProjectID
+	projectChanged := false
+	if p.ProjectID != nil && *p.ProjectID != c.ProjectID {
+		projects, err := listProjects(ctx, tx)
+		if err != nil {
+			return Item{}, err
+		}
+		if *p.ProjectID <= 0 || !projectIDExists(projects, *p.ProjectID) {
+			return Item{}, ErrProject
+		}
+		c.ProjectID = *p.ProjectID
+		projectChanged = true
+	}
+	columnChanged := p.ColumnID != nil && *p.ColumnID != sourceColumnID
+	if columnChanged {
+		c.ColumnID = *p.ColumnID
+	}
+	if projectChanged {
+		if err = repositionItemForProjectChange(ctx, tx, &c); err != nil {
+			return Item{}, err
+		}
+	} else if columnChanged {
+		nextPos, err := nextCardPosition(ctx, tx, c.ColumnID, c.ProjectID)
 		if err != nil {
 			return Item{}, err
 		}
@@ -244,16 +288,14 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		if err != nil {
 			return Item{}, err
 		}
-		c.ColumnID = *p.ColumnID
 		c.Position = nextPos
 		if layout.CardLayout == CardLayoutFree {
-			offsetY, err := nextFreeOffsetY(ctx, tx, *p.ColumnID)
+			offsetY, err := nextFreeOffsetY(ctx, tx, c.ColumnID, c.ProjectID)
 			if err != nil {
 				return Item{}, err
 			}
 			c.OffsetY = offsetY
 		}
-		moved = true
 	}
 	if p.Assignee != nil {
 		c.Assignee = *p.Assignee
@@ -267,7 +309,7 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		u := TruncateDueAtMinute(*p.DueAt)
 		c.DueAt = &u
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,position=?,offset_y=?,assignee=?,close_reason=?,due_at=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.Position, c.OffsetY, c.Assignee, c.CloseReason, c.DueAt, now, id)
+	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,project_id=?,position=?,offset_y=?,backlog_position=?,assignee=?,close_reason=?,due_at=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.ProjectID, c.Position, c.OffsetY, c.BacklogPosition, c.Assignee, c.CloseReason, c.DueAt, now, id)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
@@ -281,8 +323,8 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 			return Item{}, err
 		}
 	}
-	if moved {
-		if err = compactColumnPositions(ctx, tx, sourceColumnID); err != nil {
+	if columnChanged && !projectChanged {
+		if err = compactColumnPositions(ctx, tx, sourceColumnID, sourceProjectID); err != nil {
 			return Item{}, err
 		}
 	}

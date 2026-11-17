@@ -29,6 +29,8 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, 400, map[string]string{"message": "アイテムの並び順を確認してください。"})
 	case errors.Is(err, ErrBoardSettings):
 		reply(w, 400, map[string]string{"message": "ボード設定を確認してください。"})
+	case errors.Is(err, ErrProject):
+		reply(w, 400, map[string]string{"message": "プロジェクト名は1〜80文字、または存在するプロジェクトを指定してください。"})
 	case errors.Is(err, ErrBacklogOrder):
 		reply(w, 400, map[string]string{"message": "バックログの並び順を確認してください。"})
 	case errors.Is(err, ErrCommandTemplateLimit):
@@ -45,6 +47,8 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, 409, map[string]string{"message": "アイテムの構成が変更されています。最新のボードを読み込んでからやり直してください。"})
 	case errors.Is(err, ErrBacklogMismatch):
 		reply(w, 409, map[string]string{"message": "バックログの構成が変更されています。最新を読み込んでからやり直してください。"})
+	case errors.Is(err, ErrProjectConflict):
+		reply(w, 409, map[string]string{"message": "アイテムがあるプロジェクト、または最後のプロジェクトは削除できません。"})
 	default:
 		slog.Error("request failed", "error", err)
 		reply(w, 500, map[string]string{"message": "処理に失敗しました。時間をおいて再試行してください。"})
