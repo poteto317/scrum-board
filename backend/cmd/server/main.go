@@ -58,6 +58,10 @@ func run() error {
 		err = repo.InitializeItemOffsetY(migrationCtx)
 	}
 	if err == nil {
+		// Projects exist before active_project_id is seeded inside board settings.
+		err = repo.InitializeProjects(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeBoardSettings(migrationCtx)
 	}
 	if err == nil {
