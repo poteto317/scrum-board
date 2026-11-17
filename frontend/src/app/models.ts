@@ -15,6 +15,8 @@ export type CardLayout = 'pack' | 'free';
 
 export interface BoardSettings {
   cardLayout: CardLayout;
+  /** スマホ1列表示の列 ID。正規化後は number（欠落・無効は resolve 側で補完）。 */
+  mobileBoardColumnId?: number;
   /** 未知キーは読み書きで捨てない（L-459）。 */
   [key: string]: unknown;
 }

@@ -19,7 +19,8 @@ export type LayoutSwitchDeps = {
   scheduleCardHeightMeasure: () => void;
   reorderItems: (columns: ItemOrderColumn[]) => Observable<{ items: Item[] }>;
   patchBoardSettings: (body: {
-    cardLayout: CardLayout;
+    cardLayout?: CardLayout;
+    mobileBoardColumnId?: number;
   }) => Observable<{ settings: BoardSettings; items?: Item[] }>;
 };
 

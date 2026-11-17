@@ -380,6 +380,17 @@ h1 {
     flex-basis: 237px;
   }
 }
+.mobile-column-select {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+.mobile-column-select select {
+  max-width: min(100%, 220px);
+  font: inherit;
+  padding: 6px 10px;
+}
+
 @media (max-width: 700px) {
   .board-page {
     padding: 22px 20px 0;
@@ -404,6 +415,21 @@ h1 {
   .kanban-column {
     width: 248px;
     flex-basis: 248px;
+  }
+  .board-page.board-mobile .board-scroll {
+    overflow-x: hidden;
+  }
+  .board-page.board-mobile .board-columns {
+    flex-wrap: wrap;
+  }
+  .board-page.board-mobile .kanban-column {
+    width: 100%;
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+  .board-page.board-mobile .add-column-tile {
+    width: 100%;
+    flex-basis: 100%;
   }
   .board-scroll {
     min-height: 400px;

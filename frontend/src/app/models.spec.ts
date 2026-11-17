@@ -45,6 +45,13 @@ describe('normalizeBoardData', () => {
       normalizeBoardData({ settings: { cardLayout: 'grid' as never } }).settings.cardLayout,
     ).toBe('pack');
   });
+
+  it('keeps mobileBoardColumnId through normalize', () => {
+    const board = normalizeBoardData({
+      settings: { cardLayout: 'pack', mobileBoardColumnId: 3 },
+    });
+    expect(board.settings.mobileBoardColumnId).toBe(3);
+  });
 });
 
 describe('normalizeOffsetY / normalizeItem', () => {
