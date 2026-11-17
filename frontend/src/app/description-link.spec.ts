@@ -23,6 +23,8 @@ describe('normalizeDescriptionLinkUrl', () => {
     ['https://example.com/\npath'],
     ['https://example.com/\tpath'],
     ['https://example.com/\u0001x'],
+    ['https://example.com/\u2028x'],
+    ['https://example.com/\u2029x'],
     ['https://en.wikipedia.org/wiki/Foo_(bar)'],
   ])('rejects %j', (value) => {
     expect(normalizeDescriptionLinkUrl(value)).toBeNull();
