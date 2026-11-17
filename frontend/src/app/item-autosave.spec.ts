@@ -387,6 +387,29 @@ describe('closeReason form field', () => {
     TestBed.resetTestingModule();
     vi.useRealTimers();
   });
+  it('applyCloseSave keeps local prTitles when the PATCH omits them', () => {
+    const api = { updateItem: vi.fn() };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    const url = 'https://github.com/a/b/pull/1';
+    edit.reset({
+      ...initial,
+      prUrls: [url],
+      prTitles: ['表示名'],
+      closeReason: '',
+    });
+    edit.applyCloseSave({
+      ...initial,
+      columnId: 3,
+      closeReason: '理由',
+      prUrls: [url],
+      updatedAt: '2026-11-17T02:00:00Z',
+    });
+    expect(edit.item()?.columnId).toBe(3);
+    expect(edit.item()?.closeReason).toBe('理由');
+    expect(edit.item()?.prTitles).toEqual(['表示名']);
+    TestBed.resetTestingModule();
+  });
   it('dropInFlight resolves settle waiters so navigation is not stuck', async () => {
     vi.useFakeTimers();
     const response = new Subject<Item>();
