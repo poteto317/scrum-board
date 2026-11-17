@@ -45,6 +45,9 @@ var cardToItemColumnTables = []tableColumnRename{
 			{"task_number", "item_number"},
 		},
 		indexes: []expectedIndex{
+			// Legacy global UNIQUE(item_number). Do not blindly restore after
+			// InitializeNumbers drops it for uq_item_numbers_project_number —
+			// cross-project duplicates then make ADD fail and block boot.
 			{name: "item_number", columns: "(item_number)", unique: true},
 		},
 		fks: []expectedFK{
@@ -213,6 +216,15 @@ func (r MySQLRepository) ensureExpectedIndexes(ctx context.Context, spec tableCo
 				continue
 			}
 		}
+		if spec.table == "item_numbers" && idx.name == "item_number" && idx.unique {
+			skip, err := r.skipLegacyItemNumberUnique(ctx)
+			if err != nil {
+				return err
+			}
+			if skip {
+				continue
+			}
+		}
 		kind := "INDEX"
 		if idx.unique {
 			kind = "UNIQUE INDEX"
@@ -223,6 +235,26 @@ func (r MySQLRepository) ensureExpectedIndexes(ctx context.Context, spec tableCo
 		}
 	}
 	return nil
+}
+
+// skipLegacyItemNumberUnique is true once per-project numbering owns uniqueness,
+// or when re-adding global UNIQUE(item_number) would hit duplicate rows.
+func (r MySQLRepository) skipLegacyItemNumberUnique(ctx context.Context) (bool, error) {
+	composite, err := r.indexExists(ctx, "item_numbers", "uq_item_numbers_project_number")
+	if err != nil {
+		return false, err
+	}
+	if composite {
+		return true, nil
+	}
+	var dups int
+	if err = r.DB.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM (
+  SELECT item_number FROM item_numbers GROUP BY item_number HAVING COUNT(*) > 1
+) d`).Scan(&dups); err != nil {
+		return false, err
+	}
+	return dups > 0, nil
 }
 
 func (r MySQLRepository) ensureExpectedForeignKeys(ctx context.Context, spec tableColumnRename) error {

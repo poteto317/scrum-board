@@ -103,6 +103,73 @@ func TestRenameCardColumnsToItemsIdempotentAndGreenfield(t *testing.T) {
 	assertIndex(t, r2, "item_pr_links", "uq_item_pr_url")
 }
 
+// Regression: after InitializeNumbers drops global UNIQUE(item_number) for the
+// per-project composite, RenameCardColumns must not try to restore it — that
+// ADD fails with Duplicate entry and blocks Cloud Run boot.
+func TestRenameCardColumnsSkipsGlobalUniqueAfterPerProject(t *testing.T) {
+	db := mysqlTestDB(t, "_fresh")
+	ctx := context.Background()
+	r := MySQLRepository{DB: db}
+	if err := r.InitializeNumbers(ctx); err != nil {
+		t.Fatal(err)
+	}
+	other, err := r.CreateProject(ctx, "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mainID := int64(1)
+	if _, err = r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "main", ProjectID: &mainID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "side", ProjectID: &other.ID}); err != nil {
+		t.Fatal(err)
+	}
+	composite, err := r.indexExists(ctx, "item_numbers", "uq_item_numbers_project_number")
+	if err != nil || !composite {
+		t.Fatalf("composite unique missing: %v %v", composite, err)
+	}
+	if ok, err := r.indexExists(ctx, "item_numbers", "item_number"); err != nil || ok {
+		t.Fatalf("legacy global unique should be absent: %v %v", ok, err)
+	}
+	if err := r.RenameCardColumnsToItems(ctx); err != nil {
+		t.Fatalf("rename after per-project numbers: %v", err)
+	}
+	if ok, err := r.indexExists(ctx, "item_numbers", "item_number"); err != nil || ok {
+		t.Fatalf("rename must not restore global unique: %v %v", ok, err)
+	}
+}
+
+// Stuck mid-migrate: global UNIQUE dropped, composite not yet added, cross-project
+// duplicate numbers already present — RenameCardColumns must still succeed.
+func TestRenameCardColumnsSkipsGlobalUniqueWhenDuplicates(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	r := MySQLRepository{DB: db}
+	if err := r.InitializeNumbers(ctx); err != nil {
+		t.Fatal(err)
+	}
+	other, err := r.CreateProject(ctx, "other-dups")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mainID := int64(1)
+	a, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "a", ProjectID: &mainID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "b", ProjectID: &other.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `ALTER TABLE item_numbers DROP FOREIGN KEY fk_item_number_project`)
+	mustExec(t, db, `ALTER TABLE item_numbers DROP INDEX uq_item_numbers_project_number`)
+	// Force same item_number across projects (prod-shaped after renumber-before-composite).
+	mustExec(t, db, `UPDATE item_numbers SET item_number=1 WHERE item_id IN (?,?)`, a.ID, b.ID)
+	if err := r.RenameCardColumnsToItems(ctx); err != nil {
+		t.Fatalf("rename with duplicate numbers: %v", err)
+	}
+}
+
 func TestRenameCardColumnsToItemsRestoresMissingConstraints(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
