@@ -99,17 +99,64 @@
         @if (form.controls.title.touched && form.controls.title.invalid) {
           <p class="form-error">タイトルを1〜200文字で入力してください。</p>
         }
-        <label for="detail-description">説明 <span class="optional">任意</span></label
-        ><textarea
-          id="detail-description"
-          formControlName="description"
-          (blur)="autosave.flush()"
-          (compositionstart)="autosave.composition('description', true)"
-          (compositionend)="autosave.composition('description', false)"
-          rows="10"
-          placeholder="背景、取り組む内容、完了の条件など"
-        ></textarea>
-        <p class="field-note">タスクの背景や完了条件を残しておきましょう。10000文字以内。</p>
+        <div class="description-header">
+          <label for="detail-description">説明 <span class="optional">任意</span></label>
+          @if (!descriptionLink.editing()) {
+            <button type="button" class="secondary description-edit-btn" (click)="startDescriptionEdit()">
+              編集
+            </button>
+          }
+        </div>
+        @if (descriptionLink.editing()) {
+          <div class="description-edit-toolbar">
+            <button
+              type="button"
+              class="secondary description-link-btn"
+              (mousedown)="$event.preventDefault()"
+              (click)="openDescriptionLink(descArea)"
+            >
+              リンク
+            </button>
+          </div>
+          <textarea
+            #descArea
+            id="detail-description"
+            formControlName="description"
+            (blur)="onDescriptionBlur()"
+            (compositionstart)="autosave.composition('description', true)"
+            (compositionend)="autosave.composition('description', false)"
+            rows="10"
+            placeholder="背景、取り組む内容、完了の条件など"
+          ></textarea>
+        } @else {
+          <div
+            class="description-view"
+            role="button"
+            tabindex="0"
+            (click)="onDescriptionViewClick($event)"
+            (keydown.enter)="onDescriptionViewKeydown($event)"
+          >
+            @if (!form.controls.description.value.trim()) {
+              <span class="description-placeholder">背景、取り組む内容、完了の条件など</span>
+            } @else {
+              @for (seg of descriptionSegments(); track $index) {
+                @if (seg.kind === 'link') {
+                  <a
+                    [href]="seg.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    (click)="$event.stopPropagation()"
+                    (keydown)="$event.stopPropagation()"
+                    >{{ seg.label }}</a
+                  >
+                } @else {
+                  <span class="description-text">{{ seg.text }}</span>
+                }
+              }
+            }
+          </div>
+        }
+        <p class="field-note">タスクの背景や完了条件を残しておきましょう。10000文字以内。リンクは https のみ。</p>
         @if (form.controls.description.invalid) {
           <p class="form-error">説明は10000文字以内で入力してください。</p>
         }
@@ -503,6 +550,41 @@
     <app-item-history [number]="item()!.number" [revision]="item()!.updatedAt" />
   }
 </main>
+@if (descriptionLink.open()) {
+  <dialog
+    appModal
+    class="modal-backdrop"
+    aria-labelledby="description-link-title"
+    (cancel)="$event.preventDefault(); descriptionLink.cancel()"
+  >
+    <section class="modal">
+      <h2 id="description-link-title">リンクを追加</h2>
+      <label for="description-link-label">表示名</label>
+      <input
+        id="description-link-label"
+        type="text"
+        [value]="descriptionLink.label()"
+        (input)="descriptionLink.setLabel($any($event.target).value)"
+        placeholder="リンクの表示名"
+      />
+      <label for="description-link-url">URL</label>
+      <input
+        id="description-link-url"
+        type="url"
+        [value]="descriptionLink.url()"
+        (input)="descriptionLink.setUrl($any($event.target).value)"
+        placeholder="https://example.com"
+      />
+      @if (descriptionLink.error()) {
+        <p class="form-error">{{ descriptionLink.error() }}</p>
+      }
+      <div class="form-actions">
+        <button type="button" class="secondary" (click)="descriptionLink.cancel()">キャンセル</button>
+        <button type="button" (click)="confirmDescriptionLink()">確定</button>
+      </div>
+    </section>
+  </dialog>
+}
 @if (closeTransition.open()) {
   <dialog
     appModal
