@@ -140,4 +140,8 @@ type Repository interface {
 	ApplyCommandTemplatesToAllItems(context.Context, []int64) error
 	GetListFilter(context.Context) (ListFilter, error)
 	PutListFilter(context.Context, ListFilter) (ListFilter, error)
+	ListComments(context.Context, int64) ([]Comment, error)
+	CreateComment(context.Context, int64, string, string) (Comment, error)
+	UpdateComment(context.Context, int64, int64, *string, *string) (Comment, error)
+	DeleteComment(context.Context, int64, int64) error
 }

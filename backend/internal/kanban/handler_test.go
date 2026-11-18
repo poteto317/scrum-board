@@ -25,6 +25,8 @@ type memoryRepo struct {
 	listFilter         *ListFilter
 	projects           []Project
 	nextProject        int64
+	comments           map[int64]Comment
+	nextCommentID      int64
 }
 
 func fresh() *memoryRepo {
@@ -37,6 +39,8 @@ func fresh() *memoryRepo {
 		settings:        BoardSettings{CardLayout: CardLayoutPack, MobileBoardColumnID: 1, ActiveProjectID: 1},
 		projects:        []Project{{ID: 1, Name: "メイン", Position: 0}},
 		nextProject:     2,
+		comments:        map[int64]Comment{},
+		nextCommentID:   1,
 	}
 }
 func (m *memoryRepo) Board(context.Context) (Board, error) {
@@ -409,6 +413,11 @@ func (m *memoryRepo) DeleteItem(ctx context.Context, id int64) error {
 		return err
 	}
 	delete(m.cards, id)
+	for cid, c := range m.comments {
+		if c.ItemID == id {
+			delete(m.comments, cid)
+		}
+	}
 	return nil
 }
 func (m *memoryRepo) CreateColumn(_ context.Context, name string) (Column, error) {
@@ -915,4 +924,57 @@ func (m *memoryRepo) PutListFilter(_ context.Context, in ListFilter) (ListFilter
 	cp.StatusIDs = append([]int64(nil), out.StatusIDs...)
 	m.listFilter = &cp
 	return out, nil
+}
+
+func (m *memoryRepo) ListComments(_ context.Context, itemID int64) ([]Comment, error) {
+	out := make([]Comment, 0)
+	for _, c := range m.comments {
+		if c.ItemID == itemID {
+			out = append(out, c)
+		}
+	}
+	slices.SortFunc(out, func(a, b Comment) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return out, nil
+}
+
+func (m *memoryRepo) CreateComment(_ context.Context, itemID int64, author, body string) (Comment, error) {
+	if _, ok := m.cards[itemID]; !ok {
+		return Comment{}, ErrNotFound
+	}
+	now := time.Now().UTC()
+	id := m.nextCommentID
+	m.nextCommentID++
+	c := Comment{ID: id, ItemID: itemID, Author: author, Body: body, CreatedAt: now, UpdatedAt: now}
+	m.comments[id] = c
+	return c, nil
+}
+
+func (m *memoryRepo) UpdateComment(_ context.Context, itemID, commentID int64, author, body *string) (Comment, error) {
+	c, ok := m.comments[commentID]
+	if !ok || c.ItemID != itemID {
+		return Comment{}, ErrNotFound
+	}
+	if author != nil {
+		c.Author = *author
+	}
+	if body != nil {
+		c.Body = *body
+	}
+	c.UpdatedAt = time.Now().UTC()
+	m.comments[commentID] = c
+	return c, nil
+}
+
+func (m *memoryRepo) DeleteComment(_ context.Context, itemID, commentID int64) error {
+	c, ok := m.comments[commentID]
+	if !ok || c.ItemID != itemID {
+		return ErrNotFound
+	}
+	delete(m.comments, commentID)
+	return nil
 }
