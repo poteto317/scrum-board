@@ -134,9 +134,6 @@ export class ListFilterSession {
   }
 
   private isDirty(view: ListFilterView): boolean {
-    if (this.saveQueued || this.saveInFlight || this.timer !== undefined) {
-      if (!listFiltersEqual(this.filters()[view], this.confirmed[view])) return true;
-    }
     return !listFiltersEqual(this.filters()[view], this.confirmed[view]);
   }
 
