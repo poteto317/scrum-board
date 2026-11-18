@@ -50,6 +50,7 @@ export class ItemHistory implements OnChanges {
     relatedItems: '関連',
     assignee: '対応',
     closeReason: 'Close理由',
+    favorite: 'お気に入り',
   };
   readonly kinds: Record<string, string> = {
     created: '作成',

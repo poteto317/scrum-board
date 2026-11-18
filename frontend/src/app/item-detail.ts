@@ -35,6 +35,7 @@ import { formatDueAtLocal } from './due-at';
 import { DueAtPicker } from './due-at-picker';
 import { ItemAssignee } from './item-assignee';
 import { ItemAutosave } from './item-autosave';
+import { ItemFavorite } from './item-favorite';
 import { ItemCloseTransition } from './item-close-transition';
 import { ItemDueAt } from './item-due-at';
 import { ItemPrLinks } from './item-pr-links';
@@ -81,6 +82,7 @@ import { ProjectSession } from './project-session';
     ItemPrLinks,
     ItemRelatedItems,
     ItemAssignee,
+    ItemFavorite,
     ItemDueAt,
     ItemCloseTransition,
     DescriptionEditor,
@@ -106,6 +108,7 @@ export class ItemDetail implements OnInit {
   readonly prLinks = inject(ItemPrLinks);
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
+  readonly favorite = inject(ItemFavorite);
   readonly dueAt = inject(ItemDueAt);
   readonly closeTransition = inject(ItemCloseTransition);
   readonly descriptionEditor = inject(DescriptionEditor);
@@ -193,6 +196,12 @@ export class ItemDetail implements OnInit {
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
+    this.favorite.bind({
+      item: () => this.item(),
+      applyFavoriteSave: (updated) => this.autosave.applyFavoriteSave(updated),
+      onError: (message) => this.error.set(message),
+      cancel$: this.changed$,
+    });
     this.dueAt.bind({
       item: () => this.item(),
       applyDueSave: (updated) => this.autosave.applyDueSave(updated),
@@ -238,6 +247,7 @@ export class ItemDetail implements OnInit {
           this.prLinks.reset();
           this.relatedItems.reset();
           this.assignee.reset();
+          this.favorite.reset();
           this.dueAt.reset();
           this.closeTransition.reset();
           this.descriptionEditor.reset();
@@ -266,6 +276,7 @@ export class ItemDetail implements OnInit {
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
           solution: card.solution ?? '',
+          favorite: card.favorite === true,
           dueAt: card.dueAt ?? null,
         });
         this.itemCommands.load(card.number, projectId > 0 ? projectId : undefined);
@@ -304,6 +315,7 @@ export class ItemDetail implements OnInit {
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
           solution: card.solution ?? '',
+          favorite: card.favorite === true,
           dueAt: card.dueAt ?? null,
         };
         if (this.item() && sameJson(this.item(), next)) return;
@@ -443,6 +455,7 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.favorite.saving() ||
       this.dueAt.open() ||
       this.dueAt.saving() ||
       this.itemCommands.saving() ||
@@ -462,6 +475,7 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.favorite.saving() ||
       this.dueAt.saving() ||
       this.itemCommands.saving() ||
       this.closeTransition.saving() ||
