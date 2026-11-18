@@ -41,6 +41,7 @@ describe('Board card drag start', () => {
           assignee: '',
           closeReason: '',
           solution: '',
+          favorite: false,
           dueAt: null,
           createdAt: '',
           updatedAt: '',

@@ -19,6 +19,7 @@ const initial: Item = {
   assignee: '',
   closeReason: '',
   solution: '',
+  favorite: false,
   dueAt: null,
   createdAt: '',
   updatedAt: '',
@@ -357,6 +358,7 @@ describe('side field preservation', () => {
     expect(edit.item()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
+
 });
 
 describe('closeReason form field', () => {
@@ -444,6 +446,7 @@ describe('closeReason form field', () => {
       prTitles: ['表示名'],
       closeReason: '',
       solution: '',
+      favorite: false,
       dueAt: null,
     });
     edit.applyCloseSave({

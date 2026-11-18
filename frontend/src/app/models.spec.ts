@@ -30,6 +30,7 @@ describe('normalizeBoardData', () => {
           assignee: '',
           closeReason: '',
           solution: '',
+          favorite: false,
           dueAt: null,
           createdAt: '',
           updatedAt: '',
@@ -101,5 +102,13 @@ describe('normalizeOffsetY / normalizeItem', () => {
     expect(normalizeItem({ id: 1, dueAt: '2026-11-17T08:30:00Z' }).dueAt).toBe(
       '2026-11-17T08:30:00Z',
     );
+  });
+
+  it('normalizes favorite with === true only (L-002)', () => {
+    expect(normalizeItem({ id: 1 }).favorite).toBe(false);
+    expect(normalizeItem({ id: 1, favorite: true }).favorite).toBe(true);
+    expect(normalizeItem({ id: 1, favorite: false }).favorite).toBe(false);
+    expect(normalizeItem({ id: 1, favorite: 'true' as never }).favorite).toBe(false);
+    expect(normalizeItem({ id: 1, favorite: 1 as never }).favorite).toBe(false);
   });
 });

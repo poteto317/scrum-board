@@ -35,6 +35,7 @@ function card(id: number, columnId: number, position: number, title: string): It
     assignee: '',
     closeReason: '',
     solution: '',
+    favorite: false,
     dueAt: null,
     createdAt: '',
     updatedAt: '',
