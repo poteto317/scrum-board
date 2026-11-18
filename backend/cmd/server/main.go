@@ -90,6 +90,9 @@ func run() error {
 		err = repo.InitializeSolution(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeFavorite(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeHistory(migrationCtx)
 	}
 	if err == nil {
