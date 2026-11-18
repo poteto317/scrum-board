@@ -324,10 +324,9 @@ export class Board implements OnInit {
       apply: (d) => {
         this.error.set('');
         if (sameJson(this.data(), d)) return;
-        applyBoardDataWithActiveSync(this.projectSession, d, (board) => {
-          this.data.set(board);
-          this.scheduleCardHeightMeasure();
-        });
+        // Do not sync activeProjectId from poll — only initial load / post-switch reload.
+        this.data.set(d);
+        this.scheduleCardHeightMeasure();
       },
       ...zoneAwareTimers(this.zone),
     });
