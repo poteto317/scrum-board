@@ -362,6 +362,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		RelatedItems json.RawMessage `json:"relatedItems"`
 		Assignee     json.RawMessage `json:"assignee"`
 		CloseReason  json.RawMessage `json:"closeReason"`
+		Favorite     json.RawMessage `json:"favorite"`
 		DueAt        json.RawMessage `json:"dueAt"`
 	}
 	if !decode(w, r, &body) {
@@ -415,6 +416,18 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		}
 		p.CloseReason = &value
 	}
+	if len(body.Favorite) > 0 {
+		if string(body.Favorite) == "null" {
+			invalid(w, "お気に入りは true または false で指定してください。")
+			return
+		}
+		var value bool
+		if err := json.Unmarshal(body.Favorite, &value); err != nil {
+			invalid(w, "お気に入りは true または false で指定してください。")
+			return
+		}
+		p.Favorite = &value
+	}
 	if len(body.DueAt) > 0 {
 		if string(body.DueAt) == "null" {
 			p.ClearDueAt = true
@@ -436,7 +449,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 			p.DueAt = &value
 		}
 	}
-	if p.Title == nil && p.Description == nil && p.Solution == nil && p.ColumnID == nil && p.ProjectID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.DueAt == nil && !p.ClearDueAt {
+	if p.Title == nil && p.Description == nil && p.Solution == nil && p.ColumnID == nil && p.ProjectID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.Favorite == nil && p.DueAt == nil && !p.ClearDueAt {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}

@@ -60,6 +60,7 @@ type Item struct {
 	RelatedItems    []RelatedItem `json:"relatedItems"`
 	Assignee        string        `json:"assignee"`
 	CloseReason     string        `json:"closeReason"`
+	Favorite        bool          `json:"favorite"`
 	DueAt           *time.Time    `json:"dueAt"`
 	CreatedAt       time.Time     `json:"createdAt"`
 	UpdatedAt       time.Time     `json:"updatedAt"`
@@ -90,6 +91,7 @@ type ItemInput struct {
 	RelatedItems []RelatedItem `json:"relatedItems"`
 	Assignee     string        `json:"assignee"`
 	CloseReason  string        `json:"closeReason"`
+	Favorite     bool          `json:"favorite"`
 }
 type ItemPatch struct {
 	ColumnID     *int64         `json:"columnId"`
@@ -101,6 +103,7 @@ type ItemPatch struct {
 	RelatedItems *[]RelatedItem `json:"relatedItems"`
 	Assignee     *string        `json:"assignee"`
 	CloseReason  *string        `json:"closeReason"`
+	Favorite     *bool          `json:"favorite"`
 	DueAt        *time.Time     `json:"dueAt"`
 	ClearDueAt   bool           `json:"-"`
 }

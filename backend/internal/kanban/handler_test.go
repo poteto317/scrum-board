@@ -261,7 +261,7 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 		Number: m.nextItemNumber(projectID), ID: id, ColumnID: in.ColumnID, ProjectID: projectID,
 		Title: in.Title, Description: in.Description, Solution: in.Solution, PRURLs: urls, RelatedItems: related,
 		Position: m.nextPosition(in.ColumnID, projectID), OffsetY: offsetY, Assignee: in.Assignee,
-		CloseReason: in.CloseReason, BacklogPosition: m.nextBacklog(projectID),
+		CloseReason: in.CloseReason, Favorite: in.Favorite, BacklogPosition: m.nextBacklog(projectID),
 	}
 	m.cards[c.ID] = c
 	m.cardTemplateIDs[c.ID] = append([]int64(nil), m.defaultTemplateIDs...)
@@ -324,6 +324,9 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 	}
 	if p.Solution != nil {
 		c.Solution = *p.Solution
+	}
+	if p.Favorite != nil {
+		c.Favorite = *p.Favorite
 	}
 	if p.PRURLs != nil {
 		c.PRURLs = append([]string(nil), (*p.PRURLs)...)
