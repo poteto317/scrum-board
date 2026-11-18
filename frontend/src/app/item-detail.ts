@@ -265,6 +265,7 @@ export class ItemDetail implements OnInit {
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
+          solution: card.solution ?? '',
           dueAt: card.dueAt ?? null,
         });
         this.itemCommands.load(card.number, projectId > 0 ? projectId : undefined);
@@ -302,6 +303,7 @@ export class ItemDetail implements OnInit {
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
+          solution: card.solution ?? '',
           dueAt: card.dueAt ?? null,
         };
         if (this.item() && sameJson(this.item(), next)) return;
