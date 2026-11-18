@@ -8,12 +8,15 @@ import {
   BoardSettings,
   CardLayout,
   Item,
+  ItemComment,
   ItemInput,
   ItemPatch,
   Column,
   HistoryPage,
   Project,
+  normalizeComment,
 } from './models';
+import { map } from 'rxjs';
 
 export type { ItemOrderColumn };
 
@@ -71,6 +74,50 @@ export class Api {
     return this.http.get<HistoryPage>(`/api/items/by-number/${number}/history`, {
       params: Object.keys(params).length ? params : {},
     });
+  }
+  listComments(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http
+      .get<{ comments: ItemComment[] }>(
+        `/api/items/by-number/${number}/comments`,
+        params ? { params } : {},
+      )
+      .pipe(map((res) => (res.comments ?? []).map((c) => normalizeComment(c))));
+  }
+  createComment(
+    number: number,
+    input: { author?: string; body: string },
+    projectId?: number,
+  ) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http
+      .post<ItemComment>(`/api/items/by-number/${number}/comments`, input, params ? { params } : {})
+      .pipe(map((c) => normalizeComment(c)));
+  }
+  updateComment(
+    number: number,
+    id: number,
+    patch: { author?: string; body?: string },
+    projectId?: number,
+  ) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    const body: Record<string, string> = {};
+    if (patch.author !== undefined) body['author'] = patch.author;
+    if (patch.body !== undefined) body['body'] = patch.body;
+    return this.http
+      .patch<ItemComment>(
+        `/api/items/by-number/${number}/comments/${id}`,
+        body,
+        params ? { params } : {},
+      )
+      .pipe(map((c) => normalizeComment(c)));
+  }
+  deleteComment(number: number, id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(
+      `/api/items/by-number/${number}/comments/${id}`,
+      params ? { params } : {},
+    );
   }
   prTitles(urls: string[]) {
     return this.http.post<{ titles: Record<string, string> }>('/api/pr-titles', { urls });
