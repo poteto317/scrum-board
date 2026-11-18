@@ -18,7 +18,6 @@
       [value]="block"
       [disabled]="disabled()"
       [attr.aria-label]="'説明ブロック ' + ($index + 1)"
-      placeholder="背景、取り組む内容、完了の条件など"
       (focus)="onFocus($index)"
       (blur)="onBlur($event)"
       (input)="onInput($index, $event)"

@@ -46,6 +46,24 @@ describe('DescriptionBlocksEditor', () => {
   const areas = (f: ReturnType<typeof mount>['f']) =>
     f.nativeElement.querySelectorAll('textarea.block-input') as NodeListOf<HTMLTextAreaElement>;
 
+  it('does not set placeholder on empty description blocks', () => {
+    const { f } = mount('');
+    const list = [...areas(f)];
+    expect(list.length).toBe(1);
+    expect(list[0]!.getAttribute('placeholder')).toBeNull();
+    expect(list[0]!.getAttribute('aria-label')).toBe('説明ブロック 1');
+  });
+
+  it('does not set placeholder on empty trailing blocks', () => {
+    const { f } = mount('a\n');
+    const list = [...areas(f)];
+    expect(list.length).toBe(2);
+    for (const [i, el] of list.entries()) {
+      expect(el.getAttribute('placeholder')).toBeNull();
+      expect(el.getAttribute('aria-label')).toBe(`説明ブロック ${i + 1}`);
+    }
+  });
+
   it('splits on Enter and emits text before focus moves', () => {
     const { f, host, editor } = mount('hello');
     const area = areas(f)[0]!;
