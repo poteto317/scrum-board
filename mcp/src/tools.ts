@@ -147,7 +147,7 @@ export function createToolHandlers(client: HttpClient) {
 
 export type ToolHandlers = ReturnType<typeof createToolHandlers>;
 
-async function safeTool(run: () => Promise<ToolResult>): Promise<ToolResult> {
+export async function safeTool(run: () => Promise<ToolResult>): Promise<ToolResult> {
   try {
     return await run();
   } catch {
