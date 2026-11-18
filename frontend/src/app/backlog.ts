@@ -37,6 +37,7 @@ import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
 import { Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
+import { itemsForActiveProject } from './project-items';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
@@ -51,6 +52,8 @@ export class Backlog implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   private readonly api = inject(Api);
   private readonly projectSession = inject(ProjectSession);
+  /** Template-safe busy flag while active project reload is in flight. */
+  readonly projectSwitching = computed(() => this.projectSession.switching());
   private backlogLoadGeneration = 0;
   private projectSwitchSub?: Subscription;
   private readonly router = inject(Router);
@@ -83,9 +86,12 @@ export class Backlog implements OnInit {
       this.columns().map((c) => c.id),
     ),
   );
+  readonly activeItems = computed(() =>
+    itemsForActiveProject(this.items(), this.projectSession.activeId()),
+  );
   readonly filteredItems = computed(() => {
     const filter = this.appliedFilter();
-    return this.items().filter((card) => itemMatchesFilter(card, filter));
+    return this.activeItems().filter((card) => itemMatchesFilter(card, filter));
   });
   readonly filterActive = computed(() =>
     listFilterActive(

@@ -12,7 +12,7 @@
       class="primary"
       type="button"
       (click)="openItem()"
-      [disabled]="loading() || reordering() || saving() || !!error() || columns().length === 0"
+      [disabled]="loading() || reordering() || saving() || !!error() || columns().length === 0 || projectSwitching()"
     >
       アイテムを追加
     </button>
@@ -20,7 +20,7 @@
   <app-list-filter-bar
     class="backlog-list-filter"
     [columns]="columns()"
-    [countLabel]="filteredItems().length + ' / ' + items().length + ' 件'"
+    [countLabel]="filteredItems().length + ' / ' + activeItems().length + ' 件'"
   />
   @if (loading()) {
     <div class="state-panel" role="status">読み込み中…</div>
@@ -53,7 +53,9 @@
       (dragleave)="onListDragLeave($event)"
       (drop)="onListDrop($event)"
     >
-      @if (items().length === 0) {
+      @if (projectSwitching()) {
+        <div class="state-panel empty" role="status">プロジェクトを切り替え中…</div>
+      } @else if (activeItems().length === 0) {
         <div class="state-panel empty">
           まだアイテムがありません。「アイテムを追加」から始めましょう。
         </div>
