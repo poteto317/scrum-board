@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { HttpClient } from './http.js';
-import { createToolHandlers } from './tools.js';
+import { createToolHandlers, safeTool } from './tools.js';
 
 describe('createToolHandlers', () => {
   it('list_projects returns JSON on success', async () => {
@@ -409,3 +409,15 @@ describe('createToolHandlers', () => {
     expect(result.content[0]).toMatchObject({ text: 'identity_mismatch' });
   });
 });
+
+describe('safeTool', () => {
+  it('maps thrown errors to internal_error without leaking messages', async () => {
+    const result = await safeTool(async () => {
+      throw new Error('secret-token-in-message');
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]).toMatchObject({ text: 'internal_error' });
+    expect(JSON.stringify(result)).not.toContain('secret');
+  });
+});
+
