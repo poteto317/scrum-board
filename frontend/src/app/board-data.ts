@@ -36,6 +36,7 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
     columnId: raw.columnId ?? 0,
     title: raw.title ?? '',
     description: raw.description ?? '',
+    solution: raw.solution ?? '',
     position: raw.position ?? 0,
     backlogPosition: raw.backlogPosition ?? 0,
     projectId: normalizeOptionalInt(raw.projectId) ?? 0,

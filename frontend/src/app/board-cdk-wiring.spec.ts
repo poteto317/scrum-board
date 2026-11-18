@@ -13,7 +13,7 @@ import { BoardData, Item } from './models';
 function card(id: number, columnId: number, position: number): Item {
   return {
     id,
-    projectId: 0,
+    projectId: 1,
     number: id,
     columnId,
     title: `card ${id}`,
@@ -25,6 +25,7 @@ function card(id: number, columnId: number, position: number): Item {
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
     dueAt: null,
     createdAt: '',
     updatedAt: '',
@@ -39,7 +40,7 @@ describe('Board template CDK wiring', () => {
         { id: 2, name: 'Doing', position: 1 },
       ],
       items: [card(1, 1, 0), card(2, 1, 1), card(3, 2, 0)],
-      settings: { cardLayout: 'pack' },
+      settings: { cardLayout: 'pack', activeProjectId: 1 },
     };
     const reorderItems = vi.fn(() => new Subject<{ items: Item[] }>());
     TestBed.configureTestingModule({
@@ -128,7 +129,7 @@ describe('Board template CDK wiring', () => {
     const board: BoardData = {
       columns: [{ id: 1, name: 'Todo', position: 0 }],
       items: [card(1, 1, 0)],
-      settings: { cardLayout: 'pack' },
+      settings: { cardLayout: 'pack', activeProjectId: 1 },
     };
     TestBed.configureTestingModule({
       imports: [Board],

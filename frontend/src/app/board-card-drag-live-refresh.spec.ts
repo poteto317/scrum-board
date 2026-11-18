@@ -14,7 +14,7 @@ const POLL_MS = 5000;
 function card(id: number, position: number, title: string): Item {
   return {
     id,
-    projectId: 0,
+    projectId: 1,
     number: id,
     columnId: 1,
     title,
@@ -26,6 +26,7 @@ function card(id: number, position: number, title: string): Item {
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
     dueAt: null,
     createdAt: '',
     updatedAt: '',
@@ -42,7 +43,7 @@ function todoBoard(items: Item[]): NormalizedBoardData {
   return normalizeBoardData({
     columns: [{ id: 1, name: 'Todo', position: 0 }],
     items,
-    settings: { cardLayout: 'pack' },
+    settings: { cardLayout: 'pack', activeProjectId: 1 },
   });
 }
 

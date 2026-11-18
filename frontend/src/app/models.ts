@@ -40,6 +40,8 @@ export interface Item {
   columnId: number;
   title: string;
   description: string;
+  /** ソリューション本文。欠落時は ''（normalizeItem で補完）。 */
+  solution: string;
   position: number;
   backlogPosition: number;
   /** 欠落時は 0（normalizeBoardData / normalizeItem で補完）。 */
@@ -64,7 +66,7 @@ export interface BoardData {
 }
 /** POST /api/items body — dueAt は create 非対応（PATCH のみ）。 */
 export type ItemInput = Pick<Item, 'title' | 'description' | 'columnId'> &
-  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason' | 'projectId'>>;
+  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason' | 'solution' | 'projectId'>>;
 /** PATCH /api/items/{id} body — dueAt の null クリアを含む。 */
 export type ItemPatch = Partial<ItemInput & Pick<Item, 'dueAt'>>;
 

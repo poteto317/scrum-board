@@ -92,6 +92,7 @@ import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-f
 import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
+import { applyBoardDataWithActiveSync } from './board-active-sync';
 import { itemsForActiveProject } from './project-items';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
@@ -323,8 +324,10 @@ export class Board implements OnInit {
       apply: (d) => {
         this.error.set('');
         if (sameJson(this.data(), d)) return;
-        this.data.set(d);
-        this.scheduleCardHeightMeasure();
+        applyBoardDataWithActiveSync(this.projectSession, d, (board) => {
+          this.data.set(board);
+          this.scheduleCardHeightMeasure();
+        });
       },
       ...zoneAwareTimers(this.zone),
     });
@@ -595,11 +598,17 @@ export class Board implements OnInit {
       .subscribe({
         next: (d) => {
           if (generation !== this.boardLoadGeneration) return;
-          this.data.set(applyBoardMobileSettings(d));
-          // Schedule after data arrives so the first afterNextRender sees #boardScroll
-          // (not the loading-only first paint).
-          this.scheduleBoardScrollRestore();
-          this.scheduleCardHeightMeasure();
+          applyBoardDataWithActiveSync(
+            this.projectSession,
+            applyBoardMobileSettings(d),
+            (board) => {
+              this.data.set(board);
+              // Schedule after data arrives so the first afterNextRender sees #boardScroll
+              // (not the loading-only first paint).
+              this.scheduleBoardScrollRestore();
+              this.scheduleCardHeightMeasure();
+            },
+          );
         },
         error: (e) => {
           if (generation !== this.boardLoadGeneration) return;
@@ -628,8 +637,14 @@ export class Board implements OnInit {
         next: (d) => {
           if (generation !== this.boardLoadGeneration) return;
           this.error.set('');
-          this.data.set(applyBoardMobileSettings(d));
-          this.scheduleCardHeightMeasure();
+          applyBoardDataWithActiveSync(
+            this.projectSession,
+            applyBoardMobileSettings(d),
+            (board) => {
+              this.data.set(board);
+              this.scheduleCardHeightMeasure();
+            },
+          );
         },
         error: (e) => {
           if (generation !== this.boardLoadGeneration) return;

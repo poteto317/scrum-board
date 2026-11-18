@@ -12,7 +12,7 @@ import { BoardData, Item } from './models';
 function card(id: number, position: number): Item {
   return {
     id,
-    projectId: 0,
+    projectId: 1,
     number: id,
     columnId: 1,
     title: `card ${id}`,
@@ -24,6 +24,7 @@ function card(id: number, position: number): Item {
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
     dueAt: null,
     createdAt: '',
     updatedAt: '',
@@ -33,7 +34,7 @@ function card(id: number, position: number): Item {
 const board = (): BoardData => ({
   columns: [{ id: 1, name: 'Todo', position: 0 }],
   items: [card(1, 0), card(2, 1)],
-  settings: { cardLayout: 'pack' },
+  settings: { cardLayout: 'pack', activeProjectId: 1 },
 });
 
 async function setup() {
@@ -92,7 +93,7 @@ describe('Board card structure', () => {
     expect(link.tagName).toBe('A');
     expect(link.hasAttribute('data-card-id')).toBe(false);
     expect(link.hasAttribute('aria-describedby')).toBe(false);
-    expect(link.getAttribute('href')).toBe('/items/1');
+    expect(link.getAttribute('href')).toBe('/items/1?project=1');
     // The drag handle, quick-actions wrapper, and link are siblings. Copy stays inside quick actions, never inside the anchor.
     expect(handle.parentElement).toBe(article);
     expect(actions.parentElement).toBe(article);
@@ -143,7 +144,7 @@ describe('Board card structure', () => {
     const plain = new MouseEvent('click', { bubbles: true, cancelable: true });
     link.dispatchEvent(plain);
     expect(plain.defaultPrevented).toBe(true);
-    expect(navigate).toHaveBeenCalledWith(['/items', 1]);
+    expect(navigate).toHaveBeenCalledWith(['/items', 1], { queryParams: { project: 1 } });
   });
 
   it('copying a link neither navigates nor reorders', async () => {

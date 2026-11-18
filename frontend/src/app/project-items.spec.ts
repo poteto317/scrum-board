@@ -17,6 +17,7 @@ function stub(projectId: number, id: number): Item {
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
     dueAt: null,
     createdAt: '',
     updatedAt: '',
