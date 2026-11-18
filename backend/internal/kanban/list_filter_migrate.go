@@ -155,7 +155,7 @@ VALUES (1, '', CAST(? AS JSON), '', CAST(? AS JSON))`, string(emptyRaw), string(
 }
 
 func (r MySQLRepository) lookupTodoColumnID(ctx context.Context) (int64, error) {
-	_, cols, err := r.knownColumnIDs(ctx)
+	_, cols, err := r.columnsWithKnownIDs(ctx)
 	if err != nil {
 		return 0, err
 	}
