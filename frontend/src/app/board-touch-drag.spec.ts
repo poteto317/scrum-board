@@ -28,6 +28,7 @@ describe('Board card drag start', () => {
       items: [
         {
           id: 1,
+          projectId: 1,
           number: 1,
           columnId: 1,
           title: 'A',
@@ -39,12 +40,13 @@ describe('Board card drag start', () => {
           relatedItems: [],
           assignee: '',
           closeReason: '',
+          solution: '',
           dueAt: null,
           createdAt: '',
           updatedAt: '',
         },
       ],
-      settings: { cardLayout: 'pack' as const },
+      settings: { cardLayout: 'pack' as const, activeProjectId: 1 },
     };
     TestBed.configureTestingModule({
       imports: [Board],

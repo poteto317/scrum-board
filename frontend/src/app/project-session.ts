@@ -8,6 +8,12 @@ import { Project } from './models';
 
 export const PROJECT_NAME_REQUIRED = 'プロジェクト名を1〜80文字で入力してください。';
 
+/** Positive integer project id, or null when missing/invalid. */
+export function parseActiveProjectId(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+  return null;
+}
+
 /**
  * Project list and the active project for the workspace.
  *
@@ -45,6 +51,19 @@ export class ProjectSession {
   private switchListeners = 0;
   private loadGeneration = 0;
 
+  /**
+   * Adopt active project from a board GET.
+   * `clearIfMissing`: ProjectSession.load だけ true（欠落時に null）。board/backlog 適用では false（poll 欠落で消さない）。
+   */
+  syncActiveFromBoard(activeProjectId: unknown, clearIfMissing = false): void {
+    const next = parseActiveProjectId(activeProjectId);
+    if (next != null) {
+      this.activeId.set(next);
+      return;
+    }
+    if (clearIfMissing) this.activeId.set(null);
+  }
+
   load(): void {
     const generation = ++this.loadGeneration;
     forkJoin({
@@ -54,8 +73,7 @@ export class ProjectSession {
       next: ({ projects, board }) => {
         if (generation !== this.loadGeneration) return;
         this.projects.set(sortProjects(projects.projects ?? []));
-        const active = normalizeBoardData(board).settings.activeProjectId;
-        this.activeId.set(typeof active === 'number' ? active : null);
+        this.syncActiveFromBoard(normalizeBoardData(board).settings.activeProjectId, true);
         this.error.set('');
       },
       error: (e) => {
@@ -145,8 +163,9 @@ export class ProjectSession {
         this.switching.set(true);
         this.api.board().subscribe({
           next: (board) => {
-            const active = normalizeBoardData(board).settings.activeProjectId;
-            const next = typeof active === 'number' ? active : null;
+            const next = parseActiveProjectId(
+              normalizeBoardData(board).settings.activeProjectId,
+            );
             this.activeId.set(next);
             this.mutating.set(false);
             if (next == null || this.switchListeners === 0) {

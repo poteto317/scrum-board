@@ -21,7 +21,7 @@ function sample(settings: { cardLayout: 'pack' | 'free'; mobileBoardColumnId?: n
     items: [
       {
         id: 1,
-        projectId: 0,
+        projectId: 1,
         number: 1,
         columnId: 1,
         title: 'A',
@@ -33,6 +33,7 @@ function sample(settings: { cardLayout: 'pack' | 'free'; mobileBoardColumnId?: n
         relatedItems: [],
         assignee: '',
         closeReason: '',
+        solution: '',
         dueAt: null,
         createdAt: '',
         updatedAt: '',
@@ -128,7 +129,7 @@ describe('Board mobile column select', () => {
   it('mobile: empty columns disables select', async () => {
     matchMediaMatches = true;
     const f = mount({
-      board: () => of(normalizeBoardData({ columns: [], items: [], settings: { cardLayout: 'pack' } })),
+      board: () => of(normalizeBoardData({ columns: [], items: [], settings: { cardLayout: 'pack', activeProjectId: 1 } })),
     });
     await f.whenStable();
     f.detectChanges();

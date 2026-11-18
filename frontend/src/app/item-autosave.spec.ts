@@ -18,6 +18,7 @@ const initial: Item = {
   relatedItems: [],
   assignee: '',
   closeReason: '',
+  solution: '',
   dueAt: null,
   createdAt: '',
   updatedAt: '',
@@ -442,12 +443,14 @@ describe('closeReason form field', () => {
       prUrls: [url],
       prTitles: ['表示名'],
       closeReason: '',
+      solution: '',
       dueAt: null,
     });
     edit.applyCloseSave({
       ...initial,
       columnId: 3,
       closeReason: '理由',
+      solution: '',
       dueAt: null,
       prUrls: [url],
       updatedAt: '2026-11-17T02:00:00Z',

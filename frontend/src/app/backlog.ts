@@ -19,6 +19,8 @@ import { Subscription, finalize, forkJoin } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
+import { applyBoardDataWithActiveSync } from './board-active-sync';
+import { normalizeBoardData } from './board-data';
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
 import { itemAppPath } from './item-link';
@@ -197,11 +199,13 @@ export class Backlog implements OnInit {
       .subscribe({
         next: ({ backlog, board }) => {
           if (generation !== this.backlogLoadGeneration) return;
-          this.items.set(backlog.items);
-          this.columns.set(board.columns);
-          // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
-          // (not the loading-only first paint).
-          this.scheduleBacklogScrollRestore();
+          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board), () => {
+            this.items.set(backlog.items);
+            this.columns.set(board.columns);
+            // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
+            // (not the loading-only first paint).
+            this.scheduleBacklogScrollRestore();
+          });
         },
         error: (e) => {
           if (generation !== this.backlogLoadGeneration) return;
@@ -229,8 +233,10 @@ export class Backlog implements OnInit {
         next: ({ backlog, board }) => {
           if (generation !== this.backlogLoadGeneration) return;
           this.error.set('');
-          this.items.set(backlog.items);
-          this.columns.set(board.columns);
+          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board), () => {
+            this.items.set(backlog.items);
+            this.columns.set(board.columns);
+          });
         },
         error: (e) => {
           if (generation !== this.backlogLoadGeneration) return;

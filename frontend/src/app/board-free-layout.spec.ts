@@ -11,7 +11,7 @@ import { BoardData, Item } from './models';
 function card(id: number, columnId: number, position: number, offsetY = 0): Item {
   return {
     id,
-    projectId: 0,
+    projectId: 1,
     number: id,
     columnId,
     title: `c${id}`,
@@ -23,6 +23,7 @@ function card(id: number, columnId: number, position: number, offsetY = 0): Item
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
     dueAt: null,
     createdAt: '',
     updatedAt: '',
@@ -36,7 +37,7 @@ function board(layout: 'pack' | 'free', items: Item[]): BoardData {
       { id: 2, name: 'Doing', position: 1 },
     ],
     items,
-    settings: { cardLayout: layout },
+    settings: { cardLayout: layout, activeProjectId: 1 },
   };
 }
 
@@ -49,7 +50,7 @@ async function setup(opts: {
   const initial = opts.initial ?? board('pack', [card(1, 1, 0, 40), card(2, 1, 1, 10), card(3, 2, 0, 0)]);
   const reorderItems = opts.reorderItems ?? vi.fn(() => of({ items: initial.items }));
   const patchBoardSettings =
-    opts.patchBoardSettings ?? vi.fn(() => of({ settings: { cardLayout: 'free' } }));
+    opts.patchBoardSettings ?? vi.fn(() => of({ settings: { cardLayout: 'free', activeProjectId: 1 } }));
   const boardFn = opts.boardFn ?? vi.fn(() => of(initial));
   TestBed.configureTestingModule({
     imports: [Board],
@@ -190,7 +191,7 @@ describe('Board free card layout', () => {
 
   it('pack→free measures then orders then patches; reverts on order failure', async () => {
     const reorderItems = vi.fn(() => throwError(() => ({ status: 500, message: 'fail' })));
-    const patchBoardSettings = vi.fn(() => of({ settings: { cardLayout: 'free' } }));
+    const patchBoardSettings = vi.fn(() => of({ settings: { cardLayout: 'free', activeProjectId: 1 } }));
     const { f, component } = await setup({
       initial: board('pack', [card(1, 1, 0), card(2, 1, 1)]),
       reorderItems,
@@ -225,7 +226,7 @@ describe('Board free card layout', () => {
   it('free→pack patches settings and replaces items from the response', async () => {
     const packed = [card(2, 1, 0, 10), card(1, 1, 1, 40)];
     const patchBoardSettings = vi.fn(() =>
-      of({ settings: { cardLayout: 'pack' }, items: packed }),
+      of({ settings: { cardLayout: 'pack', activeProjectId: 1 }, items: packed }),
     );
     const { component } = await setup({
       initial: board('free', [card(1, 1, 0, 40), card(2, 1, 1, 10)]),
@@ -248,7 +249,7 @@ describe('Board free card layout', () => {
         of({
           columns: freeBoard.columns,
           items: [{ ...card(1, 1, 0, 77), title: 'updated' }],
-          settings: { cardLayout: 'free' },
+          settings: { cardLayout: 'free', activeProjectId: 1 },
         }),
       );
       await vi.advanceTimersByTimeAsync(5000);

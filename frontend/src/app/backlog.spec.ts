@@ -17,7 +17,7 @@ function makeCards(): Item[] {
   return [
     {
       id: 1,
-      projectId: 0,
+      projectId: 1,
       number: 1,
       columnId: 1,
       title: 'A',
@@ -29,13 +29,14 @@ function makeCards(): Item[] {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
       dueAt: null,
       createdAt: '',
       updatedAt: '',
     },
     {
       id: 2,
-      projectId: 0,
+      projectId: 1,
       number: 2,
       columnId: 2,
       title: 'B',
@@ -47,13 +48,14 @@ function makeCards(): Item[] {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
       dueAt: null,
       createdAt: '',
       updatedAt: '',
     },
     {
       id: 3,
-      projectId: 0,
+      projectId: 1,
       number: 3,
       columnId: 3,
       title: 'C',
@@ -65,13 +67,14 @@ function makeCards(): Item[] {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
       dueAt: null,
       createdAt: '',
       updatedAt: '',
     },
     {
       id: 9,
-      projectId: 0,
+      projectId: 1,
       number: 9,
       columnId: 1,
       title: 'D',
@@ -83,6 +86,7 @@ function makeCards(): Item[] {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
       dueAt: null,
       createdAt: '',
       updatedAt: '',
@@ -164,7 +168,7 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
@@ -199,7 +203,7 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
@@ -250,7 +254,7 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
@@ -300,7 +304,7 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
@@ -336,7 +340,7 @@ describe('Backlog reordering', () => {
     const columns = makeColumns();
     const created: Item = {
       id: 10,
-      projectId: 0,
+      projectId: 1,
       number: 10,
       columnId: 1,
       title: 'New',
@@ -348,6 +352,7 @@ describe('Backlog reordering', () => {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
       dueAt: null,
       createdAt: '',
       updatedAt: '',
@@ -361,7 +366,7 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             createItem,
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
@@ -547,7 +552,7 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
@@ -576,7 +581,7 @@ describe('Backlog scroll save and restore', () => {
     backlog.onDetailClick(new MouseEvent('click', { cancelable: true }), card);
     expect(readBacklogScroll()).toEqual({ scrollTop: 90, scrollLeft: 12 });
     expect(readReturnTo()).toBe('/backlog');
-    expect(navigate).toHaveBeenCalledWith(['/items', 1]);
+    expect(navigate).toHaveBeenCalledWith(['/items', 1], { queryParams: { project: 1 } });
   });
 
   it('restores backlog scroll once after render when saved', async () => {
@@ -592,7 +597,7 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
@@ -625,7 +630,7 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
@@ -669,7 +674,7 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
@@ -717,7 +722,7 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },
@@ -749,7 +754,7 @@ describe('Backlog add dialog accidental close', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             createItem: vi.fn(),
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
@@ -822,7 +827,7 @@ describe('Backlog list filter', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             listFilter: () => of({ query: '', statusIds: [] }),
             putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
         },

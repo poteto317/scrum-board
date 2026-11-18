@@ -29,6 +29,7 @@ describe('normalizeBoardData', () => {
           relatedItems: [],
           assignee: '',
           closeReason: '',
+          solution: '',
           dueAt: null,
           createdAt: '',
           updatedAt: '',
@@ -83,6 +84,8 @@ describe('normalizeOffsetY / normalizeItem', () => {
     expect(normalizeItem({ id: 1, offsetY: 200_000 }).offsetY).toBe(100_000);
     expect(normalizeItem({ id: 1 }).closeReason).toBe('');
     expect(normalizeItem({ id: 1, closeReason: 'x' }).closeReason).toBe('x');
+    expect(normalizeItem({ id: 1 }).solution).toBe('');
+    expect(normalizeItem({ id: 1, solution: 'done' }).solution).toBe('done');
   });
 
   it('defaults missing projectId to 0 and truncates numeric ids', () => {
