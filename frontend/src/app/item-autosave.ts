@@ -153,7 +153,9 @@ export class ItemAutosave {
   applyFavoriteSave(updated: Pick<Item, 'favorite' | 'updatedAt'>) {
     const card = this.item();
     if (!card) return;
-    if (this.saving()) this.favoriteDirty = true;
+    // Always shield: a later title/description flush must not overwrite the star
+    // with a stale PATCH response (same pattern as projectDirty).
+    this.favoriteDirty = true;
     this.item.set({
       ...card,
       favorite: updated.favorite === true,
