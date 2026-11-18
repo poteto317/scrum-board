@@ -92,6 +92,7 @@ import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-f
 import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
+import { itemsForActiveProject } from './project-items';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
@@ -262,7 +263,8 @@ export class Board implements OnInit {
     const filter = this.appliedFilter();
     const groups = new Map<number, Item[]>();
     for (const column of this.data().columns) groups.set(column.id, []);
-    for (const card of this.data().items) {
+    const scoped = itemsForActiveProject(this.data().items, this.projectSession.activeId());
+    for (const card of scoped) {
       if (!itemMatchesFilter(card, filter)) continue;
       groups.get(card.columnId)?.push(card);
     }
