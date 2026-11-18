@@ -359,6 +359,24 @@ describe('side field preservation', () => {
     TestBed.resetTestingModule();
   });
 
+  it('keeps favorite set during an in-flight form flush via applyFavoriteSave', () => {
+    const response = new Subject<Item>();
+    const api = {
+      updateItem: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset({ ...initial, favorite: false });
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    edit.applyFavoriteSave({ favorite: true, updatedAt: '2026-11-18T12:00:00Z' });
+    expect(edit.item()?.favorite).toBe(true);
+    response.next({ ...initial, title: '編集', favorite: false });
+    response.complete();
+    expect(edit.item()?.favorite).toBe(true);
+    expect(edit.item()?.title).toBe('編集');
+    TestBed.resetTestingModule();
+  });
 });
 
 describe('closeReason form field', () => {

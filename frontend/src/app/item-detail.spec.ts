@@ -37,6 +37,7 @@ const card: Item = {
   assignee: '',
   closeReason: '',
   solution: '',
+  favorite: false,
   dueAt: null,
   createdAt: '',
   updatedAt: '',
@@ -505,6 +506,52 @@ describe('ItemDetail autosave', () => {
     expect(f.componentInstance.item()?.assignee).toBe('');
     expect(input.value).toBe('draft-name');
     expect(f.nativeElement.textContent).toContain('対応の保存失敗');
+  });
+  it('toggles favorite with immediate PATCH and aria-label', () => {
+    api.updateItem.mockReturnValue(
+      of({ ...card, favorite: true, updatedAt: '2026-11-18T00:00:00.000Z' }),
+    );
+    const f = create();
+    const btn = f.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-label')).toBe('お気に入りに追加');
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    btn.click();
+    f.detectChanges();
+    expect(api.updateItem).toHaveBeenCalledWith(18, { favorite: true });
+    expect(f.componentInstance.item()?.favorite).toBe(true);
+    expect(btn.getAttribute('aria-label')).toBe('お気に入りから外す');
+    expect(Object.keys(f.componentInstance.form.getRawValue())).not.toContain('favorite');
+  });
+  it('ignores second favorite toggle while saving and reverts on error', () => {
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValueOnce(pending);
+    const f = create();
+    const btn = f.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement;
+    btn.click();
+    f.detectChanges();
+    expect(f.componentInstance.busy()).toBe(true);
+    btn.click();
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    pending.error({ error: { message: 'お気に入りの保存失敗' } });
+    f.detectChanges();
+    expect(f.componentInstance.item()?.favorite).toBe(false);
+    expect(f.nativeElement.textContent).toContain('お気に入りの保存失敗');
+  });
+  it('keeps favorite while saving when live refresh would overwrite (L-037)', () => {
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValueOnce(pending);
+    const f = create();
+    const btn = f.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement;
+    btn.click();
+    f.detectChanges();
+    expect(f.componentInstance.busy()).toBe(true);
+    expect(f.componentInstance.item()?.favorite).toBe(true);
+    // Simulate what live refresh apply would do — busy() must block callers.
+    expect(f.componentInstance.busy()).toBe(true);
+    pending.next({ ...card, favorite: true, updatedAt: '2026-11-18T00:00:00.000Z' });
+    pending.complete();
+    f.detectChanges();
+    expect(f.componentInstance.item()?.favorite).toBe(true);
   });
   it('flushes edits before allowing navigation', async () => {
     const pending = new Subject<Item>();
@@ -1460,6 +1507,7 @@ describe('ItemDetail Close reason', () => {
       columnId: 3,
       closeReason: '理由',
       solution: '',
+      favorite: false,
       dueAt: null,
       title: '編集中',
       updatedAt: '2026-11-17T01:00:00Z',

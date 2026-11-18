@@ -28,6 +28,12 @@
 .copy-link-icon {
   display: block;
 }
+.favorite-icon {
+  display: block;
+}
+.favorite-toggle.favorite-on {
+  color: var(--accent);
+}
 .eyebrow {
   font-size: 11px;
   letter-spacing: 1.4px;
