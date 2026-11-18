@@ -27,9 +27,6 @@
 .block-input:focus {
   outline: none;
 }
-.block-input::placeholder {
-  color: var(--muted, #9aa291);
-}
 .form-error {
   color: var(--danger, #b42318);
   font-size: 13px;
