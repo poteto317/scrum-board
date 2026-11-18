@@ -54,6 +54,16 @@ describe('App project switcher', () => {
     expect(f.nativeElement.querySelector('.workspace-name')).toBeNull();
   });
 
+  it('keeps the app header sticky above content but below dialogs', () => {
+    const { f } = setup();
+    const header = f.nativeElement.querySelector('.app-header') as HTMLElement;
+    expect(header).toBeTruthy();
+    const style = getComputedStyle(header);
+    expect(style.position).toBe('sticky');
+    expect(style.top).toBe('0px');
+    expect(style.zIndex).toBe('5');
+  });
+
   it('disables delete when only one project remains', () => {
     const { f } = setup({
       listProjects: () => of({ projects: [projects[0]] }),

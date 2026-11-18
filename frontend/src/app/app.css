@@ -1,4 +1,7 @@
 .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   min-height: 67px;
   display: flex;
   align-items: center;
