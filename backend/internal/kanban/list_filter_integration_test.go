@@ -13,7 +13,7 @@ func TestListFilterMySQLCorruptJSONDoesNotOverwrite(t *testing.T) {
 UPDATE workspace_list_filter SET
   board_query_text = 'saved',
   board_status_ids = CAST('"bad"' AS JSON),
-  backlog_query_text = '',
+  backlog_query_text = 'kept',
   backlog_status_ids = CAST('[]' AS JSON)
 WHERE id = 1`); err != nil {
 		t.Fatal(err)
@@ -23,7 +23,10 @@ WHERE id = 1`); err != nil {
 		t.Fatal(err)
 	}
 	if got.Board.Query != "" || len(got.Board.StatusIDs) != 0 {
-		t.Fatalf("expected safe defaults for corrupt board JSON, got %+v", got)
+		t.Fatalf("corrupt board → default board, got %+v", got.Board)
+	}
+	if got.Backlog.Query != "kept" || len(got.Backlog.StatusIDs) != 0 {
+		t.Fatalf("healthy backlog must stay, got %+v", got.Backlog)
 	}
 	var query string
 	var raw []byte
