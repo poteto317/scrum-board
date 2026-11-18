@@ -170,6 +170,25 @@ curl --fail-with-body --request PATCH \
 
 受け付ける各URLの形式は `https://github.com/{owner}/{repo}/pull/{正の整数}`、ASCIIで2048文字以内です。owner/repoは英数字・`_`・`-`・`.`（`.`／`..` 単独は不可）。末尾スラッシュ、先頭0の番号、query、fragment、credentials、port、他ホスト、制御文字、バックスラッシュは400になります。PRの実在や閲覧権限の確認、GitHubとの同期は行いません。
 
+## コメント
+
+アイテム詳細向けのフラットなコメントです。`item_history` には記録しません。ルートは by-number のみです（任意 query `projectId` は既存と同じ解決）。
+
+| 方法 | パス | 応答 |
+|------|------|------|
+| GET | `/api/items/by-number/{number}/comments` | `{ "comments": [ ... ] }`（`created_at` ASC, `id` ASC） |
+| POST | `/api/items/by-number/{number}/comments` | 201 + 1件。body: `{ "author"?: string, "body": string }` |
+| PATCH | `/api/items/by-number/{number}/comments/{id}` | 200 + 1件。`author` / `body` の少なくとも一方 |
+| DELETE | `/api/items/by-number/{number}/comments/{id}` | 204 |
+
+各コメント JSON: `id`, `itemId`, `author`, `body`, `createdAt`, `updatedAt`（RFC3339 UTC）。`author` / `body` は受信後に trim。`author` 省略・空白のみは `""`（最大60・制御文字禁止）。`body` は trim 後 1〜4000。制御文字は禁止だが改行（`\n`/`\r`）は許可。PATCH の空オブジェクト・`null`・未知キーは400。別アイテムの comment id は404。アイテム削除で CASCADE。
+
+```bash
+curl -u "$USER:$PASS" -X POST -H 'Content-Type: application/json' \
+  --data '{"author":"Alice","body":"メモ"}' \
+  http://127.0.0.1:4200/api/items/by-number/7/comments
+```
+
 ## 変更履歴
 
 `GET /api/items/by-number/{number}/history` は `{events: [...], nextBefore: 0}` を返します。eventsにはid、kind、occurredAt、recordedAt、changes（field/before/after）、note、evidenceUrlがあります。kindはcreated/updated/baseline/restoredです。statusの値は列名、assigneeは対応者ラベル、closeReasonはClose理由、solutionはソリューション本文、favoriteは`true`/`false`文字列、dueAtはUTCの期限（未設定は空文字）です。
