@@ -1,7 +1,18 @@
 export type ListFilter = { query: string; statusIds: number[] };
 
+export type ListFilterView = 'board' | 'backlog';
+
+export type WorkspaceListFilters = {
+  board: ListFilter;
+  backlog: ListFilter;
+};
+
 export function emptyListFilter(): ListFilter {
   return { query: '', statusIds: [] };
+}
+
+export function emptyWorkspaceListFilters(): WorkspaceListFilters {
+  return { board: emptyListFilter(), backlog: emptyListFilter() };
 }
 
 /** Draft filter with statusIds limited to currently known columns (for UI + match). */
@@ -45,4 +56,26 @@ export function itemMatchesFilter(
   }
   if (filter.statusIds.length === 0) return true;
   return filter.statusIds.includes(item.columnId);
+}
+
+export function cloneListFilter(f: ListFilter | null | undefined): ListFilter {
+  return {
+    query: f?.query ?? '',
+    statusIds: [...(f?.statusIds ?? [])],
+  };
+}
+
+export function cloneWorkspaceListFilters(
+  f: WorkspaceListFilters | null | undefined,
+): WorkspaceListFilters {
+  return {
+    board: cloneListFilter(f?.board),
+    backlog: cloneListFilter(f?.backlog),
+  };
+}
+
+export function listFiltersEqual(a: ListFilter, b: ListFilter): boolean {
+  if (a.query !== b.query) return false;
+  if (a.statusIds.length !== b.statusIds.length) return false;
+  return a.statusIds.every((id, i) => id === b.statusIds[i]);
 }

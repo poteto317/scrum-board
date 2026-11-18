@@ -261,12 +261,23 @@ describe('Api', () => {
   });
   it('gets and puts list filter', () => {
     api.listFilter().subscribe();
-    http.expectOne('/api/list-filter').flush({ query: '', statusIds: [] });
-    api.putListFilter({ query: 'x', statusIds: [1] }).subscribe();
+    http.expectOne('/api/list-filter').flush({
+      board: { query: '', statusIds: [] },
+      backlog: { query: '', statusIds: [] },
+    });
+    api
+      .putListFilter({
+        board: { query: 'x', statusIds: [1] },
+        backlog: { query: '', statusIds: [] },
+      })
+      .subscribe();
     const req = http.expectOne('/api/list-filter');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ query: 'x', statusIds: [1] });
-    req.flush({ query: 'x', statusIds: [1] });
+    expect(req.request.body).toEqual({
+      board: { query: 'x', statusIds: [1] },
+      backlog: { query: '', statusIds: [] },
+    });
+    req.flush(req.request.body);
   });
 });
 
