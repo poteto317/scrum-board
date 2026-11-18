@@ -336,6 +336,10 @@ func (h handler) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.CloseReason = closeReason
+	if !validDescription(in.Solution) {
+		invalid(w, "ソリューションは10000文字以内で入力してください。")
+		return
+	}
 	c, e := h.repo.CreateItem(r.Context(), in)
 	if e != nil {
 		fail(w, e)
@@ -353,6 +357,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		ProjectID    *int64          `json:"projectId"`
 		Title        *string         `json:"title"`
 		Description  *string         `json:"description"`
+		Solution     *string         `json:"solution"`
 		PRURLs       *[]string       `json:"prUrls"`
 		RelatedItems json.RawMessage `json:"relatedItems"`
 		Assignee     json.RawMessage `json:"assignee"`
@@ -362,7 +367,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	p := ItemPatch{ColumnID: body.ColumnID, ProjectID: body.ProjectID, Title: body.Title, Description: body.Description, PRURLs: body.PRURLs}
+	p := ItemPatch{ColumnID: body.ColumnID, ProjectID: body.ProjectID, Title: body.Title, Description: body.Description, Solution: body.Solution, PRURLs: body.PRURLs}
 	if len(body.RelatedItems) > 0 {
 		if string(body.RelatedItems) == "null" {
 			invalid(w, "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。")
@@ -431,7 +436,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 			p.DueAt = &value
 		}
 	}
-	if p.Title == nil && p.Description == nil && p.ColumnID == nil && p.ProjectID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.DueAt == nil && !p.ClearDueAt {
+	if p.Title == nil && p.Description == nil && p.Solution == nil && p.ColumnID == nil && p.ProjectID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.DueAt == nil && !p.ClearDueAt {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}
@@ -452,6 +457,10 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if p.Description != nil && !validDescription(*p.Description) {
 		invalid(w, "説明は10000文字以内で入力してください。")
+		return
+	}
+	if p.Solution != nil && !validDescription(*p.Solution) {
+		invalid(w, "ソリューションは10000文字以内で入力してください。")
 		return
 	}
 	if p.ColumnID != nil && *p.ColumnID <= 0 {

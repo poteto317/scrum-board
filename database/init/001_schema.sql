@@ -20,6 +20,7 @@ CREATE TABLE items (
  project_id BIGINT NOT NULL,
  title VARCHAR(200) NOT NULL,
  description TEXT NOT NULL,
+ solution TEXT NOT NULL DEFAULT (''),
  position INT NOT NULL DEFAULT 0,
  offset_y INT NOT NULL DEFAULT 0,
  backlog_position INT NOT NULL DEFAULT 0,

@@ -49,6 +49,7 @@ func TestMySQLHistory(t *testing.T) {
 	wantBaseline := []HistoryChange{
 		{Field: "title", After: after.Title},
 		{Field: "description", After: after.Description},
+		{Field: "solution", After: after.Solution},
 		{Field: "status", After: status},
 		{Field: "prUrls", After: prURLsJSON(after.PRURLs)},
 		{Field: "relatedItems", After: relatedItemsJSON(after.RelatedItems)},
@@ -487,8 +488,41 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 		t.Fatalf("changes: %+v", page.Events[0])
 	}
 	created := page.Events[1]
-	if created.Kind != "created" || len(created.Changes) != 8 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
+	if created.Kind != "created" || len(created.Changes) != 9 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[3].After != "Todo" {
 		t.Fatalf("created event: %+v", created)
+	}
+}
+
+func TestMySQLHistoryRecordsSolutionChange(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	sol := "implemented via X"
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{Solution: &sol}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := r.History(ctx, c.Number, c.ProjectID, 0)
+	if err != nil || len(page.Events) < 1 {
+		t.Fatal(page, err)
+	}
+	updated := page.Events[0]
+	if updated.Kind != "updated" || len(updated.Changes) != 1 {
+		t.Fatalf("updated: %+v", updated)
+	}
+	want := HistoryChange{Field: "solution", Before: "", After: "implemented via X"}
+	if updated.Changes[0] != want {
+		t.Fatalf("solution change: %+v", updated.Changes[0])
+	}
+	beforeCount := len(page.Events)
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{Solution: &sol}); err != nil {
+		t.Fatal(err)
+	}
+	page, err = r.History(ctx, c.Number, c.ProjectID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Events) != beforeCount {
+		t.Fatalf("same solution should not add history: before=%d after=%d", beforeCount, len(page.Events))
 	}
 }
 

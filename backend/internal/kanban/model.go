@@ -51,6 +51,7 @@ type Item struct {
 	ProjectID       int64         `json:"projectId"`
 	Title           string        `json:"title"`
 	Description     string        `json:"description"`
+	Solution        string        `json:"solution"`
 	Position        int           `json:"position"`
 	OffsetY         int           `json:"offsetY"`
 	BacklogPosition int           `json:"backlogPosition"`
@@ -84,6 +85,7 @@ type ItemInput struct {
 	ProjectID    *int64        `json:"projectId,omitempty"`
 	Title        string        `json:"title"`
 	Description  string        `json:"description"`
+	Solution     string        `json:"solution"`
 	PRURLs       []string      `json:"prUrls"`
 	RelatedItems []RelatedItem `json:"relatedItems"`
 	Assignee     string        `json:"assignee"`
@@ -94,6 +96,7 @@ type ItemPatch struct {
 	ProjectID    *int64         `json:"projectId,omitempty"`
 	Title        *string        `json:"title"`
 	Description  *string        `json:"description"`
+	Solution     *string        `json:"solution"`
 	PRURLs       *[]string      `json:"prUrls"`
 	RelatedItems *[]RelatedItem `json:"relatedItems"`
 	Assignee     *string        `json:"assignee"`
