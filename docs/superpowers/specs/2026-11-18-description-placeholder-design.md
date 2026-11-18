@@ -41,7 +41,7 @@
 ## 実装方針（概要）
 
 - `frontend/src/app/description-blocks-editor.html` の `placeholder="…"` を削除する。
-- テスト: ブロック editor の DOM に当該 placeholder が無いこと、Enter 後の空ブロックにも付かないことを固定する。既存の Enter / IME / paste テストは壊さない。
+- テスト: ブロック editor の DOM に当該 placeholder が無いこと、および末尾空ブロック（`a\n` → `['a','']`）にも付かないことを固定する。Enter 分割自体は既存テストに委譲する。
 
 ## 関連知見
 
