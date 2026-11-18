@@ -4,6 +4,7 @@ import { of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { App } from './app';
+import { FavoritesSession } from './favorites-session';
 import { ProjectSession } from './project-session';
 
 const projects = [
@@ -112,5 +113,69 @@ describe('App project switcher', () => {
     f.detectChanges();
     expect(session.projects()).toHaveLength(2);
     expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('削除できません');
+  });
+
+  it('moves board/backlog nav into the sidebar and shows empty favorites', () => {
+    const { f } = setup();
+    const sidebar = f.nativeElement.querySelector('.app-sidebar') as HTMLElement;
+    expect(sidebar).toBeTruthy();
+    const links = [...sidebar.querySelectorAll('.app-nav a')].map((a) => ({
+      href: a.getAttribute('href'),
+      text: a.textContent?.trim(),
+    }));
+    expect(links).toEqual([
+      { href: '/', text: 'ボード' },
+      { href: '/backlog', text: 'バックログ' },
+    ]);
+    expect(f.nativeElement.querySelector('header .app-nav')).toBeNull();
+    expect(sidebar.querySelector('.sidebar-empty')?.textContent?.trim()).toBe('なし');
+  });
+
+  it('lists favorite items with untitled fallback and reloads after switch', () => {
+    const { f, api, session } = setup({
+      board: vi.fn(() =>
+        of({
+          columns: [],
+          items: [
+            {
+              id: 1,
+              number: 7,
+              title: '  ',
+              projectId: 1,
+              favorite: true,
+              columnId: 1,
+              description: '',
+              position: 0,
+              backlogPosition: 0,
+              offsetY: 0,
+              prUrls: [],
+              relatedItems: [],
+              assignee: '',
+              closeReason: '',
+              solution: '',
+              dueAt: null,
+              createdAt: '',
+              updatedAt: '',
+            },
+          ],
+          settings: { cardLayout: 'pack', activeProjectId: 1 },
+        }),
+      ),
+    });
+    f.detectChanges();
+    const favLink = f.nativeElement.querySelector(
+      '.sidebar-favorite-list a',
+    ) as HTMLAnchorElement | null;
+    expect(favLink?.textContent?.trim()).toBe('（無題）');
+    expect(favLink?.getAttribute('href')).toContain('/items/7');
+    const favorites = TestBed.inject(FavoritesSession);
+    const loadSpy = vi.spyOn(favorites, 'loadForActiveProject');
+    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    select.value = '2';
+    select.dispatchEvent(new Event('change'));
+    f.detectChanges();
+    expect(session.activeId()).toBe(2);
+    expect(loadSpy).toHaveBeenCalled();
+    expect(api.board).toHaveBeenCalled();
   });
 });
