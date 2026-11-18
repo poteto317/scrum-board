@@ -175,8 +175,8 @@ describe('Backlog reordering', () => {
             board: () => of({ columns, items: cards, settings: { cardLayout: 'pack' } }),
             reorderBacklog: () => of({ items: cards }),
             listCommandTemplates: () => of({ templates: [] }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
           },
         },
       ],
@@ -200,8 +200,8 @@ describe('Backlog reordering', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -236,8 +236,8 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -287,8 +287,8 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -337,8 +337,8 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -400,8 +400,8 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             createItem,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -452,8 +452,8 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: [] }),
             board: () => of({ columns: [{ id: 2, name: 'Doing', position: 0 }], items: [] }),
             createItem,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -478,8 +478,8 @@ describe('Backlog reordering', () => {
           useValue: {
             backlog: () => throwError(() => ({ status: 500, error: { message: '失敗' } })),
             board: () => throwError(() => ({ status: 500, error: { message: '失敗' } })),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -518,8 +518,8 @@ describe('Backlog live refresh', () => {
       board: vi.fn(() => of({ columns, items: [] })),
       createItem: vi.fn(),
       reorderBacklog: vi.fn(),
-      listFilter: () => of({ query: '', statusIds: [] }),
-      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+      listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+      putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Backlog],
@@ -547,8 +547,8 @@ describe('Backlog live refresh', () => {
       board: vi.fn(() => of({ columns, items: [] })),
       createItem: vi.fn(),
       reorderBacklog: vi.fn(),
-      listFilter: () => of({ query: '', statusIds: [] }),
-      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+      listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+      putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Backlog],
@@ -585,8 +585,8 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -630,8 +630,8 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -663,8 +663,8 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -707,8 +707,8 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -755,8 +755,8 @@ describe('Backlog scroll save and restore', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -788,8 +788,8 @@ describe('Backlog add dialog accidental close', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             createItem: vi.fn(),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -860,8 +860,8 @@ describe('Backlog list filter', () => {
           useValue: {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -873,11 +873,11 @@ describe('Backlog list filter', () => {
     expect(f.nativeElement.querySelector('.list-filter')).not.toBeNull();
     expect(f.componentInstance.filteredItems().length).toBe(4);
     expect(f.componentInstance.canReorder()).toBe(true);
-    f.componentInstance.listFilter.setQuery('A');
+    f.componentInstance.listFilter.setQuery('backlog', 'A');
     f.detectChanges();
     expect(f.componentInstance.filteredItems().map((c) => c.title)).toEqual(['A']);
     expect(f.componentInstance.canReorder()).toBe(false);
-    f.componentInstance.listFilter.clear();
+    f.componentInstance.listFilter.clear('backlog');
     f.detectChanges();
     expect(f.componentInstance.filteredItems().length).toBe(4);
     expect(f.componentInstance.canReorder()).toBe(true);

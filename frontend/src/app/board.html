@@ -50,7 +50,7 @@
       >{{ done() }} 完了 <span>／</span> {{ data().columns.length }} ステータス</span
     >
   </section>
-  <app-list-filter-bar class="board-list-filter" [columns]="data().columns" />
+  <app-list-filter-bar class="board-list-filter" view="board" [columns]="data().columns" />
   @if (loading()) {
     <div class="state-panel" role="status">
       <span class="spinner"></span>ボードを読み込んでいます…

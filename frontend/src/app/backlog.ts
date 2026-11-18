@@ -84,7 +84,7 @@ export class Backlog implements OnInit {
   readonly formError = signal('');
   readonly appliedFilter = computed(() =>
     appliedListFilter(
-      this.listFilter.filter(),
+      this.listFilter.filter('backlog'),
       this.columns().map((c) => c.id),
     ),
   );
