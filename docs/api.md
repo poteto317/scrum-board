@@ -377,21 +377,24 @@ curl --fail-with-body --request PATCH \
 - HTTP 400: 3キーすべて欠落、`cardLayout` 不正値・空文字、`mobileBoardColumnId` が 0 以下または存在しない列、`activeProjectId` が 0 以下または存在しないプロジェクト、未知フィールド、不正 JSON。
 - HTTP 500: DB 更新に失敗した場合（トランザクションはロールバックされます）。
 
-# 一覧フィルタ（ボード／バックログ共有）
+# 一覧フィルタ（ボード／バックログ分離）
 
-`GET` / `PUT /api/list-filter` で、かんばんとプロダクトバックログが共有する絞り込み状態を読み書きします。Basic Auth 共有のワークスペース共通 1 件です。一覧 API 自体は絞らず、クライアントが `query`（タイトル／説明の部分一致）と `statusIds`（列 ID の複数選択。空配列＝全列）で表示を絞ります。
+`GET` / `PUT /api/list-filter` で、かんばん（`board`）とプロダクトバックログ（`backlog`）それぞれの絞り込み状態を読み書きします。Basic Auth 共有のワークスペース共通 1 行で、**ビューごとに独立**です。一覧 API 自体は絞らず、クライアントが各ビューの `query`（タイトル／説明の部分一致）と `statusIds`（列 ID の複数選択。空配列＝全列）で表示を絞ります。
 
 ```sh
 curl --fail-with-body http://127.0.0.1:4200/api/list-filter
 curl --fail-with-body --request PUT \
   --header 'Content-Type: application/json' \
-  --data '{"query":"ログイン","statusIds":[1,2]}' \
+  --data '{"board":{"query":"ログイン","statusIds":[]},"backlog":{"query":"","statusIds":[1]}}' \
   http://127.0.0.1:4200/api/list-filter
 ```
 
-- 応答は常に `{ "query": string, "statusIds": number[] }`（行が無い GET は空フィルタ）。
-- PUT: `query` は trim 後 200 文字以内。`statusIds` は正の整数配列（重複除去、存在しない列 ID は無視、最大 64 要素）。未知トップレベルキーや null フィールドは 400。
-- 壊れた DB の JSON は GET で空フィルタを返すが、行を空で上書きしない。
+- 応答は常に `{ "board": { "query", "statusIds" }, "backlog": { "query", "statusIds" } }`。
+- 初期（行なし／Initialize）: `board.statusIds` は `[]`（全列）。`backlog.statusIds` は列名が Todo（大小無視・trim）の先頭列 ID。Todo 列が無ければ `[]`。
+- 旧形式（単一 query/statusIds）からの移行: 旧値は `board` へ。`backlog` は上記 Todo 初期。旧カラムは DROP する。
+- PUT は `board` と `backlog` の両方必須（全体置換）。各ネストの `query` は trim 後 200 文字以内。`statusIds` は正の整数配列（重複除去、存在しない列 ID は無視、最大 64 要素）。未知キーや null フィールドは 400。
+- クリア後の空 `statusIds` は全列表示として保存され、再 GET で Todo を再シードしない。
+- 壊れた DB の JSON は GET で安全なデフォルトを返すが、行を空で上書きしない。
 
 # プロダクトバックログ
 
