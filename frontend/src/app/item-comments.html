@@ -1,0 +1,116 @@
+<section class="comments" aria-label="コメント">
+  <h2>コメント</h2>
+
+  @if (loading()) {
+    <p role="status">コメントを読み込んでいます…</p>
+  }
+  @if (error()) {
+    <p role="alert">コメントを読み込めませんでした。</p>
+    <button type="button" class="secondary" (click)="retry()">再試行</button>
+  } @else if (!loading() && !comments().length) {
+    <p class="empty">まだコメントはありません。</p>
+  }
+
+  @if (!error()) {
+    <ul class="comment-list">
+      @for (c of comments(); track c.id) {
+        <li class="comment-row">
+          @if (editingId() === c.id) {
+            <label class="field">
+              <span>表示名</span>
+              <input
+                type="text"
+                [ngModel]="editAuthor()"
+                (ngModelChange)="editAuthor.set($event)"
+                [disabled]="savingId() === c.id"
+                maxlength="60"
+              />
+            </label>
+            <label class="field">
+              <span>本文</span>
+              <textarea
+                rows="3"
+                [ngModel]="editBody()"
+                (ngModelChange)="editBody.set($event)"
+                [disabled]="savingId() === c.id"
+              ></textarea>
+            </label>
+            <div class="row-actions">
+              <button
+                type="button"
+                (click)="saveEdit(c)"
+                [disabled]="savingId() === c.id"
+              >
+                保存
+              </button>
+              <button
+                type="button"
+                class="secondary"
+                (click)="cancelEdit()"
+                [disabled]="savingId() === c.id"
+              >
+                キャンセル
+              </button>
+            </div>
+          } @else {
+            <div class="comment-heading">
+              <strong>{{ displayName(c.author) }}</strong>
+              <time>{{ c.createdAt | date: 'yyyy/MM/dd HH:mm:ss' }}</time>
+            </div>
+            <pre class="comment-body">{{ c.body }}</pre>
+            <div class="row-actions">
+              <button
+                type="button"
+                class="secondary"
+                (click)="startEdit(c)"
+                [disabled]="savingId() != null || deletingId() != null || posting()"
+              >
+                編集
+              </button>
+              <button
+                type="button"
+                class="danger-link"
+                (click)="remove(c)"
+                [disabled]="deletingId() != null || savingId() != null || posting()"
+              >
+                削除
+              </button>
+            </div>
+          }
+        </li>
+      }
+    </ul>
+
+    <form class="compose" (submit)="$event.preventDefault(); submit()">
+      <label class="field">
+        <span>表示名（任意）</span>
+        <input
+          type="text"
+          [ngModel]="draftAuthor()"
+          (ngModelChange)="draftAuthor.set($event)"
+          name="draftAuthor"
+          [disabled]="posting()"
+          maxlength="60"
+        />
+      </label>
+      <label class="field">
+        <span>本文</span>
+        <textarea
+          rows="3"
+          [ngModel]="draftBody()"
+          (ngModelChange)="draftBody.set($event)"
+          name="draftBody"
+          [disabled]="posting()"
+          required
+        ></textarea>
+      </label>
+      <button type="submit" [disabled]="posting() || savingId() != null || deletingId() != null">
+        投稿
+      </button>
+    </form>
+  }
+
+  @if (actionError()) {
+    <p class="form-error" role="alert">{{ actionError() }}</p>
+  }
+</section>
