@@ -97,7 +97,7 @@ func defaultWorkspaceListFilters(cols []Column) WorkspaceListFilters {
 	return out
 }
 
-func (r MySQLRepository) knownColumnIDs(ctx context.Context) (map[int64]struct{}, []Column, error) {
+func (r MySQLRepository) columnsWithKnownIDs(ctx context.Context) (map[int64]struct{}, []Column, error) {
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, nil, err
@@ -115,7 +115,7 @@ func (r MySQLRepository) knownColumnIDs(ctx context.Context) (map[int64]struct{}
 }
 
 func (r MySQLRepository) GetListFilter(ctx context.Context) (WorkspaceListFilters, error) {
-	known, cols, err := r.knownColumnIDs(ctx)
+	known, cols, err := r.columnsWithKnownIDs(ctx)
 	if err != nil {
 		return WorkspaceListFilters{}, err
 	}
@@ -158,7 +158,7 @@ func parseStoredListFilterOK(query string, statusJSON []byte) (ListFilter, bool)
 }
 
 func (r MySQLRepository) PutListFilter(ctx context.Context, in WorkspaceListFilters) (WorkspaceListFilters, error) {
-	known, _, err := r.knownColumnIDs(ctx)
+	known, _, err := r.columnsWithKnownIDs(ctx)
 	if err != nil {
 		return WorkspaceListFilters{}, err
 	}
