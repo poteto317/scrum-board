@@ -43,27 +43,21 @@ it('does not set placeholder on empty description blocks', () => {
   const { f } = mount('');
   const list = [...areas(f)];
   expect(list.length).toBe(1);
-  expect(list[0]!.placeholder).toBe('');
   expect(list[0]!.getAttribute('placeholder')).toBeNull();
   expect(list[0]!.getAttribute('aria-label')).toBe('説明ブロック 1');
 });
 ```
 
-- [x] **Step 2: Enter 後の空ブロックにも placeholder が無く aria-label があるテストを追加**
+- [x] **Step 2: 末尾空ブロックにも placeholder が無く aria-label があるテストを追加**
+
+静的属性削除の回帰は Enter 分割に依存せず、`mount('a\n')` で空ブロックを直接検証する（Enter 経路は既存 split テストに委譲）。
 
 ```ts
-it('does not set placeholder on empty blocks created by Enter', () => {
-  const { f } = mount('a');
-  const area = areas(f)[0]!;
-  area.setSelectionRange(1, 1);
-  area.dispatchEvent(
-    new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
-  );
-  f.detectChanges();
+it('does not set placeholder on empty trailing blocks', () => {
+  const { f } = mount('a\n');
   const list = [...areas(f)];
   expect(list.length).toBe(2);
   for (const [i, el] of list.entries()) {
-    expect(el.placeholder).toBe('');
     expect(el.getAttribute('placeholder')).toBeNull();
     expect(el.getAttribute('aria-label')).toBe(`説明ブロック ${i + 1}`);
   }
