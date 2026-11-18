@@ -22,7 +22,7 @@ type memoryRepo struct {
 	defaultTemplateIDs []int64
 	settings           BoardSettings
 	settingsFail       error
-	listFilter         *ListFilter
+	listFilter         *WorkspaceListFilters
 	projects           []Project
 	nextProject        int64
 	comments           map[int64]Comment
@@ -895,33 +895,29 @@ func (m *memoryRepo) ApplyCommandTemplatesToAllItems(_ context.Context, template
 	return nil
 }
 
-func (m *memoryRepo) GetListFilter(context.Context) (ListFilter, error) {
+func (m *memoryRepo) GetListFilter(context.Context) (WorkspaceListFilters, error) {
 	if m.listFilter == nil {
-		return emptyListFilter(), nil
+		return defaultWorkspaceListFilters(m.columns), nil
 	}
-	out := *m.listFilter
-	if out.StatusIDs == nil {
-		out.StatusIDs = []int64{}
-	} else {
-		out.StatusIDs = append([]int64(nil), out.StatusIDs...)
-	}
-	return out, nil
+	return WorkspaceListFilters{
+		Board:   cloneListFilter(m.listFilter.Board),
+		Backlog: cloneListFilter(m.listFilter.Backlog),
+	}, nil
 }
 
-func (m *memoryRepo) PutListFilter(_ context.Context, in ListFilter) (ListFilter, error) {
+func (m *memoryRepo) PutListFilter(_ context.Context, in WorkspaceListFilters) (WorkspaceListFilters, error) {
 	known := make(map[int64]struct{}, len(m.columns))
 	for _, c := range m.columns {
 		known[c.ID] = struct{}{}
 	}
-	out := ListFilter{
-		Query:     strings.TrimSpace(in.Query),
-		StatusIDs: normalizeStatusIDs(in.StatusIDs, known),
+	out := WorkspaceListFilters{
+		Board:   normalizeListFilter(in.Board, known),
+		Backlog: normalizeListFilter(in.Backlog, known),
 	}
-	if out.StatusIDs == nil {
-		out.StatusIDs = []int64{}
+	cp := WorkspaceListFilters{
+		Board:   cloneListFilter(out.Board),
+		Backlog: cloneListFilter(out.Backlog),
 	}
-	cp := out
-	cp.StatusIDs = append([]int64(nil), out.StatusIDs...)
 	m.listFilter = &cp
 	return out, nil
 }

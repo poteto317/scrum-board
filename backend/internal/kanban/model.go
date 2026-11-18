@@ -138,8 +138,8 @@ type Repository interface {
 	ListCommandTemplateDefaults(context.Context) ([]int64, error)
 	ReplaceCommandTemplateDefaults(context.Context, []int64) ([]int64, error)
 	ApplyCommandTemplatesToAllItems(context.Context, []int64) error
-	GetListFilter(context.Context) (ListFilter, error)
-	PutListFilter(context.Context, ListFilter) (ListFilter, error)
+	GetListFilter(context.Context) (WorkspaceListFilters, error)
+	PutListFilter(context.Context, WorkspaceListFilters) (WorkspaceListFilters, error)
 	ListComments(context.Context, int64) ([]Comment, error)
 	CreateComment(context.Context, int64, string, string) (Comment, error)
 	UpdateComment(context.Context, int64, int64, *string, *string) (Comment, error)
