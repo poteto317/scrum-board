@@ -110,6 +110,24 @@ h1 {
   line-height: 1.9;
   margin-top: 12px;
 }
+.solution-property {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+.solution-property .property-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.solution-link {
+  font-size: 14px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.solution-link:hover {
+  text-decoration: underline;
+}
 .timestamps {
   border-top: 1px solid var(--line);
   margin-top: 23px;

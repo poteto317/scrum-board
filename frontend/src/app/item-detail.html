@@ -325,6 +325,16 @@
               }
             </p>
           </div>
+          <div class="solution-property">
+            <span class="property-label">ソリューション</span>
+            <a
+              class="solution-link"
+              [routerLink]="['/items', item()!.number, 'solution']"
+              [queryParams]="item()!.projectId > 0 ? { project: item()!.projectId } : {}"
+            >
+              {{ item()!.solution === '' ? 'ソリューション（未記入）' : 'ソリューション' }}
+            </a>
+          </div>
           <label for="detail-pr-url">GitHub PR <span class="optional">任意</span></label>
           <div class="pr-add">
             <input

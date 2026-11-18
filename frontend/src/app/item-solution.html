@@ -1,0 +1,40 @@
+<main class="solution-page">
+  <a class="back-link" [routerLink]="detailLink()" [queryParams]="detailQuery()">
+    ← {{ item() ? formatItemNumber(item()!.number) + ' の詳細へ' : '詳細へ' }}
+  </a>
+  @if (loading()) {
+    <div class="state-panel" role="status">
+      <span class="spinner"></span>ソリューションを読み込んでいます…
+    </div>
+  } @else if (!item()) {
+    <div class="state-panel" role="alert">
+      <p>{{ error() }}</p>
+      <button class="secondary" type="button" (click)="load()">再試行</button>
+    </div>
+  } @else {
+    <header class="solution-heading">
+      <div class="eyebrow">{{ formatItemNumber(item()!.number) }}</div>
+      <h1>ソリューション</h1>
+      <p class="solution-title">{{ item()!.title }}</p>
+      <p class="field-note">実装の整理を書くページです。詳細の説明とは別です。</p>
+    </header>
+    <section class="solution-editor" aria-label="ソリューション本文">
+      <app-description-blocks-editor
+        [value]="control.value"
+        [lengthErrorMessage]="solutionLengthError"
+        (textChange)="onTextChange($event)"
+      />
+      @if (control.invalid) {
+        <p class="form-error">{{ solutionLengthError }}</p>
+      }
+      @if (saveError()) {
+        <p class="form-error" role="alert">{{ saveError() }}</p>
+      }
+      @if (saving()) {
+        <p class="field-note" role="status">保存中…</p>
+      } @else if (control.value === '') {
+        <p class="field-note">未記入です。ここに実装内容を書けます。</p>
+      }
+    </section>
+  }
+</main>

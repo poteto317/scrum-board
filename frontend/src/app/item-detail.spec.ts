@@ -36,6 +36,7 @@ const card: Item = {
   relatedItems: [],
   assignee: '',
   closeReason: '',
+  solution: '',
   dueAt: null,
   createdAt: '',
   updatedAt: '',
@@ -100,6 +101,23 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     return f;
   };
+  it('shows solution property link (empty label) without form field', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const link = f.nativeElement.querySelector('a.solution-link') as HTMLAnchorElement | null;
+    expect(link).toBeTruthy();
+    expect(link!.textContent?.trim()).toBe('ソリューション（未記入）');
+    expect(Object.keys(f.componentInstance.form.getRawValue())).not.toContain('solution');
+  });
+  it('shows filled solution property label when solution is set', async () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, solution: 'メモ', projectId: 2 }));
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const link = f.nativeElement.querySelector('a.solution-link') as HTMLAnchorElement;
+    expect(link.textContent?.trim()).toBe('ソリューション');
+  });
   it('goBackToList navigates to saved returnTo and clears list-return', async () => {
     saveReturnTo('/backlog');
     const f = create();
@@ -1441,6 +1459,7 @@ describe('ItemDetail Close reason', () => {
       ...card,
       columnId: 3,
       closeReason: '理由',
+      solution: '',
       dueAt: null,
       title: '編集中',
       updatedAt: '2026-11-17T01:00:00Z',

@@ -20,7 +20,7 @@ import {
   splitDescriptionBlock,
 } from './description-blocks';
 
-const LENGTH_ERROR = `説明は${DESCRIPTION_MAX_LEN}文字以内で入力してください。`;
+const DEFAULT_LENGTH_ERROR = `説明は${DESCRIPTION_MAX_LEN}文字以内で入力してください。`;
 
 @Component({
   selector: 'app-description-blocks-editor',
@@ -33,6 +33,8 @@ export class DescriptionBlocksEditor {
 
   readonly value = input.required<string>();
   readonly disabled = input(false);
+  /** Overridable length error (solution page uses「ソリューションは…」). */
+  readonly lengthErrorMessage = input(DEFAULT_LENGTH_ERROR);
   readonly textChange = output<string>();
   readonly compositionChange = output<boolean>();
   readonly linkRequest = output<{
@@ -99,7 +101,7 @@ export class DescriptionBlocksEditor {
     next[index] = el.value;
     const normalized = normalizeDescriptionBlocks(next);
     if (descriptionLength(serializeDescriptionBlocks(normalized)) > DESCRIPTION_MAX_LEN) {
-      this.lengthError.set(LENGTH_ERROR);
+      this.lengthError.set(this.lengthErrorMessage());
       el.value = this.blocks()[index] ?? '';
       this.resize(el);
       return;
@@ -123,7 +125,7 @@ export class DescriptionBlocksEditor {
       const caret = el.selectionStart ?? 0;
       const split = splitDescriptionBlock(this.blocks(), index, caret);
       if (!split) {
-        this.lengthError.set(LENGTH_ERROR);
+        this.lengthError.set(this.lengthErrorMessage());
         return;
       }
       this.lengthError.set('');
@@ -152,7 +154,7 @@ export class DescriptionBlocksEditor {
     const next = this.areas().map((ref) => ref.nativeElement.value);
     const normalized = normalizeDescriptionBlocks(next.length ? next : this.blocks());
     if (descriptionLength(serializeDescriptionBlocks(normalized)) > DESCRIPTION_MAX_LEN) {
-      this.lengthError.set(LENGTH_ERROR);
+      this.lengthError.set(this.lengthErrorMessage());
       this.areas().forEach((ref, i) => {
         ref.nativeElement.value = this.blocks()[i] ?? '';
         this.resize(ref.nativeElement);
