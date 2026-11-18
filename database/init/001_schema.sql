@@ -45,3 +45,14 @@ INSERT INTO board_settings(setting_key, setting_value) VALUES ('card_layout', 'p
 INSERT INTO board_columns(id,name) VALUES (1,'Todo'),(2,'Doing'),(3,'Done');
 INSERT INTO items(column_id,title,description,project_id) VALUES
 (1,'ドラッグ＆ドロップでカードの移動・並べ替えを実装する','ボード上でカードをドラッグして列内の順番変更と別ステータスへの移動ができる。短いドラッグは詳細へ遷移する。詳細画面のステータス選択でも移動でき、移動先列の末尾に並ぶ。',1);
+-- Keep in sync with backend/internal/kanban/comment_migrate.go (itemCommentsDDL).
+CREATE TABLE IF NOT EXISTS item_comments (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ item_id BIGINT NOT NULL,
+ author VARCHAR(60) NOT NULL DEFAULT '',
+ body TEXT NOT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ CONSTRAINT fk_comment_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+ INDEX comments_item_created (item_id, created_at, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
