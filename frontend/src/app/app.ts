@@ -1,5 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { FavoritesSession, displayFavoriteTitle } from './favorites-session';
 import { ProjectSession } from './project-session';
 
 @Component({
@@ -10,6 +11,8 @@ import { ProjectSession } from './project-session';
 })
 export class App implements OnInit {
   readonly projectSession = inject(ProjectSession);
+  readonly favorites = inject(FavoritesSession);
+  readonly displayFavoriteTitle = displayFavoriteTitle;
 
   ngOnInit() {
     this.projectSession.load();
@@ -21,7 +24,6 @@ export class App implements OnInit {
     if (!Number.isFinite(id) || id <= 0) return;
     this.projectSession.switchTo(id).subscribe({
       error: () => {
-        // A same-turn failure never renders the optimistic id, so write the restored value.
         const current = this.projectSession.activeId();
         select.value = current == null ? '' : String(current);
       },

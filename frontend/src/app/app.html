@@ -6,17 +6,6 @@
     ></a
   >
   <span class="header-divider"></span>
-  <nav class="app-nav" aria-label="メイン">
-    <a
-      routerLink="/"
-      routerLinkActive="active"
-      [routerLinkActiveOptions]="{ exact: true }"
-      ariaCurrentWhenActive="page"
-      >ボード</a
-    >
-    <a routerLink="/backlog" routerLinkActive="active" ariaCurrentWhenActive="page">バックログ</a>
-  </nav>
-  <span class="header-divider"></span>
   <div class="project-switcher">
     <label class="sr-only" for="project-select">プロジェクト</label>
     <select
@@ -67,4 +56,39 @@
     <span class="avatar" aria-label="個人用">S</span></span
   >
 </header>
-<router-outlet />
+<div class="app-body">
+  <aside class="app-sidebar" aria-label="サイドバー">
+    <nav class="app-nav" aria-label="メイン">
+      <a
+        routerLink="/"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        ariaCurrentWhenActive="page"
+        >ボード</a
+      >
+      <a routerLink="/backlog" routerLinkActive="active" ariaCurrentWhenActive="page">バックログ</a>
+    </nav>
+    <section class="sidebar-favorites" aria-labelledby="favorites-heading">
+      <h2 id="favorites-heading" class="sidebar-heading">お気に入り</h2>
+      @if (favorites.items().length === 0) {
+        <p class="sidebar-empty">なし</p>
+      } @else {
+        <ul class="sidebar-favorite-list">
+          @for (fav of favorites.items(); track fav.id) {
+            <li>
+              <a
+                [routerLink]="['/items', fav.number]"
+                [queryParams]="fav.projectId > 0 ? { project: fav.projectId } : null"
+                [attr.title]="displayFavoriteTitle(fav.title)"
+                >{{ displayFavoriteTitle(fav.title) }}</a
+              >
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </aside>
+  <div class="app-main">
+    <router-outlet />
+  </div>
+</div>
