@@ -1,6 +1,6 @@
 import { Component, inject, input } from '@angular/core';
 import { Column } from './models';
-import { appliedListFilter } from './list-filter';
+import { ListFilterView, appliedListFilter } from './list-filter';
 import { ListFilterSession } from './list-filter-session';
 
 @Component({
@@ -9,6 +9,7 @@ import { ListFilterSession } from './list-filter-session';
   styleUrl: './list-filter-bar.css',
 })
 export class ListFilterBar {
+  readonly view = input.required<ListFilterView>();
   readonly columns = input<Column[]>([]);
   /** Optional trailing count label (e.g. backlog "3 / 10 件"). */
   readonly countLabel = input('');
@@ -16,7 +17,7 @@ export class ListFilterBar {
 
   selectedStatusIds(): number[] {
     return appliedListFilter(
-      this.session.filter(),
+      this.session.filter(this.view()),
       this.columns().map((c) => c.id),
     ).statusIds;
   }
@@ -26,18 +27,22 @@ export class ListFilterBar {
   }
 
   onQueryInput(event: Event) {
-    this.session.setQuery((event.target as HTMLInputElement).value);
+    this.session.setQuery(this.view(), (event.target as HTMLInputElement).value);
   }
 
   onStatusToggle(columnId: number) {
-    this.session.toggleStatus(columnId);
+    this.session.toggleStatus(this.view(), columnId);
   }
 
   clear() {
-    this.session.clear();
+    this.session.clear(this.view());
   }
 
   retryLoad() {
     this.session.retryLoad();
+  }
+
+  queryValue(): string {
+    return this.session.filter(this.view()).query;
   }
 }

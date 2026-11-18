@@ -257,7 +257,7 @@ export class Board implements OnInit {
   });
   readonly appliedFilter = computed(() =>
     appliedListFilter(
-      this.listFilter.filter(),
+      this.listFilter.filter('board'),
       this.data().columns.map((c) => c.id),
     ),
   );
