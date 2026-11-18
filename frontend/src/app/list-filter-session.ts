@@ -52,10 +52,11 @@ export class ListFilterSession {
   load(options?: { force?: boolean }) {
     const force = options?.force === true;
     const hadQueuedSave = this.saveQueued || this.timer !== undefined;
+    // Invalidate in-flight PUT so a stale whole-workspace body cannot overwrite a fresher GET.
+    this.saveGeneration++;
+    this.saveInFlight = false;
     if (force) {
       this.clearTimer();
-      this.saveGeneration++;
-      this.saveInFlight = false;
       this.saveQueued = false;
     }
     const generation = ++this.loadGeneration;
