@@ -22,6 +22,7 @@ const card: Item = {
   relatedItems: [],
   assignee: '',
   closeReason: '',
+  favorite: false,
   dueAt: null,
   createdAt: '',
   updatedAt: '',

@@ -53,6 +53,8 @@ export interface Item {
   assignee: string;
   /** Close 理由。欠落時は ''（normalizeItem で補完）。 */
   closeReason: string;
+  /** お気に入り。欠落時は false（normalizeItem で補完）。 */
+  favorite: boolean;
   /** 期限 UTC `…Z`（秒 00）。欠落時は null（normalizeItem で補完。空文字にしない）。 */
   dueAt: string | null;
   createdAt: string;
@@ -66,7 +68,7 @@ export interface BoardData {
 }
 /** POST /api/items body — dueAt は create 非対応（PATCH のみ）。 */
 export type ItemInput = Pick<Item, 'title' | 'description' | 'columnId'> &
-  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason' | 'solution' | 'projectId'>>;
+  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason' | 'solution' | 'favorite' | 'projectId'>>;
 /** PATCH /api/items/{id} body — dueAt の null クリアを含む。 */
 export type ItemPatch = Partial<ItemInput & Pick<Item, 'dueAt'>>;
 

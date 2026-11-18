@@ -27,6 +27,7 @@ function card(id: number, position: number, title: string): Item {
     assignee: '',
     closeReason: '',
     solution: '',
+    favorite: false,
     dueAt: null,
     createdAt: '',
     updatedAt: '',

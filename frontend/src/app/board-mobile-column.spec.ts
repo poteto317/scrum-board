@@ -34,6 +34,7 @@ function sample(settings: { cardLayout: 'pack' | 'free'; mobileBoardColumnId?: n
         assignee: '',
         closeReason: '',
         solution: '',
+        favorite: false,
         dueAt: null,
         createdAt: '',
         updatedAt: '',

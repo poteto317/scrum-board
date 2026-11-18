@@ -23,6 +23,7 @@ function card(id: number, columnId: number, position: number, offsetY = 0): Item
     assignee: '',
     closeReason: '',
     solution: '',
+    favorite: false,
     dueAt: null,
     createdAt: '',
     updatedAt: '',

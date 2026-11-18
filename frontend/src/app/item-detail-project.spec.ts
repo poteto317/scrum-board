@@ -23,6 +23,7 @@ function card(projectId: number): Item {
     assignee: '',
     closeReason: '',
     solution: '',
+    favorite: false,
     dueAt: null,
     createdAt: '',
     updatedAt: '',
