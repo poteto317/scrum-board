@@ -308,25 +308,29 @@
                   >
                 </article>
               } @empty {
-                <div class="empty-column">
-                  <span class="empty-symbol" aria-hidden="true">{{
-                    column.name === 'Done' ? '✓' : '＋'
-                  }}</span>
-                  <p>まだアイテムはありません</p>
-                  <span>{{
-                    column.name === 'Done'
-                      ? '完了したタスクがここに並びます'
-                      : '最初のタスクを追加しましょう'
-                  }}</span>
+                <div class="empty-column" [attr.role]="projectSwitching() ? 'status' : null">
+                  @if (projectSwitching()) {
+                    <p>プロジェクトを切り替え中…</p>
+                  } @else {
+                    <span class="empty-symbol" aria-hidden="true">{{
+                      column.name === 'Done' ? '✓' : '＋'
+                    }}</span>
+                    <p>まだアイテムはありません</p>
+                    <span>{{
+                      column.name === 'Done'
+                        ? '完了したタスクがここに並びます'
+                        : '最初のタスクを追加しましょう'
+                    }}</span>
+                  }
                 </div>
               }
             </div>
-            <button class="add-card" (click)="openItem(column.id)" [disabled]="reordering()">
+            <button class="add-card" (click)="openItem(column.id)" [disabled]="reordering() || projectSwitching()">
               <span aria-hidden="true">＋</span> アイテムを追加
             </button>
           </section>
         }
-        <button class="add-column-tile" (click)="openColumn()" [disabled]="reordering()">
+        <button class="add-column-tile" (click)="openColumn()" [disabled]="reordering() || projectSwitching()">
           <span aria-hidden="true">＋</span> 列を追加
         </button>
       </div>

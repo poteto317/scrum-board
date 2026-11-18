@@ -126,6 +126,8 @@ export class Board implements OnInit {
   readonly assigneeKind = assigneeKind;
   private readonly api = inject(Api);
   private readonly projectSession = inject(ProjectSession);
+  /** Template-safe busy flag while active project reload is in flight. */
+  readonly projectSwitching = computed(() => this.projectSession.switching());
   private boardLoadGeneration = 0;
   private projectSwitchSub?: Subscription;
   private readonly appOrigin = inject(AppOrigin);
