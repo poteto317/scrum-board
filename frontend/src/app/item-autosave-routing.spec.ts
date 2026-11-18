@@ -10,6 +10,7 @@ import { ItemDetail } from './item-detail';
 it('guards real router reuse: rejecting discard retains the old card, then flushes before leaving', async () => {
   const api = {
     history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
     board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
     itemByNumber: vi.fn((number: number) =>
       of({

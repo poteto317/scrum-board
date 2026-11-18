@@ -86,6 +86,15 @@ describe('ItemSolution', () => {
     fixture.destroy();
   });
 
+  it('does not show comment UI on the solution page', async () => {
+    const fixture = create();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-item-comments')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('コメント');
+    fixture.destroy();
+  });
+
   it('PATCHes only solution after debounce', async () => {
     const fixture = create();
     await Promise.resolve();

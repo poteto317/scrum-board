@@ -46,6 +46,7 @@ describe('ItemDetail autosave', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -64,6 +65,7 @@ describe('ItemDetail autosave', () => {
     };
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -162,6 +164,16 @@ describe('ItemDetail autosave', () => {
     expect(readBoardScroll()).toBeNull();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
   });
+  it('places comments above history', () => {
+    const f = create();
+    const comments = f.nativeElement.querySelector('app-item-comments');
+    const history = f.nativeElement.querySelector('app-item-history');
+    expect(comments).toBeTruthy();
+    expect(history).toBeTruthy();
+    expect(
+      comments.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
   it('refreshes history after a successful autosave without resetting the draft', () => {
     api.updateItem.mockImplementation((_id, patch) =>
       of({ ...card, ...patch, updatedAt: '2026-11-13T00:00:00Z' }),
@@ -178,7 +190,7 @@ describe('ItemDetail autosave', () => {
   });
   it('has no manual save button and never saves just by loading', () => {
     const f = create();
-    expect(f.nativeElement.querySelector('button[type="submit"]')).toBeNull();
+    expect(f.nativeElement.querySelector('form.detail-layout button[type="submit"]')).toBeNull();
     vi.advanceTimersByTime(2500);
     expect(api.updateItem).not.toHaveBeenCalled();
     expect(f.nativeElement.querySelector('.eyebrow').textContent).toBe('ITEM-003');
@@ -627,6 +639,7 @@ describe('ItemDetail copy card link', () => {
   const originalClipboard = navigator.clipboard;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -638,6 +651,7 @@ describe('ItemDetail copy card link', () => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [{ id: 1, name: 'Todo', position: 0 }],
@@ -783,6 +797,7 @@ describe('ItemDetail copy command menu and management', () => {
     const params = new BehaviorSubject(new Map([['number', '3']]));
     const api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
       board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
       itemByNumber: vi.fn(() => of(card)),
       updateItem: vi.fn(),
@@ -1181,6 +1196,7 @@ describe('ItemDetail IME response handling', () => {
             provide: Api,
             useValue: {
               history: () => of({ events: [], nextBefore: 0 }),
+              listComments: () => of([]),
               board: () => of({ columns: [], items: [] }),
               itemByNumber: () => of(card),
               updateItem: () => pending,
@@ -1225,6 +1241,7 @@ describe('ItemDetail live refresh', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1239,6 +1256,7 @@ describe('ItemDetail live refresh', () => {
     router = { navigate: vi.fn() };
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1335,6 +1353,7 @@ describe('ItemDetail Close reason', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1365,6 +1384,7 @@ describe('ItemDetail Close reason', () => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1526,6 +1546,7 @@ describe('ItemDetail description text links', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1560,6 +1581,7 @@ describe('ItemDetail description text links', () => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1783,6 +1805,7 @@ describe('ItemDetail dueAt picker', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1796,6 +1819,7 @@ describe('ItemDetail dueAt picker', () => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [

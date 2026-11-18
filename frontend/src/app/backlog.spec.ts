@@ -161,6 +161,33 @@ function mockRowRects(root: HTMLElement, bounds: { top: number; height: number }
 }
 
 describe('Backlog reordering', () => {
+  it('does not show comment UI on backlog rows', async () => {
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards, settings: { cardLayout: 'pack' } }),
+            reorderBacklog: () => of({ items: cards }),
+            listCommandTemplates: () => of({ templates: [] }),
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.querySelector('app-item-comments')).toBeNull();
+    expect(f.nativeElement.textContent).not.toMatch(/コメント/);
+  });
+
   it('shows status names for all columns including Done', async () => {
     const cards = makeCards();
     const columns = makeColumns();

@@ -36,6 +36,7 @@ describe('ItemDetail project move', () => {
   let current: Item;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -52,6 +53,7 @@ describe('ItemDetail project move', () => {
     current = card(1);
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
