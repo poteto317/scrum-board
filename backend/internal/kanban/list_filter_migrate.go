@@ -37,13 +37,15 @@ func (r MySQLRepository) InitializeListFilter(ctx context.Context) error {
 		return err
 	}
 
-	if hasLegacy && !hasBoard {
-		if err := r.migrateLegacyListFilter(ctx); err != nil {
-			return err
-		}
-	} else if !hasBoard {
+	if !hasBoard && !hasLegacy {
 		if _, err := r.DB.ExecContext(ctx, workspaceListFilterDDL); err != nil {
 			return fmt.Errorf("create workspace_list_filter: %w", err)
+		}
+	}
+	// Resume legacy migrate whenever old columns remain (idempotent ADD/COPY/DROP).
+	if hasLegacy {
+		if err := r.migrateLegacyListFilter(ctx); err != nil {
+			return err
 		}
 	}
 
