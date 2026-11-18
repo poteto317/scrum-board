@@ -23,6 +23,7 @@
         [value]="control.value"
         [lengthErrorMessage]="solutionLengthError"
         (textChange)="onTextChange($event)"
+        (compositionChange)="onCompositionChange($event)"
       />
       @if (control.invalid) {
         <p class="form-error">{{ solutionLengthError }}</p>

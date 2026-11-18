@@ -9,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   catchError,
@@ -61,10 +61,11 @@ export class ItemSolution implements OnInit {
   readonly routeNumber = signal(0);
   readonly control = new FormControl('', {
     nonNullable: true,
-    validators: [Validators.maxLength(DESCRIPTION_MAX_LEN), textLimit(DESCRIPTION_MAX_LEN)],
+    validators: [textLimit(DESCRIPTION_MAX_LEN)],
   });
   private baseline = '';
   private dirty = false;
+  private composing = false;
 
   ngOnInit() {
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
@@ -123,7 +124,12 @@ export class ItemSolution implements OnInit {
       .subscribe();
 
     const stop = startLiveRefresh({
-      enabled: () => !this.loading() && this.routeNumber() > 0 && !this.dirty && !this.saving(),
+      enabled: () =>
+        !this.loading() &&
+        this.routeNumber() > 0 &&
+        !this.dirty &&
+        !this.saving() &&
+        !this.composing,
       fetch: () => {
         const number = this.routeNumber();
         const card = this.item();
@@ -135,7 +141,7 @@ export class ItemSolution implements OnInit {
       },
       apply: (card) => {
         if (card.number !== this.routeNumber()) return;
-        if (this.dirty || this.saving()) return;
+        if (this.dirty || this.saving() || this.composing) return;
         const next = normalizeItem(card);
         if (this.item() && sameJson(this.item(), next)) return;
         this.item.set(next);
@@ -161,6 +167,10 @@ export class ItemSolution implements OnInit {
   onTextChange(text: string) {
     this.control.setValue(text, { emitEvent: true });
     this.control.markAsDirty();
+  }
+
+  onCompositionChange(composing: boolean) {
+    this.composing = composing;
   }
 
   load() {
