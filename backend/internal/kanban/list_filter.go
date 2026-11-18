@@ -134,8 +134,11 @@ FROM workspace_list_filter WHERE id = 1`).Scan(&boardQ, &boardJSON, &backlogQ, &
 	}
 	board, boardOK := parseStoredListFilterOK(boardQ, boardJSON)
 	backlog, backlogOK := parseStoredListFilterOK(backlogQ, backlogJSON)
-	if !boardOK || !backlogOK {
-		return defaults, nil
+	if !boardOK {
+		board = defaults.Board
+	}
+	if !backlogOK {
+		backlog = defaults.Backlog
 	}
 	return WorkspaceListFilters{
 		Board:   normalizeListFilter(board, known),
