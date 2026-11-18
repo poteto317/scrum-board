@@ -208,4 +208,104 @@ describe('Board project switch', () => {
     expect(f.componentInstance.data().items[0].title).toBe('B');
     f.destroy();
   });
+
+  it('hides previous-project cards while activeId has switched and reload is in flight', async () => {
+    const held = new Subject<BoardData>();
+    const initial = boardFor(1, 'A');
+    let phase: 'init' | 'held' = 'init';
+    const board = vi.fn(() => {
+      if (phase === 'init') return of(initial);
+      return held.asObservable();
+    });
+    const patch = new Subject<{ settings: { cardLayout: 'pack'; activeProjectId: number } }>();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board,
+            patchBoardSettings: vi.fn(() => patch.asObservable()),
+            reorderItems: vi.fn(),
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const session = TestBed.inject(ProjectSession);
+    session.activeId.set(1);
+    expect([...f.componentInstance.grouped().values()].flat().map((c) => c.title)).toEqual([
+      'A',
+      'A2',
+    ]);
+
+    phase = 'held';
+    session.switchTo(2).subscribe({ error: () => undefined });
+    patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });
+    patch.complete();
+    expect(session.activeId()).toBe(2);
+    expect(f.componentInstance.data().items.map((c) => c.projectId)).toEqual([1, 1]);
+    expect([...f.componentInstance.grouped().values()].flat()).toEqual([]);
+
+    held.next(boardFor(2, 'B'));
+    held.complete();
+    expect([...f.componentInstance.grouped().values()].flat().map((c) => c.title)).toEqual([
+      'B',
+      'B2',
+    ]);
+    f.destroy();
+  });
+
+  it('keeps previous-project cards hidden after post-switch reload fails', async () => {
+    const held = new Subject<BoardData>();
+    const initial = boardFor(1, 'A');
+    let phase: 'init' | 'held' = 'init';
+    const board = vi.fn(() => {
+      if (phase === 'init') return of(initial);
+      return held.asObservable();
+    });
+    const patch = new Subject<{ settings: { cardLayout: 'pack'; activeProjectId: number } }>();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board,
+            patchBoardSettings: vi.fn(() => patch.asObservable()),
+            reorderItems: vi.fn(),
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ query: '', statusIds: [] }),
+            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const session = TestBed.inject(ProjectSession);
+    session.activeId.set(1);
+    phase = 'held';
+    session.switchTo(2).subscribe({ error: () => undefined });
+    patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });
+    patch.complete();
+    held.error({ error: { message: '再取得失敗' } });
+    expect(session.activeId()).toBe(2);
+    expect(session.switching()).toBe(false);
+    expect(f.componentInstance.data().items.map((c) => c.projectId)).toEqual([1, 1]);
+    expect([...f.componentInstance.grouped().values()].flat()).toEqual([]);
+    f.destroy();
+  });
 });
