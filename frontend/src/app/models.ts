@@ -90,3 +90,24 @@ export interface HistoryPage {
   events: HistoryEvent[];
   nextBefore: number;
 }
+
+export interface ItemComment {
+  id: number;
+  itemId: number;
+  author: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Normalize API comment; author/body always string (missing → ""). */
+export function normalizeComment(raw: Partial<ItemComment> | null | undefined): ItemComment {
+  return {
+    id: typeof raw?.id === 'number' ? raw.id : 0,
+    itemId: typeof raw?.itemId === 'number' ? raw.itemId : 0,
+    author: typeof raw?.author === 'string' ? raw.author : '',
+    body: typeof raw?.body === 'string' ? raw.body : '',
+    createdAt: typeof raw?.createdAt === 'string' ? raw.createdAt : '',
+    updatedAt: typeof raw?.updatedAt === 'string' ? raw.updatedAt : '',
+  };
+}
