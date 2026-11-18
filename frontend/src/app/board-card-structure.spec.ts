@@ -148,6 +148,12 @@ describe('Board card structure', () => {
     expect(navigate).toHaveBeenCalledWith(['/items', 1], { queryParams: { project: 1 } });
   });
 
+  it('does not show comment UI or count on board cards', async () => {
+    const { root } = await setup();
+    expect(root.querySelector('app-item-comments')).toBeNull();
+    expect(root.textContent).not.toContain('コメント');
+  });
+
   it('copying a link neither navigates nor reorders', async () => {
     const original = navigator.clipboard;
     Object.defineProperty(navigator, 'clipboard', {

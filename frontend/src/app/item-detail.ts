@@ -1,5 +1,6 @@
 import { formatItemNumber } from './item-number';
 import { ItemHistory } from './item-history';
+import { ItemComments } from './item-comments';
 import { Modal } from './modal';
 import {
   Component,
@@ -69,6 +70,7 @@ import { ProjectSession } from './project-session';
     RouterLink,
     DatePipe,
     Modal,
+    ItemComments,
     ItemHistory,
     CdkDropList,
     CdkDrag,
