@@ -5,16 +5,24 @@ import (
 	"strings"
 	"testing"
 
+	"database/sql"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func dropUsersTables(t *testing.T, db *sql.DB) {
+	t.Helper()
+	mustExec(t, db, `DROP TABLE IF EXISTS item_acl_entries`)
+	mustExec(t, db, `ALTER TABLE items DROP FOREIGN KEY fk_items_created_by`)
+	mustExec(t, db, `DROP TABLE IF EXISTS sessions`)
+	mustExec(t, db, `DROP TABLE IF EXISTS users`)
+}
 
 func TestInitializeUsersAndSessionsIdempotentMySQL(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
 	r := MySQLRepository{DB: db}
 
-	mustExec(t, db, `DROP TABLE IF EXISTS sessions`)
-	mustExec(t, db, `DROP TABLE IF EXISTS users`)
+	dropUsersTables(t, db)
 	if err := r.InitializeUsers(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +52,7 @@ func TestSeedAdminFromEnvMySQL(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
 	r := MySQLRepository{DB: db}
-	mustExec(t, db, `DROP TABLE IF EXISTS sessions`)
-	mustExec(t, db, `DROP TABLE IF EXISTS users`)
+	dropUsersTables(t, db)
 	if err := r.InitializeUsers(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -92,8 +99,7 @@ func TestSeedAdminFromEnvRequiresAUTHWhenEmpty(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
 	r := MySQLRepository{DB: db}
-	mustExec(t, db, `DROP TABLE IF EXISTS sessions`)
-	mustExec(t, db, `DROP TABLE IF EXISTS users`)
+	dropUsersTables(t, db)
 	if err := r.InitializeUsers(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -111,8 +117,7 @@ func TestSeedAdminFromEnvNoOpWhenUsersExistWithoutAUTH(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
 	r := MySQLRepository{DB: db}
-	mustExec(t, db, `DROP TABLE IF EXISTS sessions`)
-	mustExec(t, db, `DROP TABLE IF EXISTS users`)
+	dropUsersTables(t, db)
 	if err := r.InitializeUsers(ctx); err != nil {
 		t.Fatal(err)
 	}

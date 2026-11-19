@@ -29,6 +29,9 @@ CREATE TABLE items (
  favorite TINYINT(1) NOT NULL DEFAULT 0,
  due_at DATETIME NULL,
  deleted_at DATETIME(6) NULL,
+ view_access VARCHAR(16) NOT NULL DEFAULT 'open',
+ edit_access VARCHAR(16) NOT NULL DEFAULT 'open',
+ created_by_user_id BIGINT NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
  CONSTRAINT fk_item_column FOREIGN KEY (column_id) REFERENCES board_columns(id),
@@ -79,4 +82,16 @@ CREATE TABLE IF NOT EXISTS sessions (
  CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
  INDEX sessions_user_id (user_id),
  INDEX sessions_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- Keep in sync with backend/internal/kanban/item_acl_migrate.go
+ALTER TABLE items
+  ADD CONSTRAINT fk_items_created_by FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL;
+CREATE TABLE IF NOT EXISTS item_acl_entries (
+ item_id BIGINT NOT NULL,
+ user_id BIGINT NOT NULL,
+ capability VARCHAR(8) NOT NULL,
+ PRIMARY KEY (item_id, user_id, capability),
+ CONSTRAINT fk_item_acl_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+ CONSTRAINT fk_item_acl_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+ CONSTRAINT chk_item_acl_capability CHECK (capability IN ('view', 'edit'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
