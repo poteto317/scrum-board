@@ -162,4 +162,15 @@ type Repository interface {
 	CreateComment(context.Context, int64, string, string) (Comment, error)
 	UpdateComment(context.Context, int64, int64, *string, *string) (Comment, error)
 	DeleteComment(context.Context, int64, int64) error
+	CountUsers(context.Context) (int64, error)
+	ListUsers(context.Context) ([]User, error)
+	GetUser(context.Context, int64) (User, error)
+	GetUserByLoginName(context.Context, string) (User, error)
+	CreateUser(context.Context, UserCreateInput) (User, error)
+	UpdateUser(context.Context, int64, UserPatch, int64) (User, error)
+	CountEnabledAdmins(context.Context) (int64, error)
+	CreateSession(context.Context, int64, time.Time) (Session, error)
+	DeleteSession(context.Context, string) error
+	DeleteSessionsForUser(context.Context, int64) error
+	UserBySessionID(context.Context, string, time.Time) (User, error)
 }

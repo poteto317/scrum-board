@@ -2,16 +2,12 @@ package kanban
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
 func TestHeaderMenuGETDefaults(t *testing.T) {
 	h := NewHandler(fresh())
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/header-menu", nil))
+	rec := request(h, "GET", "/api/header-menu", "")
 	if rec.Code != 200 {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
@@ -30,8 +26,7 @@ func TestHeaderMenuPUTRoundTrip(t *testing.T) {
 	repo := fresh()
 	h := NewHandler(repo)
 	body := `{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":["project_delete","project_delete"]},"itemDetail":{"hiddenIds":["item_favorite"]}}`
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/header-menu", strings.NewReader(body)))
+	rec := request(h, "PUT", "/api/header-menu", body)
 	if rec.Code != 200 {
 		t.Fatalf("put status %d body %s", rec.Code, rec.Body.String())
 	}
@@ -48,8 +43,7 @@ func TestHeaderMenuPUTRoundTrip(t *testing.T) {
 	if len(put.ItemDetail.HiddenIDs) != 1 || put.ItemDetail.HiddenIDs[0] != "item_favorite" {
 		t.Fatalf("itemDetail %+v", put.ItemDetail)
 	}
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/header-menu", nil))
+	rec = request(h, "GET", "/api/header-menu", "")
 	var got WorkspaceHeaderMenu
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
@@ -82,8 +76,7 @@ func TestHeaderMenuPUTValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/header-menu", strings.NewReader(tc.body)))
+			rec := request(h, "PUT", "/api/header-menu", tc.body)
 			if rec.Code != 400 {
 				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 			}

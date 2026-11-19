@@ -113,6 +113,15 @@ func run() error {
 	if err == nil {
 		err = repo.InitializeComments(migrationCtx)
 	}
+	if err == nil {
+		err = repo.InitializeUsers(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeSessions(migrationCtx)
+	}
+	if err == nil {
+		err = repo.SeedAdminFromEnv(migrationCtx, os.Getenv)
+	}
 	migrationCancel()
 	if err != nil {
 		return err

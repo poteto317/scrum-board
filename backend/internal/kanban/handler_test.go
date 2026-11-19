@@ -28,9 +28,17 @@ type memoryRepo struct {
 	nextProject        int64
 	comments           map[int64]Comment
 	nextCommentID      int64
+	users              []User
+	nextUserID         int64
+	sessions           map[string]Session
 }
 
 func fresh() *memoryRepo {
+	hash, err := HashPassword("test-password")
+	if err != nil {
+		panic(err)
+	}
+	now := time.Now().UTC()
 	return &memoryRepo{
 		columns:         []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}},
 		cards:           map[int64]Item{},
@@ -42,6 +50,15 @@ func fresh() *memoryRepo {
 		nextProject:     2,
 		comments:        map[int64]Comment{},
 		nextCommentID:   1,
+		users: []User{{
+			ID: 1, LoginName: "admin", DisplayName: "admin",
+			PasswordHash: hash, Role: RoleAdmin, Disabled: false,
+			CreatedAt: now, UpdatedAt: now,
+		}},
+		nextUserID: 2,
+		sessions: map[string]Session{
+			HandlerTestSessionID: {ID: HandlerTestSessionID, UserID: 1, ExpiresAt: now.Add(time.Hour), CreatedAt: now},
+		},
 	}
 }
 func (m *memoryRepo) living(c Item) bool {
@@ -682,9 +699,20 @@ func (m *memoryRepo) DeleteProject(_ context.Context, id int64) error {
 	return nil
 }
 func request(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	return requestWithCookie(h, method, path, body, HandlerTestSessionID)
+}
+
+func requestAnon(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	return requestWithCookie(h, method, path, body, "")
+}
+
+func requestWithCookie(h http.Handler, method, path, body, sessionID string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
+	if sessionID != "" {
+		r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: sessionID})
+	}
 	h.ServeHTTP(w, r)
 	return w
 }

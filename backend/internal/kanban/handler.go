@@ -46,6 +46,12 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public-config", h.publicConfig)
+	mux.HandleFunc("POST /api/auth/login", h.login)
+	mux.HandleFunc("POST /api/auth/logout", h.logout)
+	mux.HandleFunc("GET /api/auth/me", h.me)
+	mux.HandleFunc("GET /api/users", h.listUsers)
+	mux.HandleFunc("POST /api/users", h.createUser)
+	mux.HandleFunc("PATCH /api/users/{id}", h.patchUser)
 	mux.HandleFunc("GET /api/board", h.board)
 	mux.HandleFunc("PATCH /api/board/settings", h.updateBoardSettings)
 	mux.HandleFunc("GET /api/projects", h.listProjects)
@@ -89,10 +95,11 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("PUT /api/list-filter", h.putListFilter)
 	mux.HandleFunc("GET /api/header-menu", h.getHeaderMenu)
 	mux.HandleFunc("PUT /api/header-menu", h.putHeaderMenu)
+	secured := h.withSessionAuth(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
-		mux.ServeHTTP(w, r)
+		secured.ServeHTTP(w, r)
 	})
 }
 func (h handler) backlog(w http.ResponseWriter, r *http.Request) {
