@@ -396,6 +396,24 @@ curl --fail-with-body --request PUT \
 - クリア後の空 `statusIds` は全列表示として保存され、再 GET で Todo を再シードしない。
 - 壊れた DB の JSON は GET で安全なデフォルトを返すが、行を空で上書きしない。
 
+# ヘッダーメニュー
+
+`GET` / `PUT /api/header-menu` で、ページ種別（`board` / `backlog` / `itemDetail`）ごとにヘッダーのハンバーガーメニューから隠す項目 ID を読み書きします。Basic Auth 共有のワークスペース共通 1 行です。
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/header-menu
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":["project_delete"]},"itemDetail":{"hiddenIds":[]}}' \
+  http://127.0.0.1:4200/api/header-menu
+```
+
+- 応答は常に `{ "board": { "hiddenIds": string[] }, "backlog": { "hiddenIds": string[] }, "itemDetail": { "hiddenIds": string[] } }`。
+- 初期（行なし）: 3 キーとも `hiddenIds` は `[]`（カタログ既定ですべて表示）。
+- カタログ ID: `board` / `backlog` は `project_add`, `project_rename`, `project_delete`。`itemDetail` は `item_history`, `item_solution`, `item_favorite`。
+- PUT は 3 キーすべて必須（全体置換）。各ネストは `hiddenIds` のみ。要素は当該 pageKind のカタログ ID のみ（未知・他種別は 400）。重複 ID は除去して受理。未知トップキー・欠落キー・null・型不正は 400。
+- GET は壊れた／欠落した保存値を正規化して返すが、DB 行は書き換えない（余分キー無視、欠落キー補完、不正型はそのキーだけ空、未知・非 string 要素は除去してユニーク化）。
+
 # プロダクトバックログ
 
 解決後アクティブプロジェクトのアイテムを `backlog_position` 昇順（同値は `id` 昇順）で返します。ステータス（列）に関係なく Done も含みます。他プロジェクトのアイテムは含めません。
