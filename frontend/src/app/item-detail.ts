@@ -22,6 +22,7 @@ import {
   EMPTY,
   finalize,
   forkJoin,
+  map,
   startWith,
   Subject,
   switchMap,
@@ -62,6 +63,7 @@ import {
 import { DescriptionEditor } from './description-editor';
 import { DescriptionBlocksEditor } from './description-blocks-editor';
 import { ProjectSession } from './project-session';
+import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
 
 @Component({
   selector: 'app-item-detail',
@@ -111,6 +113,7 @@ export class ItemDetail implements OnInit {
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
   readonly favorite = inject(ItemFavorite);
+  private readonly itemMenuActions = inject(ItemMenuActions);
   readonly dueAt = inject(ItemDueAt);
   readonly closeTransition = inject(ItemCloseTransition);
   readonly descriptionEditor = inject(DescriptionEditor);
@@ -232,7 +235,29 @@ export class ItemDetail implements OnInit {
     return this.linkCopy.copyItemNumber(card.number, origin, projectId);
   }
 
+  private scrollToHistorySection() {
+    requestAnimationFrame(() => {
+      document.querySelector('app-item-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  private navigateToSolution(): boolean {
+    const card = this.item();
+    if (!card) return false;
+    const queryParams = card.projectId > 0 ? { project: card.projectId } : {};
+    void this.router.navigate(['/items', card.number, 'solution'], { queryParams });
+    return true;
+  }
+
   ngOnInit() {
+    this.itemMenuActions.register({
+      scrollToHistory: () => this.scrollToHistorySection(),
+      goToSolution: () => this.navigateToSolution(),
+      toggleFavorite: () => this.favorite.toggle(),
+      favoriteLabel: () => favoriteMenuLabel(this.item()?.favorite),
+      favoriteDisabled: () => this.favorite.saving() || !this.item(),
+    });
+    this.destroyRef.onDestroy(() => this.itemMenuActions.unregister());
     this.commands.load();
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       this.routeNumber.set(Number(params.get('number')));
@@ -263,11 +288,11 @@ export class ItemDetail implements OnInit {
           this.error.set('');
           const num = Number(params.get('number'));
           const queryProjectId = Number(query.get('project'));
-          return this.loadCardForRoute(num, queryProjectId);
+          return this.loadCardForRoute(num, queryProjectId).pipe(map((data) => ({ ...data, query })));
         }),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(({ board, card }) => {
+      .subscribe(({ board, card, query }) => {
         this.columns.set(board.columns);
         const projectId = card.projectId ?? 0;
         this.autosave.reset({
@@ -282,6 +307,10 @@ export class ItemDetail implements OnInit {
           dueAt: card.dueAt ?? null,
         });
         this.itemCommands.load(card.number, projectId > 0 ? projectId : undefined);
+        if (query.get('scrollHistory') === '1') {
+          // finalize() clears loading after this next; wait a macrotask so history is rendered.
+          setTimeout(() => this.scrollToHistorySection(), 0);
+        }
       });
     const stop = startLiveRefresh({
       enabled: () =>

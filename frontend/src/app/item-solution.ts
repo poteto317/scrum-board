@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   catchError,
   combineLatest,
@@ -38,13 +38,15 @@ import type { Item } from './models';
 import { Modal } from './modal';
 import { normalizeItem } from './board-data';
 import { ProjectSession } from './project-session';
+import { ItemFavorite } from './item-favorite';
+import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
 
 const SOLUTION_LENGTH_ERROR = `ソリューションは${DESCRIPTION_MAX_LEN}文字以内で入力してください。`;
 
 @Component({
   selector: 'app-item-solution',
   imports: [ReactiveFormsModule, RouterLink, DescriptionBlocksEditor, Modal],
-  providers: [DescriptionEditor],
+  providers: [DescriptionEditor, ItemFavorite],
   templateUrl: './item-solution.html',
   styleUrl: './item-solution.css',
 })
@@ -54,9 +56,13 @@ export class ItemSolution implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly zone = inject(NgZone);
   private readonly projectSession = inject(ProjectSession);
+  private readonly router = inject(Router);
   readonly descriptionEditor = inject(DescriptionEditor);
+  readonly favorite = inject(ItemFavorite);
+  private readonly itemMenuActions = inject(ItemMenuActions);
   private readonly blocksEditor = viewChild(DescriptionBlocksEditor);
   private readonly reload$ = new Subject<void>();
+  private readonly changed$ = new Subject<void>();
   private saveGeneration = 0;
   private flushWaiters: Array<(ok: boolean) => void> = [];
 
@@ -76,13 +82,40 @@ export class ItemSolution implements OnInit {
   private dirty = false;
   private composing = false;
 
+  constructor() {
+    this.favorite.bind({
+      item: () => this.item(),
+      applyFavoriteSave: (updated) => {
+        const card = this.item();
+        if (!card) return;
+        this.item.set({
+          ...card,
+          favorite: updated.favorite === true,
+          updatedAt: updated.updatedAt,
+        });
+      },
+      onError: (message) => this.error.set(message),
+      cancel$: this.changed$,
+    });
+  }
+
   ngOnInit() {
+    this.itemMenuActions.register({
+      scrollToHistory: () => this.navigateToDetailForHistory(),
+      goToSolution: () => false,
+      toggleFavorite: () => this.favorite.toggle(),
+      favoriteLabel: () => favoriteMenuLabel(this.item()?.favorite),
+      favoriteDisabled: () => this.favorite.saving() || !this.item(),
+    });
+    this.destroyRef.onDestroy(() => this.itemMenuActions.unregister());
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       this.routeNumber.set(Number(params.get('number')));
     });
     combineLatest([this.route.paramMap, this.route.queryParamMap, this.reload$])
       .pipe(
         switchMap(([params, query]) => {
+          this.changed$.next();
+          this.favorite.reset();
           this.saveGeneration++;
           this.saving.set(false);
           this.resolveFlush(false);
@@ -139,6 +172,7 @@ export class ItemSolution implements OnInit {
         this.routeNumber() > 0 &&
         !this.dirty &&
         !this.saving() &&
+        !this.favorite.saving() &&
         !this.composing &&
         !this.descriptionEditor.open(),
       fetch: () => {
@@ -152,7 +186,15 @@ export class ItemSolution implements OnInit {
       },
       apply: (card) => {
         if (card.number !== this.routeNumber()) return;
-        if (this.dirty || this.saving() || this.composing || this.descriptionEditor.open()) return;
+        if (
+          this.dirty ||
+          this.saving() ||
+          this.favorite.saving() ||
+          this.composing ||
+          this.descriptionEditor.open()
+        ) {
+          return;
+        }
         const next = normalizeItem(card);
         if (this.item() && sameJson(this.item(), next)) return;
         this.item.set(next);
@@ -173,6 +215,14 @@ export class ItemSolution implements OnInit {
   detailQuery(): Record<string, number> {
     const card = this.item();
     return card && card.projectId > 0 ? { project: card.projectId } : {};
+  }
+
+  private navigateToDetailForHistory() {
+    const card = this.item();
+    if (!card) return;
+    const queryParams: Record<string, string | number> = { scrollHistory: '1' };
+    if (card.projectId > 0) queryParams['project'] = card.projectId;
+    void this.router.navigate(['/items', card.number], { queryParams });
   }
 
   onTextChange(text: string) {

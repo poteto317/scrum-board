@@ -35,6 +35,7 @@ describe('ItemSolution', () => {
   let api: {
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
+    board: ReturnType<typeof vi.fn>;
   };
   let restoreDialog: (() => void) | undefined;
 
@@ -63,6 +64,9 @@ describe('ItemSolution', () => {
       updateItem: vi.fn((_id: number, patch: { solution?: string }) =>
         of({ ...card, ...patch }),
       ),
+      board: vi.fn(() =>
+        of({ columns: [], items: [], settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+      ),
     };
     await TestBed.configureTestingModule({
       imports: [ItemSolution],
@@ -78,7 +82,11 @@ describe('ItemSolution', () => {
         },
         {
           provide: ProjectSession,
-          useValue: { activeId: () => 1, projects: () => [{ id: 1, name: 'P' }] },
+          useValue: {
+            activeId: () => 1,
+            projects: () => [{ id: 1, name: 'P' }],
+            switching: () => false,
+          },
         },
       ],
     }).compileComponents();
