@@ -30,7 +30,11 @@
         }
       </select>
     } @else {
-      <select id="project-select" disabled aria-busy="true">
+      <select
+        id="project-select"
+        disabled
+        [attr.aria-busy]="projectSession.bootstrapped() ? null : 'true'"
+      >
         <option value="">…</option>
       </select>
     }
