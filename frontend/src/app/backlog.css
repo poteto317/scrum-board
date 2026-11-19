@@ -140,10 +140,10 @@ h1 {
   align-items: center;
   gap: 12px;
 }
-.backlog-row[draggable='true'] {
+.backlog-drag-zone[draggable='true'] {
   cursor: grab;
 }
-.backlog-row[draggable='true']:active {
+.backlog-drag-zone[draggable='true']:active {
   cursor: grabbing;
 }
 .backlog-rank {
@@ -311,15 +311,20 @@ h1 {
     font-size: 28px;
   }
   .backlog-row {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      'rank title quick detail'
-      'rank status quick detail';
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'main quick detail';
     gap: 6px 10px;
     padding: 10px 12px;
   }
   .backlog-drag-zone {
-    display: contents;
+    grid-area: main;
+    grid-column: auto;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'rank title'
+      'rank status';
+    gap: 6px 10px;
   }
   .backlog-rank {
     grid-area: rank;
@@ -336,6 +341,7 @@ h1 {
   }
   .backlog-quick-actions {
     grid-area: quick;
+    grid-column: auto;
     align-self: center;
   }
   .backlog-detail-link {
