@@ -190,6 +190,11 @@ export class HeaderMenu implements OnInit {
       case 'project_delete':
         this.runAction(id, () => this.deleteProject.emit());
         break;
+      case 'open_trash':
+        this.runAction(id, () => {
+          void this.router.navigate(['/trash']);
+        });
+        break;
       case 'item_history':
         this.runAction(id, () => this.itemActions.scrollToHistory());
         break;
@@ -207,6 +212,9 @@ export class HeaderMenu implements OnInit {
   }
 
   actionDisabled(id: HeaderMenuItemId): boolean {
+    if (id === 'open_trash') {
+      return this.projectSwitching();
+    }
     if (id.startsWith('project_')) {
       return this.projectActionDisabled(id);
     }

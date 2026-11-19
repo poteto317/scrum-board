@@ -55,9 +55,26 @@ describe('ItemDetail autosave', () => {
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> };
+  let restoreDialog: () => void;
   beforeEach(() => {
     vi.useFakeTimers();
     sessionStorage.clear();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    restoreDialog = () => {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    };
     params = new BehaviorSubject(new Map([['number', '3']]));
     router = {
       navigate: vi.fn(),
@@ -94,6 +111,7 @@ describe('ItemDetail autosave', () => {
     });
   });
   afterEach(() => {
+    restoreDialog();
     sessionStorage.clear();
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
@@ -618,6 +636,33 @@ describe('ItemDetail autosave', () => {
     expect(api.updateItem).not.toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
     expect(await f.componentInstance.canLeave()).toBe(true);
+  });
+  it('shows trash-bin delete dialog copy without irreversible wording', () => {
+    const f = create();
+    f.componentInstance.confirmDelete.set(true);
+    f.detectChanges();
+    const copy = f.nativeElement.querySelector('.delete-copy')?.textContent ?? '';
+    const title = f.nativeElement.querySelector('#delete-title')?.textContent ?? '';
+    const action =
+      [...(f.nativeElement.querySelectorAll('.danger-button') as NodeListOf<HTMLElement>)].find(
+        (el) => el.textContent?.includes('ゴミ箱'),
+      )?.textContent ?? '';
+    expect(title).toContain('ゴミ箱');
+    expect(copy).toContain('ゴミ箱に移します');
+    expect(copy).toMatch(/30日以内.*復元/);
+    expect(copy).not.toContain('取り消せません');
+    expect(action).toContain('ゴミ箱に移す');
+    f.destroy();
+  });
+  it('keeps Close reason dialog flow after trash dialog copy change', () => {
+    const f = create();
+    f.componentInstance.form.controls.columnId.setValue(3);
+    f.componentInstance.closeTransition.onStatusChange();
+    f.detectChanges();
+    expect(f.componentInstance.closeTransition.open()).toBe(true);
+    expect(f.nativeElement.querySelector('#close-reason-modal-input')).toBeTruthy();
+    expect(api.updateItem).not.toHaveBeenCalled();
+    f.destroy();
   });
   it('confirms before leave while assignee PATCH is in flight', async () => {
     const pending = new Subject<Item>();
