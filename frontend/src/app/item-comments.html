@@ -58,56 +58,60 @@
               <time>{{ c.createdAt | date: 'yyyy/MM/dd HH:mm:ss' }}</time>
             </div>
             <pre class="comment-body">{{ c.body }}</pre>
-            <div class="row-actions">
-              <button
-                type="button"
-                class="secondary"
-                (click)="startEdit(c)"
-                [disabled]="savingId() != null || deletingId() != null || posting()"
-              >
-                編集
-              </button>
-              <button
-                type="button"
-                class="danger-link"
-                (click)="remove(c)"
-                [disabled]="deletingId() != null || savingId() != null || posting()"
-              >
-                削除
-              </button>
-            </div>
+            @if (!readOnly) {
+              <div class="row-actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="startEdit(c)"
+                  [disabled]="savingId() != null || deletingId() != null || posting()"
+                >
+                  編集
+                </button>
+                <button
+                  type="button"
+                  class="danger-link"
+                  (click)="remove(c)"
+                  [disabled]="deletingId() != null || savingId() != null || posting()"
+                >
+                  削除
+                </button>
+              </div>
+            }
           }
         </li>
       }
     </ul>
 
-    <form class="compose" (submit)="$event.preventDefault(); submit()">
-      <label class="field">
-        <span>表示名（任意）</span>
-        <input
-          type="text"
-          [ngModel]="draftAuthor()"
-          (ngModelChange)="draftAuthor.set($event)"
-          name="draftAuthor"
-          [disabled]="posting()"
-          maxlength="60"
-        />
-      </label>
-      <label class="field">
-        <span>本文</span>
-        <textarea
-          rows="3"
-          [ngModel]="draftBody()"
-          (ngModelChange)="draftBody.set($event)"
-          name="draftBody"
-          [disabled]="posting()"
-          required
-        ></textarea>
-      </label>
-      <button type="submit" [disabled]="posting() || savingId() != null || deletingId() != null">
-        投稿
-      </button>
-    </form>
+    @if (!readOnly) {
+      <form class="compose" (submit)="$event.preventDefault(); submit()">
+        <label class="field">
+          <span>表示名（任意）</span>
+          <input
+            type="text"
+            [ngModel]="draftAuthor()"
+            (ngModelChange)="draftAuthor.set($event)"
+            name="draftAuthor"
+            [disabled]="posting()"
+            maxlength="60"
+          />
+        </label>
+        <label class="field">
+          <span>本文</span>
+          <textarea
+            rows="3"
+            [ngModel]="draftBody()"
+            (ngModelChange)="draftBody.set($event)"
+            name="draftBody"
+            [disabled]="posting()"
+            required
+          ></textarea>
+        </label>
+        <button type="submit" [disabled]="posting() || savingId() != null || deletingId() != null">
+          投稿
+        </button>
+      </form>
+    }
   }
 
   @if (actionError()) {

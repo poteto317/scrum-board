@@ -6,6 +6,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   HostListener,
   inject,
   NgZone,
@@ -35,6 +36,9 @@ import { errorMessage } from './api-error';
 import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
 import { UsersSession } from './users-session';
+import { AuthSession } from './auth-session';
+import { canEditItem, canManageItem, viewAccessLabel } from './item-acl';
+import { ItemAclPanel } from './item-acl-panel';
 import { formatDueAtLocal } from './due-at';
 import { DueAtPicker } from './due-at-picker';
 import { ItemAssignee } from './item-assignee';
@@ -89,6 +93,7 @@ import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
     ItemRelatedItems,
     ItemAssignee,
     ItemFavorite,
+    ItemAclPanel,
     ItemDueAt,
     ItemCloseTransition,
     DescriptionEditor,
@@ -114,8 +119,10 @@ export class ItemDetail implements OnInit {
   readonly prLinks = inject(ItemPrLinks);
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
-  private readonly usersSession = inject(UsersSession);
+  readonly usersSession = inject(UsersSession);
+  private readonly auth = inject(AuthSession);
   readonly favorite = inject(ItemFavorite);
+  readonly acl = inject(ItemAclPanel);
   private readonly itemMenuActions = inject(ItemMenuActions);
   readonly dueAt = inject(ItemDueAt);
   readonly closeTransition = inject(ItemCloseTransition);
@@ -137,8 +144,20 @@ export class ItemDetail implements OnInit {
   });
   readonly usersLoadError = this.usersSession.loadError;
   readonly assigneeKind = assigneeKind;
+  readonly viewAccessLabel = viewAccessLabel;
   readonly item = this.autosave.item;
   readonly form = this.autosave.form;
+  readonly canEdit = computed(() => {
+    const card = this.item();
+    return !!card && canEditItem(card, this.auth.user());
+  });
+  readonly canManage = computed(() => {
+    const card = this.item();
+    return !!card && canManageItem(card, this.auth.user());
+  });
+  readonly authReady = computed(() => this.auth.status() !== 'unknown');
+  /** L-463: /me 未確定 or 編集不可ならサイド操作も止める。 */
+  readonly editLocked = computed(() => !this.authReady() || !this.canEdit());
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
   readonly deleting = signal(false);
@@ -238,6 +257,29 @@ export class ItemDetail implements OnInit {
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
+    this.acl.bind({
+      item: () => this.item(),
+      canManage: () => this.canManage(),
+      applySaved: (saved) => this.autosave.reset(saved),
+    });
+    effect(() => {
+      const card = this.item();
+      const locked = this.editLocked();
+      if (!card) return;
+      if (locked) {
+        this.form.disable({ emitEvent: false });
+        this.assignee.draft.disable({ emitEvent: false });
+        this.prLinks.draft.disable({ emitEvent: false });
+        this.relatedItems.draft.disable({ emitEvent: false });
+        this.relatedItems.labelDraft.disable({ emitEvent: false });
+      } else {
+        this.form.enable({ emitEvent: false });
+        this.assignee.draft.enable({ emitEvent: false });
+        this.prLinks.draft.enable({ emitEvent: false });
+        this.relatedItems.draft.enable({ emitEvent: false });
+        this.relatedItems.labelDraft.enable({ emitEvent: false });
+      }
+    });
   }
 
   async copyItemLink(): Promise<void> {
@@ -320,6 +362,7 @@ export class ItemDetail implements OnInit {
           favorite: card.favorite === true,
           dueAt: card.dueAt ?? null,
         });
+        this.acl.syncFrom(card);
         this.itemCommands.load(card.number, projectId > 0 ? projectId : undefined);
         if (query.get('scrollHistory') === '1') {
           // finalize() clears loading after this next; wait a macrotask so history is rendered.
@@ -365,6 +408,7 @@ export class ItemDetail implements OnInit {
         };
         if (this.item() && sameJson(this.item(), next)) return;
         this.autosave.reset(next);
+        this.acl.syncFrom(next);
       },
       ...zoneAwareTimers(this.zone),
     });
@@ -501,6 +545,7 @@ export class ItemDetail implements OnInit {
       this.relatedItems.saving() ||
       this.assignee.saving() ||
       this.favorite.saving() ||
+      this.acl.saving() ||
       this.dueAt.open() ||
       this.dueAt.saving() ||
       this.itemCommands.saving() ||
@@ -521,6 +566,7 @@ export class ItemDetail implements OnInit {
       this.relatedItems.saving() ||
       this.assignee.saving() ||
       this.favorite.saving() ||
+      this.acl.saving() ||
       this.dueAt.saving() ||
       this.itemCommands.saving() ||
       this.closeTransition.saving() ||
@@ -534,6 +580,7 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.acl.saving() ||
       this.dueAt.saving() ||
       this.closeTransition.saving() ||
       this.itemCommands.saving() ||
@@ -559,6 +606,7 @@ export class ItemDetail implements OnInit {
         this.prLinks.saving() ||
         this.relatedItems.saving() ||
         this.assignee.saving() ||
+        this.acl.saving() ||
         this.dueAt.saving() ||
         this.closeTransition.saving() ||
         this.itemCommands.saving() ||

@@ -16,9 +16,19 @@
     />
     <section class="detail-heading">
       <div class="detail-heading-main">
-        <div class="eyebrow">{{ formatItemNumber(item()!.number) }}</div>
+        <div class="eyebrow">
+          {{ formatItemNumber(item()!.number) }}
+          @if (viewAccessLabel(item()!.viewAccess); as accessLabel) {
+            @if (accessLabel) {
+              <span class="access-badge" [attr.data-access]="item()!.viewAccess">{{ accessLabel }}</span>
+            }
+          }
+        </div>
         <h1>アイテムの詳細</h1>
         <p>取り組むことを明確にして、次のステップへ。</p>
+        @if (authReady() && !canEdit()) {
+          <p class="form-error" role="status">編集権限がありません（閲覧のみ）。</p>
+        }
       </div>
       <div class="detail-heading-actions">
         <div class="detail-heading-toolbar">
@@ -28,7 +38,7 @@
             [class.favorite-on]="item()!.favorite"
             [attr.aria-pressed]="item()!.favorite ? 'true' : 'false'"
             [attr.aria-label]="item()!.favorite ? 'お気に入りから外す' : 'お気に入りに追加'"
-            [disabled]="favorite.saving()"
+            [disabled]="favorite.saving() || editLocked()"
             (click)="favorite.toggle()"
           >
             <svg
@@ -127,6 +137,85 @@
         @if (form.controls.title.touched && form.controls.title.invalid) {
           <p class="form-error">タイトルを1〜200文字で入力してください。</p>
         }
+        @if (canManage()) {
+          <fieldset class="acl-fieldset" [disabled]="!authReady() || acl.saving()">
+            <legend>アクセス</legend>
+            <label>
+              閲覧
+              <select
+                [value]="acl.viewAccess()"
+                (change)="acl.viewAccess.set($any($event.target).value)"
+              >
+                <option value="public">全公開（ログイン不要で詳細可）</option>
+                <option value="open">ログイン全員</option>
+                <option value="restricted">指定ユーザー</option>
+              </select>
+            </label>
+            <label>
+              編集
+              <select
+                [value]="acl.editAccess()"
+                (change)="acl.editAccess.set($any($event.target).value)"
+              >
+                <option value="open">ログイン全員（閲覧可の人）</option>
+                <option value="restricted">指定ユーザー</option>
+              </select>
+            </label>
+            @if (acl.viewAccess() === 'restricted' || acl.editAccess() === 'restricted') {
+              @if (usersLoadError()) {
+                <p class="form-error" role="alert">{{ usersLoadError() }}</p>
+              } @else if (usersSession.users() === null) {
+                <p class="muted">ユーザー一覧を読み込み中…</p>
+              } @else {
+                <div class="acl-user-lists">
+                  @if (acl.viewAccess() === 'restricted') {
+                    <div>
+                      <span class="acl-list-label">閲覧可</span>
+                      @for (u of usersSession.users()!; track u.id) {
+                        <label class="acl-user">
+                          <input
+                            type="checkbox"
+                            [checked]="acl.viewUserIds().includes(u.id)"
+                            [disabled]="u.disabled || acl.saving() || usersLoadError()"
+                            (change)="acl.toggleUser('view', u.id, $any($event.target).checked)"
+                          />
+                          {{ u.displayName }}
+                        </label>
+                      }
+                    </div>
+                  }
+                  @if (acl.editAccess() === 'restricted') {
+                    <div>
+                      <span class="acl-list-label">編集可</span>
+                      @for (u of usersSession.users()!; track u.id) {
+                        <label class="acl-user">
+                          <input
+                            type="checkbox"
+                            [checked]="acl.editUserIds().includes(u.id)"
+                            [disabled]="u.disabled || acl.saving() || usersLoadError()"
+                            (change)="acl.toggleUser('edit', u.id, $any($event.target).checked)"
+                          />
+                          {{ u.displayName }}
+                        </label>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            }
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="acl.saving() || !!usersLoadError()"
+              (click)="acl.save()"
+            >
+              アクセス設定を保存
+            </button>
+            @if (acl.error()) {
+              <p class="form-error" role="alert">{{ acl.error() }}</p>
+            }
+          </fieldset>
+        }
         <app-description-blocks-editor
           [value]="form.controls.description.value"
           [disabled]="form.disabled"
@@ -147,7 +236,7 @@
           <select
             id="detail-project"
             [value]="'' + item()!.projectId"
-            [disabled]="projectSaving()"
+            [disabled]="projectSaving() || editLocked()"
             (change)="onProjectChange($event)"
           >
             @for (project of projectSession.projects(); track project.id) {
@@ -209,7 +298,7 @@
                   [attr.data-assignee]="assigneeKind(chip.name)"
                   [attr.aria-pressed]="item()!.assignee === chip.name"
                   [class.selected]="item()!.assignee === chip.name"
-                  [disabled]="chip.disabled || assignee.saving() || !item()"
+                  [disabled]="chip.disabled || assignee.saving() || !item() || editLocked()"
                   [attr.title]="chip.disabled ? '無効なユーザーです' : null"
                   (click)="assignee.selectPreset(chip.name)"
                 >
@@ -230,7 +319,7 @@
               <button
                 type="button"
                 class="secondary"
-                [disabled]="assignee.saving() || !item()"
+                [disabled]="assignee.saving() || !item() || editLocked()"
                 (click)="assignee.applyDraft()"
               >
                 適用
@@ -240,7 +329,7 @@
               <button
                 type="button"
                 class="secondary assignee-clear"
-                [disabled]="assignee.saving()"
+                [disabled]="assignee.saving() || editLocked()"
                 (click)="assignee.clear()"
               >
                 クリア
@@ -259,7 +348,7 @@
                   <button
                     type="button"
                     class="secondary"
-                    [disabled]="dueAt.saving() || !item()"
+                    [disabled]="dueAt.saving() || !item() || editLocked()"
                     (click)="dueAt.start()"
                   >
                     編集
@@ -267,7 +356,7 @@
                   <button
                     type="button"
                     class="secondary"
-                    [disabled]="dueAt.saving() || !item()"
+                    [disabled]="dueAt.saving() || !item() || editLocked()"
                     (click)="dueAt.clear()"
                   >
                     クリア
@@ -276,7 +365,7 @@
                   <button
                     type="button"
                     class="secondary"
-                    [disabled]="dueAt.saving() || !item()"
+                    [disabled]="dueAt.saving() || !item() || editLocked()"
                     (click)="dueAt.start()"
                   >
                     設定
@@ -287,7 +376,7 @@
             } @else {
               <app-due-at-picker
                 [parts]="dueAt.draft()!"
-                [disabled]="dueAt.saving()"
+                [disabled]="dueAt.saving() || editLocked()"
                 (partsChange)="dueAt.draft.set($event)"
               />
               <div class="due-at-actions">
@@ -299,7 +388,7 @@
                 >
                   キャンセル
                 </button>
-                <button type="button" [disabled]="dueAt.saving()" (click)="confirmDueAt()">
+                <button type="button" [disabled]="dueAt.saving() || editLocked()" (click)="confirmDueAt()">
                   {{ dueAt.saving() ? '保存中…' : '確定' }}
                 </button>
               </div>
@@ -319,7 +408,10 @@
                       type="checkbox"
                       [checked]="itemCommands.isSelected(command.id)"
                       [disabled]="
-                        itemCommands.saving() || itemCommands.loading() || !!itemCommands.loadError()
+                        editLocked() ||
+                        itemCommands.saving() ||
+                        itemCommands.loading() ||
+                        !!itemCommands.loadError()
                       "
                       (change)="
                         itemCommands.toggle(command.id, $any($event.target).checked)
@@ -337,6 +429,7 @@
                 type="button"
                 class="secondary"
                 [disabled]="
+                  editLocked() ||
                   itemCommands.saving() ||
                   itemCommands.loading() ||
                   !!itemCommands.loadError() ||
@@ -380,7 +473,7 @@
             <button
               type="button"
               class="secondary"
-              [disabled]="prLinks.saving() || !item()"
+              [disabled]="prLinks.saving() || !item() || editLocked()"
               (click)="prLinks.add()"
             >
               追加
@@ -399,14 +492,14 @@
             aria-label="紐付けたGitHub PR"
             cdkDropList
             [cdkDropListData]="item()!.prUrls"
-            [cdkDropListDisabled]="prLinks.saving() || item()!.prUrls.length < 2"
+            [cdkDropListDisabled]="prLinks.saving() || editLocked() || item()!.prUrls.length < 2"
             (cdkDropListDropped)="onPrDrop($event)"
           >
             @for (url of item()!.prUrls; track url; let i = $index; let first = $first; let last = $last) {
               <li
                 class="pr-item"
                 cdkDrag
-                [cdkDragDisabled]="prLinks.saving() || item()!.prUrls.length < 2"
+                [cdkDragDisabled]="prLinks.saving() || editLocked() || item()!.prUrls.length < 2"
                 (cdkDragStarted)="onListDragStarted()"
                 (cdkDragEnded)="onListDragEnded()"
               >
@@ -416,8 +509,8 @@
                       type="button"
                       class="card-drag-handle"
                       cdkDragHandle
-                      [cdkDragHandleDisabled]="prLinks.saving()"
-                      [attr.aria-disabled]="prLinks.saving()"
+                      [cdkDragHandleDisabled]="prLinks.saving() || editLocked()"
+                      [attr.aria-disabled]="prLinks.saving() || editLocked()"
                       [attr.aria-label]="'GitHub PR を並び替え: ' + prLabel(url, i)"
                     >
                       <span aria-hidden="true">⋮⋮</span>
@@ -437,7 +530,7 @@
                     <button
                       type="button"
                       class="secondary pr-move"
-                      [disabled]="prLinks.saving() || first"
+                      [disabled]="prLinks.saving() || editLocked() || first"
                       [attr.aria-label]="'1つ上へ: ' + prLabel(url, i)"
                       (click)="prLinks.move(i, -1)"
                     >
@@ -446,7 +539,7 @@
                     <button
                       type="button"
                       class="secondary pr-move"
-                      [disabled]="prLinks.saving() || last"
+                      [disabled]="prLinks.saving() || editLocked() || last"
                       [attr.aria-label]="'1つ下へ: ' + prLabel(url, i)"
                       (click)="prLinks.move(i, 1)"
                     >
@@ -456,7 +549,7 @@
                   <button
                     type="button"
                     class="secondary pr-remove"
-                    [disabled]="prLinks.saving()"
+                    [disabled]="prLinks.saving() || editLocked()"
                     (click)="prLinks.remove(i)"
                   >
                     削除
@@ -486,7 +579,7 @@
             <button
               type="button"
               class="secondary"
-              [disabled]="relatedItems.saving() || !item()"
+              [disabled]="relatedItems.saving() || !item() || editLocked()"
               (click)="relatedItems.add()"
             >
               追加
@@ -501,7 +594,7 @@
             aria-label="関連アイテム"
             cdkDropList
             [cdkDropListData]="item()!.relatedItems"
-            [cdkDropListDisabled]="relatedItems.saving() || item()!.relatedItems.length < 2"
+            [cdkDropListDisabled]="relatedItems.saving() || editLocked() || item()!.relatedItems.length < 2"
             (cdkDropListDropped)="onRelatedDrop($event)"
           >
             @for (
@@ -514,7 +607,7 @@
               <li
                 class="pr-item"
                 cdkDrag
-                [cdkDragDisabled]="relatedItems.saving() || item()!.relatedItems.length < 2"
+                [cdkDragDisabled]="relatedItems.saving() || editLocked() || item()!.relatedItems.length < 2"
                 (cdkDragStarted)="onListDragStarted()"
                 (cdkDragEnded)="onListDragEnded()"
               >
@@ -524,8 +617,8 @@
                       type="button"
                       class="card-drag-handle"
                       cdkDragHandle
-                      [cdkDragHandleDisabled]="relatedItems.saving()"
-                      [attr.aria-disabled]="relatedItems.saving()"
+                      [cdkDragHandleDisabled]="relatedItems.saving() || editLocked()"
+                      [attr.aria-disabled]="relatedItems.saving() || editLocked()"
                       [attr.aria-label]="'関連を並び替え: ' + relatedDisplayLabel(related)"
                     >
                       <span aria-hidden="true">⋮⋮</span>
@@ -556,7 +649,7 @@
                     <button
                       type="button"
                       class="secondary pr-move"
-                      [disabled]="relatedItems.saving() || first"
+                      [disabled]="relatedItems.saving() || editLocked() || first"
                       [attr.aria-label]="'1つ上へ: ' + relatedDisplayLabel(related)"
                       (click)="relatedItems.move(i, -1)"
                     >
@@ -565,7 +658,7 @@
                     <button
                       type="button"
                       class="secondary pr-move"
-                      [disabled]="relatedItems.saving() || last"
+                      [disabled]="relatedItems.saving() || editLocked() || last"
                       [attr.aria-label]="'1つ下へ: ' + relatedDisplayLabel(related)"
                       (click)="relatedItems.move(i, 1)"
                     >
@@ -575,7 +668,7 @@
                   <button
                     type="button"
                     class="secondary pr-remove"
-                    [disabled]="relatedItems.saving()"
+                    [disabled]="relatedItems.saving() || editLocked()"
                     (click)="relatedItems.remove(related)"
                   >
                     削除
@@ -619,7 +712,7 @@
             class="danger-link"
             type="button"
             (click)="confirmDelete.set(true)"
-            [disabled]="savingBusy()"
+            [disabled]="savingBusy() || editLocked()"
           >
             アイテムを削除</button
           ><a class="secondary" [attr.href]="backLinkHref()" (click)="onBackClick($event)">{{ backLinkLabel() }}</a>
@@ -629,6 +722,7 @@
     <app-item-comments
       [number]="item()!.number"
       [projectId]="item()!.projectId"
+      [readOnly]="editLocked()"
     />
     <app-item-history
       [number]="item()!.number"
