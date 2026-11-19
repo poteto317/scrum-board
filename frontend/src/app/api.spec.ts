@@ -259,6 +259,25 @@ describe('Api', () => {
     expect(removed.request.method).toBe('DELETE');
     removed.flush(null);
   });
+  it('gets and puts header menu', () => {
+    api.headerMenu().subscribe();
+    http.expectOne('/api/header-menu').flush({
+      board: { hiddenIds: [] },
+      backlog: { hiddenIds: [] },
+      itemDetail: { hiddenIds: [] },
+    });
+    api
+      .putHeaderMenu({
+        board: { hiddenIds: ['project_add'] },
+        backlog: { hiddenIds: [] },
+        itemDetail: { hiddenIds: [] },
+      })
+      .subscribe();
+    const req = http.expectOne('/api/header-menu');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body.board.hiddenIds).toEqual(['project_add']);
+    req.flush(req.request.body);
+  });
   it('gets and puts list filter', () => {
     api.listFilter().subscribe();
     http.expectOne('/api/list-filter').flush({
