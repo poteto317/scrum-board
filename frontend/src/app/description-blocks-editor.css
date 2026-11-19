@@ -1,12 +1,38 @@
 .blocks-editor {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
+  position: relative;
 }
 .blocks-toolbar {
   margin: 0 0 4px;
 }
 .blocks-link-btn {
+  font-size: 13px;
+}
+.block-gap {
+  flex: 0 0 10px;
+  height: 10px;
+  width: 100%;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.block-gap:hover,
+.block-gap:focus-visible {
+  background: color-mix(in srgb, var(--border, #d0d5dd) 55%, transparent);
+}
+.block-gap[aria-disabled='true'] {
+  cursor: default;
+  pointer-events: none;
+}
+.block-insert-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding: 4px 0;
+}
+.block-insert-menu button {
   font-size: 13px;
 }
 .block-input {

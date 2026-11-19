@@ -9,21 +9,28 @@ import { DESCRIPTION_MAX_LEN } from './description-blocks';
   template: `
     <app-description-blocks-editor
       [value]="value"
+      [disabled]="disabled"
       (textChange)="onText($event)"
       (compositionChange)="onComp($event)"
+      (linkRequest)="onLink($event)"
     />
   `,
 })
 class Host {
   value = 'hello';
+  disabled = false;
   texts: string[] = [];
   comps: boolean[] = [];
+  links: { blockIndex: number; start: number; end: number; selectedText: string }[] = [];
   onText(t: string) {
     this.texts.push(t);
     this.value = t;
   }
   onComp(v: boolean) {
     this.comps.push(v);
+  }
+  onLink(v: { blockIndex: number; start: number; end: number; selectedText: string }) {
+    this.links.push(v);
   }
 }
 
@@ -45,6 +52,9 @@ describe('DescriptionBlocksEditor', () => {
 
   const areas = (f: ReturnType<typeof mount>['f']) =>
     f.nativeElement.querySelectorAll('textarea.block-input') as NodeListOf<HTMLTextAreaElement>;
+
+  const gaps = (f: ReturnType<typeof mount>['f']) =>
+    f.nativeElement.querySelectorAll('.block-gap') as NodeListOf<HTMLElement>;
 
   it('does not set placeholder on empty description blocks', () => {
     const { f } = mount('');
@@ -195,5 +205,137 @@ describe('DescriptionBlocksEditor', () => {
     f.detectChanges();
     const area = f.nativeElement.querySelector('textarea.block-input') as HTMLTextAreaElement;
     expect(area.style.height).toMatch(/px$/);
+  });
+
+  it('opens insert menu from leading and trailing gaps', () => {
+    const { f, editor } = mount('a\nb');
+    expect(gaps(f).length).toBe(3);
+    gaps(f)[0]!.click();
+    f.detectChanges();
+    expect(editor.insertMenuIndex()).toBe(0);
+    expect(f.nativeElement.querySelector('[role="menu"]')).toBeTruthy();
+    expect(f.nativeElement.querySelectorAll('[role="menuitem"]').length).toBe(2);
+    gaps(f)[2]!.click();
+    f.detectChanges();
+    expect(editor.insertMenuIndex()).toBe(2);
+  });
+
+  it('inserts empty text block from menu and focuses it', async () => {
+    const { f, host, editor } = mount('a\nb');
+    gaps(f)[1]!.click();
+    f.detectChanges();
+    const textBtn = [...f.nativeElement.querySelectorAll('[role="menuitem"]')].find(
+      (el: Element) => el.textContent?.trim() === 'テキスト',
+    ) as HTMLButtonElement;
+    textBtn.click();
+    f.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    f.detectChanges();
+    expect(host.texts.at(-1)).toBe('a\n\nb');
+    expect(editor.blocks()).toEqual(['a', '', 'b']);
+    expect(editor.insertMenuIndex()).toBeNull();
+    const focused = areas(f)[1]!;
+    expect(document.activeElement).toBe(focused);
+    expect(focused.selectionStart).toBe(0);
+  });
+
+  it('closes insert menu when Enter splits while menu is open', () => {
+    const { f, editor } = mount('hello');
+    gaps(f)[0]!.click();
+    f.detectChanges();
+    expect(editor.insertMenuIndex()).toBe(0);
+    const area = areas(f)[0]!;
+    area.focus();
+    area.setSelectionRange(2, 2);
+    area.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
+    f.detectChanges();
+    expect(editor.insertMenuIndex()).toBeNull();
+    expect(editor.blocks()).toEqual(['he', 'llo']);
+  });
+
+  it('allows inserting empty blocks twice in a row', () => {
+    const { f, host } = mount('a');
+    gaps(f)[1]!.click();
+    f.detectChanges();
+    (f.nativeElement.querySelector('[role="menuitem"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    gaps(f)[gaps(f).length - 1]!.click();
+    f.detectChanges();
+    (f.nativeElement.querySelector('[role="menuitem"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(host.texts.at(-1)).toBe('a\n\n');
+  });
+
+  it('emits linkRequest after inserting empty block from menu', () => {
+    const { f, host } = mount('hello');
+    gaps(f)[0]!.click();
+    f.detectChanges();
+    const linkBtn = [...f.nativeElement.querySelectorAll('[role="menuitem"]')].find(
+      (el: Element) => el.textContent?.trim() === 'リンク',
+    ) as HTMLButtonElement;
+    linkBtn.click();
+    f.detectChanges();
+    expect(host.texts.at(-1)).toBe('\nhello');
+    expect(host.links.at(-1)).toEqual({
+      blockIndex: 0,
+      start: 0,
+      end: 0,
+      selectedText: '',
+    });
+  });
+
+  it('shows length error and skips linkRequest when insert would exceed max', () => {
+    const { f, host, editor } = mount('x'.repeat(DESCRIPTION_MAX_LEN));
+    gaps(f)[1]!.click();
+    f.detectChanges();
+    const linkBtn = [...f.nativeElement.querySelectorAll('[role="menuitem"]')].find(
+      (el: Element) => el.textContent?.trim() === 'リンク',
+    ) as HTMLButtonElement;
+    linkBtn.click();
+    f.detectChanges();
+    expect(editor.lengthError()).toContain('10000');
+    expect(host.links).toEqual([]);
+    expect(host.texts).toEqual([]);
+  });
+
+  it('does not open insert menu when disabled', () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', 'hello');
+    f.componentRef.setInput('disabled', true);
+    f.detectChanges();
+    f.nativeElement.querySelector('.block-gap')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.insertMenuIndex()).toBeNull();
+  });
+
+  it('closes insert menu on Escape and outside click', () => {
+    const { f, editor } = mount('hello');
+    gaps(f)[0]!.click();
+    f.detectChanges();
+    expect(editor.insertMenuIndex()).toBe(0);
+    f.nativeElement
+      .querySelector('.blocks-editor')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    f.detectChanges();
+    expect(editor.insertMenuIndex()).toBeNull();
+    gaps(f)[0]!.click();
+    f.detectChanges();
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    f.detectChanges();
+    expect(editor.insertMenuIndex()).toBeNull();
+  });
+
+  it('closes insert menu when value is replaced externally', () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', 'one');
+    f.detectChanges();
+    f.componentInstance.openInsertMenu(0);
+    f.detectChanges();
+    expect(f.componentInstance.insertMenuIndex()).toBe(0);
+    f.componentRef.setInput('value', 'two');
+    f.detectChanges();
+    expect(f.componentInstance.insertMenuIndex()).toBeNull();
   });
 });

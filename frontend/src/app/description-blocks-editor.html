@@ -1,4 +1,4 @@
-<div class="blocks-editor">
+<div class="blocks-editor" (keydown.escape)="closeInsertMenu()">
   <div class="blocks-toolbar">
     <button
       type="button"
@@ -10,21 +10,54 @@
       リンク
     </button>
   </div>
-  @for (block of blocks(); track trackBlock($index)) {
-    <textarea
-      #blockArea
-      class="block-input"
-      rows="1"
-      [value]="block"
-      [disabled]="disabled()"
-      [attr.aria-label]="'説明ブロック ' + ($index + 1)"
-      (focus)="onFocus($index)"
-      (blur)="onBlur($event)"
-      (input)="onInput($index, $event)"
-      (keydown)="onKeydown($index, $event)"
-      (compositionstart)="onComposition(true)"
-      (compositionend)="onComposition(false)"
-    ></textarea>
+  @for (gapIndex of gapIndexes(); track gapIndex) {
+    <div
+      class="block-gap"
+      role="button"
+      tabindex="-1"
+      [attr.aria-label]="gapAriaLabel(gapIndex)"
+      [attr.aria-disabled]="disabled() ? 'true' : null"
+      (mousedown)="onGapPointerDown($event)"
+      (click)="openInsertMenu(gapIndex, $event)"
+    ></div>
+    @if (insertMenuIndex() === gapIndex) {
+      <div class="block-insert-menu" role="menu" aria-label="ブロックを追加">
+        <button
+          type="button"
+          role="menuitem"
+          class="secondary"
+          (mousedown)="$event.preventDefault()"
+          (click)="insertTextAtMenu()"
+        >
+          テキスト
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="secondary"
+          (mousedown)="$event.preventDefault()"
+          (click)="insertLinkAtMenu()"
+        >
+          リンク
+        </button>
+      </div>
+    }
+    @if (gapIndex < blocks().length) {
+      <textarea
+        #blockArea
+        class="block-input"
+        rows="1"
+        [value]="blocks()[gapIndex]"
+        [disabled]="disabled()"
+        [attr.aria-label]="'説明ブロック ' + (gapIndex + 1)"
+        (focus)="onFocus(gapIndex)"
+        (blur)="onBlur($event)"
+        (input)="onInput(gapIndex, $event)"
+        (keydown)="onKeydown(gapIndex, $event)"
+        (compositionstart)="onComposition(true)"
+        (compositionend)="onComposition(false)"
+      ></textarea>
+    }
   }
   @if (lengthError()) {
     <p class="form-error" role="alert">{{ lengthError() }}</p>
