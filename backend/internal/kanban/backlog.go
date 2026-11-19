@@ -6,16 +6,36 @@ import (
 )
 
 func (r MySQLRepository) Backlog(ctx context.Context) ([]Item, error) {
+	return r.loadBacklog(ctx, 0)
+}
+
+func (r MySQLRepository) BacklogForProject(ctx context.Context, projectID int64) ([]Item, error) {
+	if projectID <= 0 {
+		return nil, ErrProject
+	}
+	return r.loadBacklog(ctx, projectID)
+}
+
+func (r MySQLRepository) loadBacklog(ctx context.Context, itemProjectID int64) ([]Item, error) {
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	active, err := resolvedActiveProjectID(ctx, tx)
+	rawSettings, err := loadBoardSettings(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-	cards, err := listBacklogCards(ctx, tx, active)
+	projects, err := listProjects(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
+	scope, err := resolveItemListScope(active, itemProjectID, projects)
+	if err != nil {
+		return nil, err
+	}
+	cards, err := listBacklogCards(ctx, tx, scope)
 	if err != nil {
 		return nil, err
 	}

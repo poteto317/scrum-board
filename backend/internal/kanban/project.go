@@ -26,6 +26,18 @@ func resolveActiveProjectID(raw int64, projects []Project) int64 {
 	return best.ID
 }
 
+// resolveItemListScope picks which project owns listed items.
+// settings.active stays `active`; override>0 must exist or ErrProject.
+func resolveItemListScope(active, override int64, projects []Project) (int64, error) {
+	if override <= 0 {
+		return active, nil
+	}
+	if !projectIDExists(projects, override) {
+		return 0, ErrProject
+	}
+	return override, nil
+}
+
 func projectIDExists(projects []Project, id int64) bool {
 	for _, p := range projects {
 		if p.ID == id {
