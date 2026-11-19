@@ -1,0 +1,84 @@
+<div class="header-menu-root">
+  <button
+    #trigger
+    type="button"
+    class="header-menu-trigger icon-button"
+    id="header-menu-trigger"
+    aria-haspopup="menu"
+    [attr.aria-expanded]="open() ? 'true' : 'false'"
+    aria-controls="header-menu-popover"
+    aria-label="メニュー"
+    (click)="toggle()"
+  >
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
+    </svg>
+  </button>
+  @if (open()) {
+    <div
+      #popover
+      id="header-menu-popover"
+      class="header-menu-popover"
+      [class.settings-view]="view() === 'settings'"
+    >
+      @if (session.loadError()) {
+        <p class="header-menu-error" role="alert">{{ session.loadError() }}</p>
+        <button type="button" class="secondary" (click)="session.retryLoad()">再試行</button>
+      }
+      @if (view() === 'actions') {
+        <ul role="menu" aria-label="メニュー">
+          @for (id of visibleIds(); track id) {
+            <li role="none">
+              <button
+                type="button"
+                role="menuitem"
+                [id]="'header-menu-item-' + id"
+                [disabled]="actionDisabled(id)"
+                (click)="onActionClick(id)"
+              >
+                {{ itemLabel(id) }}
+              </button>
+            </li>
+          }
+          <li role="none" class="header-menu-divider"></li>
+          <li role="none">
+            <button type="button" role="menuitem" (click)="openSettings()">メニュー設定</button>
+          </li>
+        </ul>
+        @if (session.saveError()) {
+          <p class="header-menu-error" role="alert">{{ session.saveError() }}</p>
+        }
+      } @else {
+        <div role="group" aria-label="メニュー設定" class="header-menu-settings">
+          <label class="sr-only" for="header-menu-page-kind">ページ種別</label>
+          <select id="header-menu-page-kind" [value]="settingsPageKind()" (change)="onSelectSettingsPageKind($event)">
+            @for (kind of pageKindOptions; track kind) {
+              <option [value]="kind">{{ pageKindLabels[kind] }}</option>
+            }
+          </select>
+          <ul class="header-menu-settings-list">
+            @for (entry of settingsCatalog(); track entry.id) {
+              <li>
+                <label>
+                  <input
+                    type="checkbox"
+                    [checked]="isItemVisible(entry.id)"
+                    [disabled]="!!session.loadError()"
+                    (change)="onSettingsToggle(entry.id, $event)"
+                  />
+                  {{ settingsLabel(entry.id) }}
+                </label>
+              </li>
+            }
+          </ul>
+          <button type="button" class="secondary" (click)="backToActions()">戻る</button>
+          @if (session.saveError()) {
+            <p class="header-menu-error" role="alert">{{ session.saveError() }}</p>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
