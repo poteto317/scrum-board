@@ -83,6 +83,8 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pr-titles", h.batchPRTitles)
 	mux.HandleFunc("GET /api/list-filter", h.getListFilter)
 	mux.HandleFunc("PUT /api/list-filter", h.putListFilter)
+	mux.HandleFunc("GET /api/header-menu", h.getHeaderMenu)
+	mux.HandleFunc("PUT /api/header-menu", h.putHeaderMenu)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")

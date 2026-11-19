@@ -105,6 +105,9 @@ func run() error {
 		err = repo.InitializeListFilter(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeHeaderMenu(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeComments(migrationCtx)
 	}
 	migrationCancel()

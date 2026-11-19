@@ -23,6 +23,7 @@ type memoryRepo struct {
 	settings           BoardSettings
 	settingsFail       error
 	listFilter         *WorkspaceListFilters
+	headerMenu         *WorkspaceHeaderMenu
 	projects           []Project
 	nextProject        int64
 	comments           map[int64]Comment
@@ -919,6 +920,24 @@ func (m *memoryRepo) PutListFilter(_ context.Context, in WorkspaceListFilters) (
 		Backlog: cloneListFilter(out.Backlog),
 	}
 	m.listFilter = &cp
+	return out, nil
+}
+
+func (m *memoryRepo) GetHeaderMenu(context.Context) (WorkspaceHeaderMenu, error) {
+	if m.headerMenu == nil {
+		return emptyWorkspaceHeaderMenu(), nil
+	}
+	return cloneWorkspaceHeaderMenu(*m.headerMenu), nil
+}
+
+func (m *memoryRepo) PutHeaderMenu(_ context.Context, in WorkspaceHeaderMenu) (WorkspaceHeaderMenu, error) {
+	out := WorkspaceHeaderMenu{
+		Board:      normalizePageHeaderMenuPut(in.Board),
+		Backlog:    normalizePageHeaderMenuPut(in.Backlog),
+		ItemDetail: normalizePageHeaderMenuPut(in.ItemDetail),
+	}
+	cp := cloneWorkspaceHeaderMenu(out)
+	m.headerMenu = &cp
 	return out, nil
 }
 
