@@ -43,6 +43,13 @@ func (r *smallRepo) CreateItem(_ context.Context, in kanban.ItemInput) (kanban.I
 	return kanban.Item{ID: 1, Number: 1, ColumnID: in.ColumnID, Title: in.Title, Description: in.Description}, nil
 }
 
+func (r *smallRepo) UserBySessionID(_ context.Context, sessionID string, _ time.Time) (kanban.User, error) {
+	if sessionID != kanban.HandlerTestSessionID {
+		return kanban.User{}, kanban.ErrUnauthorized
+	}
+	return kanban.User{ID: 1, LoginName: "admin", DisplayName: "admin", Role: kanban.RoleAdmin}, nil
+}
+
 func getenvFrom(values map[string]string) func(string) string {
 	return func(key string) string { return values[key] }
 }
@@ -84,6 +91,7 @@ func postRefined(h http.Handler, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/items/refined", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
+	r.AddCookie(&http.Cookie{Name: kanban.SessionCookieName, Value: kanban.HandlerTestSessionID})
 	h.ServeHTTP(w, r)
 	return w
 }

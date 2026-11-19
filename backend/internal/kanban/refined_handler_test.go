@@ -142,6 +142,7 @@ func post(h http.Handler, ctx context.Context, contentType, body string) *httpte
 	if contentType != "" {
 		r.Header.Set("Content-Type", contentType)
 	}
+	r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
 	h.ServeHTTP(w, r)
 	return w
 }

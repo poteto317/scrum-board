@@ -198,18 +198,22 @@
           }
           <div class="assignee-field">
             <span class="assignee-label" id="detail-assignee-label">対応</span>
+            @if (usersLoadError()) {
+              <p class="form-error" role="alert">{{ usersLoadError() }}</p>
+            }
             <div class="assignee-chips" role="group" aria-labelledby="detail-assignee-label">
-              @for (name of presets; track name) {
+              @for (chip of assigneeChips(); track chip.name) {
                 <button
                   type="button"
                   class="assignee-chip"
-                  [attr.data-assignee]="assigneeKind(name)"
-                  [attr.aria-pressed]="item()!.assignee === name"
-                  [class.selected]="item()!.assignee === name"
-                  [disabled]="assignee.saving() || !item()"
-                  (click)="assignee.selectPreset(name)"
+                  [attr.data-assignee]="assigneeKind(chip.name)"
+                  [attr.aria-pressed]="item()!.assignee === chip.name"
+                  [class.selected]="item()!.assignee === chip.name"
+                  [disabled]="chip.disabled || assignee.saving() || !item()"
+                  [attr.title]="chip.disabled ? '無効なユーザーです' : null"
+                  (click)="assignee.selectPreset(chip.name)"
                 >
-                  {{ name }}
+                  {{ chip.name }}
                 </button>
               }
             </div>

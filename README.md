@@ -28,7 +28,7 @@ docker compose up -d --build
 
 **パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）はローカル Docker 専用の既定値です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。
 
-**認証について:** APIに認証はありません。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
+**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）が本線です。ボード／アイテムなど大半の API はログイン必須です（セッション不要は login/logout・`POST /api/trash/purge`・`GET /api/public-config`・`GET /api/health` のみ）。nginx Basic は本番ゲートとして残ります。MCP・手動 curl・smoke の一般 API には Basic に加えて **セッション Cookie** が必要です。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
 
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board
@@ -206,7 +206,7 @@ npm test -- --watch=false
 npm run build
 ```
 
-smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複列、不正入力、削除後の404を確認します。テストアイテムは削除しますが、追加列`Review`は再利用できるよう残します。削除したタスク番号は再利用しないため、実行のたびに番号が1つ消費されます。普段使いのスタック（既定のポート8080 / 4200）では実行せず、プロジェクト名とポートを変えた使い捨てのスタックに対して、プロジェクトルートから実行してください。
+smokeは実DBでCRUD、ステータス変更、部分更新、Unicode、重複列、不正入力、削除後の404を確認します。ボード等の API はアプリログイン（Cookie）が追加で必要なため、smoke を動かす場合は事前ログインで `sb_session` を付与してください。テストアイテムは削除しますが、追加列`Review`は再利用できるよう残します。削除したタスク番号は再利用しないため、実行のたびに番号が1つ消費されます。普段使いのスタック（既定のポート8080 / 4200）では実行せず、プロジェクト名とポートを変えた使い捨てのスタックに対して、プロジェクトルートから実行してください。
 
 ```sh
 MYSQL_PORT=3317 API_PORT=8081 WEB_PORT=4201 docker compose -p scrumboard-smoke up -d --build
@@ -420,8 +420,12 @@ export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # Secret Manager 推奨
 ### 4. 動作確認
 
 ```sh
-# Basic Auth あり（200 と JSON）
-curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" "$SERVICE_URL/api/board" | head
+# Basic Auth + アプリログイン Cookie が必要（未ログインは 401）
+curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -c /tmp/sb.ck -b /tmp/sb.ck \
+  -H 'Content-Type: application/json' \
+  -d "{\"loginName\":\"$AUTH_USER\",\"password\":\"$AUTH_PASSWORD\"}" \
+  "$SERVICE_URL/api/auth/login"
+curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -b /tmp/sb.ck "$SERVICE_URL/api/board" | head
 
 # ヘルスチェックは認証なしで 200（nginx の /health。Cloud Run は /healthz を予約するため使わない）
 curl -sS -o /dev/null -w '%{http_code}\n' "$SERVICE_URL/health"

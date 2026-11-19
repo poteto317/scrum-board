@@ -187,6 +187,12 @@ describe('Header open_trash navigation', () => {
     expect(catalogLabel('open_trash', 'board')).toBe('ゴミ箱');
     expect(catalogLabel('open_trash', 'itemDetail')).toBe('ゴミ箱');
   });
+
+  it('catalog label for open_users is ユーザー', async () => {
+    const { catalogLabel } = await import('./header-menu');
+    expect(catalogLabel('open_users', 'board')).toBe('ユーザー');
+    expect(catalogLabel('open_users', 'itemDetail')).toBe('ユーザー');
+  });
 });
 
 describe('Router trash path', () => {

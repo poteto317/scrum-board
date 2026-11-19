@@ -2,16 +2,13 @@ package kanban
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
 func TestListFilterGETDefaults(t *testing.T) {
 	h := NewHandler(fresh())
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/list-filter", nil))
+	rec := request(h, "GET", "/api/list-filter", "")
 	if rec.Code != 200 {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
@@ -31,8 +28,7 @@ func TestListFilterGETNoTodoColumn(t *testing.T) {
 	repo := fresh()
 	repo.columns = []Column{{ID: 2, Name: "Doing", Position: 0}}
 	h := NewHandler(repo)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/list-filter", nil))
+	rec := request(h, "GET", "/api/list-filter", "")
 	var got WorkspaceListFilters
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
@@ -46,8 +42,7 @@ func TestListFilterPUTRoundTrip(t *testing.T) {
 	repo := fresh()
 	h := NewHandler(repo)
 	body := `{"board":{"query":"  hello  ","statusIds":[1,2,2,999]},"backlog":{"query":"","statusIds":[]}}`
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/list-filter", strings.NewReader(body)))
+	rec := request(h, "PUT", "/api/list-filter", body)
 	if rec.Code != 200 {
 		t.Fatalf("put status %d body %s", rec.Code, rec.Body.String())
 	}
@@ -61,8 +56,7 @@ func TestListFilterPUTRoundTrip(t *testing.T) {
 	if put.Backlog.Query != "" || len(put.Backlog.StatusIDs) != 0 {
 		t.Fatalf("cleared backlog %+v", put.Backlog)
 	}
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/list-filter", nil))
+	rec = request(h, "GET", "/api/list-filter", "")
 	var got WorkspaceListFilters
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
@@ -98,8 +92,7 @@ func TestListFilterPUTValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/list-filter", strings.NewReader(tc.body)))
+			rec := request(h, "PUT", "/api/list-filter", tc.body)
 			if rec.Code != 400 {
 				t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 			}

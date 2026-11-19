@@ -47,6 +47,9 @@ describe('App project switcher', () => {
 
   function setup(extra: Record<string, unknown> = {}) {
     const api = {
+      me: vi.fn(() =>
+        of({ id: 1, loginName: 'admin', displayName: 'admin', role: 'admin', disabled: false }),
+      ),
       listProjects: vi.fn(() => of({ projects })),
       board: vi.fn(() =>
         of({
@@ -62,6 +65,7 @@ describe('App project switcher', () => {
       patchProject: vi.fn(() => of({ id: 1, name: '改名', position: 0 })),
       deleteProject: vi.fn(() => of(undefined)),
       headerMenu: vi.fn(() => of(headerMenuPrefs)),
+      listUsers: vi.fn(() => of([])),
       ...extra,
     };
     TestBed.configureTestingModule({

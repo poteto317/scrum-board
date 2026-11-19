@@ -47,6 +47,8 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"command_templates",
 		"workspace_list_filter",
 		"item_comments",
+		"sessions",
+		"users",
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
@@ -118,6 +120,15 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeComments(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeUsers(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeSessions(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = seedHandlerTestAuth(t.Context(), repo); err != nil {
 		t.Fatal(err)
 	}
 	return db

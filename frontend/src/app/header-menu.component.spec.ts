@@ -20,12 +20,16 @@ describe('HeaderMenu component', () => {
 
   function setup() {
     const api = {
+      me: vi.fn(() =>
+        of({ id: 1, loginName: 'admin', displayName: 'admin', role: 'admin', disabled: false }),
+      ),
       listProjects: vi.fn(() => of({ projects: [{ id: 1, name: 'P', position: 0 }] })),
       board: vi.fn(() =>
         of({ columns: [], items: [], settings: { cardLayout: 'pack', activeProjectId: 1 } }),
       ),
       patchBoardSettings: vi.fn(),
       headerMenu: vi.fn(() => of(menuPrefs)),
+      listUsers: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [App],
