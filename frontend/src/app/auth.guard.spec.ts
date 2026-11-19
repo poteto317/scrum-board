@@ -46,5 +46,6 @@ describe('guestGuard', () => {
     );
     const got = await firstValueFrom(result as import('rxjs').Observable<unknown>);
     expect(String(got)).not.toContain('login');
+    expect(ensureMe).toHaveBeenCalledWith({ force: true });
   });
 });

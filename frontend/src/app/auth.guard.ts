@@ -28,15 +28,13 @@ export const authGuard: CanActivateFn = (_route, state) => {
 export const guestGuard: CanActivateFn = (route) => {
   const auth = inject(AuthSession);
   const router = inject(Router);
-  return auth.ensureMe().pipe(
+  // Always re-hit /me so a dead cookie cannot trap the user off /login.
+  return auth.ensureMe({ force: true }).pipe(
     map(() => {
       const raw = route.queryParamMap.get('returnUrl');
       const dest = safeReturnUrl(raw) ?? '/';
       return router.createUrlTree([dest]);
     }),
-    catchError((err) => {
-      if (isUnauthorized(err)) return of(true);
-      return of(true);
-    }),
+    catchError(() => of(true)),
   );
 };

@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, map, of, shareReplay, tap, throwError } from 'rxjs';
+import { Observable, catchError, finalize, map, tap, throwError } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { UserPublic, isUnauthorized } from './auth';
@@ -15,6 +15,7 @@ export class AuthSession {
   readonly user = signal<UserPublic | null>(null);
   readonly status = signal<AuthStatus>('unknown');
   readonly loadError = signal('');
+  /** In-flight only — successful /me is not cached so guards re-validate dead sessions. */
   private meInflight: Observable<UserPublic | null> | null = null;
   private meGeneration = 0;
 
@@ -46,7 +47,6 @@ export class AuthSession {
         if (generation !== this.meGeneration) {
           return throwError(() => err);
         }
-        this.meInflight = null;
         if (isUnauthorized(err)) {
           this.user.set(null);
           this.status.set('anonymous');
@@ -57,7 +57,9 @@ export class AuthSession {
         this.loadError.set(errorMessage(err));
         return throwError(() => err);
       }),
-      shareReplay(1),
+      finalize(() => {
+        if (generation === this.meGeneration) this.meInflight = null;
+      }),
     );
     return this.meInflight;
   }
@@ -69,8 +71,6 @@ export class AuthSession {
         this.user.set(user);
         this.status.set('authenticated');
         this.loadError.set('');
-        this.meGeneration++;
-        this.meInflight = of(user).pipe(shareReplay(1));
       }),
     );
   }
