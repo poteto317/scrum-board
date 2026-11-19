@@ -31,6 +31,22 @@ curl --fail-with-body --request PATCH \
 
 クリアは `{"assignee":""}` です。`null`・未知フィールド・61文字超・制御文字は400です（`PATCH /api/items/{id}` で他フィールドと同居しても `assignee:null` は400で、他フィールドも適用しません）。既存の `PATCH /api/items/{id}` でも `assignee` を部分更新できます。作成時の任意プロパティとしても送れます。
 
+## アイテム権限（ACL）
+
+アイテム JSON に `viewAccess`（`public`|`open`|`restricted`）、`editAccess`（`open`|`restricted`）、`createdByUserId` があります。詳細／作成／更新／ACL PATCH 応答には当該セッション向けの `canEdit` / `canManage` が付きます。`acl: { viewUserIds, editUserIds }` は manage 可能な応答にだけ含まれます。
+
+- ボード／バックログ一覧は閲覧可のアイテムだけを返します。
+- 閲覧不可の詳細 GET はログイン済みなら 403（固定文「閲覧権限がありません。」）、未ログインかつ非 public は 401。編集不可の書込は 403（「編集権限がありません。」）。
+- `PATCH /api/items/{id}` に `viewAccess` / `editAccess` / `viewUserIds` / `editUserIds` / `acl` / `createdByUserId` を含めると 400 です。ACL は専用 API のみです。
+
+```sh
+curl --fail-with-body --request PATCH --header 'Content-Type: application/json' \
+  --data '{"viewAccess":"restricted","editAccess":"restricted","viewUserIds":[2],"editUserIds":[2]}' \
+  http://127.0.0.1:4200/api/items/22/acl
+```
+
+`PUT /api/items/order` と `PUT /api/backlog/order` は、クライアントから見えない restricted アイテムをサーバ側で元のスロットへ戻してから適用し、応答は閲覧可だけにフィルタします。並び替え対象（クライアントが送った ID）には編集権限が必要です。
+
 ## お気に入り（favorite）
 
 アイテムJSONの `favorite` はお気に入り状態です。未設定相当は `false` です（キーはボード／バックログ／単体／by-number の GET と POST／PATCH 応答に含めます）。値は JSON boolean のみです。
@@ -143,11 +159,12 @@ number・id・title・description・columnIdなどを混ぜて送ると400にな
 
 | API | 指定する番号・値 |
 | --- | --- |
-| `GET /api/items/by-number/{number}` | 公開タスク番号 |
-| `PATCH /api/items/by-number/{number}/status` | 公開タスク番号とステータス名 |
-| `PATCH /api/items/by-number/{number}/assignee` | 公開タスク番号と対応者ラベル |
-| `GET /api/items/{id}` | 内部ID |
-| `PATCH /api/items/{id}` | 内部IDとtitle/description/solution/columnId/projectId/prUrls/assignee/closeReason/favorite/dueAtの部分更新 |
+| `GET /api/items/by-number/{number}` | 公開タスク番号（閲覧可。`viewAccess=public` ならセッション任意） |
+| `PATCH /api/items/by-number/{number}/status` | 公開タスク番号とステータス名（編集可） |
+| `PATCH /api/items/by-number/{number}/assignee` | 公開タスク番号と対応者ラベル（編集可） |
+| `GET /api/items/{id}` | 内部ID（閲覧可。public ならセッション任意） |
+| `PATCH /api/items/{id}` | 内部IDとtitle/description/solution/columnId/projectId/prUrls/assignee/closeReason/favorite/dueAtの部分更新（編集可。ACL キーは不可） |
+| `PATCH /api/items/{id}/acl` | 閲覧／編集ポリシーと allowlist の置換（manage＝admin または作成者） |
 
 番号とIDを推測で読み替えません。例のアイテムに `PATCH /api/items/7` を送ると、内部ID7を対象にしてしまいます。生成AIから画面のタスクを変更するときはby-numberを使ってください。
 
