@@ -82,7 +82,7 @@ export class ProjectSession {
     }).subscribe({
       next: ({ projects, board }) => {
         if (generation !== this.loadGeneration) return;
-        // activeId before projects so the header select never mounts with value="".
+        // Resolve activeId before projects; header select mounts only after bootstrapped.
         this.syncActiveFromBoard(normalizeBoardData(board).settings.activeProjectId, true);
         this.projects.set(sortProjects(projects.projects ?? []));
         this.bootstrapped.set(true);
