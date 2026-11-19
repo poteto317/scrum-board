@@ -39,6 +39,8 @@ export function displayCommentAuthor(author: string): string {
 export class ItemComments implements OnChanges {
   @Input({ required: true }) number = 0;
   @Input() projectId?: number;
+  /** 編集権限が無いとき投稿・編集・削除を止める。 */
+  @Input() readOnly = false;
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
   private listRequest?: Subscription;
