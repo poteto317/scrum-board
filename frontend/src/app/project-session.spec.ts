@@ -39,7 +39,41 @@ describe('ProjectSession', () => {
     flushLoad(2);
     expect(session.projects().map((p) => p.id)).toEqual([1, 2]);
     expect(session.activeId()).toBe(2);
+    expect(session.bootstrapped()).toBe(true);
     expect(session.error()).toBe('');
+  });
+
+  it('sets activeId before projects on load', () => {
+    const order: string[] = [];
+    const activeSet = session.activeId.set.bind(session.activeId);
+    const projectsSet = session.projects.set.bind(session.projects);
+    session.activeId.set = (value: number | null) => {
+      order.push(`active:${value}`);
+      activeSet(value);
+    };
+    session.projects.set = (value: Project[]) => {
+      order.push(`projects:${value.map((p) => p.id).join(',')}`);
+      projectsSet(value);
+    };
+    session.load();
+    flushLoad(2);
+    expect(order[0]).toBe('active:2');
+    expect(order[1]).toBe('projects:1,2');
+    expect(session.bootstrapped()).toBe(true);
+  });
+
+  it('does not clear a positive activeId when clearIfMissing sees a missing id', () => {
+    session.activeId.set(2);
+    session.syncActiveFromBoard(undefined, true);
+    expect(session.activeId()).toBe(2);
+    session.syncActiveFromBoard(0, true);
+    expect(session.activeId()).toBe(2);
+  });
+
+  it('clears activeId on clearIfMissing only when it was not a positive id', () => {
+    session.activeId.set(null);
+    session.syncActiveFromBoard(undefined, true);
+    expect(session.activeId()).toBeNull();
   });
 
   it('does not replace the list when load fails', () => {
@@ -53,6 +87,7 @@ describe('ProjectSession', () => {
     }
     expect(session.projects()).toEqual([main]);
     expect(session.activeId()).toBe(1);
+    expect(session.bootstrapped()).toBe(false);
     expect(session.error()).not.toBe('');
   });
 
