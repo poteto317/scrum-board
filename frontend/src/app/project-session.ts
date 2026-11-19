@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { EMPTY, Observable, Subject, forkJoin, throwError } from 'rxjs';
+import { defer, EMPTY, Observable, Subject, forkJoin, throwError } from 'rxjs';
 import { catchError, map, tap } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
@@ -84,25 +84,35 @@ export class ProjectSession {
     });
   }
 
-  create(name: string): void {
+  /**
+   * Create a project. Does not switch activeId (caller runs switchTo).
+   * On success, `mutating` stays true until `endMutating()`.
+   */
+  create(name: string): Observable<Project> {
     const trimmed = name.trim();
-    if (this.switching() || this.mutating()) return;
-    if (!trimmed) {
+    if (this.switching() || this.mutating()) return EMPTY;
+    if (!trimmed || [...trimmed].length > 80) {
       this.error.set(PROJECT_NAME_REQUIRED);
-      return;
+      return throwError(() => new Error(PROJECT_NAME_REQUIRED));
     }
-    this.mutating.set(true);
-    this.error.set('');
-    this.api.createProject(trimmed).subscribe({
-      next: (project) => {
-        this.projects.update((list) => sortProjects([...list, project]));
-        this.mutating.set(false);
-      },
-      error: (e) => {
-        this.error.set(errorMessage(e));
-        this.mutating.set(false);
-      },
+    return defer(() => {
+      this.mutating.set(true);
+      this.error.set('');
+      return this.api.createProject(trimmed).pipe(
+        tap((project) => {
+          this.projects.update((list) => sortProjects([...list, project]));
+        }),
+        catchError((e) => {
+          this.error.set(errorMessage(e));
+          this.mutating.set(false);
+          return throwError(() => e);
+        }),
+      );
     });
+  }
+
+  endMutating(): void {
+    this.mutating.set(false);
   }
 
   rename(id: number, name: string): void {
