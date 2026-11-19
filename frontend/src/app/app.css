@@ -60,6 +60,25 @@
   padding: 16px 12px 32px;
   box-sizing: border-box;
 }
+.app-sidebar.is-collapsed {
+  width: 52px;
+  padding: 12px 6px 24px;
+}
+.sidebar-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.app-sidebar.is-collapsed .sidebar-toolbar {
+  justify-content: center;
+}
+.sidebar-toggle {
+  color: var(--muted);
+}
+.sidebar-toggle:hover {
+  color: var(--ink);
+  background: #eef1ea;
+}
 .app-main {
   flex: 1;
   min-width: 0;
@@ -71,12 +90,19 @@
   margin-bottom: 20px;
 }
 .app-nav a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-decoration: none;
   color: var(--muted);
   font-size: 14px;
   font-weight: 550;
   padding: 8px 10px;
   border-radius: 6px;
+}
+.app-sidebar.is-collapsed .app-nav a {
+  justify-content: center;
+  padding: 8px 0;
 }
 .app-nav a:hover {
   color: var(--ink);
@@ -85,6 +111,13 @@
 .app-nav a.active {
   color: var(--ink);
   background: #e9ede7;
+}
+.nav-icon {
+  flex-shrink: 0;
+  display: block;
+}
+.nav-label {
+  min-width: 0;
 }
 .sidebar-heading {
   margin: 0 0 8px;

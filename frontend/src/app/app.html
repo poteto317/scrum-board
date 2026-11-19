@@ -66,36 +66,114 @@
     <div class="state-panel" role="alert">{{ auth.loadError() }}</div>
   }
   <div class="app-body">
-    <aside class="app-sidebar" aria-label="サイドバー">
+    <aside
+      id="app-sidebar"
+      class="app-sidebar"
+      [class.is-collapsed]="collapsed()"
+      aria-label="サイドバー"
+    >
+      <div class="sidebar-toolbar">
+        <button
+          type="button"
+          class="sidebar-toggle icon-button"
+          [attr.aria-expanded]="!collapsed()"
+          aria-controls="app-sidebar"
+          [attr.aria-label]="collapsed() ? 'サイドバーを開く' : 'サイドバーを閉じる'"
+          (click)="toggleSidebar()"
+          (keydown)="onSidebarToggleKeydown($event)"
+        >
+          @if (collapsed()) {
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M9 4v16" />
+              <path d="M14 9l3 3-3 3" />
+            </svg>
+          } @else {
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M9 4v16" />
+              <path d="M15 15l-3-3 3-3" />
+            </svg>
+          }
+        </button>
+      </div>
       <nav class="app-nav" aria-label="メイン">
         <a
           routerLink="/"
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: true }"
           ariaCurrentWhenActive="page"
-          >ボード</a
+          [attr.aria-label]="collapsed() ? 'ボード' : null"
         >
-        <a routerLink="/backlog" routerLinkActive="active" ariaCurrentWhenActive="page">バックログ</a>
+          @if (collapsed()) {
+            <svg
+              class="nav-icon nav-icon-board"
+              aria-hidden="true"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="4" width="7" height="16" rx="1" />
+              <rect x="14" y="4" width="7" height="10" rx="1" />
+            </svg>
+          } @else {
+            <span class="nav-label">ボード</span>
+          }
+        </a>
+        <a
+          routerLink="/backlog"
+          routerLinkActive="active"
+          ariaCurrentWhenActive="page"
+          [attr.aria-label]="collapsed() ? 'バックログ' : null"
+        >
+          @if (collapsed()) {
+            <svg
+              class="nav-icon nav-icon-backlog"
+              aria-hidden="true"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M8 6h13" />
+              <path d="M8 12h13" />
+              <path d="M8 18h13" />
+              <path d="M3 6h.01" />
+              <path d="M3 12h.01" />
+              <path d="M3 18h.01" />
+            </svg>
+          } @else {
+            <span class="nav-label">バックログ</span>
+          }
+        </a>
       </nav>
-      <section class="sidebar-favorites" aria-labelledby="favorites-heading">
-        <h2 id="favorites-heading" class="sidebar-heading">お気に入り</h2>
-        @if (favorites.items().length === 0) {
-          <p class="sidebar-empty">なし</p>
-        } @else {
-          <ul class="sidebar-favorite-list">
-            @for (fav of favorites.items(); track fav.id) {
-              <li>
-                <a
-                  [routerLink]="['/items', fav.number]"
-                  [queryParams]="fav.projectId > 0 ? { project: fav.projectId } : null"
-                  [attr.title]="displayFavoriteTitle(fav.title)"
-                  >{{ displayFavoriteTitle(fav.title) }}</a
-                >
-              </li>
-            }
-          </ul>
-        }
-      </section>
+      @if (!collapsed()) {
+        <section class="sidebar-favorites" aria-labelledby="favorites-heading">
+          <h2 id="favorites-heading" class="sidebar-heading">お気に入り</h2>
+          @if (favorites.items().length === 0) {
+            <p class="sidebar-empty">なし</p>
+          } @else {
+            <ul class="sidebar-favorite-list">
+              @for (fav of favorites.items(); track fav.id) {
+                <li>
+                  <a
+                    [routerLink]="['/items', fav.number]"
+                    [queryParams]="fav.projectId > 0 ? { project: fav.projectId } : null"
+                    [attr.title]="displayFavoriteTitle(fav.title)"
+                    >{{ displayFavoriteTitle(fav.title) }}</a
+                  >
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      }
     </aside>
     <div class="app-main">
       <router-outlet />
