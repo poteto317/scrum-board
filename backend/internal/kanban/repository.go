@@ -43,13 +43,24 @@ type scanner interface{ Scan(...any) error }
 func scanCard(s scanner) (Item, error) {
 	var c Item
 	var dueAt sql.NullTime
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.ProjectID, &c.Title, &c.Description, &c.Solution, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &c.Favorite, &dueAt, &c.CreatedAt, &c.UpdatedAt)
+	var createdBy sql.NullInt64
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.ProjectID, &c.Title, &c.Description, &c.Solution, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &c.Favorite, &dueAt, &c.ViewAccess, &c.EditAccess, &createdBy, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
 	}
 	if dueAt.Valid {
 		u := TruncateDueAtMinute(dueAt.Time)
 		c.DueAt = &u
+	}
+	if createdBy.Valid {
+		id := createdBy.Int64
+		c.CreatedByUserID = &id
+	}
+	if c.ViewAccess == "" {
+		c.ViewAccess = ViewAccessOpen
+	}
+	if c.EditAccess == "" {
+		c.EditAccess = EditAccessOpen
 	}
 	c.PRURLs = []string{}
 	c.RelatedItems = []RelatedItem{}
@@ -59,7 +70,7 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.item_number, c.column_id, c.project_id, c.title, c.description, c.solution, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.favorite, c.due_at, c.created_at, c.updated_at"
+const cardFields = "c.id, n.item_number, c.column_id, c.project_id, c.title, c.description, c.solution, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.favorite, c.due_at, c.view_access, c.edit_access, c.created_by_user_id, c.created_at, c.updated_at"
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -133,6 +144,10 @@ func (r MySQLRepository) GetItem(ctx context.Context, id int64) (Item, error) {
 func (r MySQLRepository) GetItemByNumber(ctx context.Context, number, projectID int64) (Item, error) {
 	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.project_id=? AND n.item_number=? AND c.deleted_at IS NULL", projectID, number)
 }
+
+func (r MySQLRepository) GetDeletedItem(ctx context.Context, id, projectID int64) (Item, error) {
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.project_id=? AND c.deleted_at IS NOT NULL", id, projectID)
+}
 func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -173,7 +188,8 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 	if err != nil {
 		return Item{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO items(column_id,project_id,title,description,solution,position,offset_y,backlog_position,assignee,close_reason,favorite) VALUES(?,?,?,?,?,?,?,?,?,?,?)", in.ColumnID, projectID, in.Title, in.Description, in.Solution, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason, in.Favorite)
+	result, err := tx.ExecContext(ctx, `INSERT INTO items(column_id,project_id,title,description,solution,position,offset_y,backlog_position,assignee,close_reason,favorite,view_access,edit_access,created_by_user_id)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, in.ColumnID, projectID, in.Title, in.Description, in.Solution, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason, in.Favorite, ViewAccessOpen, EditAccessOpen, in.CreatedByUserID)
 	if err != nil {
 		return Item{}, dbError(err)
 	}

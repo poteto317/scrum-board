@@ -31,6 +31,7 @@ type memoryRepo struct {
 	users              []User
 	nextUserID         int64
 	sessions           map[string]Session
+	aclEntries         map[int64]ItemACL
 }
 
 func fresh() *memoryRepo {
@@ -59,6 +60,7 @@ func fresh() *memoryRepo {
 		sessions: map[string]Session{
 			HandlerTestSessionID: {ID: HandlerTestSessionID, UserID: 1, ExpiresAt: now.Add(time.Hour), CreatedAt: now},
 		},
+		aclEntries: map[int64]ItemACL{},
 	}
 }
 func (m *memoryRepo) living(c Item) bool {
@@ -288,6 +290,7 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 		Title: in.Title, Description: in.Description, Solution: in.Solution, PRURLs: urls, RelatedItems: related,
 		Position: m.nextPosition(in.ColumnID, projectID), OffsetY: offsetY, Assignee: in.Assignee,
 		CloseReason: in.CloseReason, Favorite: in.Favorite, BacklogPosition: m.nextBacklog(projectID),
+		ViewAccess: ViewAccessOpen, EditAccess: EditAccessOpen, CreatedByUserID: in.CreatedByUserID,
 	}
 	m.cards[c.ID] = c
 	m.cardTemplateIDs[c.ID] = append([]int64(nil), m.defaultTemplateIDs...)
@@ -739,7 +742,13 @@ func TestValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			w := request(NewHandler(fresh()), tc.method, tc.path, tc.body)
+			m := fresh()
+			if tc.method == "PATCH" && strings.Contains(tc.path, "/api/items/1") {
+				if _, err := m.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: "seed", Description: ""}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			w := request(NewHandler(m), tc.method, tc.path, tc.body)
 			if w.Code != tc.status {
 				t.Fatalf("status=%d body=%s", w.Code, w.Body)
 			}
@@ -811,6 +820,14 @@ func (m *memoryRepo) GetItemByNumber(_ context.Context, number, projectID int64)
 		}
 	}
 	return Item{}, ErrNotFound
+}
+
+func (m *memoryRepo) GetDeletedItem(_ context.Context, id, projectID int64) (Item, error) {
+	c, ok := m.cards[id]
+	if !ok || m.living(c) || m.cardProjectID(c) != projectID {
+		return Item{}, ErrNotFound
+	}
+	return c, nil
 }
 func TestGetItemByNumberProjectDistinguishesDuplicateNumbers(t *testing.T) {
 	repo := fresh()

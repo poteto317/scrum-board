@@ -167,3 +167,53 @@ func (m *memoryRepo) UserBySessionID(_ context.Context, sessionID string, now ti
 	}
 	return User{}, ErrUnauthorized
 }
+
+func (m *memoryRepo) ListACLEntriesForItems(_ context.Context, itemIDs []int64) (map[int64]ItemACL, error) {
+	out := make(map[int64]ItemACL, len(itemIDs))
+	if m.aclEntries == nil {
+		return out, nil
+	}
+	for _, id := range itemIDs {
+		if acl, ok := m.aclEntries[id]; ok {
+			cp := ItemACL{
+				ViewUserIDs: append([]int64(nil), acl.ViewUserIDs...),
+				EditUserIDs: append([]int64(nil), acl.EditUserIDs...),
+			}
+			out[id] = cp
+		}
+	}
+	return out, nil
+}
+
+func (m *memoryRepo) ReplaceItemACL(_ context.Context, id int64, viewAccess, editAccess string, viewIDs, editIDs []int64) (Item, error) {
+	if err := ValidateViewAccess(viewAccess); err != nil {
+		return Item{}, ErrInvalidACL
+	}
+	if err := ValidateEditAccess(editAccess); err != nil {
+		return Item{}, ErrInvalidACL
+	}
+	c, ok := m.cards[id]
+	if !ok || !m.living(c) {
+		return Item{}, ErrNotFound
+	}
+	viewIDs = dedupeIDs(viewIDs)
+	editIDs = dedupeIDs(editIDs)
+	viewSet := map[int64]struct{}{}
+	for _, uid := range viewIDs {
+		viewSet[uid] = struct{}{}
+	}
+	for _, uid := range editIDs {
+		if _, ok := viewSet[uid]; !ok {
+			viewIDs = append(viewIDs, uid)
+		}
+	}
+	c.ViewAccess = viewAccess
+	c.EditAccess = editAccess
+	m.cards[id] = c
+	if m.aclEntries == nil {
+		m.aclEntries = map[int64]ItemACL{}
+	}
+	m.aclEntries[id] = ItemACL{ViewUserIDs: viewIDs, EditUserIDs: editIDs}
+	c.ACL = &ItemACL{ViewUserIDs: append([]int64(nil), viewIDs...), EditUserIDs: append([]int64(nil), editIDs...)}
+	return c, nil
+}
