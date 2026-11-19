@@ -169,7 +169,8 @@ func (h handler) patchItemACL(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if _, ok := h.requireManage(w, r, item); !ok {
+	manager, ok := h.requireManage(w, r, item)
+	if !ok {
 		return
 	}
 	var in itemACLPatch
@@ -196,17 +197,12 @@ func (h handler) patchItemACL(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	user, _ := CurrentUser(r.Context())
-	if err := h.enrichItemForReply(r.Context(), &updated, &user); err != nil {
+	if err := h.enrichItemForReply(r.Context(), &updated, manager); err != nil {
 		fail(w, err)
 		return
 	}
 	attachPRTitles(r.Context(), h.prTitleResolver, &updated)
 	reply(w, 200, updated)
-}
-
-func (p ItemPatch) hasACLFields() bool {
-	return p.ViewAccess != nil || p.EditAccess != nil || p.ViewUserIDs != nil || p.EditUserIDs != nil || p.ACL != nil || p.CreatedByUserID != nil
 }
 
 // mergeHiddenIntoOrder keeps !CanView cards in their old slots while applying the visible reorder.

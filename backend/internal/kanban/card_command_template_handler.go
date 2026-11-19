@@ -131,14 +131,6 @@ func (h handler) applyCommandTemplatesToAllItems(w http.ResponseWriter, r *http.
 	w.WriteHeader(204)
 }
 
-func itemIDsOf(items []Item) []int64 {
-	ids := make([]int64, len(items))
-	for i, it := range items {
-		ids[i] = it.ID
-	}
-	return ids
-}
-
 func decodeTemplateIDs(w http.ResponseWriter, r *http.Request) ([]int64, bool) {
 	var body struct {
 		TemplateIDs json.RawMessage `json:"templateIds"`
