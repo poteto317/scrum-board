@@ -25,6 +25,7 @@ import { applyBoardDataWithActiveSync } from './board-active-sync';
 import { normalizeBoardData } from './board-data';
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
+import { viewAccessLabel } from './item-acl';
 import { itemAppPath, itemDetailUrl } from './item-link';
 import {
   COMMAND_ITEM_MENU_EMPTY,
@@ -64,6 +65,7 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 })
 export class Backlog implements OnInit {
   readonly formatItemNumber = formatItemNumber;
+  readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
   private readonly projectSession = inject(ProjectSession);
   /** Template-safe busy flag while active project reload is in flight. */
