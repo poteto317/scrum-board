@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, tap, throwError } from 'rxjs';
+import { Observable, catchError, finalize, map, share, tap, throwError } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { UserPublic, isUnauthorized } from './auth';
@@ -60,6 +60,8 @@ export class AuthSession {
       finalize(() => {
         if (generation === this.meGeneration) this.meInflight = null;
       }),
+      // Coalesce concurrent ensureMe; clear on complete so dead sessions are rechecked.
+      share({ resetOnRefCountZero: true }),
     );
     return this.meInflight;
   }
