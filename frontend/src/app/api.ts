@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { CommandTemplate } from './command-template';
 import { ItemOrderColumn } from './item-order';
 import { WorkspaceListFilters } from './list-filter';
+import { WorkspaceHeaderMenu } from './header-menu';
 import {
   BoardData,
   BoardSettings,
@@ -197,5 +198,11 @@ export class Api {
   }
   putListFilter(filter: WorkspaceListFilters) {
     return this.http.put<WorkspaceListFilters>('/api/list-filter', filter);
+  }
+  headerMenu() {
+    return this.http.get<WorkspaceHeaderMenu>('/api/header-menu');
+  }
+  putHeaderMenu(menu: WorkspaceHeaderMenu) {
+    return this.http.put<WorkspaceHeaderMenu>('/api/header-menu', menu);
   }
 }
