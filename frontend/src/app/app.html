@@ -19,6 +19,8 @@
           [value]="'' + projectSession.activeId()"
           [disabled]="projectSession.switching() || projectModalOpen() || saving()"
           [attr.aria-busy]="projectSession.switching() ? 'true' : 'false'"
+          (focus)="onProjectSelectPrefetch()"
+          (pointerdown)="onProjectSelectPrefetch()"
           (change)="onProjectChange($event)"
         >
           @for (project of projectSession.projects(); track project.id) {

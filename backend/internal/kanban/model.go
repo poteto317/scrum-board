@@ -138,6 +138,9 @@ type ItemPatch struct {
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.
 type Repository interface {
 	Board(context.Context) (Board, error)
+	// BoardForProject returns the same columns/settings as Board (active unchanged in settings),
+	// but items belong to projectID. projectID must exist; otherwise ErrProject.
+	BoardForProject(context.Context, int64) (Board, error)
 	ListProjects(context.Context) ([]Project, error)
 	CreateProject(context.Context, string) (Project, error)
 	UpdateProject(context.Context, int64, string) (Project, error)
@@ -162,6 +165,8 @@ type Repository interface {
 	ReorderColumns(context.Context, []int64) ([]Column, error)
 	ReorderItems(context.Context, []ItemColumnOrder) ([]Item, error)
 	Backlog(context.Context) ([]Item, error)
+	// BacklogForProject lists living backlog items for projectID without changing active.
+	BacklogForProject(context.Context, int64) ([]Item, error)
 	ReorderBacklog(context.Context, []int64) ([]Item, error)
 	ListLivingItems(context.Context) ([]Item, error)
 	ListCommandTemplates(context.Context) ([]CommandTemplate, error)

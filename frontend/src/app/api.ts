@@ -67,8 +67,10 @@ export class Api {
   ) {
     return this.http.patch<UserPublic>(`/api/users/${id}`, patch);
   }
-  board() {
-    return this.http.get<BoardData>('/api/board');
+  board(projectId?: number) {
+    const params =
+      projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<BoardData>('/api/board', params ? { params } : {});
   }
   patchBoardSettings(body: {
     cardLayout?: CardLayout;
@@ -167,8 +169,10 @@ export class Api {
   reorderItems(columns: ItemOrderColumn[]) {
     return this.http.put<{ items: Item[] }>('/api/items/order', { columns });
   }
-  backlog() {
-    return this.http.get<{ items: Item[] }>('/api/backlog');
+  backlog(projectId?: number) {
+    const params =
+      projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<{ items: Item[] }>('/api/backlog', params ? { params } : {});
   }
   reorderBacklog(itemIds: number[]) {
     return this.http.put<{ items: Item[] }>('/api/backlog/order', { itemIds });

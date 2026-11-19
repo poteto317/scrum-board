@@ -53,6 +53,7 @@ import { ListFilterSession } from './list-filter-session';
 import { Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import { itemsForActiveProject } from './project-items';
+import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
@@ -68,6 +69,7 @@ export class Backlog implements OnInit {
   readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
   private readonly projectSession = inject(ProjectSession);
+  private readonly projectBoardCache = inject(ProjectBoardCache);
   /** Template-safe busy flag while active project reload is in flight. */
   readonly projectSwitching = computed(() => this.projectSession.switching());
   private backlogLoadGeneration = 0;
@@ -181,7 +183,10 @@ export class Backlog implements OnInit {
       fetch: () => forkJoin({ backlog: this.api.backlog(), board: this.api.board() }),
       apply: ({ backlog, board }) => {
         this.error.set('');
-        if (!sameJson(this.items(), backlog.items)) this.items.set(backlog.items);
+        if (!sameJson(this.items(), backlog.items)) {
+          this.rememberBacklogCache(backlog.items);
+          this.items.set(backlog.items);
+        }
         if (!sameJson(this.columns(), board.columns)) this.columns.set(board.columns);
       },
       ...zoneAwareTimers(this.zone),
@@ -239,6 +244,7 @@ export class Backlog implements OnInit {
         next: ({ backlog, board }) => {
           if (generation !== this.backlogLoadGeneration) return;
           applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board), () => {
+            this.rememberBacklogCache(backlog.items);
             this.items.set(backlog.items);
             this.columns.set(board.columns);
             // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
@@ -260,6 +266,11 @@ export class Backlog implements OnInit {
   private reloadAfterProjectSwitch() {
     this.closeCommandMenu();
     const generation = ++this.backlogLoadGeneration;
+    const activeId = this.projectSession.activeId();
+    const cached = activeId != null ? this.projectBoardCache.getBacklog(activeId) : undefined;
+    if (cached) {
+      this.items.set(cached);
+    }
     this.projectSwitchSub?.unsubscribe();
     this.projectSwitchSub = forkJoin({ backlog: this.api.backlog(), board: this.api.board() })
       .pipe(
@@ -274,6 +285,7 @@ export class Backlog implements OnInit {
           if (generation !== this.backlogLoadGeneration) return;
           this.error.set('');
           applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board), () => {
+            this.rememberBacklogCache(backlog.items);
             this.items.set(backlog.items);
             this.columns.set(board.columns);
           });
@@ -283,6 +295,13 @@ export class Backlog implements OnInit {
           this.error.set(errorMessage(e));
         },
       });
+  }
+
+  private rememberBacklogCache(items: Item[]) {
+    const activeId = this.projectSession.activeId();
+    if (activeId != null && activeId > 0) {
+      this.projectBoardCache.putBacklog(activeId, items);
+    }
   }
 
   async copyItemLink(number: number, projectId?: number) {

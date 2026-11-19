@@ -67,7 +67,18 @@ func (m *memoryRepo) living(c Item) bool {
 	return c.DeletedAt == nil
 }
 
-func (m *memoryRepo) Board(context.Context) (Board, error) {
+func (m *memoryRepo) Board(ctx context.Context) (Board, error) {
+	return m.boardForScope(0)
+}
+
+func (m *memoryRepo) BoardForProject(_ context.Context, projectID int64) (Board, error) {
+	if projectID <= 0 || !m.projectExists(projectID) {
+		return Board{}, ErrProject
+	}
+	return m.boardForScope(projectID)
+}
+
+func (m *memoryRepo) boardForScope(itemProjectID int64) (Board, error) {
 	cols := slices.Clone(m.columns)
 	slices.SortFunc(cols, func(a, b Column) int {
 		if c := cmp.Compare(a.Position, b.Position); c != 0 {
@@ -77,9 +88,13 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 	})
 	active := m.resolvedActive()
 	settings := m.resolvedSettings(cols)
+	scope, err := resolveItemListScope(active, itemProjectID, m.projects)
+	if err != nil {
+		return Board{}, err
+	}
 	b := Board{Columns: cols, Items: []Item{}, Settings: settings}
 	for _, c := range m.cards {
-		if m.living(c) && m.cardProjectID(c) == active {
+		if m.living(c) && m.cardProjectID(c) == scope {
 			b.Items = append(b.Items, c)
 		}
 	}
@@ -582,11 +597,26 @@ func (m *memoryRepo) ReorderColumns(_ context.Context, columnIDs []int64) ([]Col
 	return slices.Clone(next), nil
 }
 
-func (m *memoryRepo) Backlog(context.Context) ([]Item, error) {
+func (m *memoryRepo) Backlog(ctx context.Context) ([]Item, error) {
+	return m.backlogForScope(0)
+}
+
+func (m *memoryRepo) BacklogForProject(_ context.Context, projectID int64) ([]Item, error) {
+	if projectID <= 0 || !m.projectExists(projectID) {
+		return nil, ErrProject
+	}
+	return m.backlogForScope(projectID)
+}
+
+func (m *memoryRepo) backlogForScope(itemProjectID int64) ([]Item, error) {
 	active := m.resolvedActive()
+	scope, err := resolveItemListScope(active, itemProjectID, m.projects)
+	if err != nil {
+		return nil, err
+	}
 	cards := []Item{}
 	for _, c := range m.cards {
-		if m.living(c) && m.cardProjectID(c) == active {
+		if m.living(c) && m.cardProjectID(c) == scope {
 			cards = append(cards, c)
 		}
 	}
@@ -597,6 +627,15 @@ func (m *memoryRepo) Backlog(context.Context) ([]Item, error) {
 		return cmp.Compare(a.ID, b.ID)
 	})
 	return cards, nil
+}
+
+func (m *memoryRepo) projectExists(id int64) bool {
+	for _, p := range m.projects {
+		if p.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *memoryRepo) ReorderBacklog(_ context.Context, cardIDs []int64) ([]Item, error) {

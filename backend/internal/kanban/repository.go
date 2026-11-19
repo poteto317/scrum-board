@@ -91,6 +91,19 @@ func loadCard(ctx context.Context, q interface {
 }
 
 func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
+	return r.loadBoard(ctx, 0)
+}
+
+func (r MySQLRepository) BoardForProject(ctx context.Context, projectID int64) (Board, error) {
+	if projectID <= 0 {
+		return Board{}, ErrProject
+	}
+	return r.loadBoard(ctx, projectID)
+}
+
+// loadBoard loads columns/settings with resolved active. If itemProjectID > 0, items are
+// for that project (must exist); otherwise items use the resolved active project.
+func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Board, error) {
 	b := Board{Columns: []Column{}, Items: []Item{}, Settings: BoardSettings{CardLayout: CardLayoutPack}}
 	// A consistent snapshot prevents a concurrent column/card creation from splitting the board response.
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -114,7 +127,11 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	b.Settings.MobileBoardColumnID = resolveMobileBoardColumnID(rawSettings.MobileBoardColumnID, b.Columns)
 	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
 	b.Settings.ActiveProjectID = active
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.position,c.id", active)
+	scope, err := resolveItemListScope(active, itemProjectID, projects)
+	if err != nil {
+		return b, err
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.position,c.id", scope)
 	if err != nil {
 		return b, err
 	}

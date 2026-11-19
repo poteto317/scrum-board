@@ -104,7 +104,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	})
 }
 func (h handler) backlog(w http.ResponseWriter, r *http.Request) {
-	cards, e := h.repo.Backlog(r.Context())
+	cards, e := h.backlogForRequest(r)
 	if e != nil {
 		fail(w, e)
 		return
@@ -152,7 +152,7 @@ func (h handler) reorderBacklog(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) board(w http.ResponseWriter, r *http.Request) {
-	b, e := h.repo.Board(r.Context())
+	b, e := h.boardForRequest(r)
 	if e != nil {
 		fail(w, e)
 		return
@@ -165,6 +165,44 @@ func (h handler) board(w http.ResponseWriter, r *http.Request) {
 	}
 	b.Items = filtered
 	reply(w, 200, b)
+}
+
+func (h handler) boardForRequest(r *http.Request) (Board, error) {
+	pid, scoped, err := optionalQueryProjectID(r)
+	if err != nil {
+		return Board{}, err
+	}
+	if scoped {
+		return h.repo.BoardForProject(r.Context(), pid)
+	}
+	return h.repo.Board(r.Context())
+}
+
+func (h handler) backlogForRequest(r *http.Request) ([]Item, error) {
+	pid, scoped, err := optionalQueryProjectID(r)
+	if err != nil {
+		return nil, err
+	}
+	if scoped {
+		return h.repo.BacklogForProject(r.Context(), pid)
+	}
+	return h.repo.Backlog(r.Context())
+}
+
+// optionalQueryProjectID parses ?projectId=. ok is false when the query is omitted.
+func optionalQueryProjectID(r *http.Request) (projectID int64, ok bool, err error) {
+	values, exists := r.URL.Query()["projectId"]
+	if !exists {
+		return 0, false, nil
+	}
+	if len(values) != 1 {
+		return 0, false, ErrProject
+	}
+	pid, parseErr := strconv.ParseInt(values[0], 10, 64)
+	if parseErr != nil || pid <= 0 {
+		return 0, false, ErrProject
+	}
+	return pid, true, nil
 }
 
 func (h handler) updateBoardSettings(w http.ResponseWriter, r *http.Request) {

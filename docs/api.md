@@ -121,7 +121,7 @@ curl --fail-with-body http://127.0.0.1:4200/api/items/by-number/7
 curl --fail-with-body http://127.0.0.1:4200/api/board
 ```
 
-応答は `columns` / `items` に加え、`settings: { "cardLayout": "pack" | "free", "mobileBoardColumnId": number, "activeProjectId": number }` を含みます（`cardLayout` 既定は `pack`。`mobileBoardColumnId` はスマホ1列表示用の列 ID。未保存・無効値は Todo 列、無ければ `position` 昇順・同点は `id` 昇順の先頭。列が無いときは `0`。`activeProjectId` は解決後のアクティブプロジェクト。保存値が欠落・0以下・存在しない id のときは、名称に依存せず `position` 昇順・同点は `id` 昇順の先頭プロジェクト。プロジェクトが0件なら `0`。GET は DB を書き換えません）。`items` はその解決後アクティブに属するアイテムだけです。各アイテムには所属 `projectId`、列内の並び `position` に加え、自由配置用の `offsetY`（列カードリスト上端からの CSS px・整数 0〜100000。欠落時は 0）が含まれます。応答アイテムのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
+応答は `columns` / `items` に加え、`settings: { "cardLayout": "pack" | "free", "mobileBoardColumnId": number, "activeProjectId": number }` を含みます（`cardLayout` 既定は `pack`。`mobileBoardColumnId` はスマホ1列表示用の列 ID。未保存・無効値は Todo 列、無ければ `position` 昇順・同点は `id` 昇順の先頭。列が無いときは `0`。`activeProjectId` は解決後のアクティブプロジェクト。保存値が欠落・0以下・存在しない id のときは、名称に依存せず `position` 昇順・同点は `id` 昇順の先頭プロジェクト。プロジェクトが0件なら `0`。GET は DB を書き換えません）。`items` は省略時は解決後アクティブに属するアイテムだけです。任意クエリ `projectId`（正の整数・存在するプロジェクト）を付けると、`items` だけそのプロジェクトに切り替えます（`settings.activeProjectId` と DB のアクティブは変えません。先読み用）。`projectId` が 0 以下・非数・不存在のときは HTTP 400 です。各アイテムには所属 `projectId`、列内の並び `position` に加え、自由配置用の `offsetY`（列カードリスト上端からの CSS px・整数 0〜100000。欠落時は 0）が含まれます。応答アイテムのnumberが対象番号、columnIdが目的の列のidであることを確認してください。GETで再取得しても同じステータスを確認できます。HTTPエラーを成功扱いしないよう、例では `--fail-with-body` を付けています。
 
 ## 公開オリジン（本番リンク用）
 
@@ -433,10 +433,11 @@ curl --fail-with-body --request PUT \
 
 # プロダクトバックログ
 
-解決後アクティブプロジェクトのアイテムを `backlog_position` 昇順（同値は `id` 昇順）で返します。ステータス（列）に関係なく Done も含みます。他プロジェクトのアイテムは含めません。
+解決後アクティブプロジェクトのアイテムを `backlog_position` 昇順（同値は `id` 昇順）で返します。ステータス（列）に関係なく Done も含みます。他プロジェクトのアイテムは含めません。任意クエリ `projectId`（正の整数・存在するプロジェクト）を付けると、そのプロジェクトの items だけを返し、DB／ボードのアクティブは変えません（先読み用。不正値は HTTP 400）。
 
 ```sh
 curl --fail-with-body http://127.0.0.1:4200/api/backlog
+curl --fail-with-body 'http://127.0.0.1:4200/api/backlog?projectId=2'
 ```
 
 成功時は HTTP 200 で `{"items":[...]}`（各アイテムに `backlogPosition` 付き）を返します。
