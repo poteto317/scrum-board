@@ -189,6 +189,20 @@ VALUES (?, ?, ?, ?, 0)`, in.LoginName, in.DisplayName, hash, role)
 }
 
 func (r MySQLRepository) UpdateUser(ctx context.Context, id int64, patch UserPatch, actorID int64) (User, error) {
+	var newHash string
+	passwordChanged := false
+	if patch.Password != nil {
+		if *patch.Password == "" {
+			return User{}, ErrInvalidUserInput
+		}
+		hash, err := HashPassword(*patch.Password)
+		if err != nil {
+			return User{}, err
+		}
+		newHash = hash
+		passwordChanged = true
+	}
+
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return User{}, err
@@ -222,17 +236,8 @@ SELECT id, login_name, display_name, password_hash, role, disabled, created_at, 
 	if patch.Disabled != nil {
 		next.Disabled = *patch.Disabled
 	}
-	passwordChanged := false
-	if patch.Password != nil {
-		if *patch.Password == "" {
-			return User{}, ErrInvalidUserInput
-		}
-		hash, err := HashPassword(*patch.Password)
-		if err != nil {
-			return User{}, err
-		}
-		next.PasswordHash = hash
-		passwordChanged = true
+	if passwordChanged {
+		next.PasswordHash = newHash
 	}
 	if err := validateUserMutation(ctx, txAdminCounter{tx}, cur, next, actorID); err != nil {
 		return User{}, err
@@ -256,11 +261,23 @@ UPDATE users SET display_name=?, password_hash=?, role=?, disabled=? WHERE id=?`
 
 type txAdminCounter struct{ tx *sql.Tx }
 
+// CountEnabledAdmins locks enabled admin rows so concurrent demotions cannot both pass last-admin checks.
 func (c txAdminCounter) CountEnabledAdmins(ctx context.Context) (int64, error) {
+	rows, err := c.tx.QueryContext(ctx, `
+SELECT id FROM users WHERE role = ? AND disabled = 0 ORDER BY id FOR UPDATE`, RoleAdmin)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
 	var n int64
-	err := c.tx.QueryRowContext(ctx, `
-SELECT COUNT(*) FROM users WHERE role = ? AND disabled = 0`, RoleAdmin).Scan(&n)
-	return n, err
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		n++
+	}
+	return n, rows.Err()
 }
 
 func (r MySQLRepository) CountEnabledAdmins(ctx context.Context) (int64, error) {
