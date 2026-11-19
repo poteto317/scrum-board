@@ -28,7 +28,12 @@
       type="button"
       class="secondary"
       id="project-add"
-      [disabled]="projectSession.switching() || projectSession.mutating() || saving()"
+      [disabled]="
+        projectSession.switching() ||
+        projectSession.mutating() ||
+        saving() ||
+        projectModalOpen()
+      "
       (click)="addProject()"
     >
       追加

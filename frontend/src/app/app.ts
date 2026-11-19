@@ -41,7 +41,14 @@ export class App implements OnInit {
   }
 
   addProject() {
-    if (this.projectSession.switching() || this.projectSession.mutating() || this.saving()) return;
+    if (
+      this.projectModalOpen() ||
+      this.projectSession.switching() ||
+      this.projectSession.mutating() ||
+      this.saving()
+    ) {
+      return;
+    }
     this.projectForm.reset({ name: '' });
     this.formError.set('');
     this.projectSession.error.set('');

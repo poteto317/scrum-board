@@ -134,6 +134,23 @@ describe('App project switcher', () => {
       expect(f.nativeElement.querySelector('#modal-project-title')?.textContent).toContain(
         'プロジェクトを追加',
       );
+      expect((f.nativeElement.querySelector('#project-add') as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+      expect((f.nativeElement.querySelector('#project-select') as HTMLSelectElement).disabled).toBe(
+        true,
+      );
+      expect((f.nativeElement.querySelector('#project-rename') as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+      expect((f.nativeElement.querySelector('#project-delete') as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+      f.componentInstance.projectForm.controls.name.setValue('下書き');
+      f.detectChanges();
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(f.componentInstance.projectForm.controls.name.value).toBe('下書き');
     });
   });
 

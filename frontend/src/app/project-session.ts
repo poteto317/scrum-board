@@ -90,12 +90,12 @@ export class ProjectSession {
    */
   create(name: string): Observable<Project> {
     const trimmed = name.trim();
-    if (this.switching() || this.mutating()) return EMPTY;
     if (!trimmed || [...trimmed].length > 80) {
       this.error.set(PROJECT_NAME_REQUIRED);
       return throwError(() => new Error(PROJECT_NAME_REQUIRED));
     }
     return defer(() => {
+      if (this.switching() || this.mutating()) return EMPTY;
       this.mutating.set(true);
       this.error.set('');
       return this.api.createProject(trimmed).pipe(
