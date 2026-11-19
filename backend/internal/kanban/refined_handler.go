@@ -116,7 +116,12 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 		aiFailed(w)
 		return
 	}
-	card, err := h.repo.CreateItem(r.Context(), ItemInput{ColumnID: todo.ID, Title: stored.Title, Description: stored.Description})
+	in := ItemInput{ColumnID: todo.ID, Title: stored.Title, Description: stored.Description}
+	if u, ok := CurrentUser(r.Context()); ok {
+		id := u.ID
+		in.CreatedByUserID = &id
+	}
+	card, err := h.repo.CreateItem(r.Context(), in)
 	if err != nil {
 		storageFailed(w, "create")
 		return

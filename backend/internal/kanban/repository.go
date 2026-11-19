@@ -148,6 +148,23 @@ func (r MySQLRepository) GetItemByNumber(ctx context.Context, number, projectID 
 func (r MySQLRepository) GetDeletedItem(ctx context.Context, id, projectID int64) (Item, error) {
 	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.project_id=? AND c.deleted_at IS NOT NULL", id, projectID)
 }
+
+func (r MySQLRepository) ListLivingItems(ctx context.Context) ([]Item, error) {
+	rows, err := r.DB.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.deleted_at IS NULL ORDER BY c.id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Item{}
+	for rows.Next() {
+		c, err := scanCard(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
 func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {

@@ -829,6 +829,16 @@ func (m *memoryRepo) GetDeletedItem(_ context.Context, id, projectID int64) (Ite
 	}
 	return c, nil
 }
+
+func (m *memoryRepo) ListLivingItems(_ context.Context) ([]Item, error) {
+	out := []Item{}
+	for _, c := range m.cards {
+		if m.living(c) {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
 func TestGetItemByNumberProjectDistinguishesDuplicateNumbers(t *testing.T) {
 	repo := fresh()
 	repo.projects = append(repo.projects, Project{ID: 2, Name: "Other", Position: 1})

@@ -163,6 +163,7 @@ type Repository interface {
 	ReorderItems(context.Context, []ItemColumnOrder) ([]Item, error)
 	Backlog(context.Context) ([]Item, error)
 	ReorderBacklog(context.Context, []int64) ([]Item, error)
+	ListLivingItems(context.Context) ([]Item, error)
 	ListCommandTemplates(context.Context) ([]CommandTemplate, error)
 	CreateCommandTemplate(context.Context, CommandTemplateInput) (CommandTemplate, error)
 	UpdateCommandTemplate(context.Context, int64, CommandTemplatePatch) (CommandTemplate, error)
