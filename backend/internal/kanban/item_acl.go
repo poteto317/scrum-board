@@ -65,6 +65,14 @@ func ValidateEditAccess(v string) error {
 	}
 }
 
+func itemIDsOf(items []Item) []int64 {
+	ids := make([]int64, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	return ids
+}
+
 func containsUserID(ids []int64, id int64) bool {
 	for _, x := range ids {
 		if x == id {
