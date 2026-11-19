@@ -39,6 +39,34 @@ func sessionExempt(r *http.Request) bool {
 	}
 }
 
+// sessionOptional: item detail GET may proceed without a cookie; handler enforces public vs 401.
+// Paths are NOT added to sessionExempt (L-462).
+func sessionOptional(r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/items/by-number/") {
+		rest := strings.TrimPrefix(path, "/api/items/by-number/")
+		// only bare by-number/{n}, not .../comments or .../history
+		return !strings.Contains(rest, "/")
+	}
+	if strings.HasPrefix(path, "/api/items/") {
+		rest := strings.TrimPrefix(path, "/api/items/")
+		if rest == "" || strings.Contains(rest, "/") || rest == "order" || rest == "refined" {
+			return false
+		}
+		// numeric id only
+		for _, ch := range rest {
+			if ch < '0' || ch > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 func (h handler) withSessionAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sessionExempt(r) {
@@ -47,11 +75,19 @@ func (h handler) withSessionAuth(next http.Handler) http.Handler {
 		}
 		c, err := r.Cookie(SessionCookieName)
 		if err != nil || c.Value == "" {
+			if sessionOptional(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			reply(w, 401, map[string]string{"message": msgLoginRequired})
 			return
 		}
 		user, err := h.repo.UserBySessionID(r.Context(), c.Value, time.Now().UTC())
 		if err != nil {
+			if sessionOptional(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			reply(w, 401, map[string]string{"message": msgLoginRequired})
 			return
 		}
@@ -63,10 +99,13 @@ const (
 	msgLoginRequired = "ログインが必要です。"
 	msgLoginFailed   = "ログインに失敗しました。"
 	msgForbidden     = "権限がありません。"
+	msgViewForbidden = "閲覧権限がありません。"
+	msgEditForbidden = "編集権限がありません。"
 	msgLastAdmin     = "最後の有効な管理者は無効化または降格できません。"
 	msgSelfDisable   = "自分自身を無効化できません。"
 	msgUserInvalid   = "入力内容を確認してください。"
 	msgLoginTaken    = "そのログイン名は既に使われています。"
+	msgACLInvalid    = "アクセス設定の内容を確認してください。"
 )
 
 func setSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, expires time.Time) {

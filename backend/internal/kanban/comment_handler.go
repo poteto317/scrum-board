@@ -7,7 +7,7 @@ import (
 )
 
 func (h handler) listComments(w http.ResponseWriter, r *http.Request) {
-	card, ok := h.commentParentItem(w, r)
+	card, ok := h.commentParentItem(w, r, false)
 	if !ok {
 		return
 	}
@@ -38,7 +38,7 @@ func (h handler) createComment(w http.ResponseWriter, r *http.Request) {
 		invalid(w, errMsg)
 		return
 	}
-	card, ok := h.commentParentItem(w, r)
+	card, ok := h.commentParentItem(w, r, true)
 	if !ok {
 		return
 	}
@@ -87,7 +87,7 @@ func (h handler) updateComment(w http.ResponseWriter, r *http.Request) {
 		}
 		body = &b
 	}
-	card, ok := h.commentParentItem(w, r)
+	card, ok := h.commentParentItem(w, r, true)
 	if !ok {
 		return
 	}
@@ -104,7 +104,7 @@ func (h handler) deleteComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	card, ok := h.commentParentItem(w, r)
+	card, ok := h.commentParentItem(w, r, true)
 	if !ok {
 		return
 	}
@@ -115,7 +115,7 @@ func (h handler) deleteComment(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h handler) commentParentItem(w http.ResponseWriter, r *http.Request) (Item, bool) {
+func (h handler) commentParentItem(w http.ResponseWriter, r *http.Request, needEdit bool) (Item, bool) {
 	number, ok := taskNumber(w, r)
 	if !ok {
 		return Item{}, false
@@ -128,6 +128,13 @@ func (h handler) commentParentItem(w http.ResponseWriter, r *http.Request) (Item
 	card, err := h.repo.GetItemByNumber(r.Context(), number, pid)
 	if err != nil {
 		fail(w, err)
+		return Item{}, false
+	}
+	if needEdit {
+		if _, ok := h.requireEdit(w, r, card); !ok {
+			return Item{}, false
+		}
+	} else if _, _, ok := h.requireView(w, r, card); !ok {
 		return Item{}, false
 	}
 	return card, true
