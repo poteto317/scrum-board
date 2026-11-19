@@ -325,9 +325,9 @@ describe('Backlog reordering', () => {
     f.componentInstance.items.set([cards[0]]);
     f.detectChanges();
     expect(f.componentInstance.canReorder()).toBe(false);
-    const singleRow = f.nativeElement.querySelector('.backlog-row') as HTMLElement;
+    const singleZone = f.nativeElement.querySelector('.backlog-drag-zone') as HTMLElement;
     const singleRank = f.nativeElement.querySelector('.backlog-rank') as HTMLButtonElement;
-    expect(singleRow.getAttribute('draggable')).toBeNull();
+    expect(singleZone.getAttribute('draggable')).toBeNull();
     expect(singleRank.getAttribute('aria-disabled')).toBe('true');
   });
 
