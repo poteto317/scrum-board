@@ -37,7 +37,8 @@ require PUBLIC_ORIGIN
 ORIGIN="${PUBLIC_ORIGIN%/}"
 URI="${ORIGIN}/api/trash/purge"
 
-AUTH_HEADER="Authorization: Basic $(printf '%s:%s' "$AUTH_USER" "$AUTH_PASSWORD" | base64 | tr -d '\n')"
+# gcloud --headers expects KEY=VALUE (not curl's "Key: Value").
+AUTH_HEADER="Authorization=Basic $(printf '%s:%s' "$AUTH_USER" "$AUTH_PASSWORD" | base64 | tr -d '\n')"
 
 echo "==> Ensuring Cloud Scheduler job ${SCHEDULER_JOB_NAME}"
 echo "    URI: ${URI}"
