@@ -38,39 +38,6 @@
         <option value="">…</option>
       </select>
     }
-    <button
-      type="button"
-      class="secondary"
-      id="project-add"
-      [disabled]="
-        projectSession.switching() ||
-        projectSession.mutating() ||
-        saving() ||
-        projectModalOpen()
-      "
-      (click)="addProject()"
-    >
-      追加
-    </button>
-    <button
-      type="button"
-      class="secondary"
-      id="project-rename"
-      [disabled]="!projectSession.canRename() || projectModalOpen() || saving()"
-      (click)="renameProject()"
-    >
-      名称変更
-    </button>
-    <button
-      type="button"
-      class="secondary"
-      id="project-delete"
-      [disabled]="!projectSession.canDelete() || projectModalOpen() || saving()"
-      title="アイテムが無いプロジェクトだけ削除できます"
-      (click)="deleteProject()"
-    >
-      削除
-    </button>
     @if (projectSession.error()) {
       <span class="project-error" role="alert">{{ projectSession.error() }}</span>
     }
@@ -79,6 +46,17 @@
     ><span class="local-dot"></span>Personal workspace
     <span class="avatar" aria-label="個人用">S</span></span
   >
+  <app-header-menu
+    [projectSwitching]="projectSession.switching()"
+    [projectMutating]="projectSession.mutating()"
+    [projectCanRename]="projectSession.canRename()"
+    [projectCanDelete]="projectSession.canDelete()"
+    [projectSaving]="saving()"
+    [projectModalOpen]="projectModalOpen()"
+    (addProject)="addProject()"
+    (renameProject)="renameProject()"
+    (deleteProject)="deleteProject()"
+  />
 </header>
 <div class="app-body">
   <aside class="app-sidebar" aria-label="サイドバー">

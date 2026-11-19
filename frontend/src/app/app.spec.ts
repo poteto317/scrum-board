@@ -12,6 +12,33 @@ const projects = [
   { id: 2, name: '次', position: 1 },
 ];
 
+const headerMenuPrefs = {
+  board: { hiddenIds: [] as string[] },
+  backlog: { hiddenIds: [] as string[] },
+  itemDetail: { hiddenIds: [] as string[] },
+};
+
+function openHeaderMenu(f: { detectChanges: () => void; nativeElement: HTMLElement }) {
+  (f.nativeElement.querySelector('#header-menu-trigger') as HTMLButtonElement).click();
+  f.detectChanges();
+}
+
+function headerMenuItem(
+  f: { nativeElement: HTMLElement },
+  id: string,
+): HTMLButtonElement | null {
+  return f.nativeElement.querySelector(`#header-menu-item-${id}`) as HTMLButtonElement | null;
+}
+
+function clickHeaderMenuItem(
+  f: { detectChanges: () => void; nativeElement: HTMLElement },
+  id: string,
+) {
+  openHeaderMenu(f);
+  headerMenuItem(f, id)?.click();
+  f.detectChanges();
+}
+
 describe('App project switcher', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
@@ -34,6 +61,7 @@ describe('App project switcher', () => {
       createProject: vi.fn(() => of({ id: 3, name: '新規', position: 2 })),
       patchProject: vi.fn(() => of({ id: 1, name: '改名', position: 0 })),
       deleteProject: vi.fn(() => of(undefined)),
+      headerMenu: vi.fn(() => of(headerMenuPrefs)),
       ...extra,
     };
     TestBed.configureTestingModule({
@@ -101,9 +129,8 @@ describe('App project switcher', () => {
     const { f } = setup({
       listProjects: () => of({ projects: [projects[0]] }),
     });
-    expect((f.nativeElement.querySelector('#project-delete') as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    openHeaderMenu(f);
+    expect(headerMenuItem(f, 'project_delete')?.disabled).toBe(true);
   });
 
   it('updates the select after a successful switch when no board is mounted', () => {
@@ -161,27 +188,20 @@ describe('App project switcher', () => {
     const prompt = vi.spyOn(window, 'prompt').mockReturnValue('無視');
     const { f } = setup();
     withDialogPolyfill(f, () => {
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
       expect(prompt).not.toHaveBeenCalled();
       expect(f.nativeElement.querySelector('#modal-project-title')?.textContent).toContain(
         'プロジェクトを追加',
       );
-      expect((f.nativeElement.querySelector('#project-add') as HTMLButtonElement).disabled).toBe(
-        true,
-      );
+      openHeaderMenu(f);
+      expect(headerMenuItem(f, 'project_add')?.disabled).toBe(true);
       expect((f.nativeElement.querySelector('#project-select') as HTMLSelectElement).disabled).toBe(
         true,
       );
-      expect((f.nativeElement.querySelector('#project-rename') as HTMLButtonElement).disabled).toBe(
-        true,
-      );
-      expect((f.nativeElement.querySelector('#project-delete') as HTMLButtonElement).disabled).toBe(
-        true,
-      );
+      expect(headerMenuItem(f, 'project_rename')?.disabled).toBe(true);
+      expect(headerMenuItem(f, 'project_delete')?.disabled).toBe(true);
       f.componentInstance.projectForm.controls.name.setValue('下書き');
-      f.detectChanges();
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
       f.detectChanges();
       expect(f.componentInstance.projectForm.controls.name.value).toBe('下書き');
     });
@@ -190,7 +210,7 @@ describe('App project switcher', () => {
   it('creates then switches to the new project and closes the dialog', () => {
     const { f, api, session } = setup();
     withDialogPolyfill(f, () => {
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
       f.componentInstance.projectForm.controls.name.setValue('新規');
       f.detectChanges();
@@ -211,7 +231,7 @@ describe('App project switcher', () => {
       createProject: () => throwError(() => ({ error: { message: '作成失敗' } })),
     });
     withDialogPolyfill(f, () => {
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
       f.componentInstance.projectForm.controls.name.setValue('新規');
       f.detectChanges();
@@ -232,7 +252,7 @@ describe('App project switcher', () => {
   it('does not POST when the name is empty or over 80 code points', () => {
     const { f, api } = setup();
     withDialogPolyfill(f, () => {
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
       f.componentInstance.projectForm.controls.name.setValue('   ');
       f.detectChanges();
@@ -260,7 +280,7 @@ describe('App project switcher', () => {
     const { f, session } = setup();
     withDialogPolyfill(f, () => {
       vi.spyOn(session, 'switchTo').mockReturnValue(EMPTY);
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
       f.componentInstance.projectForm.controls.name.setValue('新規');
       f.detectChanges();
@@ -283,7 +303,7 @@ describe('App project switcher', () => {
       patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
     });
     withDialogPolyfill(f, () => {
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
       f.componentInstance.projectForm.controls.name.setValue('新規');
       f.detectChanges();
@@ -301,7 +321,7 @@ describe('App project switcher', () => {
   it('does not close on backdrop click; Esc closes when not saving', () => {
     const { f } = setup();
     withDialogPolyfill(f, () => {
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
       const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
       dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -319,7 +339,7 @@ describe('App project switcher', () => {
       createProject: () => pending.asObservable(),
     });
     withDialogPolyfill(f, () => {
-      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
       f.componentInstance.projectForm.controls.name.setValue('新規');
       f.detectChanges();
@@ -349,7 +369,7 @@ describe('App project switcher', () => {
         })),
     });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    (f.nativeElement.querySelector('#project-delete') as HTMLButtonElement).click();
+    clickHeaderMenuItem(f, 'project_delete');
     f.detectChanges();
     expect(session.projects()).toHaveLength(2);
     expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('削除できません');
