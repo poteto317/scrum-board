@@ -4,6 +4,7 @@ export type HeaderMenuItemId =
   | 'project_add'
   | 'project_rename'
   | 'project_delete'
+  | 'open_trash'
   | 'item_history'
   | 'item_solution'
   | 'item_favorite';
@@ -26,6 +27,7 @@ export const HEADER_MENU_CATALOG: readonly MenuCatalogEntry[] = [
   { id: 'project_add', label: 'プロジェクトを追加', pageKinds: ['board', 'backlog'] },
   { id: 'project_rename', label: '名称変更', pageKinds: ['board', 'backlog'] },
   { id: 'project_delete', label: '削除', pageKinds: ['board', 'backlog'] },
+  { id: 'open_trash', label: 'ゴミ箱', pageKinds: ['board', 'backlog', 'itemDetail'] },
   { id: 'item_history', label: '更新履歴', pageKinds: ['itemDetail'] },
   { id: 'item_solution', label: 'ソリューション', pageKinds: ['itemDetail'] },
   { id: 'item_favorite', label: 'お気に入り', pageKinds: ['itemDetail'] },
@@ -51,6 +53,7 @@ export function resolvePageKind(url: string): PageKind | null {
     path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path === '' ? '/' : path;
   if (normalized === '/' || normalized === '') return 'board';
   if (normalized === '/backlog') return 'backlog';
+  if (normalized === '/trash') return null;
   if (/^\/items\/\d+$/.test(normalized)) return 'itemDetail';
   if (/^\/items\/\d+\/solution$/.test(normalized)) return 'itemDetail';
   return null;

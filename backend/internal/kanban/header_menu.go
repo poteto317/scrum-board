@@ -23,11 +23,13 @@ var (
 		"project_add":    {},
 		"project_rename": {},
 		"project_delete": {},
+		"open_trash":     {},
 	}
 	itemDetailHeaderMenuIDs = map[string]struct{}{
-		"item_history":   {},
-		"item_solution":  {},
-		"item_favorite":  {},
+		"open_trash":    {},
+		"item_history":  {},
+		"item_solution": {},
+		"item_favorite": {},
 	}
 )
 

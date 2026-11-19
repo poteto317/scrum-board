@@ -714,13 +714,15 @@
     (cancel)="$event.preventDefault(); !savingBusy() && confirmDelete.set(false)"
   >
     <section class="modal">
-      <h2 id="delete-title">アイテムを削除しますか？</h2>
-      <p class="delete-copy">「{{ item()?.title }}」を削除します。この操作は取り消せません。</p>
+      <h2 id="delete-title">ゴミ箱に移しますか？</h2>
+      <p class="delete-copy">
+        「{{ item()?.title }}」をゴミ箱に移します。30日以内は復元できます。
+      </p>
       <div class="form-actions">
         <button class="secondary" (click)="confirmDelete.set(false)" [disabled]="savingBusy()">
           キャンセル</button
         ><button class="danger-button" (click)="remove()" [disabled]="savingBusy()">
-          {{ deleting() ? '削除中…' : '削除する' }}
+          {{ deleting() ? '移動中…' : 'ゴミ箱に移す' }}
         </button>
       </div>
     </section>

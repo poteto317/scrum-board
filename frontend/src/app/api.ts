@@ -26,6 +26,14 @@ export type BoardSettingsPatchResponse = {
   items?: Item[];
 };
 
+export type TrashItem = {
+  id: number;
+  number: number;
+  title: string;
+  projectId: number;
+  deletedAt: string;
+};
+
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
@@ -154,6 +162,25 @@ export class Api {
   }
   deleteItem(id: number) {
     return this.http.delete<void>(`/api/items/${id}`);
+  }
+  listTrash(projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<{ items: TrashItem[] }>('/api/trash', params ? { params } : {});
+  }
+  restoreItem(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.post<Item>(
+      `/api/items/${id}/restore`,
+      {},
+      params ? { params } : {},
+    );
+  }
+  hardDeleteTrashItem(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(`/api/trash/${id}`, params ? { params } : {});
+  }
+  purgeTrash() {
+    return this.http.post<{ purged: number }>('/api/trash/purge', {});
   }
   listCommandTemplates() {
     return this.http.get<{ templates: CommandTemplate[] }>('/api/command-templates');
