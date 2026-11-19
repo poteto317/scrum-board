@@ -28,8 +28,21 @@ func (h handler) restoreItem(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	deleted, err := h.repo.GetDeletedItem(r.Context(), n, pid)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	userPtr, okEdit := h.requireEdit(w, r, deleted)
+	if !okEdit {
+		return
+	}
 	c, err := h.repo.RestoreItem(r.Context(), n, pid)
 	if err != nil {
+		fail(w, err)
+		return
+	}
+	if err := h.enrichItemForReply(r.Context(), &c, userPtr); err != nil {
 		fail(w, err)
 		return
 	}

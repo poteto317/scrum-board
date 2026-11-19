@@ -73,10 +73,20 @@ func TestCommentCascadeAndHistoryUnchangedMySQL(t *testing.T) {
 	if w := request(h, "DELETE", "/api/items/"+strconv.FormatInt(card.ID, 10), ""); w.Code != 204 {
 		t.Fatalf("delete item: %d", w.Code)
 	}
+	// Soft delete keeps the row; comments remain until hard delete / purge CASCADE.
+	if err := db.QueryRow(`SELECT COUNT(*) FROM item_comments WHERE item_id=?`, card.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("soft delete should keep comments, got %d", n)
+	}
+	if err := (MySQLRepository{DB: db}).HardDeleteItem(t.Context(), card.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM item_comments WHERE item_id=?`, card.ID).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {
-		t.Fatalf("cascade want 0, got %d", n)
+		t.Fatalf("hard delete cascade want 0, got %d", n)
 	}
 }

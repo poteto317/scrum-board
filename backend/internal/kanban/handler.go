@@ -73,6 +73,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/items/{id}", h.getItem)
 	mux.HandleFunc("GET /api/items/by-number/{number}", h.getItemByNumber)
 	mux.HandleFunc("PATCH /api/items/{id}", h.updateItem)
+	mux.HandleFunc("PATCH /api/items/{id}/acl", h.patchItemACL)
 	mux.HandleFunc("PATCH /api/items/by-number/{number}/status", h.changeStatusByNumber)
 	mux.HandleFunc("PATCH /api/items/by-number/{number}/assignee", h.changeAssigneeByNumber)
 	mux.HandleFunc("DELETE /api/items/{id}", h.deleteItem)
@@ -108,7 +109,13 @@ func (h handler) backlog(w http.ResponseWriter, r *http.Request) {
 		fail(w, e)
 		return
 	}
-	reply(w, 200, map[string][]Item{"items": cards})
+	userPtr := requestUserPtr(r)
+	filtered, err := h.filterBoardItems(r.Context(), cards, userPtr)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, 200, map[string][]Item{"items": filtered})
 }
 
 func (h handler) reorderBacklog(w http.ResponseWriter, r *http.Request) {
@@ -122,12 +129,26 @@ func (h handler) reorderBacklog(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	cards, err := h.repo.ReorderBacklog(r.Context(), in.ItemIDs)
+	userPtr := requestUserPtr(r)
+	expanded, submitted, err := h.expandBacklogWithHidden(r.Context(), in.ItemIDs, userPtr)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	reply(w, 200, map[string][]Item{"items": cards})
+	if !h.requireEditOnItemIDs(w, r, submitted) {
+		return
+	}
+	cards, err := h.repo.ReorderBacklog(r.Context(), expanded)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	filtered, err := h.filterBoardItems(r.Context(), cards, userPtr)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, 200, map[string][]Item{"items": filtered})
 }
 
 func (h handler) board(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +157,13 @@ func (h handler) board(w http.ResponseWriter, r *http.Request) {
 		fail(w, e)
 		return
 	}
+	userPtr := requestUserPtr(r)
+	filtered, err := h.filterBoardItems(r.Context(), b.Items, userPtr)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	b.Items = filtered
 	reply(w, 200, b)
 }
 
@@ -181,6 +209,14 @@ func (h handler) getItem(w http.ResponseWriter, r *http.Request) {
 	c, e := h.repo.GetItem(r.Context(), n)
 	if e != nil {
 		fail(w, e)
+		return
+	}
+	_, userPtr, okView := h.requireView(w, r, c)
+	if !okView {
+		return
+	}
+	if err := h.enrichItemForReply(r.Context(), &c, userPtr); err != nil {
+		fail(w, err)
 		return
 	}
 	attachPRTitles(r.Context(), h.prTitleResolver, &c)
@@ -232,6 +268,14 @@ func (h handler) getItemByNumber(w http.ResponseWriter, r *http.Request) {
 	}
 	card, err := h.repo.GetItemByNumber(r.Context(), n, pid)
 	if err != nil {
+		fail(w, err)
+		return
+	}
+	_, userPtr, okView := h.requireView(w, r, card)
+	if !okView {
+		return
+	}
+	if err := h.enrichItemForReply(r.Context(), &card, userPtr); err != nil {
 		fail(w, err)
 		return
 	}
@@ -309,12 +353,26 @@ func (h handler) reorderItems(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	cards, err := h.repo.ReorderItems(r.Context(), in.Columns)
+	userPtr := requestUserPtr(r)
+	expanded, submitted, err := h.expandItemOrdersWithHidden(r.Context(), in.Columns, userPtr)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	reply(w, 200, map[string][]Item{"items": cards})
+	if !h.requireEditOnItemIDs(w, r, submitted) {
+		return
+	}
+	cards, err := h.repo.ReorderItems(r.Context(), expanded)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	filtered, err := h.filterBoardItems(r.Context(), cards, userPtr)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	reply(w, 200, map[string][]Item{"items": filtered})
 }
 func (h handler) createItem(w http.ResponseWriter, r *http.Request) {
 	var in ItemInput
@@ -357,9 +415,17 @@ func (h handler) createItem(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "ソリューションは10000文字以内で入力してください。")
 		return
 	}
+	if u, ok := CurrentUser(r.Context()); ok {
+		id := u.ID
+		in.CreatedByUserID = &id
+	}
 	c, e := h.repo.CreateItem(r.Context(), in)
 	if e != nil {
 		fail(w, e)
+		return
+	}
+	if err := h.enrichItemForReply(r.Context(), &c, requestUserPtr(r)); err != nil {
+		fail(w, err)
 		return
 	}
 	reply(w, 201, c)
@@ -370,19 +436,38 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		ColumnID     *int64          `json:"columnId"`
-		ProjectID    *int64          `json:"projectId"`
-		Title        *string         `json:"title"`
-		Description  *string         `json:"description"`
-		Solution     *string         `json:"solution"`
-		PRURLs       *[]string       `json:"prUrls"`
-		RelatedItems json.RawMessage `json:"relatedItems"`
-		Assignee     json.RawMessage `json:"assignee"`
-		CloseReason  json.RawMessage `json:"closeReason"`
-		Favorite     json.RawMessage `json:"favorite"`
-		DueAt        json.RawMessage `json:"dueAt"`
+		ColumnID        *int64          `json:"columnId"`
+		ProjectID       *int64          `json:"projectId"`
+		Title           *string         `json:"title"`
+		Description     *string         `json:"description"`
+		Solution        *string         `json:"solution"`
+		PRURLs          *[]string       `json:"prUrls"`
+		RelatedItems    json.RawMessage `json:"relatedItems"`
+		Assignee        json.RawMessage `json:"assignee"`
+		CloseReason     json.RawMessage `json:"closeReason"`
+		Favorite        json.RawMessage `json:"favorite"`
+		DueAt           json.RawMessage `json:"dueAt"`
+		ViewAccess      json.RawMessage `json:"viewAccess"`
+		EditAccess      json.RawMessage `json:"editAccess"`
+		ViewUserIDs     json.RawMessage `json:"viewUserIds"`
+		EditUserIDs     json.RawMessage `json:"editUserIds"`
+		ACL             json.RawMessage `json:"acl"`
+		CreatedByUserID json.RawMessage `json:"createdByUserId"`
 	}
 	if !decode(w, r, &body) {
+		return
+	}
+	if len(body.ViewAccess) > 0 || len(body.EditAccess) > 0 || len(body.ViewUserIDs) > 0 ||
+		len(body.EditUserIDs) > 0 || len(body.ACL) > 0 || len(body.CreatedByUserID) > 0 {
+		invalid(w, "アクセス設定は専用 API で更新してください。")
+		return
+	}
+	existing, err := h.repo.GetItem(r.Context(), n)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if _, ok := h.requireEdit(w, r, existing); !ok {
 		return
 	}
 	p := ItemPatch{ColumnID: body.ColumnID, ProjectID: body.ProjectID, Title: body.Title, Description: body.Description, Solution: body.Solution, PRURLs: body.PRURLs}
@@ -506,11 +591,23 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		fail(w, e)
 		return
 	}
+	if err := h.enrichItemForReply(r.Context(), &c, requestUserPtr(r)); err != nil {
+		fail(w, err)
+		return
+	}
 	reply(w, 200, c)
 }
 func (h handler) deleteItem(w http.ResponseWriter, r *http.Request) {
 	n, ok := id(w, r)
 	if !ok {
+		return
+	}
+	existing, err := h.repo.GetItem(r.Context(), n)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if _, ok := h.requireEdit(w, r, existing); !ok {
 		return
 	}
 	if e := h.repo.DeleteItem(r.Context(), n); e != nil {

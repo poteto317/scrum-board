@@ -20,6 +20,9 @@ func (h handler) listItemCommandTemplatesByNumber(w http.ResponseWriter, r *http
 		fail(w, err)
 		return
 	}
+	if _, _, ok := h.requireView(w, r, card); !ok {
+		return
+	}
 	list, err := h.repo.ListItemCommandTemplates(r.Context(), card.ID)
 	if err != nil {
 		fail(w, err)
@@ -41,6 +44,9 @@ func (h handler) replaceItemCommandTemplatesByNumber(w http.ResponseWriter, r *h
 	card, err := h.repo.GetItemByNumber(r.Context(), n, pid)
 	if err != nil {
 		fail(w, err)
+		return
+	}
+	if _, ok := h.requireEdit(w, r, card); !ok {
 		return
 	}
 	ids, ok := decodeTemplateIDs(w, r)
@@ -82,11 +88,55 @@ func (h handler) applyCommandTemplatesToAllItems(w http.ResponseWriter, r *http.
 	if !ok {
 		return
 	}
-	if err := h.repo.ApplyCommandTemplatesToAllItems(r.Context(), ids); err != nil {
+	user, okUser := CurrentUser(r.Context())
+	if !okUser {
+		reply(w, 401, map[string]string{"message": msgLoginRequired})
+		return
+	}
+	board, err := h.repo.Board(r.Context())
+	if err != nil {
 		fail(w, err)
 		return
 	}
+	entries, err := h.repo.ListACLEntriesForItems(r.Context(), itemIDsOf(board.Items))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	attachACLState(board.Items, entries)
+	templates, err := h.repo.ListCommandTemplates(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	known := make(map[int64]struct{}, len(templates))
+	for _, tmpl := range templates {
+		known[tmpl.ID] = struct{}{}
+	}
+	for _, id := range ids {
+		if _, ok := known[id]; !ok {
+			invalid(w, "コマンドテンプレートを確認してください。")
+			return
+		}
+	}
+	for _, it := range board.Items {
+		if !CanEdit(aclStateFromItem(it), &user) {
+			continue
+		}
+		if _, err := h.repo.ReplaceItemCommandTemplates(r.Context(), it.ID, ids); err != nil {
+			fail(w, err)
+			return
+		}
+	}
 	w.WriteHeader(204)
+}
+
+func itemIDsOf(items []Item) []int64 {
+	ids := make([]int64, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	return ids
 }
 
 func decodeTemplateIDs(w http.ResponseWriter, r *http.Request) ([]int64, bool) {

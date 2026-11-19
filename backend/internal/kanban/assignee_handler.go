@@ -33,6 +33,9 @@ func (h handler) changeAssigneeByNumber(w http.ResponseWriter, r *http.Request) 
 		fail(w, err)
 		return
 	}
+	if _, ok := h.requireEdit(w, r, card); !ok {
+		return
+	}
 	updated, err := h.repo.UpdateItem(r.Context(), card.ID, ItemPatch{Assignee: &value})
 	if err != nil {
 		fail(w, err)
