@@ -6,6 +6,7 @@ import { Api } from './api';
 import { Board } from './board';
 import { normalizeBoardData } from './board-data';
 import { BoardData, Item } from './models';
+import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
 
 const POLL_MS = 5000;
@@ -308,6 +309,60 @@ describe('Board project switch', () => {
     expect(session.switching()).toBe(false);
     expect(f.componentInstance.data().items.map((c) => c.projectId)).toEqual([1, 1]);
     expect([...f.componentInstance.grouped().values()].flat()).toEqual([]);
+    f.destroy();
+  });
+
+  it('shows cached items for the new project before post-switch GET settles', async () => {
+    const held = new Subject<BoardData>();
+    const initial = boardFor(1, 'A');
+    const cachedB = boardFor(2, 'B');
+    let phase: 'init' | 'held' = 'init';
+    const board = vi.fn(() => {
+      if (phase === 'init') return of(initial);
+      return held.asObservable();
+    });
+    const patch = new Subject<{ settings: { cardLayout: 'pack'; activeProjectId: number } }>();
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board,
+            patchBoardSettings: vi.fn(() => patch.asObservable()),
+            reorderItems: vi.fn(),
+            reorderColumns: vi.fn(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const session = TestBed.inject(ProjectSession);
+    const cache = TestBed.inject(ProjectBoardCache);
+    session.activeId.set(1);
+    cache.putBoard(2, cachedB.items);
+    phase = 'held';
+    session.switchTo(2).subscribe({ error: () => undefined });
+    patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });
+    patch.complete();
+    expect(session.activeId()).toBe(2);
+    expect([...f.componentInstance.grouped().values()].flat().map((c) => c.title)).toEqual([
+      'B',
+      'B2',
+    ]);
+    held.error({ error: { message: '再取得失敗' } });
+    expect(session.switching()).toBe(false);
+    expect([...f.componentInstance.grouped().values()].flat().map((c) => c.title)).toEqual([
+      'B',
+      'B2',
+    ]);
     f.destroy();
   });
 });

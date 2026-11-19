@@ -94,6 +94,7 @@ import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
 import { applyBoardDataWithActiveSync } from './board-active-sync';
+import { ProjectBoardCache } from './project-board-cache';
 import { itemsForActiveProject } from './project-items';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
@@ -129,6 +130,7 @@ export class Board implements OnInit {
   readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
   private readonly projectSession = inject(ProjectSession);
+  private readonly projectBoardCache = inject(ProjectBoardCache);
   /** Template-safe busy flag while active project reload is in flight. */
   readonly projectSwitching = computed(() => this.projectSession.switching());
   private boardLoadGeneration = 0;
@@ -327,6 +329,7 @@ export class Board implements OnInit {
         this.error.set('');
         if (sameJson(this.data(), d)) return;
         // Do not sync activeProjectId from poll — only initial load / post-switch reload.
+        this.rememberBoardCache(d);
         this.data.set(d);
         this.scheduleCardHeightMeasure();
       },
@@ -603,6 +606,7 @@ export class Board implements OnInit {
             this.projectSession,
             applyBoardMobileSettings(d),
             (board) => {
+              this.rememberBoardCache(board);
               this.data.set(board);
               // Schedule after data arrives so the first afterNextRender sees #boardScroll
               // (not the loading-only first paint).
@@ -624,6 +628,12 @@ export class Board implements OnInit {
    */
   private reloadAfterProjectSwitch() {
     const generation = ++this.boardLoadGeneration;
+    const activeId = this.projectSession.activeId();
+    const cached = activeId != null ? this.projectBoardCache.getBoard(activeId) : undefined;
+    if (cached) {
+      // Items only; do not syncActiveFromBoard (prefetch settings.active may be stale).
+      this.data.update((d) => ({ ...d, items: cached }));
+    }
     this.projectSwitchSub?.unsubscribe();
     this.projectSwitchSub = this.api
       .board()
@@ -642,6 +652,7 @@ export class Board implements OnInit {
             this.projectSession,
             applyBoardMobileSettings(d),
             (board) => {
+              this.rememberBoardCache(board);
               this.data.set(board);
               this.scheduleCardHeightMeasure();
             },
@@ -652,6 +663,13 @@ export class Board implements OnInit {
           this.error.set(errorMessage(e));
         },
       });
+  }
+
+  private rememberBoardCache(board: { items: Item[] }) {
+    const activeId = this.projectSession.activeId();
+    if (activeId != null && activeId > 0) {
+      this.projectBoardCache.putBoard(activeId, board.items);
+    }
   }
 
   onMobileColumnChange(rawId: string): Promise<void> | void {

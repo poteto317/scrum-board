@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { Backlog } from './backlog';
 import { Item } from './models';
+import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
 
 const POLL_MS = 5000;
@@ -255,6 +256,55 @@ describe('Backlog project switch', () => {
     expect(f.componentInstance.items().map((c) => c.projectId)).toEqual([1, 1]);
     expect(f.componentInstance.activeItems()).toEqual([]);
     expect(f.componentInstance.filteredItems()).toEqual([]);
+    f.destroy();
+  });
+
+  it('shows cached backlog items before post-switch forkJoin settles', async () => {
+    const heldBacklog = new Subject<{ items: Item[] }>();
+    const heldBoard = new Subject<{ columns: typeof columns; items: Item[] }>();
+    const initialItems = [card(1, 'A', 1)];
+    const cached = [card(3, 'C', 2), card(4, 'D', 2)];
+    let phase: 'init' | 'held' = 'init';
+    const backlog = vi.fn(() => {
+      if (phase === 'init') return of({ items: initialItems });
+      return heldBacklog.asObservable();
+    });
+    const board = vi.fn(() => {
+      if (phase === 'init') return of({ columns, items: initialItems });
+      return heldBoard.asObservable();
+    });
+    const patch = new Subject<{ settings: { cardLayout: 'pack'; activeProjectId: number } }>();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog,
+            board,
+            patchBoardSettings: vi.fn(() => patch.asObservable()),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const session = TestBed.inject(ProjectSession);
+    const cache = TestBed.inject(ProjectBoardCache);
+    session.activeId.set(1);
+    cache.putBacklog(2, cached);
+    phase = 'held';
+    session.switchTo(2).subscribe({ error: () => undefined });
+    patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });
+    patch.complete();
+    expect(f.componentInstance.activeItems().map((c) => c.title)).toEqual(['C', 'D']);
+    heldBacklog.error({ error: { message: '再取得失敗' } });
+    heldBoard.error({ error: { message: '再取得失敗' } });
+    expect(f.componentInstance.activeItems().map((c) => c.title)).toEqual(['C', 'D']);
     f.destroy();
   });
 });
