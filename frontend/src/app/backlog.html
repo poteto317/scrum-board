@@ -76,17 +76,15 @@
               #row
               class="backlog-row"
               [attr.data-card-id]="card.id"
+              [attr.draggable]="canReorder() ? 'true' : null"
               [class.dragging]="draggingItemId() === card.id"
               [class.command-menu-open]="openCommandItemId() === card.id"
               [class.drop-before]="dropSlot() === i"
               [class.drop-after]="dropSlot() === filteredItems().length && i === filteredItems().length - 1"
+              (dragstart)="onItemDragStart($event, card, row)"
+              (dragend)="onItemDragEnd()"
             >
-              <div
-                class="backlog-drag-zone"
-                [attr.draggable]="canReorder() ? 'true' : null"
-                (dragstart)="onItemDragStart($event, card, row)"
-                (dragend)="onItemDragEnd()"
-              >
+              <div class="backlog-drag-zone">
                 <button
                   type="button"
                   class="backlog-rank"

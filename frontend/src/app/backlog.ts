@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   HostListener,
   inject,
@@ -120,6 +121,14 @@ export class Backlog implements OnInit {
   readonly filteredItems = computed(() => {
     const filter = this.appliedFilter();
     return this.activeItems().filter((card) => itemMatchesFilter(card, filter));
+  });
+  /** AC5: filter / live refresh で開中行が一覧から消えたらメニューを閉じ generation を進める */
+  private readonly closeCommandMenuWhenRowHidden = effect(() => {
+    const openId = this.openCommandItemId();
+    if (openId === null) return;
+    if (!this.filteredItems().some((card) => card.id === openId)) {
+      this.closeCommandMenu();
+    }
   });
   readonly filterActive = computed(() =>
     listFilterActive(
