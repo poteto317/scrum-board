@@ -133,11 +133,17 @@ describe('ProjectSession', () => {
     session.projects.set([main]);
     session.activeId.set(1);
     let emptyFailed = false;
-    session.create('   ').subscribe({ error: () => (emptyFailed = true) });
+    let emptyMsg = '';
+    session.create('   ').subscribe({
+      error: (e) => {
+        emptyFailed = true;
+        emptyMsg = e instanceof Error ? e.message : '';
+      },
+    });
     http.expectNone('/api/projects');
     expect(emptyFailed).toBe(true);
+    expect(emptyMsg).toBe(PROJECT_NAME_REQUIRED);
     expect(session.projects()).toEqual([main]);
-    expect(session.error()).not.toBe('');
 
     let createFailed = false;
     session.create('次').subscribe({ error: () => (createFailed = true) });
@@ -146,7 +152,7 @@ describe('ProjectSession', () => {
       .flush({ message: '作成失敗' }, { status: 500, statusText: 'Error' });
     expect(createFailed).toBe(true);
     expect(session.projects()).toEqual([main]);
-    expect(session.error()).toContain('作成失敗');
+    expect(session.mutating()).toBe(false);
 
     session.projects.set([main]);
     session.rename(1, '改名');
@@ -174,10 +180,16 @@ describe('ProjectSession', () => {
   it('rejects names over 80 code points without POST', () => {
     session.projects.set([main]);
     let failed = false;
-    session.create('a'.repeat(81)).subscribe({ error: () => (failed = true) });
+    let msg = '';
+    session.create('a'.repeat(81)).subscribe({
+      error: (e) => {
+        failed = true;
+        msg = e instanceof Error ? e.message : '';
+      },
+    });
     http.expectNone('/api/projects');
     expect(failed).toBe(true);
-    expect(session.error()).toBe(PROJECT_NAME_REQUIRED);
+    expect(msg).toBe(PROJECT_NAME_REQUIRED);
   });
 
   it('returns EMPTY without POST when create is busy', () => {

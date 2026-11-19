@@ -43,7 +43,11 @@ export class ProjectSession {
   readonly activeId = signal<number | null>(null);
   /** True from the start of a project switch until board/backlog reload ends. */
   readonly switching = signal(false);
-  /** True during create / rename / delete. Not the switch busy flag. */
+  /**
+   * True during create / rename / delete.
+   * create 成功後は呼び出し側が `endMutating()` するまで true のまま（切替開始まで追加を塞ぐ）。
+   * Not the switch busy flag (`switching`).
+   */
   readonly mutating = signal(false);
   readonly error = signal('');
 
@@ -90,12 +94,11 @@ export class ProjectSession {
    */
   create(name: string): Observable<Project> {
     const trimmed = name.trim();
-    if (!trimmed || [...trimmed].length > 80) {
-      this.error.set(PROJECT_NAME_REQUIRED);
-      return throwError(() => new Error(PROJECT_NAME_REQUIRED));
-    }
     return defer(() => {
       if (this.switching() || this.mutating()) return EMPTY;
+      if (!trimmed || [...trimmed].length > 80) {
+        return throwError(() => new Error(PROJECT_NAME_REQUIRED));
+      }
       this.mutating.set(true);
       this.error.set('');
       return this.api.createProject(trimmed).pipe(
@@ -103,7 +106,6 @@ export class ProjectSession {
           this.projects.update((list) => sortProjects([...list, project]));
         }),
         catchError((e) => {
-          this.error.set(errorMessage(e));
           this.mutating.set(false);
           return throwError(() => e);
         }),

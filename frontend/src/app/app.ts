@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { errorMessage } from './api-error';
 import { FavoritesSession, displayFavoriteTitle } from './favorites-session';
 import { textLimit } from './form-validation';
 import { Modal } from './modal';
@@ -81,10 +82,10 @@ export class App implements OnInit {
         this.projectForm.reset({ name: '' });
         this.switchToCreatedProject(project.id);
       },
-      error: () => {
-        const msg = this.projectSession.error() || PROJECT_NAME_REQUIRED;
-        this.formError.set(msg);
-        this.projectSession.error.set('');
+      error: (e) => {
+        this.formError.set(
+          e instanceof Error && e.message ? e.message : errorMessage(e),
+        );
         this.saving.set(false);
       },
       complete: () => {
