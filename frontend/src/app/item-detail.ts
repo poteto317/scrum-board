@@ -126,14 +126,16 @@ export class ItemDetail implements OnInit {
   readonly commands = inject(CommandTemplatesSession);
   readonly itemCommands = inject(ItemCommandsSession);
   readonly presets = ASSIGNEE_PRESETS;
-  /** Enabled users + presets (deduped, users first). */
+  /** Users (incl. disabled) + presets (deduped, users first). */
   readonly assigneeChips = computed(() => {
-    const names = [...this.usersSession.enabledDisplayNames()];
+    const chips = [...this.usersSession.assigneeChipUsers()];
+    const names = new Set(chips.map((c) => c.name));
     for (const p of ASSIGNEE_PRESETS) {
-      if (!names.includes(p)) names.push(p);
+      if (!names.has(p)) chips.push({ name: p, disabled: false });
     }
-    return names;
+    return chips;
   });
+  readonly usersLoadError = this.usersSession.loadError;
   readonly assigneeKind = assigneeKind;
   readonly item = this.autosave.item;
   readonly form = this.autosave.form;

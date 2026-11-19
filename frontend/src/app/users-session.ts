@@ -66,9 +66,10 @@ export class UsersSession {
     );
   }
 
-  enabledDisplayNames(): string[] {
+  /** Assignee chips: include disabled users (UI marks them non-selectable). */
+  assigneeChipUsers(): { name: string; disabled: boolean }[] {
     const list = this.users();
     if (!list) return [];
-    return list.filter((u) => !u.disabled).map((u) => u.displayName);
+    return list.map((u) => ({ name: u.displayName, disabled: u.disabled }));
   }
 }
