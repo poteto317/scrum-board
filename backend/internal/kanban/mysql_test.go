@@ -111,6 +111,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 	if err = repo.InitializeListFilter(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err = repo.InitializeHeaderMenu(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if err = repo.InitializeComments(t.Context()); err != nil {
 		t.Fatal(err)
 	}
