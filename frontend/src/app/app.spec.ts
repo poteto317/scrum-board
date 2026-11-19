@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { EMPTY, of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { App } from './app';
@@ -28,8 +28,8 @@ describe('App project switcher', () => {
           settings: { cardLayout: 'pack', activeProjectId: 1 },
         }),
       ),
-      patchBoardSettings: vi.fn(() =>
-        of({ settings: { cardLayout: 'pack', activeProjectId: 2 } }),
+      patchBoardSettings: vi.fn((body: { activeProjectId: number }) =>
+        of({ settings: { cardLayout: 'pack', activeProjectId: body.activeProjectId } }),
       ),
       createProject: vi.fn(() => of({ id: 3, name: '新規', position: 2 })),
       patchProject: vi.fn(() => of({ id: 1, name: '改名', position: 0 })),
@@ -99,15 +99,195 @@ describe('App project switcher', () => {
     expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('切替失敗');
   });
 
-  it('does not add a project when create fails', () => {
+  function withDialogPolyfill(f: ReturnType<typeof setup>['f'], run: () => void) {
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    try {
+      run();
+    } finally {
+      // Destroy dialog while polyfill still provides close() (jsdom has no native close).
+      f.componentInstance.saving.set(false);
+      f.componentInstance.projectModalOpen.set(false);
+      f.detectChanges();
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    }
+  }
+
+  it('opens a project add dialog instead of window.prompt', () => {
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('無視');
+    const { f } = setup();
+    withDialogPolyfill(f, () => {
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(prompt).not.toHaveBeenCalled();
+      expect(f.nativeElement.querySelector('#modal-project-title')?.textContent).toContain(
+        'プロジェクトを追加',
+      );
+    });
+  });
+
+  it('creates then switches to the new project and closes the dialog', () => {
+    const { f, api, session } = setup();
+    withDialogPolyfill(f, () => {
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      f.componentInstance.projectForm.controls.name.setValue('新規');
+      f.detectChanges();
+      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
+        new Event('submit'),
+      );
+      f.detectChanges();
+      expect(api.createProject).toHaveBeenCalledWith('新規');
+      expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 3 });
+      expect(session.activeId()).toBe(3);
+      expect(f.nativeElement.querySelector('dialog')).toBeNull();
+      expect(session.mutating()).toBe(false);
+    });
+  });
+
+  it('keeps the dialog open and shows formError when create fails', () => {
     const { f, session } = setup({
       createProject: () => throwError(() => ({ error: { message: '作成失敗' } })),
     });
-    vi.spyOn(window, 'prompt').mockReturnValue('新規');
-    (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
-    f.detectChanges();
-    expect(session.projects().map((p) => p.name)).toEqual(['メイン', '次']);
-    expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('作成失敗');
+    withDialogPolyfill(f, () => {
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      f.componentInstance.projectForm.controls.name.setValue('新規');
+      f.detectChanges();
+      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
+        new Event('submit'),
+      );
+      f.detectChanges();
+      expect(session.projects().map((p) => p.name)).toEqual(['メイン', '次']);
+      expect(f.componentInstance.projectForm.controls.name.value).toBe('新規');
+      expect(f.nativeElement.querySelector('dialog .form-error')?.textContent).toContain(
+        '作成失敗',
+      );
+      expect(f.nativeElement.querySelector('.project-error')).toBeNull();
+      expect(f.nativeElement.querySelector('dialog')).toBeTruthy();
+    });
+  });
+
+  it('does not POST when the name is empty or over 80 code points', () => {
+    const { f, api } = setup();
+    withDialogPolyfill(f, () => {
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      f.componentInstance.projectForm.controls.name.setValue('   ');
+      f.detectChanges();
+      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
+        new Event('submit'),
+      );
+      f.detectChanges();
+      expect(api.createProject).not.toHaveBeenCalled();
+      expect(f.nativeElement.querySelector('dialog')).toBeTruthy();
+
+      f.componentInstance.projectForm.controls.name.setValue('a'.repeat(81));
+      f.detectChanges();
+      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
+        new Event('submit'),
+      );
+      f.detectChanges();
+      expect(api.createProject).not.toHaveBeenCalled();
+      expect(f.nativeElement.querySelector('dialog .form-error')?.textContent).toMatch(
+        /プロジェクト名を1〜80文字/,
+      );
+    });
+  });
+
+  it('shows header error when switchTo returns EMPTY after create', () => {
+    const { f, session } = setup();
+    withDialogPolyfill(f, () => {
+      vi.spyOn(session, 'switchTo').mockReturnValue(EMPTY);
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      f.componentInstance.projectForm.controls.name.setValue('新規');
+      f.detectChanges();
+      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
+        new Event('submit'),
+      );
+      f.detectChanges();
+      expect(session.projects().some((p) => p.name === '新規')).toBe(true);
+      expect(f.nativeElement.querySelector('dialog')).toBeNull();
+      expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain(
+        '切替できませんでした',
+      );
+      expect(session.mutating()).toBe(false);
+      expect(f.componentInstance.saving()).toBe(false);
+    });
+  });
+
+  it('keeps the new project when switchTo fails after create', () => {
+    const { f, session } = setup({
+      patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
+    });
+    withDialogPolyfill(f, () => {
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      f.componentInstance.projectForm.controls.name.setValue('新規');
+      f.detectChanges();
+      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
+        new Event('submit'),
+      );
+      f.detectChanges();
+      expect(session.projects().some((p) => p.name === '新規')).toBe(true);
+      expect(session.activeId()).toBe(1);
+      expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('切替失敗');
+      expect(f.nativeElement.querySelector('dialog')).toBeNull();
+    });
+  });
+
+  it('does not close on backdrop click; Esc closes when not saving', () => {
+    const { f } = setup();
+    withDialogPolyfill(f, () => {
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
+      dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      f.detectChanges();
+      expect(f.nativeElement.querySelector('dialog')).toBeTruthy();
+      dialog.dispatchEvent(new Event('cancel'));
+      f.detectChanges();
+      expect(f.nativeElement.querySelector('dialog')).toBeNull();
+    });
+  });
+
+  it('does not close via Esc or × while saving', () => {
+    const pending = new Subject<{ id: number; name: string; position: number }>();
+    const { f } = setup({
+      createProject: () => pending.asObservable(),
+    });
+    withDialogPolyfill(f, () => {
+      (f.nativeElement.querySelector('#project-add') as HTMLButtonElement).click();
+      f.detectChanges();
+      f.componentInstance.projectForm.controls.name.setValue('新規');
+      f.detectChanges();
+      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
+        new Event('submit'),
+      );
+      f.detectChanges();
+      const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
+      const closeBtn = f.nativeElement.querySelector(
+        'dialog .icon-button',
+      ) as HTMLButtonElement;
+      expect(closeBtn.disabled).toBe(true);
+      dialog.dispatchEvent(new Event('cancel'));
+      f.detectChanges();
+      expect(f.nativeElement.querySelector('dialog')).toBeTruthy();
+      // Leave create in-flight; withDialogPolyfill clears saving/open on teardown.
+      void pending;
+    });
   });
 
   it('keeps the project and shows the server message when delete returns 409', () => {

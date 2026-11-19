@@ -11,7 +11,12 @@
     <select
       id="project-select"
       [value]="projectSession.activeId() == null ? '' : '' + projectSession.activeId()"
-      [disabled]="projectSession.switching() || projectSession.projects().length === 0"
+      [disabled]="
+        projectSession.switching() ||
+        projectSession.projects().length === 0 ||
+        projectModalOpen() ||
+        saving()
+      "
       [attr.aria-busy]="projectSession.switching() ? 'true' : 'false'"
       (change)="onProjectChange($event)"
     >
@@ -23,7 +28,7 @@
       type="button"
       class="secondary"
       id="project-add"
-      [disabled]="projectSession.switching() || projectSession.mutating()"
+      [disabled]="projectSession.switching() || projectSession.mutating() || saving()"
       (click)="addProject()"
     >
       追加
@@ -32,7 +37,7 @@
       type="button"
       class="secondary"
       id="project-rename"
-      [disabled]="!projectSession.canRename()"
+      [disabled]="!projectSession.canRename() || projectModalOpen() || saving()"
       (click)="renameProject()"
     >
       名称変更
@@ -41,7 +46,7 @@
       type="button"
       class="secondary"
       id="project-delete"
-      [disabled]="!projectSession.canDelete()"
+      [disabled]="!projectSession.canDelete() || projectModalOpen() || saving()"
       title="アイテムが無いプロジェクトだけ削除できます"
       (click)="deleteProject()"
     >
@@ -92,3 +97,52 @@
     <router-outlet />
   </div>
 </div>
+@if (projectModalOpen()) {
+  <dialog
+    appModal
+    class="modal-backdrop"
+    aria-labelledby="modal-project-title"
+    (cancel)="$event.preventDefault(); closeProjectModal()"
+  >
+    <section
+      class="modal"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeProjectModal()"
+      tabindex="-1"
+    >
+      <header class="modal-header">
+        <h2 id="modal-project-title">プロジェクトを追加</h2>
+        <button
+          class="icon-button"
+          type="button"
+          (click)="closeProjectModal()"
+          [disabled]="saving()"
+          aria-label="閉じる"
+        >
+          ×
+        </button>
+      </header>
+      <form [formGroup]="projectForm" (ngSubmit)="submitProject()">
+        <label for="project-name">プロジェクト名 <span class="required">必須</span></label>
+        <input
+          id="project-name"
+          formControlName="name"
+          placeholder="例：モバイルアプリ"
+          autofocus
+        />
+        <p class="field-note">80文字以内。</p>
+        @if (projectForm.controls.name.touched && projectForm.invalid) {
+          <p class="form-error">プロジェクト名を1〜80文字で入力してください。</p>
+        }
+        @if (formError()) {
+          <p class="form-error" role="alert">{{ formError() }}</p>
+        }
+        <div class="form-actions">
+          <button class="primary" type="submit" [disabled]="saving()">
+            {{ saving() ? '作成中…' : '作成' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </dialog>
+}
