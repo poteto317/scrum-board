@@ -1,8 +1,10 @@
 import {
   afterNextRender,
   Component,
+  computed,
   effect,
   ElementRef,
+  HostListener,
   inject,
   Injector,
   input,
@@ -13,6 +15,7 @@ import {
 import {
   DESCRIPTION_MAX_LEN,
   descriptionLength,
+  insertEmptyBlockAt,
   mergeDescriptionBlockWithPrevious,
   normalizeDescriptionBlocks,
   parseDescriptionBlocks,
@@ -29,6 +32,7 @@ const DEFAULT_LENGTH_ERROR = `説明は${DESCRIPTION_MAX_LEN}文字以内で入�
 })
 export class DescriptionBlocksEditor {
   private readonly injector = inject(Injector);
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly areas = viewChildren<ElementRef<HTMLTextAreaElement>>('blockArea');
 
   readonly value = input.required<string>();
@@ -47,6 +51,13 @@ export class DescriptionBlocksEditor {
   readonly blurLeave = output<void>();
   readonly lengthError = signal('');
   readonly blocks = signal<string[]>(['']);
+  /** Insertion index for open menu; null when closed. */
+  readonly insertMenuIndex = signal<number | null>(null);
+  /** Gap slots: 0..blocks.length inclusive. */
+  readonly gapIndexes = computed(() => {
+    const n = this.blocks().length;
+    return Array.from({ length: n + 1 }, (_, i) => i);
+  });
 
   /** When set, skip the next value() update only if it equals this string (echo). */
   private pendingEcho: string | null = null;
@@ -63,8 +74,17 @@ export class DescriptionBlocksEditor {
       this.pendingEcho = null;
       this.blocks.set(parseDescriptionBlocks(next));
       this.lengthError.set('');
+      this.closeInsertMenu();
       this.resizeAllSoon();
     });
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.insertMenuIndex() === null) return;
+    const t = event.target as Node | null;
+    if (t && this.host.nativeElement.contains(t)) return;
+    this.closeInsertMenu();
   }
 
   /** Apply serialized text from outside (e.g. link insert) without waiting on value echo. */
@@ -107,9 +127,12 @@ export class DescriptionBlocksEditor {
       return;
     }
     this.lengthError.set('');
+    const structureChanged =
+      normalized.length !== next.length || normalized.some((b, i) => b !== next[i]);
+    if (structureChanged) this.closeInsertMenu();
     this.blocks.set(normalized);
     this.emitText();
-    if (normalized.length !== next.length || normalized.some((b, i) => b !== next[i])) {
+    if (structureChanged) {
       // Paste introduced newlines — refocus the block that absorbed the caret roughly.
       this.focusBlock(Math.min(index, normalized.length - 1), 0);
     } else {
@@ -129,6 +152,7 @@ export class DescriptionBlocksEditor {
         return;
       }
       this.lengthError.set('');
+      this.closeInsertMenu();
       this.blocks.set(split);
       this.emitText();
       this.focusBlock(index + 1, 0);
@@ -141,6 +165,7 @@ export class DescriptionBlocksEditor {
       if (!merged) return;
       event.preventDefault();
       this.lengthError.set('');
+      this.closeInsertMenu();
       this.blocks.set(merged.blocks);
       this.emitText();
       this.focusBlock(index - 1, merged.caret);
@@ -186,8 +211,60 @@ export class DescriptionBlocksEditor {
     });
   }
 
-  trackBlock(index: number): number {
-    return index;
+  onGapPointerDown(event: MouseEvent): void {
+    event.preventDefault();
+  }
+
+  openInsertMenu(index: number, event?: MouseEvent): void {
+    event?.stopPropagation();
+    if (this.disabled()) return;
+    if (this.insertMenuIndex() === index) {
+      this.closeInsertMenu();
+      return;
+    }
+    this.insertMenuIndex.set(index);
+  }
+
+  closeInsertMenu(): void {
+    this.insertMenuIndex.set(null);
+  }
+
+  gapAriaLabel(index: number): string {
+    if (index === 0) return 'ブロックを挿入（先頭）';
+    if (index >= this.blocks().length) return 'ブロックを挿入（末尾）';
+    return `ブロックを挿入（${index + 1}番目の前）`;
+  }
+
+  insertTextAtMenu(): void {
+    this.insertEmptyFromMenu(false);
+  }
+
+  insertLinkAtMenu(): void {
+    this.insertEmptyFromMenu(true);
+  }
+
+  private insertEmptyFromMenu(openLink: boolean): void {
+    const index = this.insertMenuIndex();
+    if (index === null || this.disabled()) return;
+    const next = insertEmptyBlockAt(this.blocks(), index);
+    this.closeInsertMenu();
+    if (!next) {
+      this.lengthError.set(this.lengthErrorMessage());
+      return;
+    }
+    this.lengthError.set('');
+    this.blocks.set(next);
+    this.emitText();
+    this.focusedIndex = index;
+    if (openLink) {
+      this.linkRequest.emit({
+        blockIndex: index,
+        start: 0,
+        end: 0,
+        selectedText: '',
+      });
+    }
+    this.focusBlock(index, 0);
   }
 
   private emitText(): void {
