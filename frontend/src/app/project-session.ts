@@ -41,6 +41,8 @@ export class ProjectSession {
   private readonly api = inject(Api);
   readonly projects = signal<Project[]>([]);
   readonly activeId = signal<number | null>(null);
+  /** True after the first successful load (projects + activeId hydrate). */
+  readonly bootstrapped = signal(false);
   /** True from the start of a project switch until board/backlog reload ends. */
   readonly switching = signal(false);
   /**
@@ -58,6 +60,7 @@ export class ProjectSession {
   /**
    * Adopt active project from a board GET.
    * `clearIfMissing`: ProjectSession.load だけ true（欠落時に null）。board/backlog 適用では false（poll 欠落で消さない）。
+   * 既に正の `activeId` があるとき、欠落ではクリアしない（起動の二重 GET で消さない）。
    */
   syncActiveFromBoard(activeProjectId: unknown, clearIfMissing = false): void {
     const next = parseActiveProjectId(activeProjectId);
@@ -65,7 +68,10 @@ export class ProjectSession {
       this.activeId.set(next);
       return;
     }
-    if (clearIfMissing) this.activeId.set(null);
+    if (!clearIfMissing) return;
+    const current = this.activeId();
+    if (current != null && current > 0) return;
+    this.activeId.set(null);
   }
 
   load(): void {
@@ -76,8 +82,10 @@ export class ProjectSession {
     }).subscribe({
       next: ({ projects, board }) => {
         if (generation !== this.loadGeneration) return;
-        this.projects.set(sortProjects(projects.projects ?? []));
+        // activeId before projects so the header select never mounts with value="".
         this.syncActiveFromBoard(normalizeBoardData(board).settings.activeProjectId, true);
+        this.projects.set(sortProjects(projects.projects ?? []));
+        this.bootstrapped.set(true);
         this.error.set('');
       },
       error: (e) => {
