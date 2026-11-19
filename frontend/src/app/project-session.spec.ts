@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ProjectSession } from './project-session';
+import { ProjectSession, PROJECT_NAME_REQUIRED } from './project-session';
+import type { Project } from './models';
 
 const main = { id: 1, name: 'メイン', position: 0 };
 const next = { id: 2, name: '次', position: 1 };
@@ -131,15 +132,19 @@ describe('ProjectSession', () => {
   it('does not confirm create or rename when the request fails', () => {
     session.projects.set([main]);
     session.activeId.set(1);
-    session.create('   ');
+    let emptyFailed = false;
+    session.create('   ').subscribe({ error: () => (emptyFailed = true) });
     http.expectNone('/api/projects');
+    expect(emptyFailed).toBe(true);
     expect(session.projects()).toEqual([main]);
     expect(session.error()).not.toBe('');
 
-    session.create('次');
+    let createFailed = false;
+    session.create('次').subscribe({ error: () => (createFailed = true) });
     http
       .expectOne('/api/projects')
       .flush({ message: '作成失敗' }, { status: 500, statusText: 'Error' });
+    expect(createFailed).toBe(true);
     expect(session.projects()).toEqual([main]);
     expect(session.error()).toContain('作成失敗');
 
@@ -152,12 +157,51 @@ describe('ProjectSession', () => {
     expect(session.error()).toContain('改名失敗');
   });
 
-  it('appends a project only after create succeeds', () => {
+  it('emits the project on create success and keeps mutating true', () => {
     session.projects.set([main]);
-    session.create('次');
+    session.activeId.set(1);
+    let emitted: Project | undefined;
+    session.create('次').subscribe((p) => (emitted = p));
     http.expectOne('/api/projects').flush({ id: 2, name: '次', position: 1 });
+    expect(emitted).toEqual(next);
     expect(session.projects()).toEqual([main, next]);
-    expect(session.activeId()).toBeNull();
+    expect(session.activeId()).toBe(1);
+    expect(session.mutating()).toBe(true);
+    session.endMutating();
+    expect(session.mutating()).toBe(false);
+  });
+
+  it('rejects names over 80 code points without POST', () => {
+    session.projects.set([main]);
+    let failed = false;
+    session.create('a'.repeat(81)).subscribe({ error: () => (failed = true) });
+    http.expectNone('/api/projects');
+    expect(failed).toBe(true);
+    expect(session.error()).toBe(PROJECT_NAME_REQUIRED);
+  });
+
+  it('returns EMPTY without POST when create is busy', () => {
+    session.projects.set([main]);
+    session.mutating.set(true);
+    let next = false;
+    let errored = false;
+    let completed = false;
+    session.create('次').subscribe({
+      next: () => (next = true),
+      error: () => (errored = true),
+      complete: () => (completed = true),
+    });
+    http.expectNone('/api/projects');
+    expect(next).toBe(false);
+    expect(errored).toBe(false);
+    expect(completed).toBe(true);
+
+    session.mutating.set(false);
+    session.switching.set(true);
+    completed = false;
+    session.create('次').subscribe({ complete: () => (completed = true) });
+    http.expectNone('/api/projects');
+    expect(completed).toBe(true);
   });
 
   it('disables delete of the last project and keeps the list on 409', () => {
