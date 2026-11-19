@@ -28,13 +28,15 @@ CREATE TABLE items (
  close_reason TEXT NOT NULL DEFAULT (''),
  favorite TINYINT(1) NOT NULL DEFAULT 0,
  due_at DATETIME NULL,
+ deleted_at DATETIME(6) NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
  CONSTRAINT fk_item_column FOREIGN KEY (column_id) REFERENCES board_columns(id),
  CONSTRAINT fk_item_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE RESTRICT,
  INDEX items_column_position (column_id, position, id),
  INDEX items_backlog_position (backlog_position, id),
- INDEX items_project_position (project_id, column_id, position, id)
+ INDEX items_project_position (project_id, column_id, position, id),
+ INDEX items_project_deleted_at (project_id, deleted_at)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE TABLE board_settings (
  setting_key VARCHAR(64) PRIMARY KEY,

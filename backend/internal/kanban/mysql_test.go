@@ -89,6 +89,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 	if err = (MySQLRepository{DB: db}).InitializeDueAt(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err = (MySQLRepository{DB: db}).InitializeDeletedAt(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if err = (MySQLRepository{DB: db}).InitializeSolution(t.Context()); err != nil {
 		t.Fatal(err)
 	}

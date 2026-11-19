@@ -87,6 +87,9 @@ func run() error {
 		err = repo.InitializeDueAt(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeDeletedAt(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeSolution(migrationCtx)
 	}
 	if err == nil {
