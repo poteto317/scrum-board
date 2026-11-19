@@ -2,6 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
+import { Api } from './api';
 import { errorMessage } from './api-error';
 import { AuthSession } from './auth-session';
 import { FavoritesSession, displayFavoriteTitle } from './favorites-session';
@@ -9,6 +10,7 @@ import { textLimit } from './form-validation';
 import { Modal } from './modal';
 import { HeaderMenuSession } from './header-menu-session';
 import { HeaderMenu } from './header-menu.component';
+import { ProjectBoardCache } from './project-board-cache';
 import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
 
 @Component({
@@ -20,6 +22,8 @@ import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
 export class App implements OnInit {
   readonly projectSession = inject(ProjectSession);
   private readonly headerMenuSession = inject(HeaderMenuSession);
+  private readonly api = inject(Api);
+  private readonly projectBoardCache = inject(ProjectBoardCache);
   readonly auth = inject(AuthSession);
   readonly favorites = inject(FavoritesSession);
   readonly displayFavoriteTitle = displayFavoriteTitle;
@@ -66,6 +70,21 @@ export class App implements OnInit {
         select.value = current == null ? '' : String(current);
       },
     });
+  }
+
+  /** Prefetch other projects' board (and backlog on that route) into memory cache. */
+  onProjectSelectPrefetch() {
+    if (this.projectSession.switching() || this.projectSession.mutating()) return;
+    const activeId = this.projectSession.activeId();
+    if (activeId == null || activeId <= 0) return;
+    const path = this.router.url.split('?')[0];
+    const includeBacklog = path.startsWith('/backlog');
+    this.projectBoardCache.prefetchOthers(
+      this.api,
+      activeId,
+      this.projectSession.projects().map((p) => p.id),
+      includeBacklog,
+    );
   }
 
   addProject() {

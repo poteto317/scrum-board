@@ -149,6 +149,30 @@ describe('App project switcher', () => {
     expect(select.value).toBe('2');
   });
 
+  it('prefetches other projects on select focus and pointerdown', () => {
+    const { f, api, session } = setup();
+    session.activeId.set(1);
+    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    api.board.mockClear();
+    select.dispatchEvent(new Event('focus'));
+    expect(api.board).toHaveBeenCalledWith(2);
+    expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
+    api.board.mockClear();
+    select.dispatchEvent(new Event('pointerdown'));
+    // warm after first prefetch — no new unscoped board() calls
+    expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
+  });
+
+  it('does not prefetch while switching', () => {
+    const { f, api, session } = setup();
+    session.switching.set(true);
+    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    api.board.mockClear();
+    select.dispatchEvent(new Event('focus'));
+    select.dispatchEvent(new Event('pointerdown'));
+    expect(api.board).not.toHaveBeenCalled();
+  });
+
   it('restores the previous project when the switch PATCH fails', () => {
     const { f, session } = setup({
       patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
