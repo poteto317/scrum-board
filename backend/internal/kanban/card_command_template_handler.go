@@ -93,17 +93,17 @@ func (h handler) applyCommandTemplatesToAllItems(w http.ResponseWriter, r *http.
 		reply(w, 401, map[string]string{"message": msgLoginRequired})
 		return
 	}
-	board, err := h.repo.Board(r.Context())
+	items, err := h.repo.ListLivingItems(r.Context())
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	entries, err := h.repo.ListACLEntriesForItems(r.Context(), itemIDsOf(board.Items))
+	entries, err := h.repo.ListACLEntriesForItems(r.Context(), itemIDsOf(items))
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	attachACLState(board.Items, entries)
+	attachACLState(items, entries)
 	templates, err := h.repo.ListCommandTemplates(r.Context())
 	if err != nil {
 		fail(w, err)
@@ -119,7 +119,7 @@ func (h handler) applyCommandTemplatesToAllItems(w http.ResponseWriter, r *http.
 			return
 		}
 	}
-	for _, it := range board.Items {
+	for _, it := range items {
 		if !CanEdit(aclStateFromItem(it), &user) {
 			continue
 		}

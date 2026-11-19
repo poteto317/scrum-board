@@ -15,7 +15,24 @@ func (h handler) listTrash(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	reply(w, 200, map[string][]TrashItem{"items": items})
+	userPtr := requestUserPtr(r)
+	out := make([]TrashItem, 0, len(items))
+	for _, row := range items {
+		deleted, err := h.repo.GetDeletedItem(r.Context(), row.ID, pid)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		st, err := h.loadItemACLState(r.Context(), deleted)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		if CanView(st, userPtr) {
+			out = append(out, row)
+		}
+	}
+	reply(w, 200, map[string][]TrashItem{"items": out})
 }
 
 func (h handler) restoreItem(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +74,14 @@ func (h handler) hardDeleteTrash(w http.ResponseWriter, r *http.Request) {
 	pid, err := h.resolveByNumberProjectID(r)
 	if err != nil {
 		fail(w, err)
+		return
+	}
+	deleted, err := h.repo.GetDeletedItem(r.Context(), n, pid)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if _, ok := h.requireEdit(w, r, deleted); !ok {
 		return
 	}
 	if err := h.repo.HardDeleteTrashItem(r.Context(), n, pid); err != nil {
