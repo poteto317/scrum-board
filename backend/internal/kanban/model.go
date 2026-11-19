@@ -63,6 +63,14 @@ type Item struct {
 	Favorite        bool          `json:"favorite"`
 	DueAt           *time.Time    `json:"dueAt"`
 	DeletedAt       *time.Time    `json:"deletedAt,omitempty"`
+	ViewAccess      string        `json:"viewAccess"`
+	EditAccess      string        `json:"editAccess"`
+	CreatedByUserID *int64        `json:"createdByUserId"`
+	// ViewerCanEdit / ViewerCanManage are for the request user (FE form guard). Set on detail replies; omitempty hides false on lists.
+	ViewerCanEdit   bool `json:"canEdit,omitempty"`
+	ViewerCanManage bool `json:"canManage,omitempty"`
+	// ACL is omitempty: only set for manage-capable responses.
+	ACL             *ItemACL      `json:"acl,omitempty"`
 	CreatedAt       time.Time     `json:"createdAt"`
 	UpdatedAt       time.Time     `json:"updatedAt"`
 }
@@ -102,6 +110,8 @@ type ItemInput struct {
 	Assignee     string        `json:"assignee"`
 	CloseReason  string        `json:"closeReason"`
 	Favorite     bool          `json:"favorite"`
+	// CreatedByUserID is set by the handler from the session; never from JSON.
+	CreatedByUserID *int64 `json:"-"`
 }
 type ItemPatch struct {
 	ColumnID     *int64         `json:"columnId"`
@@ -116,6 +126,13 @@ type ItemPatch struct {
 	Favorite     *bool          `json:"favorite"`
 	DueAt        *time.Time     `json:"dueAt"`
 	ClearDueAt   bool           `json:"-"`
+	// ACL fields on general PATCH are rejected by the handler (dedicated /acl API).
+	ViewAccess      *string  `json:"viewAccess"`
+	EditAccess      *string  `json:"editAccess"`
+	ViewUserIDs     *[]int64 `json:"viewUserIds"`
+	EditUserIDs     *[]int64 `json:"editUserIds"`
+	ACL             *ItemACL `json:"acl"`
+	CreatedByUserID *int64   `json:"createdByUserId"`
 }
 
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.
@@ -130,6 +147,7 @@ type Repository interface {
 	History(context.Context, int64, int64, int64) (HistoryPage, error)
 	GetItem(context.Context, int64) (Item, error)
 	GetItemByNumber(context.Context, int64, int64) (Item, error)
+	GetDeletedItem(context.Context, int64, int64) (Item, error)
 	GetColumnByName(context.Context, string) (Column, error)
 	CreateItem(context.Context, ItemInput) (Item, error)
 	UpdateItem(context.Context, int64, ItemPatch) (Item, error)
@@ -173,4 +191,6 @@ type Repository interface {
 	DeleteSession(context.Context, string) error
 	DeleteSessionsForUser(context.Context, int64) error
 	UserBySessionID(context.Context, string, time.Time) (User, error)
+	ListACLEntriesForItems(context.Context, []int64) (map[int64]ItemACL, error)
+	ReplaceItemACL(context.Context, int64, string, string, []int64, []int64) (Item, error)
 }

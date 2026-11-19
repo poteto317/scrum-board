@@ -47,11 +47,12 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"command_templates",
 		"workspace_list_filter",
 		"item_comments",
+		"item_acl_entries",
 		"sessions",
-		"users",
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
+		"users",
 		"projects",
 		"board_settings",
 		"board_columns",
@@ -126,6 +127,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeSessions(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeItemACL(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = seedHandlerTestAuth(t.Context(), repo); err != nil {

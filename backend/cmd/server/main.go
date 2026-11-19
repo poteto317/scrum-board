@@ -120,6 +120,9 @@ func run() error {
 		err = repo.InitializeSessions(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeItemACL(migrationCtx)
+	}
+	if err == nil {
 		err = repo.SeedAdminFromEnv(migrationCtx, os.Getenv)
 	}
 	migrationCancel()
