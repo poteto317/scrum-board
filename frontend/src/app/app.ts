@@ -12,6 +12,7 @@ import { HeaderMenuSession } from './header-menu-session';
 import { HeaderMenu } from './header-menu.component';
 import { ProjectBoardCache } from './project-board-cache';
 import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
+import { readSidebarCollapsed, writeSidebarCollapsed } from './sidebar-collapse-storage';
 
 @Component({
   selector: 'app-root',
@@ -38,9 +39,23 @@ export class App implements OnInit {
   readonly projectModalOpen = signal(false);
   readonly formError = signal('');
   readonly saving = signal(false);
+  /** Sidebar rail vs expanded. Read once from localStorage; showChrome changes do not re-read. */
+  readonly collapsed = signal(readSidebarCollapsed());
   readonly projectForm = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [textLimit(80, true)] }),
   });
+
+  toggleSidebar() {
+    const next = !this.collapsed();
+    this.collapsed.set(next);
+    writeSidebarCollapsed(next);
+  }
+
+  onSidebarToggleKeydown(event: KeyboardEvent) {
+    if ((event.key === 'Enter' || event.key === ' ') && event.repeat) {
+      event.preventDefault();
+    }
+  }
 
   ngOnInit() {
     this.loginPath.set(this.router.url.split('?')[0] === '/login');

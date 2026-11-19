@@ -1,11 +1,21 @@
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router, Routes } from '@angular/router';
 import { EMPTY, of, Subject, throwError } from 'rxjs';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { App } from './app';
 import { FavoritesSession } from './favorites-session';
 import { ProjectSession } from './project-session';
+import { SIDEBAR_COLLAPSED_KEY } from './sidebar-collapse-storage';
+
+@Component({ standalone: true, template: '' })
+class SpecStubPage {}
+
+const chromeToggleRoutes: Routes = [
+  { path: 'login', component: SpecStubPage },
+  { path: '', component: SpecStubPage },
+];
 
 const projects = [
   { id: 1, name: 'メイン', position: 0 },
@@ -39,42 +49,46 @@ function clickHeaderMenuItem(
   f.detectChanges();
 }
 
+function setupApp(extra: Record<string, unknown> = {}, routerRoutes: Routes = []) {
+  const api = {
+    me: vi.fn(() =>
+      of({ id: 1, loginName: 'admin', displayName: 'admin', role: 'admin', disabled: false }),
+    ),
+    listProjects: vi.fn(() => of({ projects })),
+    board: vi.fn(() =>
+      of({
+        columns: [],
+        items: [],
+        settings: { cardLayout: 'pack', activeProjectId: 1 },
+      }),
+    ),
+    patchBoardSettings: vi.fn((body: { activeProjectId: number }) =>
+      of({ settings: { cardLayout: 'pack', activeProjectId: body.activeProjectId } }),
+    ),
+    createProject: vi.fn(() => of({ id: 3, name: '新規', position: 2 })),
+    patchProject: vi.fn(() => of({ id: 1, name: '改名', position: 0 })),
+    deleteProject: vi.fn(() => of(undefined)),
+    headerMenu: vi.fn(() => of(headerMenuPrefs)),
+    listUsers: vi.fn(() => of([])),
+    ...extra,
+  };
+  TestBed.configureTestingModule({
+    imports: [App],
+    providers: [provideRouter(routerRoutes), { provide: Api, useValue: api }],
+  });
+  const f = TestBed.createComponent(App);
+  f.detectChanges();
+  return { f, api, session: TestBed.inject(ProjectSession) };
+}
+
 describe('App project switcher', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
   });
 
-  function setup(extra: Record<string, unknown> = {}) {
-    const api = {
-      me: vi.fn(() =>
-        of({ id: 1, loginName: 'admin', displayName: 'admin', role: 'admin', disabled: false }),
-      ),
-      listProjects: vi.fn(() => of({ projects })),
-      board: vi.fn(() =>
-        of({
-          columns: [],
-          items: [],
-          settings: { cardLayout: 'pack', activeProjectId: 1 },
-        }),
-      ),
-      patchBoardSettings: vi.fn((body: { activeProjectId: number }) =>
-        of({ settings: { cardLayout: 'pack', activeProjectId: body.activeProjectId } }),
-      ),
-      createProject: vi.fn(() => of({ id: 3, name: '新規', position: 2 })),
-      patchProject: vi.fn(() => of({ id: 1, name: '改名', position: 0 })),
-      deleteProject: vi.fn(() => of(undefined)),
-      headerMenu: vi.fn(() => of(headerMenuPrefs)),
-      listUsers: vi.fn(() => of([])),
-      ...extra,
-    };
-    TestBed.configureTestingModule({
-      imports: [App],
-      providers: [provideRouter([]), { provide: Api, useValue: api }],
-    });
-    const f = TestBed.createComponent(App);
-    f.detectChanges();
-    return { f, api, session: TestBed.inject(ProjectSession) };
+  function setup(extra: Record<string, unknown> = {}, routerRoutes: Routes = []) {
+    return setupApp(extra, routerRoutes);
   }
 
   it('loads projects into the header select', () => {
@@ -409,7 +423,7 @@ describe('App project switcher', () => {
     expect(sidebar).toBeTruthy();
     const links = [...sidebar.querySelectorAll('.app-nav a')].map((a) => ({
       href: a.getAttribute('href'),
-      text: a.textContent?.trim(),
+      text: a.querySelector('.nav-label')?.textContent?.trim() ?? a.textContent?.trim(),
     }));
     expect(links).toEqual([
       { href: '/', text: 'ボード' },
@@ -465,5 +479,142 @@ describe('App project switcher', () => {
     expect(session.activeId()).toBe(2);
     expect(loadSpy).toHaveBeenCalled();
     expect(api.board).toHaveBeenCalled();
+  });
+});
+
+describe('App sidebar collapse', () => {
+  beforeEach(() => {
+    localStorage.removeItem(SIDEBAR_COLLAPSED_KEY);
+  });
+
+  afterEach(() => {
+    localStorage.removeItem(SIDEBAR_COLLAPSED_KEY);
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  function setup(extra: Record<string, unknown> = {}, routerRoutes: Routes = []) {
+    return setupApp(extra, routerRoutes);
+  }
+
+  it('toggles the sidebar between expanded and rail', () => {
+    const { f } = setup();
+    const sidebar = () => f.nativeElement.querySelector('.app-sidebar') as HTMLElement;
+    const toggle = () =>
+      f.nativeElement.querySelector('.sidebar-toggle') as HTMLButtonElement;
+    expect(sidebar().classList.contains('is-collapsed')).toBe(false);
+    expect(sidebar().querySelector('.sidebar-favorites')).toBeTruthy();
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(toggle().getAttribute('aria-label')).toBe('サイドバーを閉じる');
+
+    toggle().focus();
+    toggle().click();
+    f.detectChanges();
+    expect(sidebar().classList.contains('is-collapsed')).toBe(true);
+    expect(sidebar().querySelector('.sidebar-favorites')).toBeNull();
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(toggle().getAttribute('aria-label')).toBe('サイドバーを開く');
+    expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('1');
+    expect(document.activeElement).toBe(toggle());
+
+    const navLinks = [...sidebar().querySelectorAll('.app-nav a')] as HTMLAnchorElement[];
+    expect(navLinks.map((a) => a.getAttribute('aria-label'))).toEqual(['ボード', 'バックログ']);
+    expect(navLinks.every((a) => a.querySelector('.nav-label') == null)).toBe(true);
+    expect(navLinks.every((a) => (a.textContent ?? '').trim() === '')).toBe(true);
+
+    toggle().click();
+    f.detectChanges();
+    expect(sidebar().classList.contains('is-collapsed')).toBe(false);
+    expect(sidebar().querySelector('.sidebar-favorites')).toBeTruthy();
+    expect(toggle().getAttribute('aria-label')).toBe('サイドバーを閉じる');
+    expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('0');
+    expect(document.activeElement).toBe(toggle());
+  });
+
+  it('restores rail state from localStorage on construct', () => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, '1');
+    const { f } = setup();
+    const sidebar = f.nativeElement.querySelector('.app-sidebar') as HTMLElement;
+    expect(sidebar.classList.contains('is-collapsed')).toBe(true);
+    expect(sidebar.querySelector('.sidebar-favorites')).toBeNull();
+  });
+
+  it('keeps collapsed UI when localStorage setItem throws', () => {
+    const { f } = setup();
+    const original = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === SIDEBAR_COLLAPSED_KEY) {
+        throw new DOMException('QuotaExceededError');
+      }
+      return original.call(this, key, value);
+    });
+    const toggle = f.nativeElement.querySelector('.sidebar-toggle') as HTMLButtonElement;
+    toggle.click();
+    f.detectChanges();
+    expect(
+      (f.nativeElement.querySelector('.app-sidebar') as HTMLElement).classList.contains(
+        'is-collapsed',
+      ),
+    ).toBe(true);
+    expect(f.nativeElement.querySelector('.sidebar-favorites')).toBeNull();
+  });
+
+  it('does not re-read collapsed state when chrome hides and returns', async () => {
+    const { f } = setup({}, chromeToggleRoutes);
+    const toggle = f.nativeElement.querySelector('.sidebar-toggle') as HTMLButtonElement;
+    toggle.click();
+    f.detectChanges();
+    expect(f.componentInstance.collapsed()).toBe(true);
+    // Poison storage: if showChrome toggles re-read, UI would expand again.
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, '0');
+
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/login');
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.app-sidebar')).toBeNull();
+    expect(f.componentInstance.collapsed()).toBe(true);
+
+    await router.navigateByUrl('/');
+    f.detectChanges();
+    const sidebar = f.nativeElement.querySelector('.app-sidebar') as HTMLElement;
+    expect(sidebar?.classList.contains('is-collapsed')).toBe(true);
+    expect(f.componentInstance.collapsed()).toBe(true);
+  });
+
+  it('prevents Enter/Space key repeat from toggling', () => {
+    const { f } = setup();
+    const toggle = f.nativeElement.querySelector('.sidebar-toggle') as HTMLButtonElement;
+    const enterRepeat = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      repeat: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    toggle.dispatchEvent(enterRepeat);
+    expect(enterRepeat.defaultPrevented).toBe(true);
+    expect(f.componentInstance.collapsed()).toBe(false);
+
+    const spaceRepeat = new KeyboardEvent('keydown', {
+      key: ' ',
+      repeat: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    toggle.dispatchEvent(spaceRepeat);
+    expect(spaceRepeat.defaultPrevented).toBe(true);
+    expect(f.componentInstance.collapsed()).toBe(false);
+
+    const enterOnce = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      repeat: false,
+      bubbles: true,
+      cancelable: true,
+    });
+    toggle.dispatchEvent(enterOnce);
+    expect(enterOnce.defaultPrevented).toBe(false);
   });
 });
