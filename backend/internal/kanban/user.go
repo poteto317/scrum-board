@@ -189,8 +189,20 @@ VALUES (?, ?, ?, ?, 0)`, in.LoginName, in.DisplayName, hash, role)
 }
 
 func (r MySQLRepository) UpdateUser(ctx context.Context, id int64, patch UserPatch, actorID int64) (User, error) {
-	cur, err := r.GetUser(ctx, id)
+	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
+		return User{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	row := tx.QueryRowContext(ctx, `
+SELECT id, login_name, display_name, password_hash, role, disabled, created_at, updated_at
+  FROM users WHERE id=? FOR UPDATE`, id)
+	cur, err := scanUser(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return User{}, ErrNotFound
+		}
 		return User{}, err
 	}
 	next := cur
@@ -210,6 +222,7 @@ func (r MySQLRepository) UpdateUser(ctx context.Context, id int64, patch UserPat
 	if patch.Disabled != nil {
 		next.Disabled = *patch.Disabled
 	}
+	passwordChanged := false
 	if patch.Password != nil {
 		if *patch.Password == "" {
 			return User{}, ErrInvalidUserInput
@@ -219,22 +232,35 @@ func (r MySQLRepository) UpdateUser(ctx context.Context, id int64, patch UserPat
 			return User{}, err
 		}
 		next.PasswordHash = hash
+		passwordChanged = true
 	}
-	if err := validateUserMutation(ctx, r, cur, next, actorID); err != nil {
+	if err := validateUserMutation(ctx, txAdminCounter{tx}, cur, next, actorID); err != nil {
 		return User{}, err
 	}
-	_, err = r.DB.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 UPDATE users SET display_name=?, password_hash=?, role=?, disabled=? WHERE id=?`,
 		next.DisplayName, next.PasswordHash, next.Role, boolToTiny(next.Disabled), id)
 	if err != nil {
 		return User{}, err
 	}
-	if next.Disabled && !cur.Disabled {
-		if err := r.DeleteSessionsForUser(ctx, id); err != nil {
+	if (next.Disabled && !cur.Disabled) || passwordChanged {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, id); err != nil {
 			return User{}, err
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		return User{}, err
+	}
 	return r.GetUser(ctx, id)
+}
+
+type txAdminCounter struct{ tx *sql.Tx }
+
+func (c txAdminCounter) CountEnabledAdmins(ctx context.Context) (int64, error) {
+	var n int64
+	err := c.tx.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM users WHERE role = ? AND disabled = 0`, RoleAdmin).Scan(&n)
+	return n, err
 }
 
 func (r MySQLRepository) CountEnabledAdmins(ctx context.Context) (int64, error) {

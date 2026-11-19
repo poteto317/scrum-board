@@ -109,7 +109,7 @@ func (m *memoryRepo) UpdateUser(ctx context.Context, id int64, patch UserPatch, 
 	}
 	next.UpdatedAt = time.Now().UTC()
 	m.users[idx] = next
-	if next.Disabled && !cur.Disabled {
+	if (next.Disabled && !cur.Disabled) || (patch.Password != nil && *patch.Password != "") {
 		_ = m.DeleteSessionsForUser(ctx, id)
 	}
 	return next, nil
