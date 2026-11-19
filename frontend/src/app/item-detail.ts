@@ -4,6 +4,7 @@ import { ItemComments } from './item-comments';
 import { Modal } from './modal';
 import {
   Component,
+  computed,
   DestroyRef,
   HostListener,
   inject,
@@ -33,6 +34,7 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
+import { UsersSession } from './users-session';
 import { formatDueAtLocal } from './due-at';
 import { DueAtPicker } from './due-at-picker';
 import { ItemAssignee } from './item-assignee';
@@ -112,6 +114,7 @@ export class ItemDetail implements OnInit {
   readonly prLinks = inject(ItemPrLinks);
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
+  private readonly usersSession = inject(UsersSession);
   readonly favorite = inject(ItemFavorite);
   private readonly itemMenuActions = inject(ItemMenuActions);
   readonly dueAt = inject(ItemDueAt);
@@ -123,6 +126,14 @@ export class ItemDetail implements OnInit {
   readonly commands = inject(CommandTemplatesSession);
   readonly itemCommands = inject(ItemCommandsSession);
   readonly presets = ASSIGNEE_PRESETS;
+  /** Enabled users + presets (deduped, users first). */
+  readonly assigneeChips = computed(() => {
+    const names = [...this.usersSession.enabledDisplayNames()];
+    for (const p of ASSIGNEE_PRESETS) {
+      if (!names.includes(p)) names.push(p);
+    }
+    return names;
+  });
   readonly assigneeKind = assigneeKind;
   readonly item = this.autosave.item;
   readonly form = this.autosave.form;
@@ -258,6 +269,7 @@ export class ItemDetail implements OnInit {
       favoriteDisabled: () => this.favorite.saving() || !this.item(),
     });
     this.destroyRef.onDestroy(() => this.itemMenuActions.unregister());
+    this.usersSession.load();
     this.commands.load();
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       this.routeNumber.set(Number(params.get('number')));

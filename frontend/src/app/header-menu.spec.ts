@@ -27,9 +27,11 @@ describe('header-menu pure helpers', () => {
       'project_rename',
       'project_delete',
       'open_trash',
+      'open_users',
     ]);
     expect(catalogIdsForPageKind('itemDetail')).toEqual([
       'open_trash',
+      'open_users',
       'item_history',
       'item_solution',
       'item_favorite',
@@ -42,9 +44,11 @@ describe('header-menu pure helpers', () => {
       'project_add',
       'project_rename',
       'open_trash',
+      'open_users',
     ]);
     expect(visibleMenuItemIds('itemDetail', prefs)).toEqual([
       'open_trash',
+      'open_users',
       'item_solution',
       'item_favorite',
     ]);
@@ -52,8 +56,8 @@ describe('header-menu pure helpers', () => {
 
   it('empty workspace has no hidden ids', () => {
     const empty = emptyWorkspaceHeaderMenu();
-    expect(visibleMenuItemIds('board', empty.board)).toHaveLength(4);
-    expect(visibleMenuItemIds('itemDetail', empty.itemDetail)).toHaveLength(4);
+    expect(visibleMenuItemIds('board', empty.board)).toHaveLength(5);
+    expect(visibleMenuItemIds('itemDetail', empty.itemDetail)).toHaveLength(5);
   });
 
   it('disables project menu actions with the same rules as the old header buttons', () => {

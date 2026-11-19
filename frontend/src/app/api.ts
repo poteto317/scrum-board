@@ -4,6 +4,7 @@ import { CommandTemplate } from './command-template';
 import { ItemOrderColumn } from './item-order';
 import { WorkspaceListFilters } from './list-filter';
 import { WorkspaceHeaderMenu } from './header-menu';
+import { UserPublic } from './auth';
 import {
   BoardData,
   BoardSettings,
@@ -39,6 +40,32 @@ export class Api {
   private readonly http = inject(HttpClient);
   publicConfig() {
     return this.http.get<{ publicOrigin: string }>('/api/public-config');
+  }
+  me() {
+    return this.http.get<UserPublic>('/api/auth/me');
+  }
+  login(loginName: string, password: string) {
+    return this.http.post<UserPublic>('/api/auth/login', { loginName, password });
+  }
+  logout() {
+    return this.http.post('/api/auth/logout', {}, { responseType: 'text' });
+  }
+  listUsers() {
+    return this.http.get<UserPublic[]>('/api/users');
+  }
+  createUser(input: {
+    loginName: string;
+    password: string;
+    displayName: string;
+    role?: string;
+  }) {
+    return this.http.post<UserPublic>('/api/users', input);
+  }
+  patchUser(
+    id: number,
+    patch: { displayName?: string; role?: string; disabled?: boolean; password?: string },
+  ) {
+    return this.http.patch<UserPublic>(`/api/users/${id}`, patch);
   }
   board() {
     return this.http.get<BoardData>('/api/board');

@@ -1,7 +1,9 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter } from 'rxjs';
 import { errorMessage } from './api-error';
+import { AuthSession } from './auth-session';
 import { FavoritesSession, displayFavoriteTitle } from './favorites-session';
 import { textLimit } from './form-validation';
 import { Modal } from './modal';
@@ -18,8 +20,16 @@ import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
 export class App implements OnInit {
   readonly projectSession = inject(ProjectSession);
   private readonly headerMenuSession = inject(HeaderMenuSession);
+  readonly auth = inject(AuthSession);
   readonly favorites = inject(FavoritesSession);
   readonly displayFavoriteTitle = displayFavoriteTitle;
+  private readonly router = inject(Router);
+  private readonly loginPath = signal(false);
+  readonly showChrome = computed(() => {
+    if (this.loginPath()) return false;
+    const s = this.auth.status();
+    return s === 'authenticated' || s === 'error';
+  });
 
   readonly projectModalOpen = signal(false);
   readonly formError = signal('');
@@ -29,8 +39,21 @@ export class App implements OnInit {
   });
 
   ngOnInit() {
-    this.projectSession.load();
-    this.headerMenuSession.load();
+    this.loginPath.set(this.router.url.split('?')[0] === '/login');
+    this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe((e) => {
+        this.loginPath.set(e.urlAfterRedirects.split('?')[0] === '/login');
+      });
+    this.auth.ensureMe().subscribe({
+      next: () => {
+        this.projectSession.load();
+        this.headerMenuSession.load();
+      },
+      error: () => {
+        /* guest/login or transient error — guard / login handle UX */
+      },
+    });
   }
 
   onProjectChange(event: Event) {

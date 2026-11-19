@@ -199,7 +199,7 @@
           <div class="assignee-field">
             <span class="assignee-label" id="detail-assignee-label">対応</span>
             <div class="assignee-chips" role="group" aria-labelledby="detail-assignee-label">
-              @for (name of presets; track name) {
+              @for (name of assigneeChips(); track name) {
                 <button
                   type="button"
                   class="assignee-chip"

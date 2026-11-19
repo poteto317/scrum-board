@@ -1,0 +1,100 @@
+<main class="users-page">
+  <nav class="breadcrumb" aria-label="パンくず">
+    <a routerLink="/">ボード</a><span>/</span><strong>ユーザー</strong>
+  </nav>
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">USERS</p>
+      <h1>ユーザー<span class="heading-dot">.</span></h1>
+      <p>ワークスペースのアカウント一覧です。管理操作は管理者のみ実行できます。</p>
+    </div>
+    <button type="button" class="secondary" (click)="logout()">ログアウト</button>
+  </div>
+
+  @if (session.loading()) {
+    <div class="state-panel" role="status">読み込み中…</div>
+  } @else if (session.loadError()) {
+    <div class="state-panel" role="alert">
+      <p>{{ session.loadError() }}</p>
+      <button class="secondary" type="button" (click)="session.load()">再読み込み</button>
+    </div>
+  } @else if (session.users(); as users) {
+    @if (actionError()) {
+      <div class="state-panel" role="alert">{{ actionError() }}</div>
+    }
+    @if (users.length === 0) {
+      <div class="state-panel" role="status">ユーザーがいません。</div>
+    } @else {
+      <ul class="users-list" aria-label="ユーザー一覧">
+        @for (user of users; track user.id) {
+          <li class="user-row" [class.disabled-user]="user.disabled">
+            <div class="user-main">
+              <strong>{{ user.displayName }}</strong>
+              <span class="user-login">@{{ user.loginName }}</span>
+              <span class="user-role">{{ user.role }}</span>
+              @if (user.disabled) {
+                <span class="user-badge">無効</span>
+              }
+            </div>
+            @if (isAdmin) {
+              <div class="user-actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="busyId() != null"
+                  (click)="rename(user)"
+                >
+                  表示名
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="busyId() != null"
+                  (click)="setRole(user, user.role === 'admin' ? 'member' : 'admin')"
+                >
+                  {{ user.role === 'admin' ? 'member へ' : 'admin へ' }}
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="busyId() != null"
+                  (click)="resetPassword(user)"
+                >
+                  パスワード
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="busyId() != null"
+                  (click)="setDisabled(user, !user.disabled)"
+                >
+                  {{ user.disabled ? '有効化' : '無効化' }}
+                </button>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (isAdmin) {
+      <section class="users-create" aria-labelledby="users-create-heading">
+        <h2 id="users-create-heading">ユーザーを追加</h2>
+        <form class="users-create-form" (ngSubmit)="create()" novalidate>
+          <label for="new-login">ログイン名</label>
+          <input id="new-login" [formControl]="createForm.controls.loginName" />
+          <label for="new-display">表示名</label>
+          <input id="new-display" [formControl]="createForm.controls.displayName" />
+          <label for="new-password">パスワード</label>
+          <input id="new-password" type="password" [formControl]="createForm.controls.password" />
+          <label for="new-role">役割</label>
+          <select id="new-role" [formControl]="createForm.controls.role">
+            <option value="member">member</option>
+            <option value="admin">admin</option>
+          </select>
+          <button type="submit" [disabled]="creating()">追加</button>
+        </form>
+      </section>
+    }
+  }
+</main>

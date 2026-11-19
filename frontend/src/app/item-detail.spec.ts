@@ -53,6 +53,7 @@ describe('ItemDetail autosave', () => {
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> };
   let restoreDialog: () => void;
@@ -81,6 +82,7 @@ describe('ItemDetail autosave', () => {
       navigateByUrl: vi.fn().mockResolvedValue(true),
     };
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
@@ -691,10 +693,12 @@ describe('ItemDetail copy card link', () => {
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
@@ -841,6 +845,7 @@ describe('ItemDetail copy command menu and management', () => {
   ) => {
     const params = new BehaviorSubject(new Map([['number', '3']]));
     const api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
       board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
@@ -1240,6 +1245,7 @@ describe('ItemDetail IME response handling', () => {
           {
             provide: Api,
             useValue: {
+              listUsers: () => of([]),
               history: () => of({ events: [], nextBefore: 0 }),
               listComments: () => of([]),
               board: () => of({ columns: [], items: [] }),
@@ -1293,6 +1299,7 @@ describe('ItemDetail live refresh', () => {
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -1300,6 +1307,7 @@ describe('ItemDetail live refresh', () => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     router = { navigate: vi.fn() };
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
@@ -1405,6 +1413,7 @@ describe('ItemDetail Close reason', () => {
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
   };
   let restoreDialog: () => void;
   beforeEach(() => {
@@ -1428,6 +1437,7 @@ describe('ItemDetail Close reason', () => {
     };
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
@@ -1598,6 +1608,7 @@ describe('ItemDetail description text links', () => {
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
   };
   const buttonByText = (root: ParentNode, text: string) =>
     Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text) as
@@ -1625,6 +1636,7 @@ describe('ItemDetail description text links', () => {
     };
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
@@ -1857,12 +1869,14 @@ describe('ItemDetail dueAt picker', () => {
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     vi.useFakeTimers();
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
       board: vi.fn(() =>
