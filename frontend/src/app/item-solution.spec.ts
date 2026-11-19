@@ -3,6 +3,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 import { BehaviorSubject, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
+import { DESCRIPTION_MAX_LEN } from './description-blocks';
 import { ItemSolution } from './item-solution';
 import type { Item } from './models';
 import { ProjectSession } from './project-session';
@@ -35,9 +36,26 @@ describe('ItemSolution', () => {
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
   };
+  let restoreDialog: (() => void) | undefined;
 
   beforeEach(async () => {
     vi.useFakeTimers();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    restoreDialog = () => {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    };
     params = new BehaviorSubject(convertToParamMap({ number: '3' }));
     query = new BehaviorSubject(convertToParamMap({ project: '1' }));
     api = {
@@ -67,6 +85,8 @@ describe('ItemSolution', () => {
   });
 
   afterEach(() => {
+    restoreDialog?.();
+    restoreDialog = undefined;
     TestBed.resetTestingModule();
     vi.useRealTimers();
   });
@@ -136,6 +156,85 @@ describe('ItemSolution', () => {
     await vi.advanceTimersByTimeAsync(0);
     await expect(leaveP).resolves.toBe(true);
     expect(api.updateItem).toHaveBeenCalledWith(18, { solution: 'flush me' });
+    fixture.destroy();
+  });
+
+  it('opens link dialog from linkRequest and inserts markdown on confirm', async () => {
+    const fixture = create();
+    await Promise.resolve();
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.onTextChange('');
+    cmp.onLinkRequest({ blockIndex: 0, start: 0, end: 0, selectedText: '' });
+    fixture.detectChanges();
+    expect(cmp.descriptionEditor.open()).toBe(true);
+    expect(fixture.nativeElement.querySelector('#solution-link-title')).toBeTruthy();
+    cmp.descriptionEditor.setLabel('doc');
+    cmp.descriptionEditor.setUrl('https://example.com');
+    cmp.confirmDescriptionLink();
+    fixture.detectChanges();
+    expect(cmp.descriptionEditor.open()).toBe(false);
+    expect(cmp.control.value).toBe('[doc](https://example.com)');
+    fixture.destroy();
+  });
+
+  it('keeps empty block text when link dialog is cancelled', async () => {
+    const fixture = create();
+    await Promise.resolve();
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.onTextChange('\n');
+    cmp.onLinkRequest({ blockIndex: 0, start: 0, end: 0, selectedText: '' });
+    fixture.detectChanges();
+    cmp.descriptionEditor.cancel();
+    fixture.detectChanges();
+    expect(cmp.descriptionEditor.open()).toBe(false);
+    expect(cmp.control.value).toBe('\n');
+    fixture.destroy();
+  });
+
+  it('keeps blocks and shows ソリューション limit error when link apply fails', async () => {
+    const fixture = create();
+    await Promise.resolve();
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    const almost = 'x'.repeat(DESCRIPTION_MAX_LEN - 1);
+    cmp.onTextChange(almost);
+    cmp.onLinkRequest({ blockIndex: 0, start: 0, end: 0, selectedText: '' });
+    fixture.detectChanges();
+    cmp.descriptionEditor.setLabel('a');
+    cmp.descriptionEditor.setUrl('https://example.com');
+    cmp.confirmDescriptionLink();
+    fixture.detectChanges();
+    expect(cmp.descriptionEditor.error()).toContain('ソリューション');
+    expect(cmp.control.value).toBe(almost);
+    expect(cmp.descriptionEditor.open()).toBe(true);
+    fixture.destroy();
+  });
+
+  it('resets link dialog on reload', async () => {
+    const fixture = create();
+    await Promise.resolve();
+    const cmp = fixture.componentInstance;
+    cmp.onLinkRequest({ blockIndex: 0, start: 0, end: 0, selectedText: '' });
+    expect(cmp.descriptionEditor.open()).toBe(true);
+    cmp.load();
+    await Promise.resolve();
+    expect(cmp.descriptionEditor.open()).toBe(false);
+    fixture.destroy();
+  });
+
+  it('does not poll while link dialog is open', async () => {
+    const fixture = create();
+    await Promise.resolve();
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.onLinkRequest({ blockIndex: 0, start: 0, end: 0, selectedText: '' });
+    expect(cmp.descriptionEditor.open()).toBe(true);
+    const beforeCalls = api.itemByNumber.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(api.itemByNumber.mock.calls.length).toBe(beforeCalls);
+    expect(cmp.descriptionEditor.open()).toBe(true);
     fixture.destroy();
   });
 });

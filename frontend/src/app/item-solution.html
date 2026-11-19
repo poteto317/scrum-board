@@ -24,6 +24,7 @@
         [lengthErrorMessage]="solutionLengthError"
         (textChange)="onTextChange($event)"
         (compositionChange)="onCompositionChange($event)"
+        (linkRequest)="onLinkRequest($event)"
       />
       @if (control.invalid) {
         <p class="form-error">{{ solutionLengthError }}</p>
@@ -39,3 +40,38 @@
     </section>
   }
 </main>
+@if (descriptionEditor.open()) {
+  <dialog
+    appModal
+    class="modal-backdrop description-link-dialog"
+    aria-labelledby="solution-link-title"
+    (cancel)="$event.preventDefault(); descriptionEditor.cancel()"
+  >
+    <section class="modal">
+      <h2 id="solution-link-title">リンクを追加</h2>
+      <label for="solution-link-label">表示名</label>
+      <input
+        id="solution-link-label"
+        type="text"
+        [value]="descriptionEditor.label()"
+        (input)="descriptionEditor.setLabel($any($event.target).value)"
+        placeholder="リンクの表示名"
+      />
+      <label for="solution-link-url">URL</label>
+      <input
+        id="solution-link-url"
+        type="url"
+        [value]="descriptionEditor.url()"
+        (input)="descriptionEditor.setUrl($any($event.target).value)"
+        placeholder="https://example.com"
+      />
+      @if (descriptionEditor.error()) {
+        <p class="form-error">{{ descriptionEditor.error() }}</p>
+      }
+      <div class="form-actions">
+        <button type="button" class="secondary" (click)="descriptionEditor.cancel()">キャンセル</button>
+        <button type="button" (click)="confirmDescriptionLink()">確定</button>
+      </div>
+    </section>
+  </dialog>
+}

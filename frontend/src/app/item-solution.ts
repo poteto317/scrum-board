@@ -7,6 +7,7 @@ import {
   NgZone,
   OnInit,
   signal,
+  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -25,11 +26,16 @@ import {
   tap,
 } from 'rxjs';
 import { Api } from './api';
-import { DESCRIPTION_MAX_LEN } from './description-blocks';
+import {
+  DESCRIPTION_MAX_LEN,
+  parseDescriptionBlocks,
+} from './description-blocks';
 import { DescriptionBlocksEditor } from './description-blocks-editor';
+import { DescriptionEditor } from './description-editor';
 import { textLimit } from './form-validation';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import type { Item } from './models';
+import { Modal } from './modal';
 import { normalizeItem } from './board-data';
 import { ProjectSession } from './project-session';
 
@@ -37,7 +43,8 @@ const SOLUTION_LENGTH_ERROR = `ソリューションは${DESCRIPTION_MAX_LEN}文
 
 @Component({
   selector: 'app-item-solution',
-  imports: [ReactiveFormsModule, RouterLink, DescriptionBlocksEditor],
+  imports: [ReactiveFormsModule, RouterLink, DescriptionBlocksEditor, Modal],
+  providers: [DescriptionEditor],
   templateUrl: './item-solution.html',
   styleUrl: './item-solution.css',
 })
@@ -47,6 +54,8 @@ export class ItemSolution implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly zone = inject(NgZone);
   private readonly projectSession = inject(ProjectSession);
+  readonly descriptionEditor = inject(DescriptionEditor);
+  private readonly blocksEditor = viewChild(DescriptionBlocksEditor);
   private readonly reload$ = new Subject<void>();
   private saveGeneration = 0;
   private flushWaiters: Array<(ok: boolean) => void> = [];
@@ -77,6 +86,7 @@ export class ItemSolution implements OnInit {
           this.saveGeneration++;
           this.saving.set(false);
           this.resolveFlush(false);
+          this.descriptionEditor.reset();
           this.loading.set(true);
           this.error.set('');
           this.saveError.set('');
@@ -129,7 +139,8 @@ export class ItemSolution implements OnInit {
         this.routeNumber() > 0 &&
         !this.dirty &&
         !this.saving() &&
-        !this.composing,
+        !this.composing &&
+        !this.descriptionEditor.open(),
       fetch: () => {
         const number = this.routeNumber();
         const card = this.item();
@@ -141,7 +152,7 @@ export class ItemSolution implements OnInit {
       },
       apply: (card) => {
         if (card.number !== this.routeNumber()) return;
-        if (this.dirty || this.saving() || this.composing) return;
+        if (this.dirty || this.saving() || this.composing || this.descriptionEditor.open()) return;
         const next = normalizeItem(card);
         if (this.item() && sameJson(this.item(), next)) return;
         this.item.set(next);
@@ -171,6 +182,26 @@ export class ItemSolution implements OnInit {
 
   onCompositionChange(composing: boolean) {
     this.composing = composing;
+  }
+
+  onLinkRequest(sel: {
+    blockIndex: number;
+    start: number;
+    end: number;
+    selectedText: string;
+  }): void {
+    this.descriptionEditor.begin(sel);
+  }
+
+  confirmDescriptionLink(): void {
+    const editor = this.blocksEditor();
+    const blocks = editor?.blocks() ?? parseDescriptionBlocks(this.control.value);
+    const result = this.descriptionEditor.apply(blocks, 'ソリューション');
+    if (!result) return;
+    this.control.setValue(result.text, { emitEvent: true });
+    this.control.markAsDirty();
+    editor?.syncFromSerialized(result.text);
+    editor?.focusBlock(result.blockIndex, result.caret);
   }
 
   load() {
