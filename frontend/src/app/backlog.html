@@ -98,7 +98,16 @@
                 >
                   {{ i + 1 }}
                 </button>
-                <span class="backlog-number">{{ formatItemNumber(card.number) }}</span>
+                <span class="backlog-number"
+                  >{{ formatItemNumber(card.number) }}
+                  @if (viewAccessLabel(card.viewAccess); as accessLabel) {
+                    @if (accessLabel) {
+                      <span class="access-badge" [attr.data-access]="card.viewAccess">{{
+                        accessLabel
+                      }}</span>
+                    }
+                  }
+                </span>
                 <span class="backlog-title">{{ card.title }}</span>
                 <span class="backlog-status">{{ statusName(card.columnId) }}</span>
               </div>

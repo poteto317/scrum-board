@@ -171,14 +171,23 @@ h1 {
 }
 .card-topline {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  gap: 6px;
   color: #8b9488;
 }
 .card-id {
   font-family: monospace;
   font-size: 10px;
   letter-spacing: 0.5px;
+}
+.access-badge {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--muted);
+}
+.access-badge[data-access='restricted'] {
+  color: var(--accent);
 }
 .task-card h3 {
   font-size: 14px;

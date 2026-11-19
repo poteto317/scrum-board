@@ -66,6 +66,7 @@ import {
 } from './column-order';
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
+import { viewAccessLabel } from './item-acl';
 import { CardLayout, Item, Column } from './models';
 import {
   COMMAND_ITEM_MENU_EMPTY,
@@ -125,6 +126,7 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 export class Board implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   readonly assigneeKind = assigneeKind;
+  readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
   private readonly projectSession = inject(ProjectSession);
   /** Template-safe busy flag while active project reload is in flight. */

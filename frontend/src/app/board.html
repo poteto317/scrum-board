@@ -285,8 +285,15 @@
                     ><span class="card-topline"
                       ><span class="card-id"
                         >{{ formatItemNumber(card.number) }}</span
-                      ></span
-                    >
+                      >
+                      @if (viewAccessLabel(card.viewAccess); as accessLabel) {
+                        @if (accessLabel) {
+                          <span class="access-badge" [attr.data-access]="card.viewAccess">{{
+                            accessLabel
+                          }}</span>
+                        }
+                      }
+                    </span>
                     <h3>{{ card.title }}</h3>
                     @if (card.description) {
                       <p class="card-description">{{ card.description }}</p>
