@@ -49,9 +49,42 @@ describe('App project switcher', () => {
     const { f, session } = setup();
     const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
     expect(session.activeId()).toBe(1);
+    expect(session.bootstrapped()).toBe(true);
     expect(select.value).toBe('1');
     expect(Array.from(select.options).map((option) => option.text)).toEqual(['メイン', '次']);
     expect(f.nativeElement.querySelector('.workspace-name')).toBeNull();
+  });
+
+  it('shows a loading select until project session is bootstrapped', () => {
+    const pendingProjects = new Subject<{ projects: typeof projects }>();
+    const pendingBoard = new Subject<{
+      columns: [];
+      items: [];
+      settings: { cardLayout: 'pack'; activeProjectId: number };
+    }>();
+    const { f, session } = setup({
+      listProjects: () => pendingProjects.asObservable(),
+      board: () => pendingBoard.asObservable(),
+    });
+    expect(session.bootstrapped()).toBe(false);
+    const loading = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    expect(loading.disabled).toBe(true);
+    expect(loading.options[0]?.textContent?.trim()).toBe('…');
+    pendingProjects.next({ projects });
+    pendingBoard.next({
+      columns: [],
+      items: [],
+      settings: { cardLayout: 'pack', activeProjectId: 2 },
+    });
+    pendingProjects.complete();
+    pendingBoard.complete();
+    f.detectChanges();
+    expect(session.bootstrapped()).toBe(true);
+    expect(session.activeId()).toBe(2);
+    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    expect(select.disabled).toBe(false);
+    expect(select.value).toBe('2');
+    expect(Array.from(select.options).map((o) => o.text)).toEqual(['メイン', '次']);
   });
 
   it('keeps the app header sticky above content but below dialogs', () => {

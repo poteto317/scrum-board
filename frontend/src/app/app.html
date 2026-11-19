@@ -8,22 +8,32 @@
   <span class="header-divider"></span>
   <div class="project-switcher">
     <label class="sr-only" for="project-select">プロジェクト</label>
-    <select
-      id="project-select"
-      [value]="projectSession.activeId() == null ? '' : '' + projectSession.activeId()"
-      [disabled]="
-        projectSession.switching() ||
-        projectSession.projects().length === 0 ||
-        projectModalOpen() ||
-        saving()
-      "
-      [attr.aria-busy]="projectSession.switching() ? 'true' : 'false'"
-      (change)="onProjectChange($event)"
-    >
-      @for (project of projectSession.projects(); track project.id) {
-        <option [value]="'' + project.id">{{ project.name }}</option>
-      }
-    </select>
+    @if (
+      projectSession.bootstrapped() &&
+      projectSession.projects().length > 0 &&
+      projectSession.activeId() != null
+    ) {
+      <select
+        id="project-select"
+        [value]="'' + projectSession.activeId()"
+        [disabled]="projectSession.switching() || projectModalOpen() || saving()"
+        [attr.aria-busy]="projectSession.switching() ? 'true' : 'false'"
+        (change)="onProjectChange($event)"
+      >
+        @for (project of projectSession.projects(); track project.id) {
+          <option
+            [value]="'' + project.id"
+            [selected]="project.id === projectSession.activeId()"
+          >
+            {{ project.name }}
+          </option>
+        }
+      </select>
+    } @else {
+      <select id="project-select" disabled aria-busy="true">
+        <option value="">…</option>
+      </select>
+    }
     <button
       type="button"
       class="secondary"
