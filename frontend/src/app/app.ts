@@ -5,16 +5,19 @@ import { errorMessage } from './api-error';
 import { FavoritesSession, displayFavoriteTitle } from './favorites-session';
 import { textLimit } from './form-validation';
 import { Modal } from './modal';
+import { HeaderMenuSession } from './header-menu-session';
+import { HeaderMenu } from './header-menu.component';
 import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, ReactiveFormsModule, Modal],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, ReactiveFormsModule, Modal, HeaderMenu],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
 export class App implements OnInit {
   readonly projectSession = inject(ProjectSession);
+  private readonly headerMenuSession = inject(HeaderMenuSession);
   readonly favorites = inject(FavoritesSession);
   readonly displayFavoriteTitle = displayFavoriteTitle;
 
@@ -27,6 +30,7 @@ export class App implements OnInit {
 
   ngOnInit() {
     this.projectSession.load();
+    this.headerMenuSession.load();
   }
 
   onProjectChange(event: Event) {
