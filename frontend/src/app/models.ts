@@ -57,6 +57,16 @@ export interface Item {
   favorite: boolean;
   /** 期限 UTC `…Z`（秒 00）。欠落時は null（normalizeItem で補完。空文字にしない）。 */
   dueAt: string | null;
+  /** 閲覧: public | open | restricted。欠落時は open（normalizeItem）。 */
+  viewAccess?: 'public' | 'open' | 'restricted';
+  /** 編集: open | restricted。欠落時は open（normalizeItem）。 */
+  editAccess?: 'open' | 'restricted';
+  createdByUserId?: number | null;
+  /** サーバが当該セッション向けに付けた権限フラグ（詳細 GET 等）。 */
+  canEdit?: boolean;
+  canManage?: boolean;
+  /** manage のみ。一般 GET では欠落。 */
+  acl?: { viewUserIds: number[]; editUserIds: number[] };
   createdAt: string;
   updatedAt: string;
 }

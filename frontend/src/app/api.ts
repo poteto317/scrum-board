@@ -179,6 +179,17 @@ export class Api {
   updateItem(id: number, input: ItemPatch) {
     return this.http.patch<Item>(`/api/items/${id}`, input);
   }
+  patchItemAcl(
+    id: number,
+    body: {
+      viewAccess: 'public' | 'open' | 'restricted';
+      editAccess: 'open' | 'restricted';
+      viewUserIds: number[];
+      editUserIds: number[];
+    },
+  ) {
+    return this.http.patch<Item>(`/api/items/${id}/acl`, body);
+  }
   updateAssigneeByNumber(number: number, assignee: string, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.patch<Item>(
