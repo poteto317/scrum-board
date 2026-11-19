@@ -47,6 +47,21 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
     closeReason: raw.closeReason ?? '',
     favorite: raw.favorite === true,
     dueAt: raw.dueAt ? raw.dueAt : null,
+    viewAccess:
+      raw.viewAccess === 'public' || raw.viewAccess === 'restricted' ? raw.viewAccess : 'open',
+    editAccess: raw.editAccess === 'restricted' ? 'restricted' : 'open',
+    createdByUserId:
+      typeof raw.createdByUserId === 'number' && Number.isFinite(raw.createdByUserId)
+        ? Math.trunc(raw.createdByUserId)
+        : null,
+    canEdit: typeof raw.canEdit === 'boolean' ? raw.canEdit : undefined,
+    canManage: typeof raw.canManage === 'boolean' ? raw.canManage : undefined,
+    acl: raw.acl
+      ? {
+          viewUserIds: raw.acl.viewUserIds ?? [],
+          editUserIds: raw.acl.editUserIds ?? [],
+        }
+      : undefined,
     createdAt: raw.createdAt ?? '',
     updatedAt: raw.updatedAt ?? '',
   };
