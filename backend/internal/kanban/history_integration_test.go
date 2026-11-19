@@ -228,7 +228,7 @@ func TestMySQLHistoryParallelAndConflictingImport(t *testing.T) {
 	if err = r.ImportHistory(ctx, []HistoricalRecord{v}); err == nil {
 		t.Fatal("existing key content was silently ignored")
 	}
-	if err = r.DeleteItem(ctx, 1); err != nil {
+	if err = r.HardDeleteItem(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	var count int

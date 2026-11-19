@@ -44,6 +44,10 @@ func fresh() *memoryRepo {
 		nextCommentID:   1,
 	}
 }
+func (m *memoryRepo) living(c Item) bool {
+	return c.DeletedAt == nil
+}
+
 func (m *memoryRepo) Board(context.Context) (Board, error) {
 	cols := slices.Clone(m.columns)
 	slices.SortFunc(cols, func(a, b Column) int {
@@ -56,7 +60,7 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 	settings := m.resolvedSettings(cols)
 	b := Board{Columns: cols, Items: []Item{}, Settings: settings}
 	for _, c := range m.cards {
-		if m.cardProjectID(c) == active {
+		if m.living(c) && m.cardProjectID(c) == active {
 			b.Items = append(b.Items, c)
 		}
 	}
@@ -162,8 +166,8 @@ func (m *memoryRepo) validProject(id int64) bool {
 }
 func (m *memoryRepo) GetItem(_ context.Context, id int64) (Item, error) {
 	c, ok := m.cards[id]
-	if !ok {
-		return c, ErrNotFound
+	if !ok || !m.living(c) {
+		return Item{}, ErrNotFound
 	}
 	return c, nil
 }
@@ -383,6 +387,9 @@ func (m *memoryRepo) ReorderItems(_ context.Context, orders []ItemColumnOrder) (
 	active := m.resolvedActive()
 	existing := map[int64]Item{}
 	for _, c := range m.cards {
+		if !m.living(c) {
+			continue
+		}
 		if _, ok := listed[c.ColumnID]; ok && m.cardProjectID(c) == active {
 			existing[c.ID] = c
 		}
@@ -410,16 +417,107 @@ func (m *memoryRepo) ReorderItems(_ context.Context, orders []ItemColumnOrder) (
 	return board.Items, nil
 }
 func (m *memoryRepo) DeleteItem(ctx context.Context, id int64) error {
-	if _, err := m.GetItem(ctx, id); err != nil {
+	c, err := m.GetItem(ctx, id)
+	if err != nil {
 		return err
 	}
+	now := time.Now().UTC()
+	c.DeletedAt = &now
+	m.cards[id] = c
+	return nil
+}
+
+func (m *memoryRepo) HardDeleteItem(ctx context.Context, id int64) error {
+	if _, ok := m.cards[id]; !ok {
+		return ErrNotFound
+	}
+	_ = ctx
 	delete(m.cards, id)
-	for cid, c := range m.comments {
-		if c.ItemID == id {
+	for cid, comment := range m.comments {
+		if comment.ItemID == id {
 			delete(m.comments, cid)
 		}
 	}
 	return nil
+}
+
+func (m *memoryRepo) HardDeleteTrashItem(ctx context.Context, id, projectID int64) error {
+	c, ok := m.cards[id]
+	if !ok || m.living(c) || m.cardProjectID(c) != projectID {
+		return ErrNotFound
+	}
+	return m.HardDeleteItem(ctx, id)
+}
+
+func (m *memoryRepo) ListTrash(_ context.Context, projectID int64) ([]TrashItem, error) {
+	if _, err := m.PurgeExpiredTrashForProject(context.Background(), projectID); err != nil {
+		return nil, err
+	}
+	out := []TrashItem{}
+	for _, c := range m.cards {
+		if m.living(c) || m.cardProjectID(c) != projectID || c.DeletedAt == nil {
+			continue
+		}
+		out = append(out, TrashItem{
+			ID: c.ID, Number: c.Number, Title: c.Title, ProjectID: m.cardProjectID(c), DeletedAt: *c.DeletedAt,
+		})
+	}
+	slices.SortFunc(out, func(a, b TrashItem) int {
+		if c := b.DeletedAt.Compare(a.DeletedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(b.ID, a.ID)
+	})
+	return out, nil
+}
+
+func (m *memoryRepo) RestoreItem(ctx context.Context, id, projectID int64) (Item, error) {
+	c, ok := m.cards[id]
+	if !ok || m.living(c) || m.cardProjectID(c) != projectID {
+		return Item{}, ErrNotFound
+	}
+	if !m.validColumn(c.ColumnID) {
+		todo, err := m.GetColumnByName(ctx, "Todo")
+		if err != nil {
+			return Item{}, err
+		}
+		c.ColumnID = todo.ID
+	}
+	c.DeletedAt = nil
+	m.cards[id] = c
+	return c, nil
+}
+
+func (m *memoryRepo) PurgeExpiredTrash(ctx context.Context) (int64, error) {
+	return m.purgeExpiredMemory(ctx, 0)
+}
+
+func (m *memoryRepo) PurgeExpiredTrashForProject(ctx context.Context, projectID int64) (int64, error) {
+	if projectID <= 0 {
+		return 0, ErrProject
+	}
+	return m.purgeExpiredMemory(ctx, projectID)
+}
+
+func (m *memoryRepo) purgeExpiredMemory(_ context.Context, projectID int64) (int64, error) {
+	cutoff := trashCutoff(time.Now().UTC())
+	var n int64
+	for id, c := range m.cards {
+		if c.DeletedAt == nil || c.DeletedAt.After(cutoff) {
+			continue
+		}
+		if projectID > 0 && m.cardProjectID(c) != projectID {
+			continue
+		}
+		delete(m.cards, id)
+		for cid, comment := range m.comments {
+			if comment.ItemID == id {
+				delete(m.comments, cid)
+			}
+		}
+		n++
+	}
+	return n, nil
 }
 func (m *memoryRepo) CreateColumn(_ context.Context, name string) (Column, error) {
 	maxPos := -1
@@ -468,7 +566,7 @@ func (m *memoryRepo) Backlog(context.Context) ([]Item, error) {
 	active := m.resolvedActive()
 	cards := []Item{}
 	for _, c := range m.cards {
-		if m.cardProjectID(c) == active {
+		if m.living(c) && m.cardProjectID(c) == active {
 			cards = append(cards, c)
 		}
 	}
@@ -488,7 +586,7 @@ func (m *memoryRepo) ReorderBacklog(_ context.Context, cardIDs []int64) ([]Item,
 	active := m.resolvedActive()
 	byID := map[int64]Item{}
 	for _, c := range m.cards {
-		if m.cardProjectID(c) == active {
+		if m.living(c) && m.cardProjectID(c) == active {
 			byID[c.ID] = c
 		}
 	}
@@ -680,7 +778,7 @@ func TestUnicodeValidationBoundaries(t *testing.T) {
 
 func (m *memoryRepo) GetItemByNumber(_ context.Context, number, projectID int64) (Item, error) {
 	for _, card := range m.cards {
-		if card.Number == number && m.cardProjectID(card) == projectID {
+		if m.living(card) && card.Number == number && m.cardProjectID(card) == projectID {
 			return card, nil
 		}
 	}
@@ -841,7 +939,8 @@ func (m *memoryRepo) validateTemplateIDs(ids []int64) error {
 }
 
 func (m *memoryRepo) ListItemCommandTemplates(_ context.Context, cardID int64) ([]CommandTemplate, error) {
-	if _, ok := m.cards[cardID]; !ok {
+	c, ok := m.cards[cardID]
+	if !ok || !m.living(c) {
 		return nil, ErrNotFound
 	}
 	ids := m.cardTemplateIDs[cardID]
@@ -858,7 +957,8 @@ func (m *memoryRepo) ListItemCommandTemplates(_ context.Context, cardID int64) (
 }
 
 func (m *memoryRepo) ReplaceItemCommandTemplates(_ context.Context, cardID int64, templateIDs []int64) ([]CommandTemplate, error) {
-	if _, ok := m.cards[cardID]; !ok {
+	c, ok := m.cards[cardID]
+	if !ok || !m.living(c) {
 		return nil, ErrNotFound
 	}
 	ids := dedupeTemplateIDs(templateIDs)
@@ -890,7 +990,10 @@ func (m *memoryRepo) ApplyCommandTemplatesToAllItems(_ context.Context, template
 	if err := m.validateTemplateIDs(ids); err != nil {
 		return err
 	}
-	for cardID := range m.cards {
+	for cardID, c := range m.cards {
+		if !m.living(c) {
+			continue
+		}
 		m.cardTemplateIDs[cardID] = append([]int64(nil), ids...)
 	}
 	return nil
@@ -958,7 +1061,8 @@ func (m *memoryRepo) ListComments(_ context.Context, itemID int64) ([]Comment, e
 }
 
 func (m *memoryRepo) CreateComment(_ context.Context, itemID int64, author, body string) (Comment, error) {
-	if _, ok := m.cards[itemID]; !ok {
+	c0, ok := m.cards[itemID]
+	if !ok || !m.living(c0) {
 		return Comment{}, ErrNotFound
 	}
 	now := time.Now().UTC()

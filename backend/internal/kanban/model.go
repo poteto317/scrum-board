@@ -62,8 +62,18 @@ type Item struct {
 	CloseReason     string        `json:"closeReason"`
 	Favorite        bool          `json:"favorite"`
 	DueAt           *time.Time    `json:"dueAt"`
+	DeletedAt       *time.Time    `json:"deletedAt,omitempty"`
 	CreatedAt       time.Time     `json:"createdAt"`
 	UpdatedAt       time.Time     `json:"updatedAt"`
+}
+
+// TrashItem is one soft-deleted card for the trash list API.
+type TrashItem struct {
+	ID        int64     `json:"id"`
+	Number    int64     `json:"number"`
+	Title     string    `json:"title"`
+	ProjectID int64     `json:"projectId"`
+	DeletedAt time.Time `json:"deletedAt"`
 }
 
 type ItemColumnOrder struct {
@@ -124,6 +134,12 @@ type Repository interface {
 	CreateItem(context.Context, ItemInput) (Item, error)
 	UpdateItem(context.Context, int64, ItemPatch) (Item, error)
 	DeleteItem(context.Context, int64) error
+	HardDeleteItem(context.Context, int64) error
+	HardDeleteTrashItem(context.Context, int64, int64) error
+	ListTrash(context.Context, int64) ([]TrashItem, error)
+	RestoreItem(context.Context, int64, int64) (Item, error)
+	PurgeExpiredTrash(context.Context) (int64, error)
+	PurgeExpiredTrashForProject(context.Context, int64) (int64, error)
 	CreateColumn(context.Context, string) (Column, error)
 	ReorderColumns(context.Context, []int64) ([]Column, error)
 	ReorderItems(context.Context, []ItemColumnOrder) ([]Item, error)

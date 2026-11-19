@@ -79,7 +79,7 @@ func nextBacklogPosition(ctx context.Context, tx *sql.Tx, projectID int64) (int,
 }
 
 func lockProjectCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]int64, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE project_id=? ORDER BY id FOR UPDATE", projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE project_id=? AND deleted_at IS NULL ORDER BY id FOR UPDATE", projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func lockAllCards(ctx context.Context, tx *sql.Tx) ([]int64, error) {
 }
 
 func listBacklogCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? ORDER BY c.backlog_position,c.id", projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.backlog_position,c.id", projectID)
 	if err != nil {
 		return nil, err
 	}

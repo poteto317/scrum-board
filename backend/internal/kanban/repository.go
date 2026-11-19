@@ -103,7 +103,7 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	b.Settings.MobileBoardColumnID = resolveMobileBoardColumnID(rawSettings.MobileBoardColumnID, b.Columns)
 	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
 	b.Settings.ActiveProjectID = active
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? ORDER BY c.position,c.id", active)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.position,c.id", active)
 	if err != nil {
 		return b, err
 	}
@@ -128,10 +128,10 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	return b, tx.Commit()
 }
 func (r MySQLRepository) GetItem(ctx context.Context, id int64) (Item, error) {
-	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.deleted_at IS NULL", id)
 }
 func (r MySQLRepository) GetItemByNumber(ctx context.Context, number, projectID int64) (Item, error) {
-	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.project_id=? AND n.item_number=?", projectID, number)
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.project_id=? AND n.item_number=? AND c.deleted_at IS NULL", projectID, number)
 }
 func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -241,11 +241,11 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		}
 	} else {
 		var lockedID int64
-		if err = tx.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
+		if err = tx.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? AND deleted_at IS NULL FOR UPDATE", id).Scan(&lockedID); err != nil {
 			return Item{}, dbError(err)
 		}
 	}
-	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
+	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.deleted_at IS NULL", id)
 	if err != nil {
 		return c, err
 	}
@@ -354,7 +354,35 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	}
 	return c, tx.Commit()
 }
+// DeleteItem soft-deletes a living item (sets deleted_at). Already soft-deleted or missing → ErrNotFound.
+// Other columns are left unchanged (L-015).
 func (r MySQLRepository) DeleteItem(ctx context.Context, id int64) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// Soft delete still joins the all-columns lock so writers stay ordered with Create/Update/Reorder.
+	if _, err = lockColumnRows(ctx, tx); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	res, err := tx.ExecContext(ctx, "UPDATE items SET deleted_at=? WHERE id=? AND deleted_at IS NULL", now, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit()
+}
+
+// HardDeleteItem permanently removes a row (CASCADE children). Used by trash purge / hard delete.
+func (r MySQLRepository) HardDeleteItem(ctx context.Context, id int64) error {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
