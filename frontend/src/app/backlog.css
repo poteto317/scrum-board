@@ -140,10 +140,10 @@ h1 {
   align-items: center;
   gap: 12px;
 }
-.backlog-drag-zone[draggable='true'] {
+.backlog-row[draggable='true'] {
   cursor: grab;
 }
-.backlog-drag-zone[draggable='true']:active {
+.backlog-row[draggable='true']:active {
   cursor: grabbing;
 }
 .backlog-rank {

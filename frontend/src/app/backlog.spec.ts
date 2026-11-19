@@ -325,9 +325,9 @@ describe('Backlog reordering', () => {
     f.componentInstance.items.set([cards[0]]);
     f.detectChanges();
     expect(f.componentInstance.canReorder()).toBe(false);
-    const singleZone = f.nativeElement.querySelector('.backlog-drag-zone') as HTMLElement;
+    const singleRow = f.nativeElement.querySelector('.backlog-row') as HTMLElement;
     const singleRank = f.nativeElement.querySelector('.backlog-rank') as HTMLButtonElement;
-    expect(singleZone.getAttribute('draggable')).toBeNull();
+    expect(singleRow.getAttribute('draggable')).toBeNull();
     expect(singleRank.getAttribute('aria-disabled')).toBe('true');
   });
 
@@ -1113,6 +1113,35 @@ describe('Backlog copy command menu', () => {
     f.detectChanges();
     expect(f.componentInstance.openCommandItemId()).toBeNull();
     delayed.next({ templates: [template] });
+    delayed.complete();
+    await f.whenStable();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+  });
+
+  it('closes the menu when the open row leaves the filtered list', async () => {
+    const delayed = new Subject<{ templates: typeof template[] }>();
+    const { f } = await create(
+      [
+        { ...template, id: 1 },
+        { id: 2, name: 'other', template: 'y', position: 1 },
+      ],
+      vi.fn(() => delayed.asObservable()),
+    );
+    const button = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    button.click();
+    f.detectChanges();
+    expect(f.componentInstance.openCommandItemId()).not.toBeNull();
+    f.componentInstance.listFilter.setQuery('backlog', 'no-such-title');
+    f.detectChanges();
+    expect(f.componentInstance.filteredItems().length).toBe(0);
+    expect(f.componentInstance.openCommandItemId()).toBeNull();
+    delayed.next({
+      templates: [
+        { ...template, id: 1 },
+        { id: 2, name: 'other', template: 'y', position: 1 },
+      ],
+    });
     delayed.complete();
     await f.whenStable();
     f.detectChanges();
