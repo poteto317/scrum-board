@@ -7,39 +7,64 @@
       ></a
     >
     <span class="header-divider"></span>
-    <div class="project-switcher">
-      <label class="sr-only" for="project-select">プロジェクト</label>
+    <div class="project-switcher" #projectSwitcher>
+      <label class="sr-only" for="project-select-trigger">プロジェクト</label>
       @if (
         projectSession.bootstrapped() &&
         projectSession.projects().length > 0 &&
         projectSession.activeId() != null
       ) {
-        <select
-          id="project-select"
-          [value]="'' + projectSession.activeId()"
+        <button
+          #projectSelectTrigger
+          type="button"
+          id="project-select-trigger"
+          class="project-select-trigger"
           [disabled]="projectSession.switching() || projectModalOpen() || saving()"
           [attr.aria-busy]="projectSession.switching() ? 'true' : 'false'"
+          aria-haspopup="listbox"
+          [attr.aria-expanded]="projectMenuOpen() ? 'true' : 'false'"
+          aria-controls="project-select-list"
           (focus)="onProjectSelectPrefetch()"
           (pointerdown)="onProjectSelectPrefetch()"
-          (change)="onProjectChange($event)"
+          (click)="onProjectTriggerClick($event)"
+          (keydown)="onProjectTriggerKeydown($event)"
         >
-          @for (project of projectSession.projects(); track project.id) {
-            <option
-              [value]="'' + project.id"
-              [selected]="project.id === projectSession.activeId()"
-            >
-              {{ project.name }}
-            </option>
-          }
-        </select>
+          {{ activeProjectName() }}
+        </button>
+        @if (projectMenuOpen()) {
+          <ul
+            #projectSelectList
+            id="project-select-list"
+            class="project-select-list"
+            role="listbox"
+            aria-labelledby="project-select-trigger"
+          >
+            @for (project of displayProjects(); track project.id) {
+              <li
+                role="option"
+                [id]="'project-option-' + project.id"
+                [attr.aria-selected]="project.id === projectSession.activeId() ? 'true' : 'false'"
+                [class.is-active]="project.id === projectSession.activeId()"
+                [class.is-highlighted]="project.id === highlightedProjectId()"
+                (click)="onProjectOptionSelect(project.id)"
+              >
+                {{ project.name }}
+              </li>
+            }
+          </ul>
+        }
       } @else {
-        <select
-          id="project-select"
+        <button
+          type="button"
+          id="project-select-trigger"
+          class="project-select-trigger"
           disabled
           [attr.aria-busy]="projectSession.bootstrapped() ? null : 'true'"
+          aria-haspopup="listbox"
+          aria-expanded="false"
         >
-          <option value="">…</option>
-        </select>
+          …
+        </button>
       }
       @if (projectSession.error()) {
         <span class="project-error" role="alert">{{ projectSession.error() }}</span>
