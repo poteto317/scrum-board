@@ -136,7 +136,24 @@ func (h handler) prepareReplaceSprintItems(
 			return nil, false
 		}
 	}
-	var err error
+	visible, err := h.filterSprintItems(ctx, existing.Items, userPtr)
+	if err != nil {
+		fail(w, err)
+		return nil, false
+	}
+	submitted := map[int64]struct{}{}
+	for _, id := range itemIDs {
+		submitted[id] = struct{}{}
+	}
+	var removedVisible []int64
+	for _, it := range visible {
+		if _, ok := submitted[it.ID]; !ok {
+			removedVisible = append(removedVisible, it.ID)
+		}
+	}
+	if !h.requireEditOnItemIDs(w, r, removedVisible) {
+		return nil, false
+	}
 	retainIDs, err = h.invisibleSprintMemberIDs(ctx, existing.Items, userPtr)
 	if err != nil {
 		fail(w, err)
