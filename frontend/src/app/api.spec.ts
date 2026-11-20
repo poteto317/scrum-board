@@ -259,6 +259,107 @@ describe('Api', () => {
     expect(removed.request.method).toBe('DELETE');
     removed.flush(null);
   });
+  it('lists and mutates sprints with projectId query and velocity tri-state', () => {
+    api.listSprints(3).subscribe();
+    const list = http.expectOne('/api/sprints?projectId=3');
+    expect(list.request.method).toBe('GET');
+    list.flush({ sprints: [] });
+
+    api
+      .createSprint({
+        name: 'Sprint 1',
+        startDate: '2026-11-21',
+        endDate: '2026-12-04',
+        projectId: 3,
+      })
+      .subscribe();
+    const created = http.expectOne('/api/sprints');
+    expect(created.request.method).toBe('POST');
+    expect(created.request.body).toEqual({
+      name: 'Sprint 1',
+      startDate: '2026-11-21',
+      endDate: '2026-12-04',
+      projectId: 3,
+    });
+    created.flush({
+      id: 1,
+      projectId: 3,
+      name: 'Sprint 1',
+      goal: '',
+      startDate: '2026-11-21',
+      endDate: '2026-12-04',
+      status: 'planned',
+      velocity: null,
+      suggestedVelocity: 0,
+      itemCount: 0,
+      items: [],
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    api.getSprint(1, 3).subscribe();
+    const got = http.expectOne('/api/sprints/1?projectId=3');
+    expect(got.request.method).toBe('GET');
+    got.flush({
+      id: 1,
+      projectId: 3,
+      name: 'Sprint 1',
+      goal: '',
+      startDate: '2026-11-21',
+      endDate: '2026-12-04',
+      status: 'completed',
+      velocity: 4,
+      suggestedVelocity: 2,
+      itemCount: 2,
+      items: [],
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    api.patchSprint(1, { goal: 'g' }).subscribe();
+    const omitVelocity = http.expectOne('/api/sprints/1');
+    expect(omitVelocity.request.method).toBe('PATCH');
+    expect(omitVelocity.request.body).toEqual({ goal: 'g' });
+    expect(Object.prototype.hasOwnProperty.call(omitVelocity.request.body, 'velocity')).toBe(false);
+    omitVelocity.flush({ id: 1, goal: 'g' });
+
+    api.patchSprint(1, { velocity: null }, 3).subscribe();
+    const clearVelocity = http.expectOne('/api/sprints/1?projectId=3');
+    expect(clearVelocity.request.body).toEqual({ velocity: null });
+    clearVelocity.flush({ id: 1, velocity: null });
+
+    api.patchSprint(1, { velocity: 5 }).subscribe();
+    const setVelocity = http.expectOne('/api/sprints/1');
+    expect(setVelocity.request.body).toEqual({ velocity: 5 });
+    setVelocity.flush({ id: 1, velocity: 5 });
+
+    api.replaceSprintItems(1, [10, 11], 3).subscribe();
+    const putItems = http.expectOne('/api/sprints/1/items?projectId=3');
+    expect(putItems.request.method).toBe('PUT');
+    expect(putItems.request.body).toEqual({ itemIds: [10, 11] });
+    putItems.flush({ id: 1, items: [] });
+
+    api.activateSprint(1).subscribe();
+    const activate = http.expectOne('/api/sprints/1/activate');
+    expect(activate.request.method).toBe('POST');
+    activate.flush({ id: 1, status: 'active' });
+
+    api.completeSprint(1, 5, 3).subscribe();
+    const complete = http.expectOne('/api/sprints/1/complete?projectId=3');
+    expect(complete.request.method).toBe('POST');
+    expect(complete.request.body).toEqual({ velocity: 5 });
+    complete.flush({ id: 1, status: 'completed', velocity: 5 });
+
+    api.completeSprint(1).subscribe();
+    const completeOmit = http.expectOne('/api/sprints/1/complete');
+    expect(completeOmit.request.body).toEqual({});
+    completeOmit.flush({ id: 1, status: 'completed' });
+
+    api.deleteSprint(1, 3).subscribe();
+    const removed = http.expectOne('/api/sprints/1?projectId=3');
+    expect(removed.request.method).toBe('DELETE');
+    removed.flush(null);
+  });
   it('gets and puts header menu', () => {
     api.headerMenu().subscribe();
     http.expectOne('/api/header-menu').flush({

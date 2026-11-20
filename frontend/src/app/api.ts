@@ -16,6 +16,9 @@ import {
   Column,
   HistoryPage,
   Project,
+  Sprint,
+  SprintPatch,
+  SprintSummary,
   normalizeComment,
 } from './models';
 import { map } from 'rxjs';
@@ -204,6 +207,75 @@ export class Api {
   }
   deleteItem(id: number) {
     return this.http.delete<void>(`/api/items/${id}`);
+  }
+  listSprints(projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<{ sprints: SprintSummary[] }>('/api/sprints', params ? { params } : {});
+  }
+  createSprint(input: {
+    name: string;
+    goal?: string;
+    startDate: string;
+    endDate: string;
+    projectId?: number;
+  }) {
+    const body: {
+      name: string;
+      goal?: string;
+      startDate: string;
+      endDate: string;
+      projectId?: number;
+    } = {
+      name: input.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    };
+    if (input.goal !== undefined) body.goal = input.goal;
+    if (input.projectId !== undefined && input.projectId > 0) body.projectId = input.projectId;
+    return this.http.post<Sprint>('/api/sprints', body);
+  }
+  getSprint(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<Sprint>(`/api/sprints/${id}`, params ? { params } : {});
+  }
+  patchSprint(id: number, patch: SprintPatch, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    const body: Record<string, unknown> = {};
+    if (patch.name !== undefined) body['name'] = patch.name;
+    if (patch.goal !== undefined) body['goal'] = patch.goal;
+    if (patch.startDate !== undefined) body['startDate'] = patch.startDate;
+    if (patch.endDate !== undefined) body['endDate'] = patch.endDate;
+    if (patch.velocity !== undefined) body['velocity'] = patch.velocity;
+    return this.http.patch<Sprint>(`/api/sprints/${id}`, body, params ? { params } : {});
+  }
+  deleteSprint(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(`/api/sprints/${id}`, params ? { params } : {});
+  }
+  replaceSprintItems(id: number, itemIds: number[], projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.put<Sprint>(
+      `/api/sprints/${id}/items`,
+      { itemIds },
+      params ? { params } : {},
+    );
+  }
+  activateSprint(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.post<Sprint>(
+      `/api/sprints/${id}/activate`,
+      {},
+      params ? { params } : {},
+    );
+  }
+  completeSprint(id: number, velocity?: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    const body = velocity !== undefined ? { velocity } : {};
+    return this.http.post<Sprint>(
+      `/api/sprints/${id}/complete`,
+      body,
+      params ? { params } : {},
+    );
   }
   listTrash(projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
