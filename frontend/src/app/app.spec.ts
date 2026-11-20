@@ -245,13 +245,16 @@ describe('App project switcher', () => {
     expect(projectOptionLabels(f)).toEqual(['三', 'メイン', '次']);
   });
 
-  it('opens the list below the trigger', () => {
+  it('opens the list below the trigger', async () => {
     const { f } = setup();
     openProjectMenu(f);
     const panel = f.nativeElement.querySelector('#project-select-list') as HTMLElement;
     expect(panel).toBeTruthy();
     expect(getComputedStyle(panel).top).toBe('100%');
     expect(getComputedStyle(panel).position).toBe('absolute');
+    await Promise.resolve();
+    f.detectChanges();
+    expect(panel.style.maxHeight).toMatch(/^\d+px$/);
   });
 
   it('moves highlight with arrows and selects with Enter', () => {

@@ -138,12 +138,12 @@ export class App implements OnInit {
   }
 
   onProjectTriggerKeydown(event: KeyboardEvent) {
-    if (event.repeat) {
-      event.preventDefault();
-      return;
-    }
     if (this.projectMenuOpen()) {
       this.onProjectListKeydown(event);
+      return;
+    }
+    if (event.repeat) {
+      event.preventDefault();
       return;
     }
     if (event.key === 'ArrowUp') {
@@ -158,22 +158,30 @@ export class App implements OnInit {
 
   onProjectListKeydown(event: KeyboardEvent) {
     if (!this.projectMenuOpen()) return;
-    if (event.repeat) {
-      event.preventDefault();
-      return;
-    }
     const list = this.displayProjects();
     if (event.key === 'Escape') {
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       this.closeProjectMenu(true);
       return;
     }
     if (event.key === ' ') {
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       this.closeProjectMenu(true);
       return;
     }
     if (event.key === 'Enter') {
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       const id = this.highlightedProjectId();
       if (id != null) this.onProjectOptionSelect(id);
@@ -186,8 +194,18 @@ export class App implements OnInit {
         this.highlightedProjectId(),
         event.key === 'ArrowDown' ? 'down' : 'up',
       );
-      if (next != null) this.highlightedProjectId.set(next);
+      if (next != null) {
+        this.highlightedProjectId.set(next);
+        queueMicrotask(() => this.scrollHighlightedOptionIntoView(next));
+      }
     }
+  }
+
+  private scrollHighlightedOptionIntoView(id: number) {
+    const option = this.projectSelectListRef()?.nativeElement.querySelector(
+      `#project-option-${id}`,
+    ) as HTMLElement | null;
+    option?.scrollIntoView({ block: 'nearest' });
   }
 
   onProjectOptionSelect(id: number) {
