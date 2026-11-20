@@ -33,7 +33,7 @@ AskUserQuestion をこのセッションでは使わず、以下の推奨案を�
 | アクティブ化 | `POST .../activate`。`planned`→`active` のみ。別の active がある場合は 409 |
 | UI | `/sprints` 一覧＋`/sprints/:id` 詳細。サイドバーに「スプリント」。ボード／バックログのカード面へのバッジは初版対象外 |
 | 削除 | planned / active のみ削除可（メンバー紐付けも CASCADE 削除）。completed は削除不可（履歴保持）。ハード削除のみ |
-| プロジェクト削除 | 既存どおり生存アイテム 0 件が必要。加えて **スプリントが 0 件**であること（`sprints.project_id` RESTRICT）。スプリント付きプロジェクトは先にスプリント削除が必要 |
+| プロジェクト削除 | 既存どおり生存アイテム 0 件が必要。アイテム 0 件なら残スプリント（completed 含む）をプロジェクト削除と同一 TX で自動削除 |
 | ソフト削除 | アイテム soft delete 成功時、当該 `item_id` の **すべての** `sprint_items` 行を削除する（完了済み含む）。hard delete は FK CASCADE |
 | プロジェクト移動 | `PATCH` でアイテムの `projectId` が変わったとき、当該 `item_id` の **すべての** `sprint_items` を削除する（完了済み履歴も外す。初版は履歴残しをしない） |
 | アクティブ表示 | `board_settings` にスプリント ID は持たない。一覧・詳細は解決後アクティブ **プロジェクト** のスプリントだけ |

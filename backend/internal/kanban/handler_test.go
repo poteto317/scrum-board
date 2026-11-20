@@ -733,9 +733,15 @@ func (m *memoryRepo) DeleteProject(_ context.Context, id int64) error {
 			n++
 		}
 	}
-	sprintCount, _ := m.CountSprintsForProject(context.Background(), id)
-	if n > 0 || sprintCount > 0 || len(m.projects) <= 1 {
+	if n > 0 || len(m.projects) <= 1 {
 		return ErrProjectConflict
+	}
+	m.ensureSprints()
+	for sid, s := range m.sprints {
+		if s.ProjectID == id {
+			delete(m.sprints, sid)
+			delete(m.sprintItems, sid)
+		}
 	}
 	next := make([]Project, 0, len(m.projects)-1)
 	for _, p := range m.projects {
