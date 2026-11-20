@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { App } from './app';
 import { FavoritesSession } from './favorites-session';
+import { Column, Item } from './models';
+import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
 import { SIDEBAR_COLLAPSED_KEY } from './sidebar-collapse-storage';
 
@@ -60,7 +62,7 @@ function openProjectMenu(f: { detectChanges: () => void; nativeElement: HTMLElem
 
 function projectOptionLabels(f: { nativeElement: HTMLElement }): string[] {
   return Array.from(
-    f.nativeElement.querySelectorAll('#project-select-list [role="option"]'),
+    f.nativeElement.querySelectorAll('#project-select-list [role="option"] .project-option-name'),
   ).map((el) => (el.textContent ?? '').trim());
 }
 
@@ -335,9 +337,86 @@ describe('App project switcher', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
     const list = f.nativeElement.querySelector('#project-select-list');
     expect(list?.getAttribute('role')).toBe('listbox');
-    expect(list?.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim()).toBe(
-      'メイン',
+    expect(
+      list?.querySelector('[role="option"][aria-selected="true"] .project-option-name')
+        ?.textContent?.trim(),
+    ).toBe('メイン');
+  });
+
+  const statusColumns: Column[] = [
+    { id: 1, name: 'Todo', position: 0 },
+    { id: 2, name: 'Doing', position: 1 },
+    { id: 9, name: 'Review', position: 2 },
+  ];
+
+  function cacheItem(id: number, projectId: number, columnId: number): Item {
+    return {
+      id,
+      number: id,
+      projectId,
+      columnId,
+      title: `t${id}`,
+      description: '',
+      position: 0,
+      backlogPosition: 0,
+      offsetY: 0,
+      prUrls: [],
+      relatedItems: [],
+      assignee: '',
+      closeReason: '',
+      solution: '',
+      favorite: false,
+      dueAt: null,
+      createdAt: '',
+      updatedAt: '',
+    };
+  }
+
+  it('shows Doing and Review status dots from the board cache (L-060)', () => {
+    const { f } = setup();
+    const cache = TestBed.inject(ProjectBoardCache);
+    cache.putBoard(
+      2,
+      [cacheItem(10, 2, 2), cacheItem(11, 2, 9)],
+      statusColumns,
     );
+    openProjectMenu(f);
+    const option = f.nativeElement.querySelector('#project-option-2') as HTMLElement;
+    expect(option.getAttribute('aria-label')).toBe('次, Doing と Review');
+    expect(option.querySelector('.doing .status-dot')).toBeTruthy();
+    expect(option.querySelector('.review .status-dot')).toBeTruthy();
+    const cold = f.nativeElement.querySelector('#project-option-1') as HTMLElement;
+    expect(cold.getAttribute('aria-label')).toBe('メイン');
+    expect(cold.querySelector('.status-dot')).toBeNull();
+  });
+
+  it('fills status dots after prefetch while the menu stays open', () => {
+    const { f } = setup();
+    openProjectMenu(f);
+    const option = f.nativeElement.querySelector('#project-option-2') as HTMLElement;
+    expect(option.querySelector('.status-dot')).toBeNull();
+    TestBed.inject(ProjectBoardCache).putBoard(
+      2,
+      [cacheItem(10, 2, 2)],
+      statusColumns,
+    );
+    f.detectChanges();
+    expect(option.getAttribute('aria-label')).toBe('次, Doing');
+    expect(option.querySelector('.doing .status-dot')).toBeTruthy();
+  });
+
+  it('shows Todo fallback without .todo wrapper class', () => {
+    const { f } = setup();
+    TestBed.inject(ProjectBoardCache).putBoard(
+      2,
+      [cacheItem(10, 2, 1)],
+      statusColumns,
+    );
+    openProjectMenu(f);
+    const option = f.nativeElement.querySelector('#project-option-2') as HTMLElement;
+    expect(option.getAttribute('aria-label')).toBe('次, Todo');
+    expect(option.querySelector('.todo')).toBeNull();
+    expect(option.querySelector('.project-status-dots > .status-dot')).toBeTruthy();
   });
 
   function withDialogPolyfill(f: ReturnType<typeof setup>['f'], run: () => void) {
