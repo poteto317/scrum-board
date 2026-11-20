@@ -45,20 +45,23 @@ func TestHeaderMenuMySQLPutGet(t *testing.T) {
 	ctx := context.Background()
 	out, err := repo.PutHeaderMenu(ctx, WorkspaceHeaderMenu{
 		Board:      PageHeaderMenu{HiddenIDs: []string{}},
-		Backlog:    PageHeaderMenu{HiddenIDs: []string{"project_delete", "project_delete"}},
+		Backlog:    PageHeaderMenu{HiddenIDs: []string{"open_trash", "open_trash"}},
 		ItemDetail: PageHeaderMenu{HiddenIDs: []string{"item_favorite"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Backlog.HiddenIDs) != 1 || out.Backlog.HiddenIDs[0] != "project_delete" {
+	if len(out.Backlog.HiddenIDs) != 1 || out.Backlog.HiddenIDs[0] != "open_trash" {
 		t.Fatalf("deduped put %+v", out.Backlog)
 	}
 	got, err := repo.GetHeaderMenu(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Backlog.HiddenIDs) != 1 || len(got.ItemDetail.HiddenIDs) != 1 {
-		t.Fatalf("get %+v", got)
+	if len(got.Backlog.HiddenIDs) != 1 || got.Backlog.HiddenIDs[0] != "open_trash" {
+		t.Fatalf("get backlog %+v", got.Backlog)
+	}
+	if len(got.ItemDetail.HiddenIDs) != 1 || got.ItemDetail.HiddenIDs[0] != "item_favorite" {
+		t.Fatalf("get itemDetail %+v", got.ItemDetail)
 	}
 }

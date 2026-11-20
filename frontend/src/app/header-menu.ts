@@ -1,9 +1,7 @@
 export type PageKind = 'board' | 'backlog' | 'itemDetail';
 
 export type HeaderMenuItemId =
-  | 'project_add'
-  | 'project_rename'
-  | 'project_delete'
+  | 'open_projects'
   | 'open_trash'
   | 'open_users'
   | 'open_recurring'
@@ -27,9 +25,7 @@ export type MenuCatalogEntry = {
 };
 
 export const HEADER_MENU_CATALOG: readonly MenuCatalogEntry[] = [
-  { id: 'project_add', label: 'プロジェクトを追加', pageKinds: ['board', 'backlog'] },
-  { id: 'project_rename', label: '名称変更', pageKinds: ['board', 'backlog'] },
-  { id: 'project_delete', label: '削除', pageKinds: ['board', 'backlog'] },
+  { id: 'open_projects', label: 'プロジェクト', pageKinds: ['board', 'backlog', 'itemDetail'] },
   { id: 'open_trash', label: 'ゴミ箱', pageKinds: ['board', 'backlog', 'itemDetail'] },
   { id: 'open_users', label: 'ユーザー', pageKinds: ['board', 'backlog', 'itemDetail'] },
   { id: 'open_recurring', label: '繰り返し', pageKinds: ['board', 'backlog', 'itemDetail'] },
@@ -62,6 +58,7 @@ export function resolvePageKind(url: string): PageKind | null {
   if (
     normalized === '/trash' ||
     normalized === '/users' ||
+    normalized === '/projects' ||
     normalized === '/recurring' ||
     normalized === '/settings' ||
     normalized === '/login'
@@ -118,32 +115,6 @@ export function pagePrefsEqual(a: HeaderMenuPagePrefs, b: HeaderMenuPagePrefs): 
   return a.hiddenIds.every((id, i) => id === b.hiddenIds[i]);
 }
 
-export type ProjectMenuDisabledState = {
-  switching: boolean;
-  mutating: boolean;
-  saving: boolean;
-  modalOpen: boolean;
-  canRename: boolean;
-  canDelete: boolean;
-};
-
-/** Pure disabled rules for project_* menu items (same as former header buttons). */
-export function projectMenuActionDisabled(
-  id: HeaderMenuItemId,
-  state: ProjectMenuDisabledState,
-): boolean {
-  if (id === 'project_add') {
-    return state.switching || state.mutating || state.saving || state.modalOpen;
-  }
-  if (id === 'project_rename') {
-    return !state.canRename || state.modalOpen || state.saving;
-  }
-  if (id === 'project_delete') {
-    return !state.canDelete || state.modalOpen || state.saving;
-  }
-  return false;
-}
-
 export function catalogLabel(
   id: HeaderMenuItemId,
   pageKind: PageKind | null,
@@ -155,4 +126,3 @@ export function catalogLabel(
   const kind = pageKind ?? 'board';
   return catalogForPageKind(kind).find((e) => e.id === id)?.label ?? id;
 }
-

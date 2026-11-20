@@ -34,11 +34,11 @@ describe('HeaderMenuSession', () => {
   it('loads all pageKinds into drafts', () => {
     session.load();
     http.expectOne('/api/header-menu').flush({
-      board: { hiddenIds: ['project_delete'] },
+      board: { hiddenIds: ['open_trash'] },
       backlog: { hiddenIds: [] },
       itemDetail: { hiddenIds: ['item_history'] },
     });
-    expect(session.pagePrefs('board').hiddenIds).toEqual(['project_delete']);
+    expect(session.pagePrefs('board').hiddenIds).toEqual(['open_trash']);
     expect(session.pagePrefs('itemDetail').hiddenIds).toEqual(['item_history']);
     expect(session.loadError()).toBe('');
   });
@@ -54,12 +54,12 @@ describe('HeaderMenuSession', () => {
     vi.useFakeTimers();
     session.load();
     http.expectOne('/api/header-menu').flush(emptyWs);
-    session.setHidden('board', 'project_add', true);
+    session.setHidden('board', 'open_projects', true);
     await vi.advanceTimersByTimeAsync(300);
     const req = http.expectOne('/api/header-menu');
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({
-      board: { hiddenIds: ['project_add'] },
+      board: { hiddenIds: ['open_projects'] },
       backlog: { hiddenIds: [] },
       itemDetail: { hiddenIds: [] },
     });
@@ -68,7 +68,7 @@ describe('HeaderMenuSession', () => {
 
   it('does not PUT before hydrate', async () => {
     vi.useFakeTimers();
-    session.setHidden('board', 'project_add', true);
+    session.setHidden('board', 'open_projects', true);
     await vi.advanceTimersByTimeAsync(300);
     http.expectNone('/api/header-menu');
   });
@@ -92,50 +92,50 @@ describe('HeaderMenuSession', () => {
 
   it('keeps dirty board draft when reloading', () => {
     vi.useFakeTimers();
-    session.setHidden('board', 'project_rename', true);
+    session.setHidden('board', 'open_users', true);
     session.load();
     http.expectOne('/api/header-menu').flush({
       board: { hiddenIds: [] },
-      backlog: { hiddenIds: ['project_delete'] },
+      backlog: { hiddenIds: ['open_trash'] },
       itemDetail: { hiddenIds: [] },
     });
-    expect(session.pagePrefs('board').hiddenIds).toEqual(['project_rename']);
-    expect(session.pagePrefs('backlog').hiddenIds).toEqual(['project_delete']);
+    expect(session.pagePrefs('board').hiddenIds).toEqual(['open_users']);
+    expect(session.pagePrefs('backlog').hiddenIds).toEqual(['open_trash']);
   });
 
   it('ignores stale GET after local edits', () => {
     session.load();
     const req = http.expectOne('/api/header-menu');
-    session.setHidden('backlog', 'project_add', true);
+    session.setHidden('backlog', 'open_projects', true);
     req.flush(emptyWs);
-    expect(session.pagePrefs('backlog').hiddenIds).toEqual(['project_add']);
+    expect(session.pagePrefs('backlog').hiddenIds).toEqual(['open_projects']);
   });
 
   it('in-flight PUT does not rewind newer draft', async () => {
     vi.useFakeTimers();
     session.load();
     http.expectOne('/api/header-menu').flush(emptyWs);
-    session.setHidden('board', 'project_add', true);
+    session.setHidden('board', 'open_projects', true);
     await vi.advanceTimersByTimeAsync(300);
     const first = http.expectOne('/api/header-menu');
-    session.setHidden('board', 'project_delete', true);
+    session.setHidden('board', 'open_trash', true);
     await vi.advanceTimersByTimeAsync(300);
     const second = http.expectOne('/api/header-menu');
     first.flush({
-      board: { hiddenIds: ['project_add'] },
+      board: { hiddenIds: ['open_projects'] },
       backlog: emptyWs.backlog,
       itemDetail: emptyWs.itemDetail,
     });
-    expect(session.pagePrefs('board').hiddenIds).toContain('project_delete');
+    expect(session.pagePrefs('board').hiddenIds).toContain('open_trash');
     second.flush({
-      board: { hiddenIds: ['project_add', 'project_delete'] },
+      board: { hiddenIds: ['open_projects', 'open_trash'] },
       backlog: emptyWs.backlog,
       itemDetail: emptyWs.itemDetail,
     });
   });
 
   it('retryLoad forces GET even when dirty', () => {
-    session.setHidden('board', 'project_add', true);
+    session.setHidden('board', 'open_projects', true);
     session.retryLoad();
     http.expectOne('/api/header-menu').flush({
       board: { hiddenIds: [] },

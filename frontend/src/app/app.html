@@ -85,17 +85,7 @@
       >{{ auth.user()?.displayName || 'Personal workspace' }}
       <span class="avatar" aria-label="個人用">S</span></span
     >
-    <app-header-menu
-      [projectSwitching]="projectSession.switching()"
-      [projectMutating]="projectSession.mutating()"
-      [projectCanRename]="projectSession.canRename()"
-      [projectCanDelete]="projectSession.canDelete()"
-      [projectSaving]="saving()"
-      [projectModalOpen]="projectModalOpen()"
-      (addProject)="addProject()"
-      (renameProject)="renameProject()"
-      (deleteProject)="deleteProject()"
-    />
+    <app-header-menu [projectSwitching]="projectSession.switching()" />
   </header>
   @if (auth.loadError()) {
     <div class="state-panel" role="alert">{{ auth.loadError() }}</div>
