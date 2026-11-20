@@ -36,10 +36,8 @@ func (r MySQLRepository) ReorderProjects(ctx context.Context, projectIDs []int64
 	return projects, nil
 }
 
-func lockProjectRows(ctx context.Context, q interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}) ([]Project, error) {
-	return queryProjects(ctx, q, `SELECT id, name, position, created_at, updated_at FROM projects ORDER BY id FOR UPDATE`)
+func lockProjectRows(ctx context.Context, tx *sql.Tx) ([]Project, error) {
+	return queryProjects(ctx, tx, `SELECT id, name, position, created_at, updated_at FROM projects ORDER BY id FOR UPDATE`)
 }
 
 func sameProjectIDSet(existing []Project, requested []int64) bool {
