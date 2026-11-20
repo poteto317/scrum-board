@@ -433,11 +433,6 @@ dialog.modal-backdrop::backdrop {
 .task-card.cdk-drag-animating {
   transition: transform 200ms ease;
 }
-.task-card:hover {
-  transform: translateY(-2px);
-  border-color: #a2b5a2;
-  box-shadow: 0 5px 12px #2533210a;
-}
 .task-card-body {
   flex: 1;
   min-width: 0;
