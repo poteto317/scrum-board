@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import type { ItemDetail } from './item-detail';
 import type { ItemSolution } from './item-solution';
+import type { SprintDetail } from './sprint-detail';
 import { authGuard, guestGuard } from './auth.guard';
 export const routes: Routes = [
   {
@@ -13,6 +14,17 @@ export const routes: Routes = [
     path: 'backlog',
     loadComponent: () => import('./backlog').then((m) => m.Backlog),
     canActivate: [authGuard],
+  },
+  {
+    path: 'sprints',
+    loadComponent: () => import('./sprints').then((m) => m.Sprints),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'sprints/:id',
+    loadComponent: () => import('./sprint-detail').then((m) => m.SprintDetail),
+    canActivate: [authGuard],
+    canDeactivate: [(component: SprintDetail) => component.canLeave()],
   },
   {
     path: 'trash',

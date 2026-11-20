@@ -644,6 +644,7 @@ describe('App project switcher', () => {
     expect(links).toEqual([
       { href: '/', text: 'ボード' },
       { href: '/backlog', text: 'バックログ' },
+      { href: '/sprints', text: 'スプリント' },
     ]);
     expect(f.nativeElement.querySelector('header .app-nav')).toBeNull();
     expect(sidebar.querySelector('.sidebar-empty')?.textContent?.trim()).toBe('なし');
@@ -731,7 +732,11 @@ describe('App sidebar collapse', () => {
     expect(document.activeElement).toBe(toggle());
 
     const navLinks = [...sidebar().querySelectorAll('.app-nav a')] as HTMLAnchorElement[];
-    expect(navLinks.map((a) => a.getAttribute('aria-label'))).toEqual(['ボード', 'バックログ']);
+    expect(navLinks.map((a) => a.getAttribute('aria-label'))).toEqual([
+      'ボード',
+      'バックログ',
+      'スプリント',
+    ]);
     expect(navLinks.every((a) => a.querySelector('.nav-label') == null)).toBe(true);
     expect(navLinks.every((a) => (a.textContent ?? '').trim() === '')).toBe(true);
 
