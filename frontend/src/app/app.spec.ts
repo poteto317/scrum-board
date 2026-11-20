@@ -49,6 +49,32 @@ function clickHeaderMenuItem(
   f.detectChanges();
 }
 
+function projectTrigger(f: { nativeElement: HTMLElement }): HTMLButtonElement {
+  return f.nativeElement.querySelector('#project-select-trigger') as HTMLButtonElement;
+}
+
+function openProjectMenu(f: { detectChanges: () => void; nativeElement: HTMLElement }) {
+  projectTrigger(f).click();
+  f.detectChanges();
+}
+
+function projectOptionLabels(f: { nativeElement: HTMLElement }): string[] {
+  return Array.from(
+    f.nativeElement.querySelectorAll('#project-select-list [role="option"]'),
+  ).map((el) => (el.textContent ?? '').trim());
+}
+
+function selectProjectOption(
+  f: { detectChanges: () => void; nativeElement: HTMLElement },
+  id: number,
+) {
+  openProjectMenu(f);
+  (
+    f.nativeElement.querySelector(`#project-option-${id}`) as HTMLElement | null
+  )?.click();
+  f.detectChanges();
+}
+
 function setupApp(extra: Record<string, unknown> = {}, routerRoutes: Routes = []) {
   const api = {
     me: vi.fn(() =>
@@ -93,11 +119,12 @@ describe('App project switcher', () => {
 
   it('loads projects into the header select', () => {
     const { f, session } = setup();
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    const trigger = projectTrigger(f);
     expect(session.activeId()).toBe(1);
     expect(session.bootstrapped()).toBe(true);
-    expect(select.value).toBe('1');
-    expect(Array.from(select.options).map((option) => option.text)).toEqual(['メイン', '次']);
+    expect(trigger.textContent?.trim()).toBe('メイン');
+    openProjectMenu(f);
+    expect(projectOptionLabels(f)).toEqual(['メイン', '次']);
     expect(f.nativeElement.querySelector('.workspace-name')).toBeNull();
   });
 
@@ -113,9 +140,9 @@ describe('App project switcher', () => {
       board: () => pendingBoard.asObservable(),
     });
     expect(session.bootstrapped()).toBe(false);
-    const loading = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    const loading = projectTrigger(f);
     expect(loading.disabled).toBe(true);
-    expect(loading.options[0]?.textContent?.trim()).toBe('…');
+    expect(loading.textContent?.trim()).toBe('…');
     pendingProjects.next({ projects });
     pendingBoard.next({
       columns: [],
@@ -127,10 +154,11 @@ describe('App project switcher', () => {
     f.detectChanges();
     expect(session.bootstrapped()).toBe(true);
     expect(session.activeId()).toBe(2);
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
-    expect(select.disabled).toBe(false);
-    expect(select.value).toBe('2');
-    expect(Array.from(select.options).map((o) => o.text)).toEqual(['メイン', '次']);
+    const trigger = projectTrigger(f);
+    expect(trigger.disabled).toBe(false);
+    expect(trigger.textContent?.trim()).toBe('次');
+    openProjectMenu(f);
+    expect(projectOptionLabels(f)).toEqual(['次', 'メイン']);
   });
 
   it('keeps the app header sticky above content but below dialogs', () => {
@@ -153,26 +181,23 @@ describe('App project switcher', () => {
 
   it('updates the select after a successful switch when no board is mounted', () => {
     const { f, api, session } = setup();
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
-    select.value = '2';
-    select.dispatchEvent(new Event('change'));
-    f.detectChanges();
+    selectProjectOption(f, 2);
     expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
     expect(session.activeId()).toBe(2);
     expect(session.switching()).toBe(false);
-    expect(select.value).toBe('2');
+    expect(projectTrigger(f).textContent?.trim()).toBe('次');
   });
 
   it('prefetches other projects on select focus and pointerdown', () => {
     const { f, api, session } = setup();
     session.activeId.set(1);
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    const trigger = projectTrigger(f);
     api.board.mockClear();
-    select.dispatchEvent(new Event('focus'));
+    trigger.dispatchEvent(new Event('focus'));
     expect(api.board).toHaveBeenCalledWith(2);
     expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
     api.board.mockClear();
-    select.dispatchEvent(new Event('pointerdown'));
+    trigger.dispatchEvent(new Event('pointerdown'));
     // warm after first prefetch — no new unscoped board() calls
     expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
   });
@@ -180,10 +205,10 @@ describe('App project switcher', () => {
   it('does not prefetch while switching', () => {
     const { f, api, session } = setup();
     session.switching.set(true);
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    const trigger = projectTrigger(f);
     api.board.mockClear();
-    select.dispatchEvent(new Event('focus'));
-    select.dispatchEvent(new Event('pointerdown'));
+    trigger.dispatchEvent(new Event('focus'));
+    trigger.dispatchEvent(new Event('pointerdown'));
     expect(api.board).not.toHaveBeenCalled();
   });
 
@@ -191,14 +216,125 @@ describe('App project switcher', () => {
     const { f, session } = setup({
       patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
     });
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
-    select.value = '2';
-    select.dispatchEvent(new Event('change'));
-    f.detectChanges();
+    selectProjectOption(f, 2);
     expect(session.activeId()).toBe(1);
     expect(session.switching()).toBe(false);
-    expect(select.value).toBe('1');
+    expect(projectTrigger(f).textContent?.trim()).toBe('メイン');
     expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('切替失敗');
+  });
+
+  it('lists the active project first even when it is last by position', () => {
+    const { f, session } = setup({
+      listProjects: () =>
+        of({
+          projects: [
+            { id: 1, name: 'メイン', position: 0 },
+            { id: 2, name: '次', position: 1 },
+            { id: 3, name: '三', position: 2 },
+          ],
+        }),
+      board: () =>
+        of({
+          columns: [],
+          items: [],
+          settings: { cardLayout: 'pack', activeProjectId: 3 },
+        }),
+    });
+    expect(session.activeId()).toBe(3);
+    openProjectMenu(f);
+    expect(projectOptionLabels(f)).toEqual(['三', 'メイン', '次']);
+  });
+
+  it('opens the list below the trigger', () => {
+    const { f } = setup();
+    openProjectMenu(f);
+    const panel = f.nativeElement.querySelector('#project-select-list') as HTMLElement;
+    expect(panel).toBeTruthy();
+    expect(getComputedStyle(panel).top).toBe('100%');
+    expect(getComputedStyle(panel).position).toBe('absolute');
+  });
+
+  it('moves highlight with arrows and selects with Enter', () => {
+    const { f, api } = setup();
+    openProjectMenu(f);
+    const trigger = projectTrigger(f);
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    f.detectChanges();
+    expect(
+      f.nativeElement.querySelector('#project-option-2')?.classList.contains('is-highlighted'),
+    ).toBe(true);
+    api.patchBoardSettings.mockClear();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    f.detectChanges();
+    expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeNull();
+  });
+
+  it('closes when activeId becomes null while open', () => {
+    const { f, session } = setup();
+    openProjectMenu(f);
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeTruthy();
+    session.activeId.set(null);
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeNull();
+  });
+
+  it('closes on Escape and restores focus to the trigger', async () => {
+    const { f } = setup();
+    const trigger = projectTrigger(f);
+    trigger.focus();
+    openProjectMenu(f);
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeTruthy();
+    f.componentInstance.onProjectMenuEscape();
+    f.detectChanges();
+    await Promise.resolve();
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeNull();
+    expect(document.activeElement).toBe(projectTrigger(f));
+  });
+
+  it('closes on outside mousedown without selecting', () => {
+    const { f, api } = setup();
+    openProjectMenu(f);
+    api.patchBoardSettings.mockClear();
+    f.componentInstance.onProjectMenuDocumentMouseDown(
+      new MouseEvent('mousedown', { bubbles: true }),
+    );
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeNull();
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+  });
+
+  it('does not open on ArrowUp while closed', () => {
+    const { f } = setup();
+    const trigger = projectTrigger(f);
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeNull();
+  });
+
+  it('closes on Space while open without switching', () => {
+    const { f, api } = setup();
+    openProjectMenu(f);
+    api.patchBoardSettings.mockClear();
+    const trigger = projectTrigger(f);
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeNull();
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+  });
+
+  it('exposes listbox ARIA on the trigger and options', () => {
+    const { f } = setup();
+    const trigger = projectTrigger(f);
+    expect(trigger.getAttribute('aria-haspopup')).toBe('listbox');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    openProjectMenu(f);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    const list = f.nativeElement.querySelector('#project-select-list');
+    expect(list?.getAttribute('role')).toBe('listbox');
+    expect(list?.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim()).toBe(
+      'メイン',
+    );
   });
 
   function withDialogPolyfill(f: ReturnType<typeof setup>['f'], run: () => void) {
@@ -238,9 +374,7 @@ describe('App project switcher', () => {
       );
       openHeaderMenu(f);
       expect(headerMenuItem(f, 'project_add')?.disabled).toBe(true);
-      expect((f.nativeElement.querySelector('#project-select') as HTMLSelectElement).disabled).toBe(
-        true,
-      );
+      expect(projectTrigger(f).disabled).toBe(true);
       expect(headerMenuItem(f, 'project_rename')?.disabled).toBe(true);
       expect(headerMenuItem(f, 'project_delete')?.disabled).toBe(true);
       f.componentInstance.projectForm.controls.name.setValue('下書き');
@@ -472,10 +606,7 @@ describe('App project switcher', () => {
     expect(favLink?.getAttribute('href')).toContain('/items/7');
     const favorites = TestBed.inject(FavoritesSession);
     const loadSpy = vi.spyOn(favorites, 'loadForActiveProject');
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
-    select.value = '2';
-    select.dispatchEvent(new Event('change'));
-    f.detectChanges();
+    selectProjectOption(f, 2);
     expect(session.activeId()).toBe(2);
     expect(loadSpy).toHaveBeenCalled();
     expect(api.board).toHaveBeenCalled();

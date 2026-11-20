@@ -1,4 +1,14 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  ElementRef,
+  HostListener,
+  inject,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -11,6 +21,12 @@ import { Modal } from './modal';
 import { HeaderMenuSession } from './header-menu-session';
 import { HeaderMenu } from './header-menu.component';
 import { ProjectBoardCache } from './project-board-cache';
+import { projectsForSelectDisplay } from './project-select-display';
+import {
+  canOpenProjectMenu,
+  moveProjectHighlight,
+  resolveHighlightedProjectId,
+} from './project-select-menu';
 import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
 import { readSidebarCollapsed, writeSidebarCollapsed } from './sidebar-collapse-storage';
 
@@ -30,6 +46,10 @@ export class App implements OnInit {
   readonly displayFavoriteTitle = displayFavoriteTitle;
   private readonly router = inject(Router);
   private readonly loginPath = signal(false);
+  private readonly projectSwitcherRef = viewChild<ElementRef<HTMLElement>>('projectSwitcher');
+  private readonly projectSelectTriggerRef =
+    viewChild<ElementRef<HTMLElement>>('projectSelectTrigger');
+  private readonly projectSelectListRef = viewChild<ElementRef<HTMLElement>>('projectSelectList');
   readonly showChrome = computed(() => {
     if (this.loginPath()) return false;
     const s = this.auth.status();
@@ -41,9 +61,42 @@ export class App implements OnInit {
   readonly saving = signal(false);
   /** Sidebar rail vs expanded. Read once from localStorage; showChrome changes do not re-read. */
   readonly collapsed = signal(readSidebarCollapsed());
+  readonly projectMenuOpen = signal(false);
+  readonly highlightedProjectId = signal<number | null>(null);
   readonly projectForm = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [textLimit(80, true)] }),
   });
+
+  readonly displayProjects = computed(() =>
+    projectsForSelectDisplay(this.projectSession.projects(), this.projectSession.activeId()),
+  );
+
+  readonly activeProjectName = computed(() => {
+    const id = this.projectSession.activeId();
+    return this.projectSession.projects().find((p) => p.id === id)?.name ?? '…';
+  });
+
+  constructor() {
+    effect(() => {
+      const open = this.projectMenuOpen();
+      const activeId = this.projectSession.activeId();
+      const projects = this.projectSession.projects();
+      if (!open) return;
+      const next = resolveHighlightedProjectId(
+        projectsForSelectDisplay(projects, activeId),
+        activeId,
+        this.highlightedProjectId(),
+      );
+      if (next == null) {
+        this.projectMenuOpen.set(false);
+        this.highlightedProjectId.set(null);
+        return;
+      }
+      if (next !== this.highlightedProjectId()) {
+        this.highlightedProjectId.set(next);
+      }
+    });
+  }
 
   toggleSidebar() {
     const next = !this.collapsed();
@@ -75,16 +128,128 @@ export class App implements OnInit {
     });
   }
 
-  onProjectChange(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    const id = Number(select.value);
+  onProjectTriggerClick(event: MouseEvent) {
+    event.preventDefault();
+    if (this.projectMenuOpen()) {
+      this.closeProjectMenu(false);
+      return;
+    }
+    this.openProjectMenu();
+  }
+
+  onProjectTriggerKeydown(event: KeyboardEvent) {
+    if (event.repeat) {
+      event.preventDefault();
+      return;
+    }
+    if (this.projectMenuOpen()) {
+      this.onProjectListKeydown(event);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.openProjectMenu();
+    }
+  }
+
+  onProjectListKeydown(event: KeyboardEvent) {
+    if (!this.projectMenuOpen()) return;
+    if (event.repeat) {
+      event.preventDefault();
+      return;
+    }
+    const list = this.displayProjects();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeProjectMenu(true);
+      return;
+    }
+    if (event.key === ' ') {
+      event.preventDefault();
+      this.closeProjectMenu(true);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const id = this.highlightedProjectId();
+      if (id != null) this.onProjectOptionSelect(id);
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const next = moveProjectHighlight(
+        list,
+        this.highlightedProjectId(),
+        event.key === 'ArrowDown' ? 'down' : 'up',
+      );
+      if (next != null) this.highlightedProjectId.set(next);
+    }
+  }
+
+  onProjectOptionSelect(id: number) {
     if (!Number.isFinite(id) || id <= 0) return;
+    this.closeProjectMenu(true);
+    if (id === this.projectSession.activeId()) return;
     this.projectSession.switchTo(id).subscribe({
       error: () => {
-        const current = this.projectSession.activeId();
-        select.value = current == null ? '' : String(current);
+        /* activeId restored inside switchTo; trigger text follows activeProjectName */
       },
     });
+  }
+
+  openProjectMenu() {
+    if (
+      !canOpenProjectMenu({
+        switching: this.projectSession.switching(),
+        modalOpen: this.projectModalOpen(),
+        saving: this.saving(),
+        activeId: this.projectSession.activeId(),
+        projectCount: this.projectSession.projects().length,
+      })
+    ) {
+      return;
+    }
+    const list = this.displayProjects();
+    this.highlightedProjectId.set(this.projectSession.activeId() ?? list[0]?.id ?? null);
+    this.projectMenuOpen.set(true);
+    queueMicrotask(() => this.applyProjectListMaxHeight());
+  }
+
+  private applyProjectListMaxHeight() {
+    const trigger = this.projectSelectTriggerRef()?.nativeElement;
+    const panel = this.projectSelectListRef()?.nativeElement;
+    if (!trigger || !panel) return;
+    const room = Math.max(80, window.innerHeight - trigger.getBoundingClientRect().bottom - 8);
+    panel.style.maxHeight = `${Math.min(280, room)}px`;
+  }
+
+  closeProjectMenu(restoreFocus: boolean) {
+    if (!this.projectMenuOpen()) return;
+    this.projectMenuOpen.set(false);
+    this.highlightedProjectId.set(null);
+    if (restoreFocus) {
+      queueMicrotask(() => {
+        this.projectSelectTriggerRef()?.nativeElement.focus();
+      });
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onProjectMenuEscape() {
+    if (this.projectMenuOpen()) this.closeProjectMenu(true);
+  }
+
+  @HostListener('document:mousedown', ['$event'])
+  onProjectMenuDocumentMouseDown(event: MouseEvent) {
+    if (!this.projectMenuOpen()) return;
+    const root = this.projectSwitcherRef()?.nativeElement;
+    if (!root?.contains(event.target as Node)) {
+      this.closeProjectMenu(false);
+    }
   }
 
   /** Prefetch other projects' board (and backlog on that route) into memory cache. */
