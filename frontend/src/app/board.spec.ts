@@ -1626,10 +1626,16 @@ describe('Board card reordering', () => {
     }
     expect(navigate).not.toHaveBeenCalled();
 
-    const plain = new MouseEvent('click', { cancelable: true });
+    const plain = new MouseEvent('click', { cancelable: true, detail: 1 });
     board.onItemClick(plain, card);
     expect(plain.defaultPrevented).toBe(true);
     expect(navigate).toHaveBeenCalledWith(['/items', 1], { queryParams: { project: 1 } });
+
+    navigate.mockClear();
+    const second = new MouseEvent('click', { cancelable: true, detail: 2 });
+    board.onItemClick(second, card);
+    expect(second.defaultPrevented).toBe(true);
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('saves board scroll and returnTo before navigating to item', async () => {
