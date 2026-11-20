@@ -46,7 +46,7 @@ export class ProjectSession {
   /** True from the start of a project switch until board/backlog reload ends. */
   readonly switching = signal(false);
   /**
-   * True during create / rename / delete.
+   * True during create / rename / delete / reorder.
    * create 成功後は呼び出し側が `endMutating()` するまで true のまま（切替開始まで追加を塞ぐ）。
    * Not the switch busy flag (`switching`).
    */
@@ -128,6 +128,31 @@ export class ProjectSession {
 
   endMutating(): void {
     this.mutating.set(false);
+  }
+
+  /**
+   * Reorder all projects. Busy / invalid id permutation → EMPTY (no HTTP).
+   * Sets `mutating` while the PUT is in flight. Updates `projects` only on success.
+   */
+  reorder(projectIds: number[]): Observable<Project[]> {
+    return defer(() => {
+      if (this.switching() || this.mutating()) return EMPTY;
+      if (!isFullProjectPermutation(projectIds, this.projects())) return EMPTY;
+      this.mutating.set(true);
+      this.error.set('');
+      return this.api.reorderProjects(projectIds).pipe(
+        map((res) => sortProjects(res.projects ?? [])),
+        tap((list) => {
+          this.projects.set(list);
+          this.mutating.set(false);
+        }),
+        catchError((e) => {
+          this.error.set(errorMessage(e));
+          this.mutating.set(false);
+          return throwError(() => e);
+        }),
+      );
+    });
   }
 
   rename(id: number, name: string): void {
@@ -289,4 +314,16 @@ function resolvedActiveFromSettings(raw: unknown, fallback: number): number {
 
 function sortProjects(list: Project[]): Project[] {
   return [...list].sort((a, b) => a.position - b.position || a.id - b.id);
+}
+
+/** True when ids are a positive permutation of the current project list (no filter subset). */
+function isFullProjectPermutation(ids: number[], list: Project[]): boolean {
+  if (ids.length === 0 || ids.length !== list.length) return false;
+  const known = new Set(list.map((p) => p.id));
+  const seen = new Set<number>();
+  for (const id of ids) {
+    if (!Number.isInteger(id) || id <= 0 || !known.has(id) || seen.has(id)) return false;
+    seen.add(id);
+  }
+  return seen.size === known.size;
 }
