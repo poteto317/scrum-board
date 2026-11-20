@@ -121,3 +121,60 @@ export function normalizeComment(raw: Partial<ItemComment> | null | undefined): 
     updatedAt: typeof raw?.updatedAt === 'string' ? raw.updatedAt : '',
   };
 }
+
+/** Goal length limit as Unicode scalars (L-858; match BE). */
+export const SPRINT_GOAL_MAX_SCALARS = 2000;
+export const SPRINT_NAME_MAX = 120;
+
+export type SprintStatus = 'planned' | 'active' | 'completed';
+
+export interface SprintSummary {
+  id: number;
+  projectId: number;
+  name: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+  status: SprintStatus;
+  velocity: number | null;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SprintItemRef {
+  id: number;
+  number: number;
+  title: string;
+  columnId: number;
+}
+
+export interface Sprint extends SprintSummary {
+  suggestedVelocity: number;
+  items: SprintItemRef[];
+}
+
+/** PATCH body. `velocity: null` clears; omit key = no change (L-002). */
+export interface SprintPatch {
+  name?: string;
+  goal?: string;
+  startDate?: string;
+  endDate?: string;
+  velocity?: number | null;
+}
+
+export function sprintStatusLabel(status: SprintStatus): string {
+  switch (status) {
+    case 'planned':
+      return '計画中';
+    case 'active':
+      return '進行中';
+    case 'completed':
+      return '完了';
+  }
+}
+
+/** Unicode scalar count (same basis as textLimit / BE rune count). */
+export function unicodeScalarLength(value: string): number {
+  return [...value].length;
+}
