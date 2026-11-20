@@ -7,6 +7,7 @@ import {
   inject,
   OnInit,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
@@ -80,19 +81,16 @@ export class App implements OnInit {
     effect(() => {
       const open = this.projectMenuOpen();
       const activeId = this.projectSession.activeId();
-      const projects = this.projectSession.projects();
+      const list = this.displayProjects();
       if (!open) return;
-      const next = resolveHighlightedProjectId(
-        projectsForSelectDisplay(projects, activeId),
-        activeId,
-        this.highlightedProjectId(),
-      );
+      const current = untracked(() => this.highlightedProjectId());
+      const next = resolveHighlightedProjectId(list, activeId, current);
       if (next == null) {
         this.projectMenuOpen.set(false);
         this.highlightedProjectId.set(null);
         return;
       }
-      if (next !== this.highlightedProjectId()) {
+      if (next !== current) {
         this.highlightedProjectId.set(next);
       }
     });
@@ -142,15 +140,15 @@ export class App implements OnInit {
       this.onProjectListKeydown(event);
       return;
     }
-    if (event.repeat) {
-      event.preventDefault();
-      return;
-    }
     if (event.key === 'ArrowUp') {
       event.preventDefault();
       return;
     }
     if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       this.openProjectMenu();
     }
@@ -159,15 +157,6 @@ export class App implements OnInit {
   onProjectListKeydown(event: KeyboardEvent) {
     if (!this.projectMenuOpen()) return;
     const list = this.displayProjects();
-    if (event.key === 'Escape') {
-      if (event.repeat) {
-        event.preventDefault();
-        return;
-      }
-      event.preventDefault();
-      this.closeProjectMenu(true);
-      return;
-    }
     if (event.key === ' ') {
       if (event.repeat) {
         event.preventDefault();
