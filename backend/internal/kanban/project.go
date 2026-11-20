@@ -227,6 +227,9 @@ func (r MySQLRepository) DeleteProject(ctx context.Context, id int64) error {
 	if err = assertProjectDeletable(ctx, tx, id); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM sprints WHERE project_id=?`, id); err != nil {
+		return err
+	}
 	// Sequence FK blocks project DELETE; remove the per-project counter first.
 	if _, err = tx.ExecContext(ctx, `DELETE FROM item_number_sequence WHERE project_id=?`, id); err != nil {
 		return err
@@ -268,11 +271,7 @@ func assertProjectDeletable(ctx context.Context, tx *sql.Tx, id int64) error {
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM items WHERE project_id=?`, id).Scan(&items); err != nil {
 		return err
 	}
-	var sprints int
-	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sprints WHERE project_id=?`, id).Scan(&sprints); err != nil {
-		return err
-	}
-	if items > 0 || sprints > 0 || len(ids) <= 1 {
+	if items > 0 || len(ids) <= 1 {
 		return ErrProjectConflict
 	}
 	return nil

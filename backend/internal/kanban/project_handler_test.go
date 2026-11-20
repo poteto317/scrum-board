@@ -96,6 +96,30 @@ func TestProjectCRUDAndNames(t *testing.T) {
 	}
 }
 
+func TestDeleteProjectClearsSprintsWhenNoItems(t *testing.T) {
+	repo := fresh()
+	h := NewHandler(repo)
+	other := request(h, "POST", "/api/projects", `{"name":"spare"}`)
+	var p Project
+	_ = json.Unmarshal(other.Body.Bytes(), &p)
+	created := request(h, "POST", "/api/sprints", `{"name":"S","startDate":"2026-11-01","endDate":"2026-11-14","projectId":`+itoa(p.ID)+`}`)
+	if created.Code != 201 {
+		t.Fatalf("sprint: %d %s", created.Code, created.Body)
+	}
+	var s Sprint
+	_ = json.Unmarshal(created.Body.Bytes(), &s)
+	if w := request(h, "POST", "/api/sprints/"+itoa(s.ID)+"/activate", ""); w.Code != 200 {
+		t.Fatal(w.Body)
+	}
+	if w := request(h, "POST", "/api/sprints/"+itoa(s.ID)+"/complete", `{}`); w.Code != 200 {
+		t.Fatal(w.Body)
+	}
+	if w := request(h, "DELETE", "/api/projects/"+itoa(p.ID), ""); w.Code != 204 {
+		t.Fatalf("delete project clears sprints: %d %s", w.Code, w.Body)
+	}
+	_ = request(h, "POST", "/api/projects", `{"name":"spare2"}`)
+}
+
 func TestItemProjectScopeAndMove(t *testing.T) {
 	repo := fresh()
 	h := NewHandler(repo)

@@ -366,7 +366,7 @@ curl --fail-with-body --request DELETE \
 - `GET /api/projects` は `{ "projects": [ { "id", "name", "position", "createdAt", "updatedAt" } ] }`。順は `position` 昇順、同点は `id` 昇順。
 - `POST` は 201 と Project。`name` は trim 後 1〜80 Unicode 文字。空白のみは 400。同名は許可（識別は id）。`position` は末尾。削除した id は再利用しません。
 - `PATCH /api/projects/{id}` は `{ "name" }` で改名し、Project を返します。未知フィールド・空名は 400。無い id は 404。
-- `DELETE` は 204。アイテムが1件でもある、スプリントが1件でもある、または残るプロジェクトがこの1件だけのときは 409。
+- `DELETE` は 204。アイテムが1件でもある、または残るプロジェクトがこの1件だけのときは 409。アイテムが0件のときは残っているスプリント（completed 含む）を同一トランザクションで削除してからプロジェクトを削除します。
 - マイグレーションは表示名「メイン」を1件作り、既存アイテムの id / createdAt は変えずにそこへ所属させます。
 
 # スプリント
@@ -402,13 +402,13 @@ curl --fail-with-body --request DELETE \
 - `POST` は 201 相当で詳細形。初期 `status` は `planned`、`velocity` は `null`。`name` は trim 後 1〜120。`goal` は trim せず Unicode スカラー 2000 以内（省略時 `""`）。日付は `YYYY-MM-DD` のみ、`startDate <= endDate`。
 - `GET /api/sprints/{id}` はメンバー付き詳細。`suggestedVelocity` はメンバーのうち列名が正確に `Done` の件数（`Close` 除外。Done 列なしは 0）。メンバーは view 可能なものだけ。
 - `PATCH` は `name` / `goal` / `startDate` / `endDate` / `velocity`。`velocity` は **completed のみ**（省略＝変更なし、`null`＝クリア、非負整数＝設定）。planned / active で `velocity` キーがあれば 400。
-- `PUT .../items` は planned / active のみ。本文 `{ "itemIds": number[] }` は可視・edit 可メンバーの完全集合。サーバは view 不可の既存メンバーを維持する。最終 `position` は可視 ID の順のあと、不可視を置換前の相対順で密に付与。他未完了スプリントへの重複は 409。他プロジェクト・ゴミ箱・不存在は 400/404。
+- `PUT .../items` は planned / active のみ。本文 `{ "itemIds": number[] }` は可視メンバーの完全集合（省略した可視メンバーはスプリントから外す）。送信 ID と、外す可視メンバー双方に edit 権限が必要。サーバは view 不可の既存メンバーを維持する。最終 `position` は可視 ID の順のあと、不可視を置換前の相対順で密に付与。他未完了スプリントへの重複は 409。他プロジェクト・ゴミ箱・不存在は 400/404。
 - `POST .../activate` は planned→active（1 TX）。同一プロジェクトに他 active があれば 409。
 - `POST .../complete` は active→completed のみ（1 TX）。本文任意 `{ "velocity"?: number }`。planned は 409。応答に `suggestedVelocity`。
 - `DELETE` は planned / active のみ 204。completed は 409（履歴保持）。
 - アイテムの soft delete および `projectId` 変更時は、当該 `item_id` の `sprint_items` をすべて削除する。
 - HTTP 400: 不正日付・範囲・空白名・goal 超過・未知フィールド・未完了での velocity・不正 ID。
-- HTTP 409: 状態遷移不可・メンバー重複・completed 削除/PUT・プロジェクトにスプリント残存時のプロジェクト削除。
+- HTTP 409: 状態遷移不可・メンバー重複・completed 削除/PUT・アイテム残存時のプロジェクト削除。
 
 # ボード設定（カード配置・モバイル表示列・アクティブプロジェクト）
 
