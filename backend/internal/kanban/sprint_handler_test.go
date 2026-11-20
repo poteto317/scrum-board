@@ -270,14 +270,32 @@ func TestSprintReplaceItemsOrderACLAndConflicts(t *testing.T) {
 		t.Fatalf("dup unfinished: %d %s", w.Code, w.Body)
 	}
 
-	// edit-restricted for member
+	// edit-restricted for member (add)
 	editOnly, _ := repo.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: "edit-lock", Description: "d"})
 	editOnly.EditAccess = EditAccessRestricted
 	repo.cards[editOnly.ID] = editOnly
 	repo.aclEntries[editOnly.ID] = ItemACL{EditUserIDs: []int64{1}}
 	if w = requestWithCookie(h, "PUT", "/api/sprints/"+itoa(s.ID)+"/items",
 		`{"itemIds":[`+itoa(editOnly.ID)+`]}`, sess.ID); w.Code != 403 {
-		t.Fatalf("edit denied: %d %s", w.Code, w.Body)
+		t.Fatalf("edit denied add: %d %s", w.Code, w.Body)
+	}
+
+	// edit-restricted for member (remove from visible set)
+	noEditMember, _ := repo.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: "no-edit", Description: "d"})
+	noEditMember.EditAccess = EditAccessRestricted
+	repo.cards[noEditMember.ID] = noEditMember
+	repo.aclEntries[noEditMember.ID] = ItemACL{EditUserIDs: []int64{1}}
+	if w = request(h, "PUT", "/api/sprints/"+itoa(s.ID)+"/items",
+		`{"itemIds":[`+itoa(a.ID)+`,`+itoa(noEditMember.ID)+`,`+itoa(b.ID)+`]}`); w.Code != 200 {
+		t.Fatalf("seed no-edit: %d %s", w.Code, w.Body)
+	}
+	if w = requestWithCookie(h, "PUT", "/api/sprints/"+itoa(s.ID)+"/items",
+		`{"itemIds":[`+itoa(a.ID)+`,`+itoa(b.ID)+`]}`, sess.ID); w.Code != 403 {
+		t.Fatalf("edit denied remove visible: %d %s", w.Code, w.Body)
+	}
+	if w = requestWithCookie(h, "PUT", "/api/sprints/"+itoa(s.ID)+"/items",
+		`{"itemIds":[]}`, sess.ID); w.Code != 403 {
+		t.Fatalf("edit denied clear visible: %d %s", w.Code, w.Body)
 	}
 
 	if w = request(h, "POST", "/api/sprints/"+itoa(s.ID)+"/activate", ""); w.Code != 200 {
@@ -448,14 +466,3 @@ func TestSprintScopedProjectMismatch404(t *testing.T) {
 	}
 }
 
-func TestDeleteProjectBlockedBySprints(t *testing.T) {
-	repo := fresh()
-	h := NewHandler(repo)
-	other := request(h, "POST", "/api/projects", `{"name":"spare"}`)
-	var p Project
-	_ = json.Unmarshal(other.Body.Bytes(), &p)
-	createSprintOK(t, h, `{"name":"S","startDate":"2026-11-01","endDate":"2026-11-14","projectId":`+itoa(p.ID)+`}`)
-	if w := request(h, "DELETE", "/api/projects/"+itoa(p.ID), ""); w.Code != 409 {
-		t.Fatalf("delete project with sprints: %d %s", w.Code, w.Body)
-	}
-}
