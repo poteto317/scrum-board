@@ -133,18 +133,8 @@ h1 {
   overflow-wrap: anywhere;
   min-width: 0;
 }
-.status-dot {
-  width: 8px;
-  height: 8px;
-  flex-shrink: 0;
-  border: 2px solid #9ba698;
-  border-radius: 50%;
-}
-.doing .status-dot {
-  border-color: #b99342;
-  background: #cfb56b;
-}
-.done .status-dot {
+/* Base + Doing shared in styles.css; Done stays board-only. */
+.kanban-column.done .status-dot {
   border-color: var(--accent);
   background: var(--accent);
 }
