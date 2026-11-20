@@ -767,6 +767,29 @@ func (m *memoryRepo) DeleteProject(_ context.Context, id int64) error {
 	m.projects = next
 	return nil
 }
+func (m *memoryRepo) ReorderProjects(_ context.Context, projectIDs []int64) ([]Project, error) {
+	if err := validateProjectOrder(projectIDs); err != nil {
+		return nil, err
+	}
+	if !sameProjectIDSet(m.projects, projectIDs) {
+		return nil, ErrProjectMismatch
+	}
+	byID := make(map[int64]Project, len(m.projects))
+	for _, p := range m.projects {
+		byID[p.ID] = p
+	}
+	now := time.Now().UTC()
+	next := make([]Project, 0, len(projectIDs))
+	for pos, id := range projectIDs {
+		p := byID[id]
+		p.Position = pos
+		p.UpdatedAt = now
+		next = append(next, p)
+	}
+	m.projects = next
+	out, err := m.ListProjects(context.Background())
+	return out, err
+}
 func request(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	return requestWithCookie(h, method, path, body, HandlerTestSessionID)
 }
