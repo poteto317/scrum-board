@@ -366,8 +366,49 @@ curl --fail-with-body --request DELETE \
 - `GET /api/projects` は `{ "projects": [ { "id", "name", "position", "createdAt", "updatedAt" } ] }`。順は `position` 昇順、同点は `id` 昇順。
 - `POST` は 201 と Project。`name` は trim 後 1〜80 Unicode 文字。空白のみは 400。同名は許可（識別は id）。`position` は末尾。削除した id は再利用しません。
 - `PATCH /api/projects/{id}` は `{ "name" }` で改名し、Project を返します。未知フィールド・空名は 400。無い id は 404。
-- `DELETE` は 204。アイテムが1件でもある、または残るプロジェクトがこの1件だけのときは 409。
+- `DELETE` は 204。アイテムが1件でもある、スプリントが1件でもある、または残るプロジェクトがこの1件だけのときは 409。
 - マイグレーションは表示名「メイン」を1件作り、既存アイテムの id / createdAt は変えずにそこへ所属させます。
+
+# スプリント
+
+スプリントはプロジェクトに属します。クエリの `projectId` を省略すると解決後アクティブプロジェクトが対象です。状態は `planned` → `active`（`POST .../activate`）→ `completed`（`POST .../complete`）のみ。`PATCH` で `status` は変えられません。
+
+```sh
+curl --fail-with-body 'http://127.0.0.1:4200/api/sprints?projectId=1'
+curl --fail-with-body --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"name":"Sprint 12","goal":"主要バグを潰す","startDate":"2026-11-21","endDate":"2026-12-04","projectId":1}' \
+  http://127.0.0.1:4200/api/sprints
+curl --fail-with-body http://127.0.0.1:4200/api/sprints/1
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"goal":"更新","startDate":"2026-11-22"}' \
+  http://127.0.0.1:4200/api/sprints/1
+curl --fail-with-body --request PUT \
+  --header 'Content-Type: application/json' \
+  --data '{"itemIds":[10,11]}' \
+  http://127.0.0.1:4200/api/sprints/1/items
+curl --fail-with-body --request POST \
+  http://127.0.0.1:4200/api/sprints/1/activate
+curl --fail-with-body --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"velocity":5}' \
+  http://127.0.0.1:4200/api/sprints/1/complete
+curl --fail-with-body --request DELETE \
+  http://127.0.0.1:4200/api/sprints/1
+```
+
+- `GET /api/sprints` は `{ "sprints": [ SprintSummary ] }`。並びは `startDate` 降順、同日は `id` 降順。各行の `itemCount` は生存・同一プロジェクトかつ呼び出し元が view 可能なメンバー数。
+- `POST` は 201 相当で詳細形。初期 `status` は `planned`、`velocity` は `null`。`name` は trim 後 1〜120。`goal` は trim せず Unicode スカラー 2000 以内（省略時 `""`）。日付は `YYYY-MM-DD` のみ、`startDate <= endDate`。
+- `GET /api/sprints/{id}` はメンバー付き詳細。`suggestedVelocity` はメンバーのうち列名が正確に `Done` の件数（`Close` 除外。Done 列なしは 0）。メンバーは view 可能なものだけ。
+- `PATCH` は `name` / `goal` / `startDate` / `endDate` / `velocity`。`velocity` は **completed のみ**（省略＝変更なし、`null`＝クリア、非負整数＝設定）。planned / active で `velocity` キーがあれば 400。
+- `PUT .../items` は planned / active のみ。本文 `{ "itemIds": number[] }` は可視・edit 可メンバーの完全集合。サーバは view 不可の既存メンバーを維持する。最終 `position` は可視 ID の順のあと、不可視を置換前の相対順で密に付与。他未完了スプリントへの重複は 409。他プロジェクト・ゴミ箱・不存在は 400/404。
+- `POST .../activate` は planned→active（1 TX）。同一プロジェクトに他 active があれば 409。
+- `POST .../complete` は active→completed のみ（1 TX）。本文任意 `{ "velocity"?: number }`。planned は 409。応答に `suggestedVelocity`。
+- `DELETE` は planned / active のみ 204。completed は 409（履歴保持）。
+- アイテムの soft delete および `projectId` 変更時は、当該 `item_id` の `sprint_items` をすべて削除する。
+- HTTP 400: 不正日付・範囲・空白名・goal 超過・未知フィールド・未完了での velocity・不正 ID。
+- HTTP 409: 状態遷移不可・メンバー重複・completed 削除/PUT・プロジェクトにスプリント残存時のプロジェクト削除。
 
 # ボード設定（カード配置・モバイル表示列・アクティブプロジェクト）
 
