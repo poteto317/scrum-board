@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
+	"sync"
 	"testing"
 )
 
@@ -61,5 +63,109 @@ func TestMySQLProjectReorder(t *testing.T) {
 		return a.ID == b.ID && a.Position == b.Position
 	}) {
 		t.Fatalf("mismatch mutated projects: before=%+v after=%+v", after, unchanged)
+	}
+}
+
+func TestMySQLProjectReorderConcurrency(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustInit(t, r)
+
+	second, err := r.CreateProject(ctx, "second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := r.CreateProject(ctx, "third")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := r.ListProjects(ctx)
+	if err != nil || len(listed) != 3 {
+		t.Fatalf("list: %+v %v", listed, err)
+	}
+	a, b, c := listed[0].ID, second.ID, third.ID
+	perms := [][]int64{
+		{a, b, c},
+		{c, b, a},
+		{b, c, a},
+		{b, a, c},
+	}
+
+	const workers = 20
+	phase1Errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for i := range workers {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			if _, err := r.ReorderProjects(ctx, perms[idx%len(perms)]); err != nil {
+				phase1Errs <- fmt.Errorf("phase1 reorder worker %d: %w", idx, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(phase1Errs)
+	for err := range phase1Errs {
+		t.Fatal(err)
+	}
+
+	after, err := r.ListProjects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != 3 {
+		t.Fatalf("len=%d want 3: %+v", len(after), after)
+	}
+	seenPos := make(map[int]bool, len(after))
+	for i, p := range after {
+		if p.Position != i {
+			t.Fatalf("project[%d]=%+v, want position=%d", i, p, i)
+		}
+		if seenPos[p.Position] {
+			t.Fatalf("duplicate position %d in %+v", p.Position, after)
+		}
+		seenPos[p.Position] = true
+	}
+
+	errs := make(chan error, workers+2)
+	for i := range workers {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := r.ReorderProjects(ctx, perms[idx%len(perms)])
+			if err != nil && !errors.Is(err, ErrProjectMismatch) {
+				errs <- fmt.Errorf("reorder worker %d: %w", idx, err)
+			}
+		}(i)
+	}
+	for i := range 2 {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			if _, err := r.CreateProject(ctx, fmt.Sprintf("extra-%d", idx)); err != nil {
+				errs <- fmt.Errorf("create worker %d: %w", idx, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+
+	final, err := r.ListProjects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(final) != 5 {
+		t.Fatalf("expected 5 projects after concurrent create, got %d: %+v", len(final), final)
+	}
+	seenPos = make(map[int]bool, len(final))
+	for _, p := range final {
+		if seenPos[p.Position] {
+			t.Fatalf("duplicate position %d in %+v", p.Position, final)
+		}
+		seenPos[p.Position] = true
 	}
 }
