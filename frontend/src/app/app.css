@@ -191,6 +191,7 @@
   padding: 4px 0;
   min-width: 100%;
   max-width: min(280px, 80vw);
+  max-height: min(280px, 50vh);
   overflow-y: auto;
   list-style: none;
   background: var(--paper);
