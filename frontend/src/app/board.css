@@ -392,7 +392,7 @@ h1 {
 
 @media (max-width: 700px) {
   .board-page {
-    padding: 22px 20px 0;
+    padding: 22px 12px 0;
   }
   .page-heading {
     margin: 28px 0;
@@ -421,10 +421,26 @@ h1 {
   .board-page.board-mobile .board-columns {
     flex-wrap: wrap;
   }
-  .board-page.board-mobile .kanban-column {
+  .board-page.board-mobile .board-toolbar {
+    flex-wrap: wrap;
+  }
+  .board-page.board-mobile .board-columns {
+    min-width: 0;
     width: 100%;
-    flex-basis: 100%;
+    box-sizing: border-box;
+  }
+  .board-page.board-mobile .kanban-column {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
+  }
+  .board-page.board-mobile .card-footer {
+    flex-wrap: wrap;
+  }
+  .board-page.board-mobile .detail-hint {
+    white-space: normal;
   }
   .board-page.board-mobile .add-column-tile {
     width: 100%;
@@ -438,6 +454,13 @@ h1 {
   }
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .board-page .task-card:hover {
+    transform: translateY(-2px);
+    border-color: #a2b5a2;
+    box-shadow: 0 5px 12px #2533210a;
+  }
+}
 .task-card .card-quick-actions {
   /* Icon-sized controls only — a text "コマンド" button forced 118px body padding and crushed titles. */
   position: absolute;
