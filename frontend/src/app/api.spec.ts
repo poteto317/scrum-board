@@ -47,6 +47,30 @@ describe('Api', () => {
     expect(req.request.body).toEqual({ assignee: 'Claude' });
     req.flush({ id: 22, number: 7, assignee: 'Claude' });
   });
+  it('sends PUT /api/projects/order with projectIds and returns reordered projects', () => {
+    let result: unknown;
+    api.reorderProjects([3, 1, 2]).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/projects/order');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ projectIds: [3, 1, 2] });
+    const payload = {
+      projects: [
+        { id: 3, name: 'C', position: 0 },
+        { id: 1, name: 'A', position: 1 },
+        { id: 2, name: 'B', position: 2 },
+      ],
+    };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
+  it('propagates project reorder conflict errors', () => {
+    let status = 0;
+    api.reorderProjects([1, 2]).subscribe({ error: (e) => (status = e.status) });
+    http
+      .expectOne('/api/projects/order')
+      .flush({ message: '競合' }, { status: 409, statusText: 'Conflict' });
+    expect(status).toBe(409);
+  });
   it('sends PUT /api/columns/order with columnIds and returns reordered columns', () => {
     let result: unknown;
     api.reorderColumns([1, 2, 9, 3]).subscribe((res) => (result = res));
@@ -369,14 +393,14 @@ describe('Api', () => {
     });
     api
       .putHeaderMenu({
-        board: { hiddenIds: ['project_add'] },
+        board: { hiddenIds: ['open_projects'] },
         backlog: { hiddenIds: [] },
         itemDetail: { hiddenIds: [] },
       })
       .subscribe();
     const req = http.expectOne('/api/header-menu');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body.board.hiddenIds).toEqual(['project_add']);
+    expect(req.request.body.board.hiddenIds).toEqual(['open_projects']);
     req.flush(req.request.body);
   });
   it('gets and puts list filter', () => {

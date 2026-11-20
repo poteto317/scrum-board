@@ -178,6 +178,9 @@ export class Api {
   deleteProject(id: number) {
     return this.http.delete<void>(`/api/projects/${id}`);
   }
+  reorderProjects(projectIds: number[]) {
+    return this.http.put<{ projects: Project[] }>('/api/projects/order', { projectIds });
+  }
   itemByNumber(number: number, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.get<Item>(`/api/items/by-number/${number}`, params ? { params } : {});

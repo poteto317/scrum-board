@@ -317,4 +317,55 @@ describe('ProjectSession', () => {
     expect(session.switching()).toBe(false);
     expect(session.error()).toContain('読込失敗');
   });
+
+  it('reorders projects and updates the list only on success', () => {
+    session.projects.set([main, next]);
+    let got: Project[] | undefined;
+    session.reorder([2, 1]).subscribe((list) => (got = list));
+    expect(session.mutating()).toBe(true);
+    http.expectOne({ method: 'PUT', url: '/api/projects/order' }).flush({
+      projects: [
+        { ...next, position: 0 },
+        { ...main, position: 1 },
+      ],
+    });
+    expect(got?.map((p) => p.id)).toEqual([2, 1]);
+    expect(session.projects().map((p) => p.id)).toEqual([2, 1]);
+    expect(session.mutating()).toBe(false);
+  });
+
+  it('does not change the list when reorder fails', () => {
+    session.projects.set([main, next]);
+    let status = 0;
+    session.reorder([2, 1]).subscribe({ error: (e) => (status = e.status) });
+    http
+      .expectOne('/api/projects/order')
+      .flush({ message: '競合' }, { status: 409, statusText: 'Conflict' });
+    expect(status).toBe(409);
+    expect(session.projects().map((p) => p.id)).toEqual([1, 2]);
+    expect(session.mutating()).toBe(false);
+    expect(session.error()).toContain('競合');
+  });
+
+  it('returns EMPTY without HTTP when reorder ids are incomplete or busy', () => {
+    session.projects.set([main, next]);
+    let nextCount = 0;
+    session.reorder([1]).subscribe({ next: () => nextCount++ });
+    session.reorder([1, 1]).subscribe({ next: () => nextCount++ });
+    session.reorder([1, 99]).subscribe({ next: () => nextCount++ });
+    session.mutating.set(true);
+    session.reorder([2, 1]).subscribe({ next: () => nextCount++ });
+    http.expectNone('/api/projects/order');
+    expect(nextCount).toBe(0);
+  });
+
+  it('returns EMPTY without HTTP when reorder is called while switching', () => {
+    session.projects.set([main, next]);
+    session.switching.set(true);
+    let nextCount = 0;
+    session.reorder([2, 1]).subscribe({ next: () => nextCount++ });
+    http.expectNone('/api/projects/order');
+    expect(nextCount).toBe(0);
+    expect(session.mutating()).toBe(false);
+  });
 });
