@@ -343,6 +343,9 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 			return Item{}, err
 		}
 		c.Number = number
+		if err = deleteSprintItemsForItemTx(ctx, tx, id); err != nil {
+			return Item{}, err
+		}
 	} else if columnChanged {
 		nextPos, err := nextCardPosition(ctx, tx, c.ColumnID, c.ProjectID)
 		if err != nil {
@@ -427,6 +430,9 @@ func (r MySQLRepository) DeleteItem(ctx context.Context, id int64) error {
 	}
 	if n == 0 {
 		return ErrNotFound
+	}
+	if err = deleteSprintItemsForItemTx(ctx, tx, id); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

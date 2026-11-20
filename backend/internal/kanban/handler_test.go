@@ -32,6 +32,9 @@ type memoryRepo struct {
 	nextUserID         int64
 	sessions           map[string]Session
 	aclEntries         map[int64]ItemACL
+	sprints            map[int64]Sprint
+	sprintItems        map[int64][]int64
+	nextSprintID       int64
 }
 
 func fresh() *memoryRepo {
@@ -350,6 +353,7 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 		if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
 			c.OffsetY = m.nextFreeOffset(destColumn, destProject)
 		}
+		_ = m.DeleteSprintItemsForItem(ctx, id)
 	} else if destColumn != sourceColumn {
 		c.ColumnID = destColumn
 		c.Position = m.nextPosition(destColumn, destProject)
@@ -459,6 +463,7 @@ func (m *memoryRepo) DeleteItem(ctx context.Context, id int64) error {
 	now := time.Now().UTC()
 	c.DeletedAt = &now
 	m.cards[id] = c
+	_ = m.DeleteSprintItemsForItem(ctx, id)
 	return nil
 }
 
@@ -728,7 +733,8 @@ func (m *memoryRepo) DeleteProject(_ context.Context, id int64) error {
 			n++
 		}
 	}
-	if n > 0 || len(m.projects) <= 1 {
+	sprintCount, _ := m.CountSprintsForProject(context.Background(), id)
+	if n > 0 || sprintCount > 0 || len(m.projects) <= 1 {
 		return ErrProjectConflict
 	}
 	next := make([]Project, 0, len(m.projects)-1)

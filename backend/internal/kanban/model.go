@@ -19,6 +19,8 @@ var (
 	ErrBoardSettings     = errors.New("invalid board settings")
 	ErrProject           = errors.New("invalid project")
 	ErrProjectConflict   = errors.New("project conflict")
+	ErrSprint            = errors.New("invalid sprint")
+	ErrSprintConflict    = errors.New("sprint conflict")
 )
 
 const (
@@ -135,6 +137,56 @@ type ItemPatch struct {
 	CreatedByUserID *int64   `json:"createdByUserId"`
 }
 
+type SprintStatus string
+
+const (
+	SprintStatusPlanned   SprintStatus = "planned"
+	SprintStatusActive    SprintStatus = "active"
+	SprintStatusCompleted SprintStatus = "completed"
+)
+
+// Sprint is the API shape for sprint detail (and list when Items/SuggestedVelocity may be zeroed).
+type Sprint struct {
+	ID                int64        `json:"id"`
+	ProjectID         int64        `json:"projectId"`
+	Name              string       `json:"name"`
+	Goal              string       `json:"goal"`
+	StartDate         string       `json:"startDate"` // YYYY-MM-DD
+	EndDate           string       `json:"endDate"`
+	Status            SprintStatus `json:"status"`
+	Velocity          *int         `json:"velocity"`
+	SuggestedVelocity int          `json:"suggestedVelocity,omitempty"`
+	ItemCount         int          `json:"itemCount"`
+	Items             []SprintItem `json:"items,omitempty"`
+	CreatedAt         time.Time    `json:"createdAt"`
+	UpdatedAt         time.Time    `json:"updatedAt"`
+}
+
+type SprintItem struct {
+	ID       int64  `json:"id"`
+	Number   int64  `json:"number"`
+	Title    string `json:"title"`
+	ColumnID int64  `json:"columnId"`
+}
+
+type SprintCreateInput struct {
+	Name      string
+	Goal      string
+	StartDate string
+	EndDate   string
+	ProjectID int64
+}
+
+// SprintPatch uses Velocity + ClearVelocity like ItemPatch.DueAt (L-002). Never **int.
+type SprintPatch struct {
+	Name          *string
+	Goal          *string
+	StartDate     *string
+	EndDate       *string
+	Velocity      *int
+	ClearVelocity bool
+}
+
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.
 type Repository interface {
 	Board(context.Context) (Board, error)
@@ -199,4 +251,14 @@ type Repository interface {
 	UserBySessionID(context.Context, string, time.Time) (User, error)
 	ListACLEntriesForItems(context.Context, []int64) (map[int64]ItemACL, error)
 	ReplaceItemACL(context.Context, int64, string, string, []int64, []int64) (Item, error)
+	ListSprints(context.Context, int64) ([]Sprint, error)
+	GetSprint(context.Context, int64) (Sprint, error)
+	CreateSprint(context.Context, SprintCreateInput) (Sprint, error)
+	UpdateSprint(context.Context, int64, SprintPatch) (Sprint, error)
+	DeleteSprint(context.Context, int64) error
+	ReplaceSprintItems(context.Context, int64, []int64, []int64) (Sprint, error)
+	ActivateSprint(context.Context, int64) (Sprint, error)
+	CompleteSprint(context.Context, int64, *int) (Sprint, error)
+	CountSprintsForProject(context.Context, int64) (int64, error)
+	DeleteSprintItemsForItem(context.Context, int64) error
 }

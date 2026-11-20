@@ -268,7 +268,11 @@ func assertProjectDeletable(ctx context.Context, tx *sql.Tx, id int64) error {
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM items WHERE project_id=?`, id).Scan(&items); err != nil {
 		return err
 	}
-	if items > 0 || len(ids) <= 1 {
+	var sprints int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sprints WHERE project_id=?`, id).Scan(&sprints); err != nil {
+		return err
+	}
+	if items > 0 || sprints > 0 || len(ids) <= 1 {
 		return ErrProjectConflict
 	}
 	return nil

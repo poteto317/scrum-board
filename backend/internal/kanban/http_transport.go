@@ -48,7 +48,11 @@ func fail(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrBacklogMismatch):
 		reply(w, 409, map[string]string{"message": "バックログの構成が変更されています。最新を読み込んでからやり直してください。"})
 	case errors.Is(err, ErrProjectConflict):
-		reply(w, 409, map[string]string{"message": "アイテムがあるプロジェクト、または最後のプロジェクトは削除できません。"})
+		reply(w, 409, map[string]string{"message": "アイテムまたはスプリントがあるプロジェクト、または最後のプロジェクトは削除できません。"})
+	case errors.Is(err, ErrSprintConflict):
+		reply(w, 409, map[string]string{"message": "スプリントの状態またはメンバーの重複を確認してください。"})
+	case errors.Is(err, ErrSprint):
+		reply(w, 400, map[string]string{"message": "スプリントの入力内容を確認してください。"})
 	default:
 		slog.Error("request failed", "error", err)
 		reply(w, 500, map[string]string{"message": "処理に失敗しました。時間をおいて再試行してください。"})
