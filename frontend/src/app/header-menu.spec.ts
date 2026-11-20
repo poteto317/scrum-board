@@ -3,7 +3,6 @@ import {
   catalogIdsForPageKind,
   catalogLabel,
   emptyWorkspaceHeaderMenu,
-  projectMenuActionDisabled,
   resolvePageKind,
   visibleMenuItemIds,
 } from './header-menu';
@@ -15,6 +14,7 @@ describe('header-menu pure helpers', () => {
     expect(resolvePageKind('/backlog')).toBe('backlog');
     expect(resolvePageKind('/trash')).toBeNull();
     expect(resolvePageKind('/users')).toBeNull();
+    expect(resolvePageKind('/projects')).toBeNull();
     expect(resolvePageKind('/recurring')).toBeNull();
     expect(resolvePageKind('/settings')).toBeNull();
     expect(resolvePageKind('/items/12')).toBe('itemDetail');
@@ -26,15 +26,14 @@ describe('header-menu pure helpers', () => {
 
   it('lists catalog ids per pageKind without cross-kind leakage', () => {
     expect(catalogIdsForPageKind('board')).toEqual([
-      'project_add',
-      'project_rename',
-      'project_delete',
+      'open_projects',
       'open_trash',
       'open_users',
       'open_recurring',
       'open_settings',
     ]);
     expect(catalogIdsForPageKind('itemDetail')).toEqual([
+      'open_projects',
       'open_trash',
       'open_users',
       'open_recurring',
@@ -46,17 +45,15 @@ describe('header-menu pure helpers', () => {
   });
 
   it('computes visible items as catalog minus hidden', () => {
-    const prefs = { hiddenIds: ['project_delete', 'item_history'] };
+    const prefs = { hiddenIds: ['open_trash', 'item_history'] };
     expect(visibleMenuItemIds('board', prefs)).toEqual([
-      'project_add',
-      'project_rename',
-      'open_trash',
+      'open_projects',
       'open_users',
       'open_recurring',
       'open_settings',
     ]);
     expect(visibleMenuItemIds('itemDetail', prefs)).toEqual([
-      'open_trash',
+      'open_projects',
       'open_users',
       'open_recurring',
       'open_settings',
@@ -67,27 +64,12 @@ describe('header-menu pure helpers', () => {
 
   it('empty workspace has no hidden ids', () => {
     const empty = emptyWorkspaceHeaderMenu();
-    expect(visibleMenuItemIds('board', empty.board)).toHaveLength(7);
-    expect(visibleMenuItemIds('itemDetail', empty.itemDetail)).toHaveLength(7);
-  });
-
-  it('disables project menu actions with the same rules as the old header buttons', () => {
-    const base = {
-      switching: false,
-      mutating: false,
-      saving: false,
-      modalOpen: false,
-      canRename: true,
-      canDelete: true,
-    };
-    expect(projectMenuActionDisabled('project_add', { ...base, modalOpen: true })).toBe(true);
-    expect(projectMenuActionDisabled('project_rename', { ...base, canRename: false })).toBe(true);
-    expect(projectMenuActionDisabled('project_delete', { ...base, canDelete: false })).toBe(true);
-    expect(projectMenuActionDisabled('project_add', base)).toBe(false);
+    expect(visibleMenuItemIds('board', empty.board)).toHaveLength(5);
+    expect(visibleMenuItemIds('itemDetail', empty.itemDetail)).toHaveLength(8);
   });
 
   it('builds catalog and favorite labels', () => {
-    expect(catalogLabel('project_add', 'board')).toBe('プロジェクトを追加');
+    expect(catalogLabel('open_projects', 'board')).toBe('プロジェクト');
     expect(
       catalogLabel('item_favorite', 'itemDetail', { favoriteDynamic: 'お気に入りから外す' }),
     ).toBe('お気に入りから外す');

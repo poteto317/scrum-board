@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, Routes } from '@angular/router';
-import { EMPTY, of, Subject, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { App } from './app';
@@ -174,12 +174,15 @@ describe('App project switcher', () => {
     expect(style.zIndex).toBe('5');
   });
 
-  it('disables delete when only one project remains', () => {
-    const { f } = setup({
-      listProjects: () => of({ projects: [projects[0]] }),
-    });
+  it('offers open_projects in the header menu with label プロジェクト', () => {
+    const { f } = setup();
     openHeaderMenu(f);
-    expect(headerMenuItem(f, 'project_delete')?.disabled).toBe(true);
+    const btn = headerMenuItem(f, 'open_projects');
+    expect(btn).toBeTruthy();
+    expect(btn?.textContent?.trim()).toBe('プロジェクト');
+    expect(headerMenuItem(f, 'project_add')).toBeNull();
+    expect(headerMenuItem(f, 'project_rename')).toBeNull();
+    expect(headerMenuItem(f, 'project_delete')).toBeNull();
   });
 
   it('updates the select after a successful switch when no board is mounted', async () => {
@@ -465,221 +468,20 @@ describe('App project switcher', () => {
     }
   }
 
-  it('opens a project add dialog instead of window.prompt', () => {
-    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('無視');
-    const { f } = setup();
-    withDialogPolyfill(f, () => {
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      expect(prompt).not.toHaveBeenCalled();
-      expect(f.nativeElement.querySelector('#modal-project-title')?.textContent).toContain(
-        'プロジェクトを追加',
-      );
-      openHeaderMenu(f);
-      expect(headerMenuItem(f, 'project_add')?.disabled).toBe(true);
-      expect(projectTrigger(f).disabled).toBe(true);
-      expect(headerMenuItem(f, 'project_rename')?.disabled).toBe(true);
-      expect(headerMenuItem(f, 'project_delete')?.disabled).toBe(true);
-      f.componentInstance.projectForm.controls.name.setValue('下書き');
-      f.detectChanges();
-      expect(f.componentInstance.projectForm.controls.name.value).toBe('下書き');
-    });
-  });
 
-  it('creates then switches to the new project and closes the dialog', async () => {
-    const { f, api, session } = setup(undefined, chromeToggleRoutes);
+
+
+
+
+
+
+
+  it('navigates to /projects from the header menu', async () => {
+    const { f } = setup({}, [{ path: 'projects', component: SpecStubPage }]);
     const router = TestBed.inject(Router);
-    await router.navigateByUrl('/');
-    withDialogPolyfill(f, () => {
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      f.componentInstance.projectForm.controls.name.setValue('新規');
-      f.detectChanges();
-      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
-        new Event('submit'),
-      );
-      f.detectChanges();
-      expect(api.createProject).toHaveBeenCalledWith('新規');
-      expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 3 });
-      expect(session.activeId()).toBe(3);
-      expect(f.nativeElement.querySelector('dialog')).toBeNull();
-      expect(session.mutating()).toBe(false);
-    });
+    clickHeaderMenuItem(f, 'open_projects');
     await f.whenStable();
-    expect(router.url).toContain('project=3');
-  });
-
-  it('does not update the URL when switch after create fails', async () => {
-    const { f } = setup(
-      {
-        patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
-      },
-      chromeToggleRoutes,
-    );
-    const router = TestBed.inject(Router);
-    await router.navigateByUrl('/');
-    const navigateSpy = vi.spyOn(router, 'navigateByUrl');
-    withDialogPolyfill(f, () => {
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      f.componentInstance.projectForm.controls.name.setValue('新規');
-      f.detectChanges();
-      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
-        new Event('submit'),
-      );
-      f.detectChanges();
-      expect(navigateSpy).not.toHaveBeenCalled();
-      expect(router.url).toBe('/');
-    });
-  });
-
-  it('keeps the dialog open and shows formError when create fails', () => {
-    const { f, session } = setup({
-      createProject: () => throwError(() => ({ error: { message: '作成失敗' } })),
-    });
-    withDialogPolyfill(f, () => {
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      f.componentInstance.projectForm.controls.name.setValue('新規');
-      f.detectChanges();
-      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
-        new Event('submit'),
-      );
-      f.detectChanges();
-      expect(session.projects().map((p) => p.name)).toEqual(['メイン', '次']);
-      expect(f.componentInstance.projectForm.controls.name.value).toBe('新規');
-      expect(f.nativeElement.querySelector('dialog .form-error')?.textContent).toContain(
-        '作成失敗',
-      );
-      expect(f.nativeElement.querySelector('.project-error')).toBeNull();
-      expect(f.nativeElement.querySelector('dialog')).toBeTruthy();
-    });
-  });
-
-  it('does not POST when the name is empty or over 80 code points', () => {
-    const { f, api } = setup();
-    withDialogPolyfill(f, () => {
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      f.componentInstance.projectForm.controls.name.setValue('   ');
-      f.detectChanges();
-      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
-        new Event('submit'),
-      );
-      f.detectChanges();
-      expect(api.createProject).not.toHaveBeenCalled();
-      expect(f.nativeElement.querySelector('dialog')).toBeTruthy();
-
-      f.componentInstance.projectForm.controls.name.setValue('a'.repeat(81));
-      f.detectChanges();
-      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
-        new Event('submit'),
-      );
-      f.detectChanges();
-      expect(api.createProject).not.toHaveBeenCalled();
-      expect(f.nativeElement.querySelector('dialog .form-error')?.textContent).toMatch(
-        /プロジェクト名を1〜80文字/,
-      );
-    });
-  });
-
-  it('shows header error when switchTo returns EMPTY after create', () => {
-    const { f, session } = setup();
-    withDialogPolyfill(f, () => {
-      vi.spyOn(session, 'switchTo').mockReturnValue(EMPTY);
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      f.componentInstance.projectForm.controls.name.setValue('新規');
-      f.detectChanges();
-      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
-        new Event('submit'),
-      );
-      f.detectChanges();
-      expect(session.projects().some((p) => p.name === '新規')).toBe(true);
-      expect(f.nativeElement.querySelector('dialog')).toBeNull();
-      expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain(
-        '切替できませんでした',
-      );
-      expect(session.mutating()).toBe(false);
-      expect(f.componentInstance.saving()).toBe(false);
-    });
-  });
-
-  it('keeps the new project when switchTo fails after create', () => {
-    const { f, session } = setup({
-      patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
-    });
-    withDialogPolyfill(f, () => {
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      f.componentInstance.projectForm.controls.name.setValue('新規');
-      f.detectChanges();
-      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
-        new Event('submit'),
-      );
-      f.detectChanges();
-      expect(session.projects().some((p) => p.name === '新規')).toBe(true);
-      expect(session.activeId()).toBe(1);
-      expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('切替失敗');
-      expect(f.nativeElement.querySelector('dialog')).toBeNull();
-    });
-  });
-
-  it('does not close on backdrop click; Esc closes when not saving', () => {
-    const { f } = setup();
-    withDialogPolyfill(f, () => {
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
-      dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      f.detectChanges();
-      expect(f.nativeElement.querySelector('dialog')).toBeTruthy();
-      dialog.dispatchEvent(new Event('cancel'));
-      f.detectChanges();
-      expect(f.nativeElement.querySelector('dialog')).toBeNull();
-    });
-  });
-
-  it('does not close via Esc or × while saving', () => {
-    const pending = new Subject<{ id: number; name: string; position: number }>();
-    const { f } = setup({
-      createProject: () => pending.asObservable(),
-    });
-    withDialogPolyfill(f, () => {
-      clickHeaderMenuItem(f, 'project_add');
-      f.detectChanges();
-      f.componentInstance.projectForm.controls.name.setValue('新規');
-      f.detectChanges();
-      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
-        new Event('submit'),
-      );
-      f.detectChanges();
-      const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
-      const closeBtn = f.nativeElement.querySelector(
-        'dialog .icon-button',
-      ) as HTMLButtonElement;
-      expect(closeBtn.disabled).toBe(true);
-      dialog.dispatchEvent(new Event('cancel'));
-      f.detectChanges();
-      expect(f.nativeElement.querySelector('dialog')).toBeTruthy();
-      // Leave create in-flight; withDialogPolyfill clears saving/open on teardown.
-      void pending;
-    });
-  });
-
-  it('keeps the project and shows the server message when delete returns 409', () => {
-    const { f, session } = setup({
-      deleteProject: () =>
-        throwError(() => ({
-          status: 409,
-          error: { message: 'アイテムがあるため削除できません' },
-        })),
-    });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    clickHeaderMenuItem(f, 'project_delete');
-    f.detectChanges();
-    expect(session.projects()).toHaveLength(2);
-    expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('削除できません');
+    expect(router.url).toBe('/projects');
   });
 
   it('moves board/backlog nav into the sidebar and shows empty favorites', () => {

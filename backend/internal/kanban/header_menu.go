@@ -20,15 +20,14 @@ type WorkspaceHeaderMenu struct {
 
 var (
 	boardBacklogHeaderMenuIDs = map[string]struct{}{
-		"project_add":    {},
-		"project_rename": {},
-		"project_delete": {},
+		"open_projects":  {},
 		"open_trash":     {},
 		"open_users":     {},
 		"open_recurring": {},
 		"open_settings":  {},
 	}
 	itemDetailHeaderMenuIDs = map[string]struct{}{
+		"open_projects":  {},
 		"open_trash":     {},
 		"open_users":     {},
 		"open_recurring": {},

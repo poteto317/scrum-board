@@ -25,7 +25,7 @@ func TestHeaderMenuGETDefaults(t *testing.T) {
 func TestHeaderMenuPUTRoundTrip(t *testing.T) {
 	repo := fresh()
 	h := NewHandler(repo)
-	body := `{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":["project_delete","project_delete"]},"itemDetail":{"hiddenIds":["item_favorite"]}}`
+	body := `{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":["open_trash","open_trash"]},"itemDetail":{"hiddenIds":["item_favorite"]}}`
 	rec := request(h, "PUT", "/api/header-menu", body)
 	if rec.Code != 200 {
 		t.Fatalf("put status %d body %s", rec.Code, rec.Body.String())
@@ -37,7 +37,7 @@ func TestHeaderMenuPUTRoundTrip(t *testing.T) {
 	if len(put.Board.HiddenIDs) != 0 {
 		t.Fatalf("board %+v", put.Board)
 	}
-	if len(put.Backlog.HiddenIDs) != 1 || put.Backlog.HiddenIDs[0] != "project_delete" {
+	if len(put.Backlog.HiddenIDs) != 1 || put.Backlog.HiddenIDs[0] != "open_trash" {
 		t.Fatalf("deduped backlog %+v", put.Backlog)
 	}
 	if len(put.ItemDetail.HiddenIDs) != 1 || put.ItemDetail.HiddenIDs[0] != "item_favorite" {
@@ -72,7 +72,7 @@ func TestHeaderMenuPUTValidation(t *testing.T) {
 		{"non-string element", `{"board":{"hiddenIds":[1]},"backlog":{"hiddenIds":[]},"itemDetail":{"hiddenIds":[]}}`},
 		{"unknown id", `{"board":{"hiddenIds":["project_nope"]},"backlog":{"hiddenIds":[]},"itemDetail":{"hiddenIds":[]}}`},
 		{"wrong pageKind id on board", `{"board":{"hiddenIds":["item_history"]},"backlog":{"hiddenIds":[]},"itemDetail":{"hiddenIds":[]}}`},
-		{"wrong pageKind id on itemDetail", `{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":[]},"itemDetail":{"hiddenIds":["project_add"]}}`},
+		{"unknown retired id on itemDetail", `{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":[]},"itemDetail":{"hiddenIds":["project_add"]}}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -96,12 +96,16 @@ func TestParseStoredHeaderMenuPayload(t *testing.T) {
 		t.Fatalf("corrupt → empty×3, got %+v", got)
 	}
 
-	got = parseStoredHeaderMenuPayload([]byte(`{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":["project_delete"]},"itemDetail":{"hiddenIds":[]},"extra":1}`))
+	got = parseStoredHeaderMenuPayload([]byte(`{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":["open_trash"]},"itemDetail":{"hiddenIds":[]},"extra":1}`))
 	if len(got.Board.HiddenIDs) != 0 || len(got.ItemDetail.HiddenIDs) != 0 {
 		t.Fatalf("extra key ignored, got %+v", got)
 	}
-	if len(got.Backlog.HiddenIDs) != 1 || got.Backlog.HiddenIDs[0] != "project_delete" {
+	if len(got.Backlog.HiddenIDs) != 1 || got.Backlog.HiddenIDs[0] != "open_trash" {
 		t.Fatalf("backlog %+v", got.Backlog)
+	}
+	got = parseStoredHeaderMenuPayload([]byte(`{"board":{"hiddenIds":[]},"backlog":{"hiddenIds":["project_delete"]},"itemDetail":{"hiddenIds":[]}}`))
+	if len(got.Backlog.HiddenIDs) != 0 {
+		t.Fatalf("retired project_* ids stripped on GET, got %+v", got.Backlog)
 	}
 
 	got = parseStoredHeaderMenuPayload([]byte(`{"backlog":{"hiddenIds":[]}}`))
@@ -114,9 +118,9 @@ func TestParseStoredHeaderMenuPayload(t *testing.T) {
 		t.Fatalf("bad board type → empty board, got %+v", got.Board)
 	}
 
-	got = parseStoredHeaderMenuPayload([]byte(`{"board":{"hiddenIds":["project_add","item_history","project_add","bad",42,"project_rename"]},"backlog":{"hiddenIds":[]},"itemDetail":{"hiddenIds":[]}}`))
-	if len(got.Board.HiddenIDs) != 2 || got.Board.HiddenIDs[0] != "project_add" || got.Board.HiddenIDs[1] != "project_rename" {
-		t.Fatalf("filter unknown/non-string/dedupe, got %+v", got.Board.HiddenIDs)
+	got = parseStoredHeaderMenuPayload([]byte(`{"board":{"hiddenIds":["open_projects","item_history","open_projects","bad",42,"project_rename"]},"backlog":{"hiddenIds":[]},"itemDetail":{"hiddenIds":[]}}`))
+	if len(got.Board.HiddenIDs) != 1 || got.Board.HiddenIDs[0] != "open_projects" {
+		t.Fatalf("filter unknown/wrong-kind/non-string/dedupe, got %+v", got.Board.HiddenIDs)
 	}
 }
 

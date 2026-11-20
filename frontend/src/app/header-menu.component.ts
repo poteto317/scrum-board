@@ -6,7 +6,6 @@ import {
   inject,
   input,
   OnInit,
-  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -18,7 +17,6 @@ import {
   catalogLabel,
   HeaderMenuItemId,
   PageKind,
-  projectMenuActionDisabled,
   resolvePageKind,
   visibleMenuItemIds,
 } from './header-menu';
@@ -35,15 +33,6 @@ type MenuView = 'actions' | 'settings';
 })
 export class HeaderMenu implements OnInit {
   readonly projectSwitching = input(false);
-  readonly projectMutating = input(false);
-  readonly projectCanRename = input(false);
-  readonly projectCanDelete = input(false);
-  readonly projectSaving = input(false);
-  readonly projectModalOpen = input(false);
-
-  readonly addProject = output<void>();
-  readonly renameProject = output<void>();
-  readonly deleteProject = output<void>();
 
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -153,17 +142,6 @@ export class HeaderMenu implements OnInit {
     this.settingsPageKind.set(value);
   }
 
-  projectActionDisabled(id: HeaderMenuItemId): boolean {
-    return projectMenuActionDisabled(id, {
-      switching: this.projectSwitching(),
-      mutating: this.projectMutating(),
-      saving: this.projectSaving(),
-      modalOpen: this.projectModalOpen(),
-      canRename: this.projectCanRename(),
-      canDelete: this.projectCanDelete(),
-    });
-  }
-
   itemActionDisabled(id: HeaderMenuItemId): boolean {
     if (!this.itemActions.registered()) return true;
     if (id === 'item_favorite') {
@@ -181,14 +159,10 @@ export class HeaderMenu implements OnInit {
   onActionClick(id: HeaderMenuItemId) {
     if (this.actionDisabled(id)) return;
     switch (id) {
-      case 'project_add':
-        this.runAction(id, () => this.addProject.emit());
-        break;
-      case 'project_rename':
-        this.runAction(id, () => this.renameProject.emit());
-        break;
-      case 'project_delete':
-        this.runAction(id, () => this.deleteProject.emit());
+      case 'open_projects':
+        this.runAction(id, () => {
+          void this.router.navigate(['/projects']);
+        });
         break;
       case 'open_trash':
         this.runAction(id, () => {
@@ -228,15 +202,13 @@ export class HeaderMenu implements OnInit {
 
   actionDisabled(id: HeaderMenuItemId): boolean {
     if (
+      id === 'open_projects' ||
       id === 'open_trash' ||
       id === 'open_users' ||
       id === 'open_recurring' ||
       id === 'open_settings'
     ) {
       return this.projectSwitching();
-    }
-    if (id.startsWith('project_')) {
-      return this.projectActionDisabled(id);
     }
     return this.itemActionDisabled(id);
   }
