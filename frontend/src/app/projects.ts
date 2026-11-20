@@ -1,5 +1,5 @@
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { errorMessage } from './api-error';
@@ -27,17 +27,13 @@ export class ProjectsPage {
     name: new FormControl('', { nonNullable: true, validators: [textLimit(80, true)] }),
   });
 
-  list(): Project[] {
-    return this.draftOrder() ?? this.projectSession.projects();
-  }
+  readonly list = computed(() => this.draftOrder() ?? this.projectSession.projects());
+  readonly pageBusy = computed(
+    () => this.projectSession.switching() || this.projectSession.mutating() || this.saving(),
+  );
 
   openAdd() {
-    if (
-      this.modalOpen() ||
-      this.projectSession.switching() ||
-      this.projectSession.mutating() ||
-      this.saving()
-    ) {
+    if (this.modalOpen() || this.pageBusy()) {
       return;
     }
     this.projectForm.reset({ name: '' });
@@ -54,7 +50,7 @@ export class ProjectsPage {
   }
 
   submitAdd() {
-    if (this.saving() || this.projectSession.switching() || this.projectSession.mutating()) {
+    if (this.pageBusy()) {
       return;
     }
     if (this.projectForm.invalid) {
@@ -105,7 +101,7 @@ export class ProjectsPage {
   }
 
   rename(project: Project) {
-    if (this.projectSession.switching() || this.projectSession.mutating()) return;
+    if (this.pageBusy()) return;
     const name = window.prompt('新しいプロジェクト名', project.name);
     if (name == null) return;
     this.projectSession.rename(project.id, name);
@@ -133,7 +129,7 @@ export class ProjectsPage {
 
   onDrop(event: CdkDragDrop<Project[]>) {
     if (event.previousIndex === event.currentIndex) return;
-    if (this.projectSession.switching() || this.projectSession.mutating()) return;
+    if (this.pageBusy()) return;
     const before = this.list().slice();
     const next = before.slice();
     moveItemInArray(next, event.previousIndex, event.currentIndex);
@@ -141,7 +137,7 @@ export class ProjectsPage {
   }
 
   move(index: number, delta: -1 | 1) {
-    if (this.projectSession.switching() || this.projectSession.mutating()) return;
+    if (this.pageBusy()) return;
     const before = this.list().slice();
     const j = index + delta;
     if (j < 0 || j >= before.length) return;

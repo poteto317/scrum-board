@@ -12,9 +12,7 @@
       type="button"
       class="primary"
       (click)="openAdd()"
-      [disabled]="
-        modalOpen() || projectSession.switching() || projectSession.mutating() || saving()
-      "
+      [disabled]="modalOpen() || pageBusy()"
     >
       追加
     </button>
@@ -38,7 +36,7 @@
         <li
           class="project-row"
           cdkDrag
-          [cdkDragDisabled]="projectSession.switching() || projectSession.mutating() || saving()"
+          [cdkDragDisabled]="pageBusy()"
           [class.is-active]="project.id === projectSession.activeId()"
         >
           <button
@@ -46,7 +44,7 @@
             class="drag-handle"
             cdkDragHandle
             aria-label="ドラッグして並び替え"
-            [disabled]="projectSession.switching() || projectSession.mutating() || saving()"
+            [disabled]="pageBusy()"
           >
             ⋮⋮
           </button>
@@ -61,9 +59,7 @@
               type="button"
               class="secondary"
               aria-label="上へ"
-              [disabled]="
-                i === 0 || projectSession.switching() || projectSession.mutating() || saving()
-              "
+              [disabled]="i === 0 || pageBusy()"
               (click)="move(i, -1)"
               (keydown)="onMoveKeydown($event)"
             >
@@ -73,12 +69,7 @@
               type="button"
               class="secondary"
               aria-label="下へ"
-              [disabled]="
-                i === list().length - 1 ||
-                projectSession.switching() ||
-                projectSession.mutating() ||
-                saving()
-              "
+              [disabled]="i === list().length - 1 || pageBusy()"
               (click)="move(i, 1)"
               (keydown)="onMoveKeydown($event)"
             >
@@ -87,7 +78,7 @@
             <button
               type="button"
               class="secondary"
-              [disabled]="projectSession.switching() || projectSession.mutating() || saving()"
+              [disabled]="pageBusy()"
               (click)="rename(project)"
             >
               名称変更
