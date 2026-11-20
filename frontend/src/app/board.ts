@@ -665,10 +665,10 @@ export class Board implements OnInit {
       });
   }
 
-  private rememberBoardCache(board: { items: Item[] }) {
+  private rememberBoardCache(board: { items: Item[]; columns: Column[] }) {
     const activeId = this.projectSession.activeId();
     if (activeId != null && activeId > 0) {
-      this.projectBoardCache.putBoard(activeId, board.items);
+      this.projectBoardCache.putBoard(activeId, board.items, board.columns);
     }
   }
 

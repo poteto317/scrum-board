@@ -1,15 +1,15 @@
 import { of, Subject, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
-import { Item } from './models';
+import { Column, Item } from './models';
 import { ProjectBoardCache } from './project-board-cache';
 
-function item(id: number, projectId: number): Item {
+function item(id: number, projectId: number, columnId = 1): Item {
   return {
     id,
     number: id,
     projectId,
-    columnId: 1,
+    columnId,
     title: `t${id}`,
     description: '',
     position: 0,
@@ -27,32 +27,62 @@ function item(id: number, projectId: number): Item {
   };
 }
 
+const cols: Column[] = [
+  { id: 1, name: 'Todo', position: 0 },
+  { id: 2, name: 'Doing', position: 1 },
+];
+
 describe('ProjectBoardCache', () => {
   it('putIfAbsent does not clobber existing board cache', () => {
     const cache = new ProjectBoardCache();
-    cache.putBoard(2, [item(1, 2)]);
-    cache.putBoardIfAbsent(2, [item(9, 2)]);
+    cache.putBoard(2, [item(1, 2)], cols);
+    cache.putBoardIfAbsent(2, [item(9, 2)], cols);
     expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([1]);
   });
 
   it('put overwrites board cache', () => {
     const cache = new ProjectBoardCache();
-    cache.putBoard(2, [item(1, 2)]);
-    cache.putBoard(2, [item(3, 2)]);
+    cache.putBoard(2, [item(1, 2)], cols);
+    cache.putBoard(2, [item(3, 2)], cols);
     expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([3]);
   });
 
   it('keeps board and backlog caches separate', () => {
     const cache = new ProjectBoardCache();
-    cache.putBoard(2, [item(1, 2)]);
+    cache.putBoard(2, [item(1, 2)], cols);
     cache.putBacklog(2, [item(2, 2)]);
     expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([1]);
     expect(cache.getBacklog(2)?.map((i) => i.id)).toEqual([2]);
   });
 
+  it('stores columns on snapshot and bumps revision', () => {
+    const cache = new ProjectBoardCache();
+    const before = cache.revision();
+    cache.putBoard(2, [item(1, 2, 2)], cols);
+    expect(cache.revision()).toBeGreaterThan(before);
+    expect(cache.getBoardSnapshot(2)?.columns.map((c) => c.name)).toEqual([
+      'Todo',
+      'Doing',
+    ]);
+  });
+
+  it('ignores put with empty columns (not warm)', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], []);
+    expect(cache.getBoard(2)).toBeUndefined();
+    expect(cache.getBoardSnapshot(2)).toBeUndefined();
+  });
+
+  it('keeps warm snapshot when a later put has empty columns (no-op)', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    cache.putBoard(2, [item(9, 2)], []);
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([1]);
+  });
+
   it('dedupes same-kind prefetch and allows other kind while in flight', () => {
     const cache = new ProjectBoardCache();
-    const boardHeld = new Subject<{ items: Item[] }>();
+    const boardHeld = new Subject<{ items: Item[]; columns: Column[] }>();
     const backlogHeld = new Subject<{ items: Item[] }>();
     const board = vi.fn(() => boardHeld.asObservable());
     const backlog = vi.fn(() => backlogHeld.asObservable());
@@ -65,7 +95,7 @@ describe('ProjectBoardCache', () => {
     expect(board).toHaveBeenCalledTimes(1);
     expect(backlog).toHaveBeenCalledTimes(1);
 
-    boardHeld.next({ items: [item(1, 2)] });
+    boardHeld.next({ items: [item(1, 2)], columns: cols });
     boardHeld.complete();
     backlogHeld.next({ items: [item(2, 2)] });
     backlogHeld.complete();
@@ -74,17 +104,42 @@ describe('ProjectBoardCache', () => {
     expect(cache.getBacklog(2)?.[0]?.id).toBe(2);
   });
 
+  it('prefetchBoard persists columns from API response', () => {
+    const cache = new ProjectBoardCache();
+    const board = vi.fn(() =>
+      of({ items: [item(1, 2, 2)], columns: cols, settings: { cardLayout: 'pack' as const } }),
+    );
+    cache.prefetchBoard({ board } as unknown as Api, 2);
+    expect(cache.getBoardSnapshot(2)?.columns).toEqual(cols);
+  });
+
   it('skips prefetch when cache already warm', () => {
     const cache = new ProjectBoardCache();
-    cache.putBoard(2, [item(1, 2)]);
-    const board = vi.fn(() => of({ items: [item(9, 2)] }));
+    cache.putBoard(2, [item(1, 2)], cols);
+    const board = vi.fn(() => of({ items: [item(9, 2)], columns: cols }));
     cache.prefetchBoard({ board } as unknown as Api, 2);
     expect(board).not.toHaveBeenCalled();
   });
 
+  it('re-prefetches when prior response had no columns', () => {
+    const cache = new ProjectBoardCache();
+    const board = vi
+      .fn()
+      .mockReturnValueOnce(of({ items: [item(1, 2)] }))
+      .mockReturnValueOnce(of({ items: [item(2, 2)], columns: cols }));
+    const api = { board } as unknown as Api;
+    cache.prefetchBoard(api, 2);
+    expect(cache.getBoardSnapshot(2)).toBeUndefined();
+    cache.prefetchBoard(api, 2);
+    expect(board).toHaveBeenCalledTimes(2);
+    expect(cache.getBoardSnapshot(2)?.items[0]?.id).toBe(2);
+  });
+
   it('prefetchOthers skips active id', () => {
     const cache = new ProjectBoardCache();
-    const board = vi.fn(() => of({ items: [item(1, 3)], columns: [], settings: { cardLayout: 'pack' as const } }));
+    const board = vi.fn(() =>
+      of({ items: [item(1, 3)], columns: cols, settings: { cardLayout: 'pack' as const } }),
+    );
     cache.prefetchOthers({ board, backlog: vi.fn() } as unknown as Api, 1, [1, 3], false);
     expect(board).toHaveBeenCalledTimes(1);
     expect(board).toHaveBeenCalledWith(3);
@@ -95,7 +150,7 @@ describe('ProjectBoardCache', () => {
     const board = vi
       .fn()
       .mockReturnValueOnce(throwError(() => new Error('fail')))
-      .mockReturnValueOnce(of({ items: [item(1, 2)] }));
+      .mockReturnValueOnce(of({ items: [item(1, 2)], columns: cols }));
     const api = { board } as unknown as Api;
     cache.prefetchBoard(api, 2);
     expect(board).toHaveBeenCalledTimes(1);
@@ -106,11 +161,11 @@ describe('ProjectBoardCache', () => {
 
   it('does not let a late prefetch overwrite a fresher put', () => {
     const cache = new ProjectBoardCache();
-    const held = new Subject<{ items: Item[] }>();
+    const held = new Subject<{ items: Item[]; columns: Column[] }>();
     const board = vi.fn(() => held.asObservable());
     cache.prefetchBoard({ board } as unknown as Api, 2);
-    cache.putBoard(2, [item(5, 2)]);
-    held.next({ items: [item(1, 2)] });
+    cache.putBoard(2, [item(5, 2)], cols);
+    held.next({ items: [item(1, 2)], columns: cols });
     held.complete();
     expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([5]);
   });
