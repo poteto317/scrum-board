@@ -43,12 +43,22 @@
               <li
                 role="option"
                 [id]="'project-option-' + project.id"
+                [attr.aria-label]="optionAriaLabel(project)"
                 [attr.aria-selected]="project.id === projectSession.activeId() ? 'true' : 'false'"
                 [class.is-active]="project.id === projectSession.activeId()"
                 [class.is-highlighted]="project.id === highlightedProjectId()"
                 (click)="onProjectOptionSelect(project.id)"
               >
-                {{ project.name }}
+                <span class="project-status-dots" aria-hidden="true">
+                  @for (kind of optionStatusDots(project); track kind) {
+                    @if (kind === 'todo') {
+                      <span class="status-dot"></span>
+                    } @else {
+                      <span [class]="kind"><span class="status-dot"></span></span>
+                    }
+                  }
+                </span>
+                <span class="project-option-name">{{ project.name }}</span>
               </li>
             }
           </ul>

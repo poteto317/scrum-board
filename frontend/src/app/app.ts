@@ -28,8 +28,14 @@ import {
   moveProjectHighlight,
   resolveHighlightedProjectId,
 } from './project-select-menu';
+import {
+  projectStatusAriaLabel,
+  projectStatusDots,
+  StatusKind,
+} from './project-status-dots';
 import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
 import { readSidebarCollapsed, writeSidebarCollapsed } from './sidebar-collapse-storage';
+import { Project } from './models';
 
 @Component({
   selector: 'app-root',
@@ -72,10 +78,29 @@ export class App implements OnInit {
     projectsForSelectDisplay(this.projectSession.projects(), this.projectSession.activeId()),
   );
 
+  /** Depends on cache.revision so open listbox refreshes when prefetch lands. */
+  readonly projectStatusById = computed(() => {
+    this.projectBoardCache.revision();
+    const map = new Map<number, StatusKind[]>();
+    for (const p of this.projectSession.projects()) {
+      const snap = this.projectBoardCache.peekBoardSnapshot(p.id);
+      map.set(p.id, snap ? projectStatusDots(snap.columns, snap.items) : []);
+    }
+    return map;
+  });
+
   readonly activeProjectName = computed(() => {
     const id = this.projectSession.activeId();
     return this.projectSession.projects().find((p) => p.id === id)?.name ?? '…';
   });
+
+  optionAriaLabel(project: Project): string {
+    return projectStatusAriaLabel(project.name, this.optionStatusDots(project));
+  }
+
+  optionStatusDots(project: Project): StatusKind[] {
+    return this.projectStatusById().get(project.id) ?? [];
+  }
 
   constructor() {
     effect(() => {

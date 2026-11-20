@@ -200,11 +200,26 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 .project-select-list [role='option'] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 6px 10px;
   font-size: 14px;
   color: var(--ink);
   cursor: pointer;
   white-space: nowrap;
+}
+.project-select-list .project-status-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.project-select-list .project-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .project-select-list [role='option'].is-highlighted,
 .project-select-list [role='option']:hover {
