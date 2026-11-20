@@ -850,6 +850,11 @@ export class Board implements OnInit {
     if (!isUnmodifiedPrimaryClick(event)) {
       return;
     }
+    // A second click of a double-tap must not open the detail (L-408). Keyboard clicks are detail 0.
+    if (event.detail > 1) {
+      event.preventDefault();
+      return;
+    }
     event.preventDefault();
     const page = pageScrollElement();
     const boardEl = this.boardScroll()?.nativeElement;
