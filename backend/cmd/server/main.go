@@ -62,6 +62,9 @@ func run() error {
 		err = repo.InitializeProjects(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeSprints(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeBoardSettings(migrationCtx)
 	}
 	if err == nil {
