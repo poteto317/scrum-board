@@ -347,7 +347,7 @@ describe('Board project switch', () => {
     const session = TestBed.inject(ProjectSession);
     const cache = TestBed.inject(ProjectBoardCache);
     session.activeId.set(1);
-    cache.putBoard(2, cachedB.items);
+    cache.putBoard(2, cachedB.items, cachedB.columns);
     phase = 'held';
     session.switchTo(2).subscribe({ error: () => undefined });
     patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });

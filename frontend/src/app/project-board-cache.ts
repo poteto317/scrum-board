@@ -1,43 +1,68 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { finalize } from 'rxjs';
 import { Api } from './api';
-import { Item } from './models';
+import { Column, Item } from './models';
 
 type PrefetchKind = 'board' | 'backlog';
+
+type BoardSnapshot = { items: Item[]; columns: Column[] };
 
 const MAX_IN_FLIGHT = 2;
 
 /**
- * In-memory Item[] snapshots per project for faster project switches.
- * Board and backlog keep separate maps (order differs). Prefetch must not
- * touch boardLoadGeneration / display state.
+ * In-memory snapshots per project for faster project switches.
+ * Board entries are `{ items, columns }` (warm when columns.length >= 1).
+ * Prefetch must not touch boardLoadGeneration / display state.
  */
 @Injectable({ providedIn: 'root' })
 export class ProjectBoardCache {
-  private readonly boardItems = new Map<number, Item[]>();
+  private readonly boardSnapshots = new Map<number, BoardSnapshot>();
   private readonly backlogItems = new Map<number, Item[]>();
   private readonly inFlight = new Set<string>();
   private running = 0;
   private readonly queue: Array<() => void> = [];
+  private readonly revisionSignal = signal(0);
+
+  /** Bumps on successful board put so listbox dots can refresh while open. */
+  readonly revision = this.revisionSignal.asReadonly();
 
   getBoard(projectId: number): Item[] | undefined {
-    return cloneList(this.boardItems.get(projectId));
+    return cloneList(this.getWarmBoard(projectId)?.items);
+  }
+
+  getBoardSnapshot(projectId: number): BoardSnapshot | undefined {
+    const snap = this.getWarmBoard(projectId);
+    if (!snap) return undefined;
+    return {
+      items: snap.items.map((i) => ({ ...i })),
+      columns: snap.columns.map((c) => ({ ...c })),
+    };
+  }
+
+  /** Read-only warm snapshot without cloning (caller must not mutate). */
+  peekBoardSnapshot(projectId: number): BoardSnapshot | undefined {
+    return this.getWarmBoard(projectId);
   }
 
   getBacklog(projectId: number): Item[] | undefined {
     return cloneList(this.backlogItems.get(projectId));
   }
 
-  putBoardIfAbsent(projectId: number, next: Item[]): void {
-    putIfAbsent(this.boardItems, projectId, next);
+  putBoardIfAbsent(projectId: number, items: Item[], columns: Column[]): void {
+    if (!this.isValidBoardPut(projectId, columns)) return;
+    if (this.isBoardWarm(projectId)) return;
+    this.boardSnapshots.set(projectId, cloneSnapshot(items, columns));
+    this.bumpRevision();
   }
 
   putBacklogIfAbsent(projectId: number, next: Item[]): void {
     putIfAbsent(this.backlogItems, projectId, next);
   }
 
-  putBoard(projectId: number, next: Item[]): void {
-    put(this.boardItems, projectId, next);
+  putBoard(projectId: number, items: Item[], columns: Column[]): void {
+    if (!this.isValidBoardPut(projectId, columns)) return;
+    this.boardSnapshots.set(projectId, cloneSnapshot(items, columns));
+    this.bumpRevision();
   }
 
   putBacklog(projectId: number, next: Item[]): void {
@@ -67,8 +92,11 @@ export class ProjectBoardCache {
 
   private enqueue(api: Api, projectId: number, kind: PrefetchKind): void {
     if (!Number.isFinite(projectId) || projectId <= 0) return;
-    const map = kind === 'board' ? this.boardItems : this.backlogItems;
-    if (map.has(projectId)) return;
+    if (kind === 'board') {
+      if (this.isBoardWarm(projectId)) return;
+    } else if (this.backlogItems.has(projectId)) {
+      return;
+    }
     const key = `${kind}:${projectId}`;
     if (this.inFlight.has(key)) return;
     this.inFlight.add(key);
@@ -85,9 +113,12 @@ export class ProjectBoardCache {
         )
         .subscribe({
           next: (res) => {
-            const list = extractItems(res);
-            if (kind === 'board') this.putBoardIfAbsent(projectId, list);
-            else this.putBacklogIfAbsent(projectId, list);
+            if (kind === 'board') {
+              const { items, columns } = extractBoard(res);
+              this.putBoardIfAbsent(projectId, items, columns);
+            } else {
+              this.putBacklogIfAbsent(projectId, extractItems(res));
+            }
           },
           error: () => undefined,
         });
@@ -102,6 +133,24 @@ export class ProjectBoardCache {
       if (next) next();
     }
   }
+
+  private getWarmBoard(projectId: number): BoardSnapshot | undefined {
+    const snap = this.boardSnapshots.get(projectId);
+    if (!snap || snap.columns.length < 1) return undefined;
+    return snap;
+  }
+
+  private isBoardWarm(projectId: number): boolean {
+    return this.getWarmBoard(projectId) != null;
+  }
+
+  private isValidBoardPut(projectId: number, columns: Column[]): boolean {
+    return Number.isFinite(projectId) && projectId > 0 && columns.length >= 1;
+  }
+
+  private bumpRevision(): void {
+    this.revisionSignal.update((n) => n + 1);
+  }
 }
 
 function extractItems(res: unknown): Item[] {
@@ -112,8 +161,25 @@ function extractItems(res: unknown): Item[] {
   return [];
 }
 
+function extractBoard(res: unknown): { items: Item[]; columns: Column[] } {
+  const items = extractItems(res);
+  if (!res || typeof res !== 'object' || Array.isArray(res)) {
+    return { items, columns: [] };
+  }
+  const raw = (res as { columns?: Column[] }).columns;
+  const columns = Array.isArray(raw) ? raw.filter((c) => c && Number.isFinite(c.id)) : [];
+  return { items, columns };
+}
+
 function cloneList(list: Item[] | undefined): Item[] | undefined {
   return list ? list.map((i) => ({ ...i })) : undefined;
+}
+
+function cloneSnapshot(items: Item[], columns: Column[]): BoardSnapshot {
+  return {
+    items: items.map((i) => ({ ...i })),
+    columns: columns.map((c) => ({ ...c })),
+  };
 }
 
 function putIfAbsent(map: Map<number, Item[]>, projectId: number, next: Item[]): void {
