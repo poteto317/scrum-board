@@ -246,6 +246,10 @@ func (r MySQLRepository) ReplaceSprintItems(ctx context.Context, id int64, itemI
 		return Sprint{}, err
 	}
 	defer tx.Rollback()
+	var locked int64
+	if err = tx.QueryRowContext(ctx, `SELECT id FROM sprints WHERE id=? FOR UPDATE`, id).Scan(&locked); err != nil {
+		return Sprint{}, dbError(err)
+	}
 	s, err := loadSprintRow(ctx, tx, id)
 	if err != nil {
 		return Sprint{}, err

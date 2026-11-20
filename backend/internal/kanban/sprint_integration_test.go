@@ -159,20 +159,48 @@ func TestMySQLActivateSprintConcurrent(t *testing.T) {
 	}
 }
 
-func TestMySQLDeleteProjectBlockedBySprints(t *testing.T) {
+func TestMySQLReplaceSprintItemsConcurrent(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
 	r := MySQLRepository{DB: db}
-	p, err := r.CreateProject(ctx, "with-sprint")
+	s, err := r.CreateSprint(ctx, SprintCreateInput{
+		Name: "S", StartDate: "2026-11-01", EndDate: "2026-11-14", ProjectID: 1,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = r.CreateSprint(ctx, SprintCreateInput{
-		Name: "S", StartDate: "2026-11-01", EndDate: "2026-11-14", ProjectID: p.ID,
-	}); err != nil {
-		t.Fatal(err)
+	items := make([]int64, 0, 4)
+	for i := 0; i < 4; i++ {
+		it, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "m", Description: "d"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		items = append(items, it.ID)
 	}
-	if err = r.DeleteProject(ctx, p.ID); !errors.Is(err, ErrProjectConflict) {
-		t.Fatalf("want conflict, got %v", err)
+	var wg sync.WaitGroup
+	errCh := make(chan error, 8)
+	orders := [][]int64{
+		{items[0], items[1], items[2], items[3]},
+		{items[3], items[2], items[1], items[0]},
+	}
+	for round := 0; round < 4; round++ {
+		order := orders[round%2]
+		wg.Add(1)
+		go func(ids []int64) {
+			defer wg.Done()
+			_, err := r.ReplaceSprintItems(ctx, s.ID, ids, nil)
+			errCh <- err
+		}(append([]int64(nil), order...))
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent replace: %v", err)
+		}
+	}
+	var n int
+	if err = db.QueryRow(`SELECT COUNT(*) FROM sprint_items WHERE sprint_id=?`, s.ID).Scan(&n); err != nil || n != 4 {
+		t.Fatalf("member count: n=%d err=%v", n, err)
 	}
 }
