@@ -20,6 +20,8 @@ var (
 	ErrBoardSettings     = errors.New("invalid board settings")
 	ErrProject           = errors.New("invalid project")
 	ErrProjectConflict   = errors.New("project conflict")
+	ErrProjectOrder      = errors.New("invalid project order")
+	ErrProjectMismatch   = errors.New("project set mismatch")
 	ErrSprint            = errors.New("invalid sprint")
 	ErrSprintConflict    = errors.New("sprint conflict")
 	ErrRecurring         = errors.New("invalid recurring rule")
@@ -199,6 +201,7 @@ type Repository interface {
 	CreateProject(context.Context, string) (Project, error)
 	UpdateProject(context.Context, int64, string) (Project, error)
 	DeleteProject(context.Context, int64) error
+	ReorderProjects(context.Context, []int64) ([]Project, error)
 	UpdateBoardSettings(context.Context, BoardSettings) (BoardSettings, []Item, error)
 	PatchBoardSettings(context.Context, BoardSettingsPatch) (BoardSettings, []Item, error)
 	History(context.Context, int64, int64, int64) (HistoryPage, error)

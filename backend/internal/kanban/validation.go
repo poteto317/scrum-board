@@ -33,6 +33,23 @@ func validateColumnOrder(columnIDs []int64) error {
 	return nil
 }
 
+func validateProjectOrder(projectIDs []int64) error {
+	if len(projectIDs) == 0 {
+		return ErrProjectOrder
+	}
+	seen := make(map[int64]struct{}, len(projectIDs))
+	for _, id := range projectIDs {
+		if id <= 0 {
+			return ErrProjectOrder
+		}
+		if _, exists := seen[id]; exists {
+			return ErrProjectOrder
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
+}
+
 func validateItemOrder(orders []ItemColumnOrder) error {
 	if len(orders) == 0 {
 		return ErrItemOrder

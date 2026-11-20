@@ -105,7 +105,13 @@ type settingsQuery interface {
 func listProjects(ctx context.Context, q interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }) ([]Project, error) {
-	rows, err := q.QueryContext(ctx, `SELECT id, name, position, created_at, updated_at FROM projects ORDER BY position, id`)
+	return queryProjects(ctx, q, `SELECT id, name, position, created_at, updated_at FROM projects ORDER BY position, id`)
+}
+
+func queryProjects(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, sqlQuery string) ([]Project, error) {
+	rows, err := q.QueryContext(ctx, sqlQuery)
 	if err != nil {
 		return nil, err
 	}

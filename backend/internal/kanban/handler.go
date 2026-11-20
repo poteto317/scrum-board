@@ -102,6 +102,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/projects", h.createProject)
 	mux.HandleFunc("PATCH /api/projects/{id}", h.updateProject)
 	mux.HandleFunc("DELETE /api/projects/{id}", h.deleteProject)
+	mux.HandleFunc("PUT /api/projects/order", h.reorderProjects)
 	mux.HandleFunc("GET /api/sprints", h.listSprints)
 	mux.HandleFunc("POST /api/sprints", h.createSprint)
 	mux.HandleFunc("GET /api/sprints/{id}", h.getSprint)
