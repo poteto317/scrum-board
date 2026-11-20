@@ -20,7 +20,9 @@
           id="project-select-trigger"
           class="project-select-trigger"
           [disabled]="projectSession.switching() || projectSession.mutating()"
-          [attr.aria-busy]="projectSession.switching() ? 'true' : 'false'"
+          [attr.aria-busy]="
+            projectSession.switching() || projectSession.mutating() ? 'true' : 'false'
+          "
           aria-haspopup="listbox"
           [attr.aria-expanded]="projectMenuOpen() ? 'true' : 'false'"
           aria-controls="project-select-list"
