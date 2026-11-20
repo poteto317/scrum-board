@@ -327,9 +327,10 @@ export class Board implements OnInit {
       fetch: () => this.pollBoard(),
       apply: (d) => {
         this.error.set('');
+        // Always refresh cache: local mutations may match poll JSON while cache is stale.
+        this.rememberBoardCache(d);
         if (sameJson(this.data(), d)) return;
         // Do not sync activeProjectId from poll — only initial load / post-switch reload.
-        this.rememberBoardCache(d);
         this.data.set(d);
         this.scheduleCardHeightMeasure();
       },
@@ -740,6 +741,7 @@ export class Board implements OnInit {
       .subscribe({
         next: (column) => {
           this.data.update((d) => ({ ...d, columns: [...d.columns, column] }));
+          this.rememberBoardCache(this.data());
           this.modal.set(null);
         },
         error: (e) => this.formError.set(errorMessage(e)),
@@ -776,6 +778,7 @@ export class Board implements OnInit {
       .subscribe({
         next: (card) => {
           this.data.update((d) => ({ ...d, items: [...d.items, normalizeItem(card)] }));
+          this.rememberBoardCache(this.data());
           this.modal.set(null);
           this.scheduleCardHeightMeasure();
         },
@@ -979,6 +982,7 @@ export class Board implements OnInit {
     this.reorderError.set('');
     this.reorderConflict.set(false);
     this.data.update((d) => ({ ...d, items: nextCards }));
+    this.rememberBoardCache(this.data());
     this.scheduleCardHeightMeasure();
     restoreFocus();
     this.api
@@ -990,12 +994,14 @@ export class Board implements OnInit {
             ...d,
             items: (res.items ?? []).map((item) => normalizeItem(item)),
           }));
+          this.rememberBoardCache(this.data());
           this.reorderAnnouncement.set(announcement);
           this.scheduleCardHeightMeasure();
           restoreFocus();
         },
         error: (e) => {
           this.data.update((d) => ({ ...d, items: previous }));
+          this.rememberBoardCache(this.data());
           this.reorderError.set(errorMessage(e));
           this.reorderConflict.set((e as { status?: number } | null)?.status === 409);
           this.reorderAnnouncement.set('アイテムの移動を保存できませんでした');
