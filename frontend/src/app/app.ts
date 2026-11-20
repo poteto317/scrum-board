@@ -10,17 +10,13 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AiChatFab } from './ai-chat-fab';
 import { isAiChatRoute } from './ai-chat-target';
 import { Api } from './api';
-import { errorMessage } from './api-error';
 import { AuthSession } from './auth-session';
 import { FavoritesSession, displayFavoriteTitle } from './favorites-session';
-import { textLimit } from './form-validation';
-import { Modal } from './modal';
 import { HeaderMenuSession } from './header-menu-session';
 import { HeaderMenu } from './header-menu.component';
 import { ProjectBoardCache } from './project-board-cache';
@@ -35,7 +31,7 @@ import {
   projectStatusDots,
   StatusKind,
 } from './project-status-dots';
-import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
+import { ProjectSession } from './project-session';
 import {
   isBoardPath,
   resolveProjectDeepLinkAction,
@@ -46,15 +42,7 @@ import { Project } from './models';
 
 @Component({
   selector: 'app-root',
-  imports: [
-    RouterLink,
-    RouterLinkActive,
-    RouterOutlet,
-    ReactiveFormsModule,
-    Modal,
-    HeaderMenu,
-    AiChatFab,
-  ],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, HeaderMenu, AiChatFab],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -81,17 +69,11 @@ export class App implements OnInit {
 
   readonly showAiChatFab = computed(() => isAiChatRoute(this.routeUrl()));
 
-  readonly projectModalOpen = signal(false);
-  readonly formError = signal('');
-  readonly saving = signal(false);
   /** Sidebar rail vs expanded. Read once from localStorage; showChrome changes do not re-read. */
   readonly collapsed = signal(readSidebarCollapsed());
   readonly projectMenuOpen = signal(false);
   readonly highlightedProjectId = signal<number | null>(null);
   private projectDeepLinkApplied = false;
-  readonly projectForm = new FormGroup({
-    name: new FormControl('', { nonNullable: true, validators: [textLimit(80, true)] }),
-  });
 
   readonly displayProjects = computed(() =>
     projectsForSelectDisplay(this.projectSession.projects(), this.projectSession.activeId()),
@@ -268,8 +250,8 @@ export class App implements OnInit {
     if (
       !canOpenProjectMenu({
         switching: this.projectSession.switching(),
-        modalOpen: this.projectModalOpen(),
-        saving: this.saving(),
+        modalOpen: false,
+        saving: this.projectSession.mutating(),
         activeId: this.projectSession.activeId(),
         projectCount: this.projectSession.projects().length,
       })
@@ -330,83 +312,6 @@ export class App implements OnInit {
     );
   }
 
-  addProject() {
-    if (
-      this.projectModalOpen() ||
-      this.projectSession.switching() ||
-      this.projectSession.mutating() ||
-      this.saving()
-    ) {
-      return;
-    }
-    this.projectForm.reset({ name: '' });
-    this.formError.set('');
-    this.projectSession.error.set('');
-    this.projectModalOpen.set(true);
-  }
-
-  closeProjectModal() {
-    if (this.saving()) return;
-    this.projectModalOpen.set(false);
-    this.projectForm.reset({ name: '' });
-    this.formError.set('');
-  }
-
-  submitProject() {
-    if (this.saving() || this.projectSession.switching() || this.projectSession.mutating()) {
-      return;
-    }
-    if (this.projectForm.invalid) {
-      this.projectForm.markAllAsTouched();
-      return;
-    }
-    const name = this.projectForm.controls.name.value.trim();
-    this.saving.set(true);
-    this.formError.set('');
-    let gotNext = false;
-    this.projectSession.create(name).subscribe({
-      next: (project) => {
-        gotNext = true;
-        this.projectModalOpen.set(false);
-        this.projectForm.reset({ name: '' });
-        this.switchToCreatedProject(project.id);
-      },
-      error: (e) => {
-        this.formError.set(
-          e instanceof Error && e.message ? e.message : errorMessage(e),
-        );
-        this.saving.set(false);
-      },
-      complete: () => {
-        if (!gotNext) {
-          this.formError.set('作成できませんでした');
-          this.saving.set(false);
-        }
-      },
-    });
-  }
-
-  /** After create succeeds: switch active project; clear mutating as soon as switch starts. */
-  private switchToCreatedProject(projectId: number) {
-    let gotSwitched = false;
-    this.projectSession.switchTo(projectId).subscribe({
-      next: (resolved) => {
-        gotSwitched = true;
-        this.saving.set(false);
-        this.syncProjectQueryToUrl(resolved);
-      },
-      error: () => this.saving.set(false),
-      complete: () => {
-        if (!gotSwitched) {
-          this.projectSession.error.set('切替できませんでした');
-          this.saving.set(false);
-        }
-      },
-    });
-    this.projectSession.endMutating();
-  }
-
-  /** Board `/` only: apply `?project=` once after session bootstrap (design #86). */
   private applyProjectDeepLink() {
     const url = this.routeUrl();
     const path = url.split('?')[0];
@@ -429,32 +334,11 @@ export class App implements OnInit {
     });
   }
 
-  /** Outbound only: sync `?project=` after header/create switch success (not inbound). */
   private syncProjectQueryToUrl(id: number) {
     if (!Number.isFinite(id) || id <= 0) return;
     const tree = this.router.parseUrl(this.routeUrl());
     tree.queryParams = withProjectQueryParam(tree.queryParams, id);
     // navigateByUrl+UrlTree: App root では navigate([], merge) が URL を更新しないため同等の merge を純関数で行う。
     void this.router.navigateByUrl(tree, { replaceUrl: true });
-  }
-
-  renameProject() {
-    if (!this.projectSession.canRename()) return;
-    const current = this.projectSession.projects().find((p) => p.id === this.projectSession.activeId());
-    if (!current) return;
-    const name = window.prompt('新しいプロジェクト名', current.name);
-    if (name == null) return;
-    this.projectSession.rename(current.id, name);
-  }
-
-  deleteProject() {
-    if (!this.projectSession.canDelete()) return;
-    const current = this.projectSession.projects().find((p) => p.id === this.projectSession.activeId());
-    if (!current) return;
-    const ok = window.confirm(
-      `「${current.name}」を削除しますか？アイテムが無いプロジェクトだけ削除できます。`,
-    );
-    if (!ok) return;
-    this.projectSession.delete(current.id);
   }
 }

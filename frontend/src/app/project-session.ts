@@ -187,16 +187,6 @@ export class ProjectSession {
     return this.projects().length >= 2 && !this.switching() && !this.mutating();
   }
 
-  canRename(): boolean {
-    const id = this.activeId();
-    return (
-      id != null &&
-      !this.switching() &&
-      !this.mutating() &&
-      this.projects().some((p) => p.id === id)
-    );
-  }
-
   delete(id: number): void {
     if (!this.canDelete() || !this.projects().some((p) => p.id === id)) return;
     this.mutating.set(true);
