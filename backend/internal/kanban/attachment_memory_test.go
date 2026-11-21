@@ -78,6 +78,12 @@ func (m *memoryRepo) CreateAttachment(
 	if _, ok := m.cards[itemID]; !ok {
 		return Attachment{}, ErrNotFound
 	}
+	if commentID != nil {
+		c, ok := m.comments[*commentID]
+		if !ok || c.ItemID != itemID {
+			return Attachment{}, ErrAttachmentInvalid
+		}
+	}
 	id := m.nextAttachmentID
 	m.nextAttachmentID++
 	key := attachmentObjectKey(itemID, id)
@@ -155,6 +161,16 @@ func (m *memoryRepo) ListAttachmentObjectKeysByCommentID(_ context.Context, comm
 		}
 	}
 	return keys, nil
+}
+
+func (m *memoryRepo) AttachmentObjectKeyExists(_ context.Context, objectKey string) (bool, error) {
+	m.ensureAttachments()
+	for _, a := range m.attachments {
+		if a.objectKey == objectKey {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (m *memoryRepo) ListAttachmentObjectKeysForExpiredTrash(_ context.Context, projectID int64) ([]string, error) {

@@ -304,6 +304,49 @@ func TestAttachmentLimitAndHardDeletePurge(t *testing.T) {
 	}
 }
 
+func TestAttachmentOpenRequiresLoginWhenViewOpen(t *testing.T) {
+	h, repo, _ := attachmentHandler(t)
+	card, err := repo.CreateItem(t.Context(), ItemInput{Title: "img", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// default ViewAccessOpen: anonymous must not see content
+	w := postPNG(t, h, card.Number, "description", "a.png", pngBytes(), nil)
+	if w.Code != 201 {
+		t.Fatalf("upload=%d %s", w.Code, w.Body)
+	}
+	var att Attachment
+	if err := json.Unmarshal(w.Body.Bytes(), &att); err != nil {
+		t.Fatal(err)
+	}
+	anon := requestAnon(h, "GET", "/api/items/by-number/"+strconv.FormatInt(card.Number, 10)+"/attachments/"+strconv.FormatInt(att.ID, 10)+"/content", "")
+	if anon.Code != 401 {
+		t.Fatalf("open view anon content=%d %s", anon.Code, anon.Body)
+	}
+}
+
+func TestAttachmentRejectsForeignCommentID(t *testing.T) {
+	h, repo, _ := attachmentHandler(t)
+	a, err := repo.CreateItem(t.Context(), ItemInput{Title: "a", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := repo.CreateItem(t.Context(), ItemInput{Title: "b", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmt, err := repo.CreateComment(t.Context(), b.ID, "x", "body")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := postPNG(t, h, a.Number, "comment", "a.png", pngBytes(), map[string]string{
+		"commentId": strconv.FormatInt(cmt.ID, 10),
+	})
+	if w.Code != 400 {
+		t.Fatalf("foreign commentId=%d %s", w.Code, w.Body)
+	}
+}
+
 func TestAttachmentPutFailureCompensates(t *testing.T) {
 	repo := fresh()
 	failStore := &failPutStorage{inner: NewMemoryBlobStorage()}
