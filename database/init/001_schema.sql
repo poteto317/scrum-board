@@ -137,6 +137,26 @@ CREATE TABLE IF NOT EXISTS recurring_rules (
  CONSTRAINT fk_recurring_rules_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
  INDEX recurring_rules_project_id (project_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- Keep in sync with backend/internal/kanban/ai_chat_migrate.go (itemAIMessagesDDL / aiUsageDDL).
+CREATE TABLE IF NOT EXISTS item_ai_messages (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ item_id BIGINT NOT NULL,
+ role VARCHAR(16) NOT NULL,
+ body TEXT NOT NULL,
+ input_tokens INT NULL,
+ output_tokens INT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ CONSTRAINT fk_ai_message_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+ CONSTRAINT chk_ai_message_role CHECK (role IN ('user', 'assistant')),
+ INDEX ai_messages_item_created (item_id, created_at, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE IF NOT EXISTS ai_usage (
+ id TINYINT NOT NULL PRIMARY KEY,
+ request_count BIGINT NOT NULL DEFAULT 0,
+ input_tokens BIGINT NOT NULL DEFAULT 0,
+ output_tokens BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT IGNORE INTO ai_usage (id, request_count, input_tokens, output_tokens) VALUES (1, 0, 0, 0);
 -- Keep in sync with backend/internal/kanban/attachment_migrate.go (itemAttachmentsDDL).
 CREATE TABLE IF NOT EXISTS item_attachments (
  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
