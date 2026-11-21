@@ -4,6 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ItemDetail } from './item-detail';
+import { AiChatContext } from './ai-chat-context';
 import { Api } from './api';
 import { AuthSession } from './auth-session';
 import { formatDueAtUtc, fromLocalParts } from './due-at';
@@ -162,6 +163,22 @@ describe('ItemDetail autosave', () => {
     await Promise.resolve();
     f.detectChanges();
     expect(f.nativeElement.querySelector('app-item-ai-chat')).toBeNull();
+  });
+  it('clears AiChatContext when route number changes while item is null', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const ctx = TestBed.inject(AiChatContext);
+    expect(ctx.pageKind()).toBe('detail');
+    expect(ctx.routeTarget()?.number).toBe(3);
+    // Simulate navigation to another number before the new card arrives
+    (f.componentInstance as unknown as { routeNumber: { set: (n: number) => void } }).routeNumber.set(
+      99,
+    );
+    f.componentInstance.autosave.reset(null);
+    f.detectChanges();
+    expect(ctx.pageKind()).toBe('other');
+    expect(ctx.routeTarget()).toBeNull();
   });
   it('shows solution property link (empty label) without form field', async () => {
     const f = create();

@@ -340,4 +340,30 @@ describe('AiChatFab', () => {
     expect(f.componentInstance.activeTarget()?.number).toBe(9);
     expect(f.nativeElement.querySelector('app-item-ai-chat')).toBeTruthy();
   });
+
+  it('ignores onSelectChange for non-editable option keys', () => {
+    const { f, ctx } = setup();
+    ctx.setBoard([
+      { number: 1, projectId: 1, itemId: 10, title: 'A', canEdit: true },
+      { number: 2, projectId: 1, itemId: 20, title: 'B', canEdit: false },
+    ]);
+    f.detectChanges();
+    f.componentInstance.onSelectChange('2:1:20');
+    expect(f.componentInstance.selected()).toBeNull();
+  });
+
+  it('forwards descriptionApplied and commentApplied to context handlers', () => {
+    const onDescriptionApplied = vi.fn();
+    const onCommentApplied = vi.fn();
+    const { f, ctx } = setup();
+    ctx.setDetail(
+      { number: 3, projectId: 1, itemId: 30 },
+      { onDescriptionApplied, onCommentApplied },
+    );
+    f.detectChanges();
+    f.componentInstance.onDescriptionApplied({ id: 30 } as never);
+    f.componentInstance.onCommentApplied();
+    expect(onDescriptionApplied).toHaveBeenCalledWith({ id: 30 });
+    expect(onCommentApplied).toHaveBeenCalled();
+  });
 });
