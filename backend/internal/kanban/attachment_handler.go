@@ -178,3 +178,24 @@ func failAttachment(w http.ResponseWriter, err error) {
 func (h handler) purgeBlobsBestEffort(r *http.Request, keys []string) {
 	purgeAttachmentBlobs(r.Context(), h.blobs, keys)
 }
+
+// purgeOrphanAttachmentBlobs deletes blobs only when the object_key row is already gone
+// (avoids deleting a restored item's blob after a race with trash purge).
+func (h handler) purgeOrphanAttachmentBlobs(r *http.Request, keys []string) {
+	if h.blobs == nil || len(keys) == 0 {
+		return
+	}
+	ctx := r.Context()
+	orphans := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		exists, err := h.repo.AttachmentObjectKeyExists(ctx, key)
+		if err != nil || exists {
+			continue
+		}
+		orphans = append(orphans, key)
+	}
+	purgeAttachmentBlobs(ctx, h.blobs, orphans)
+}
