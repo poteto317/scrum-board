@@ -40,6 +40,8 @@ export interface Item {
   columnId: number;
   title: string;
   description: string;
+  /** ソリューション本文。欠落時は ''（normalizeItem で補完）。 */
+  solution: string;
   position: number;
   backlogPosition: number;
   /** 欠落時は 0（normalizeBoardData / normalizeItem で補完）。 */
@@ -51,8 +53,20 @@ export interface Item {
   assignee: string;
   /** Close 理由。欠落時は ''（normalizeItem で補完）。 */
   closeReason: string;
+  /** お気に入り。欠落時は false（normalizeItem で補完）。 */
+  favorite: boolean;
   /** 期限 UTC `…Z`（秒 00）。欠落時は null（normalizeItem で補完。空文字にしない）。 */
   dueAt: string | null;
+  /** 閲覧: public | open | restricted。欠落時は open（normalizeItem）。 */
+  viewAccess?: 'public' | 'open' | 'restricted';
+  /** 編集: open | restricted。欠落時は open（normalizeItem）。 */
+  editAccess?: 'open' | 'restricted';
+  createdByUserId?: number | null;
+  /** サーバが当該セッション向けに付けた権限フラグ（詳細 GET 等）。 */
+  canEdit?: boolean;
+  canManage?: boolean;
+  /** manage のみ。一般 GET では欠落。 */
+  acl?: { viewUserIds: number[]; editUserIds: number[] };
   createdAt: string;
   updatedAt: string;
 }
@@ -64,7 +78,7 @@ export interface BoardData {
 }
 /** POST /api/items body — dueAt は create 非対応（PATCH のみ）。 */
 export type ItemInput = Pick<Item, 'title' | 'description' | 'columnId'> &
-  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason' | 'projectId'>>;
+  Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason' | 'solution' | 'favorite' | 'projectId'>>;
 /** PATCH /api/items/{id} body — dueAt の null クリアを含む。 */
 export type ItemPatch = Partial<ItemInput & Pick<Item, 'dueAt'>>;
 
@@ -85,4 +99,82 @@ export interface HistoryEvent {
 export interface HistoryPage {
   events: HistoryEvent[];
   nextBefore: number;
+}
+
+export interface ItemComment {
+  id: number;
+  itemId: number;
+  author: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Normalize API comment; author/body always string (missing → ""). */
+export function normalizeComment(raw: Partial<ItemComment> | null | undefined): ItemComment {
+  return {
+    id: typeof raw?.id === 'number' ? raw.id : 0,
+    itemId: typeof raw?.itemId === 'number' ? raw.itemId : 0,
+    author: typeof raw?.author === 'string' ? raw.author : '',
+    body: typeof raw?.body === 'string' ? raw.body : '',
+    createdAt: typeof raw?.createdAt === 'string' ? raw.createdAt : '',
+    updatedAt: typeof raw?.updatedAt === 'string' ? raw.updatedAt : '',
+  };
+}
+
+/** Goal length limit as Unicode scalars (L-858; match BE). */
+export const SPRINT_GOAL_MAX_SCALARS = 2000;
+export const SPRINT_NAME_MAX = 120;
+
+export type SprintStatus = 'planned' | 'active' | 'completed';
+
+export interface SprintSummary {
+  id: number;
+  projectId: number;
+  name: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+  status: SprintStatus;
+  velocity: number | null;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SprintItemRef {
+  id: number;
+  number: number;
+  title: string;
+  columnId: number;
+}
+
+export interface Sprint extends SprintSummary {
+  suggestedVelocity: number;
+  items: SprintItemRef[];
+}
+
+/** PATCH body. `velocity: null` clears; omit key = no change (L-002). */
+export interface SprintPatch {
+  name?: string;
+  goal?: string;
+  startDate?: string;
+  endDate?: string;
+  velocity?: number | null;
+}
+
+export function sprintStatusLabel(status: SprintStatus): string {
+  switch (status) {
+    case 'planned':
+      return '計画中';
+    case 'active':
+      return '進行中';
+    case 'completed':
+      return '完了';
+  }
+}
+
+/** Unicode scalar count (same basis as textLimit / BE rune count). */
+export function unicodeScalarLength(value: string): number {
+  return [...value].length;
 }

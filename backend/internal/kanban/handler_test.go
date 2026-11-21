@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -22,12 +23,34 @@ type memoryRepo struct {
 	defaultTemplateIDs []int64
 	settings           BoardSettings
 	settingsFail       error
-	listFilter         *ListFilter
+	listFilter         *WorkspaceListFilters
+	headerMenu         *WorkspaceHeaderMenu
 	projects           []Project
 	nextProject        int64
+	comments           map[int64]Comment
+	nextCommentID      int64
+	users              []User
+	nextUserID         int64
+	sessions           map[string]Session
+	aclEntries         map[int64]ItemACL
+	sprints            map[int64]Sprint
+	sprintItems        map[int64][]int64
+	nextSprintID       int64
+	recurringRules     map[int64]RecurringRule
+	nextRecurringID    int64
+	attachments        map[int64]memoryAttachment
+	nextAttachmentID   int64
+	aiMessages         map[int64]AIMessage
+	nextAIMessageID    int64
+	aiUsage            AIUsage
 }
 
 func fresh() *memoryRepo {
+	hash, err := HashPassword("test-password")
+	if err != nil {
+		panic(err)
+	}
+	now := time.Now().UTC()
 	return &memoryRepo{
 		columns:         []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}},
 		cards:           map[int64]Item{},
@@ -37,9 +60,38 @@ func fresh() *memoryRepo {
 		settings:        BoardSettings{CardLayout: CardLayoutPack, MobileBoardColumnID: 1, ActiveProjectID: 1},
 		projects:        []Project{{ID: 1, Name: "メイン", Position: 0}},
 		nextProject:     2,
+		comments:        map[int64]Comment{},
+		nextCommentID:   1,
+		aiMessages:      map[int64]AIMessage{},
+		nextAIMessageID: 1,
+		users: []User{{
+			ID: 1, LoginName: "admin", DisplayName: "admin",
+			PasswordHash: hash, Role: RoleAdmin, Disabled: false,
+			CreatedAt: now, UpdatedAt: now,
+		}},
+		nextUserID: 2,
+		sessions: map[string]Session{
+			HandlerTestSessionID: {ID: HandlerTestSessionID, UserID: 1, ExpiresAt: now.Add(time.Hour), CreatedAt: now},
+		},
+		aclEntries: map[int64]ItemACL{},
 	}
 }
-func (m *memoryRepo) Board(context.Context) (Board, error) {
+func (m *memoryRepo) living(c Item) bool {
+	return c.DeletedAt == nil
+}
+
+func (m *memoryRepo) Board(ctx context.Context) (Board, error) {
+	return m.boardForScope(0)
+}
+
+func (m *memoryRepo) BoardForProject(_ context.Context, projectID int64) (Board, error) {
+	if projectID <= 0 || !m.projectExists(projectID) {
+		return Board{}, ErrProject
+	}
+	return m.boardForScope(projectID)
+}
+
+func (m *memoryRepo) boardForScope(itemProjectID int64) (Board, error) {
 	cols := slices.Clone(m.columns)
 	slices.SortFunc(cols, func(a, b Column) int {
 		if c := cmp.Compare(a.Position, b.Position); c != 0 {
@@ -49,9 +101,13 @@ func (m *memoryRepo) Board(context.Context) (Board, error) {
 	})
 	active := m.resolvedActive()
 	settings := m.resolvedSettings(cols)
+	scope, err := resolveItemListScope(active, itemProjectID, m.projects)
+	if err != nil {
+		return Board{}, err
+	}
 	b := Board{Columns: cols, Items: []Item{}, Settings: settings}
 	for _, c := range m.cards {
-		if m.cardProjectID(c) == active {
+		if m.living(c) && m.cardProjectID(c) == scope {
 			b.Items = append(b.Items, c)
 		}
 	}
@@ -157,8 +213,8 @@ func (m *memoryRepo) validProject(id int64) bool {
 }
 func (m *memoryRepo) GetItem(_ context.Context, id int64) (Item, error) {
 	c, ok := m.cards[id]
-	if !ok {
-		return c, ErrNotFound
+	if !ok || !m.living(c) {
+		return Item{}, ErrNotFound
 	}
 	return c, nil
 }
@@ -259,9 +315,10 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 	m.next++
 	c := Item{
 		Number: m.nextItemNumber(projectID), ID: id, ColumnID: in.ColumnID, ProjectID: projectID,
-		Title: in.Title, Description: in.Description, PRURLs: urls, RelatedItems: related,
+		Title: in.Title, Description: in.Description, Solution: in.Solution, PRURLs: urls, RelatedItems: related,
 		Position: m.nextPosition(in.ColumnID, projectID), OffsetY: offsetY, Assignee: in.Assignee,
-		CloseReason: in.CloseReason, BacklogPosition: m.nextBacklog(projectID),
+		CloseReason: in.CloseReason, Favorite: in.Favorite, BacklogPosition: m.nextBacklog(projectID),
+		ViewAccess: ViewAccessOpen, EditAccess: EditAccessOpen, CreatedByUserID: in.CreatedByUserID,
 	}
 	m.cards[c.ID] = c
 	m.cardTemplateIDs[c.ID] = append([]int64(nil), m.defaultTemplateIDs...)
@@ -306,6 +363,7 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 		if normalizeCardLayout(m.settings.CardLayout) == CardLayoutFree {
 			c.OffsetY = m.nextFreeOffset(destColumn, destProject)
 		}
+		_ = m.DeleteSprintItemsForItem(ctx, id)
 	} else if destColumn != sourceColumn {
 		c.ColumnID = destColumn
 		c.Position = m.nextPosition(destColumn, destProject)
@@ -321,6 +379,12 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 	}
 	if p.Description != nil {
 		c.Description = *p.Description
+	}
+	if p.Solution != nil {
+		c.Solution = *p.Solution
+	}
+	if p.Favorite != nil {
+		c.Favorite = *p.Favorite
 	}
 	if p.PRURLs != nil {
 		c.PRURLs = append([]string(nil), (*p.PRURLs)...)
@@ -372,6 +436,9 @@ func (m *memoryRepo) ReorderItems(_ context.Context, orders []ItemColumnOrder) (
 	active := m.resolvedActive()
 	existing := map[int64]Item{}
 	for _, c := range m.cards {
+		if !m.living(c) {
+			continue
+		}
 		if _, ok := listed[c.ColumnID]; ok && m.cardProjectID(c) == active {
 			existing[c.ID] = c
 		}
@@ -399,11 +466,113 @@ func (m *memoryRepo) ReorderItems(_ context.Context, orders []ItemColumnOrder) (
 	return board.Items, nil
 }
 func (m *memoryRepo) DeleteItem(ctx context.Context, id int64) error {
-	if _, err := m.GetItem(ctx, id); err != nil {
+	c, err := m.GetItem(ctx, id)
+	if err != nil {
 		return err
 	}
-	delete(m.cards, id)
+	now := time.Now().UTC()
+	c.DeletedAt = &now
+	m.cards[id] = c
+	_ = m.DeleteSprintItemsForItem(ctx, id)
 	return nil
+}
+
+func (m *memoryRepo) HardDeleteItem(ctx context.Context, id int64) error {
+	if _, ok := m.cards[id]; !ok {
+		return ErrNotFound
+	}
+	_ = ctx
+	delete(m.cards, id)
+	for cid, comment := range m.comments {
+		if comment.ItemID == id {
+			delete(m.comments, cid)
+		}
+	}
+	for mid, msg := range m.aiMessages {
+		if msg.ItemID == id {
+			delete(m.aiMessages, mid)
+		}
+	}
+	return nil
+}
+
+func (m *memoryRepo) HardDeleteTrashItem(ctx context.Context, id, projectID int64) error {
+	c, ok := m.cards[id]
+	if !ok || m.living(c) || m.cardProjectID(c) != projectID {
+		return ErrNotFound
+	}
+	return m.HardDeleteItem(ctx, id)
+}
+
+func (m *memoryRepo) ListTrash(_ context.Context, projectID int64) ([]TrashItem, error) {
+	if _, err := m.PurgeExpiredTrashForProject(context.Background(), projectID); err != nil {
+		return nil, err
+	}
+	out := []TrashItem{}
+	for _, c := range m.cards {
+		if m.living(c) || m.cardProjectID(c) != projectID || c.DeletedAt == nil {
+			continue
+		}
+		out = append(out, TrashItem{
+			ID: c.ID, Number: c.Number, Title: c.Title, ProjectID: m.cardProjectID(c), DeletedAt: *c.DeletedAt,
+		})
+	}
+	slices.SortFunc(out, func(a, b TrashItem) int {
+		if c := b.DeletedAt.Compare(a.DeletedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(b.ID, a.ID)
+	})
+	return out, nil
+}
+
+func (m *memoryRepo) RestoreItem(ctx context.Context, id, projectID int64) (Item, error) {
+	c, ok := m.cards[id]
+	if !ok || m.living(c) || m.cardProjectID(c) != projectID {
+		return Item{}, ErrNotFound
+	}
+	if !m.validColumn(c.ColumnID) {
+		todo, err := m.GetColumnByName(ctx, "Todo")
+		if err != nil {
+			return Item{}, err
+		}
+		c.ColumnID = todo.ID
+	}
+	c.DeletedAt = nil
+	m.cards[id] = c
+	return c, nil
+}
+
+func (m *memoryRepo) PurgeExpiredTrash(ctx context.Context) (int64, error) {
+	return m.purgeExpiredMemory(ctx, 0)
+}
+
+func (m *memoryRepo) PurgeExpiredTrashForProject(ctx context.Context, projectID int64) (int64, error) {
+	if projectID <= 0 {
+		return 0, ErrProject
+	}
+	return m.purgeExpiredMemory(ctx, projectID)
+}
+
+func (m *memoryRepo) purgeExpiredMemory(_ context.Context, projectID int64) (int64, error) {
+	cutoff := trashCutoff(time.Now().UTC())
+	var n int64
+	for id, c := range m.cards {
+		if c.DeletedAt == nil || c.DeletedAt.After(cutoff) {
+			continue
+		}
+		if projectID > 0 && m.cardProjectID(c) != projectID {
+			continue
+		}
+		delete(m.cards, id)
+		for cid, comment := range m.comments {
+			if comment.ItemID == id {
+				delete(m.comments, cid)
+			}
+		}
+		n++
+	}
+	return n, nil
 }
 func (m *memoryRepo) CreateColumn(_ context.Context, name string) (Column, error) {
 	maxPos := -1
@@ -448,11 +617,26 @@ func (m *memoryRepo) ReorderColumns(_ context.Context, columnIDs []int64) ([]Col
 	return slices.Clone(next), nil
 }
 
-func (m *memoryRepo) Backlog(context.Context) ([]Item, error) {
+func (m *memoryRepo) Backlog(ctx context.Context) ([]Item, error) {
+	return m.backlogForScope(0)
+}
+
+func (m *memoryRepo) BacklogForProject(_ context.Context, projectID int64) ([]Item, error) {
+	if projectID <= 0 || !m.projectExists(projectID) {
+		return nil, ErrProject
+	}
+	return m.backlogForScope(projectID)
+}
+
+func (m *memoryRepo) backlogForScope(itemProjectID int64) ([]Item, error) {
 	active := m.resolvedActive()
+	scope, err := resolveItemListScope(active, itemProjectID, m.projects)
+	if err != nil {
+		return nil, err
+	}
 	cards := []Item{}
 	for _, c := range m.cards {
-		if m.cardProjectID(c) == active {
+		if m.living(c) && m.cardProjectID(c) == scope {
 			cards = append(cards, c)
 		}
 	}
@@ -465,6 +649,15 @@ func (m *memoryRepo) Backlog(context.Context) ([]Item, error) {
 	return cards, nil
 }
 
+func (m *memoryRepo) projectExists(id int64) bool {
+	for _, p := range m.projects {
+		if p.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *memoryRepo) ReorderBacklog(_ context.Context, cardIDs []int64) ([]Item, error) {
 	if err := validateBacklogOrder(cardIDs); err != nil {
 		return nil, err
@@ -472,7 +665,7 @@ func (m *memoryRepo) ReorderBacklog(_ context.Context, cardIDs []int64) ([]Item,
 	active := m.resolvedActive()
 	byID := map[int64]Item{}
 	for _, c := range m.cards {
-		if m.cardProjectID(c) == active {
+		if m.living(c) && m.cardProjectID(c) == active {
 			byID[c.ID] = c
 		}
 	}
@@ -558,6 +751,13 @@ func (m *memoryRepo) DeleteProject(_ context.Context, id int64) error {
 	if n > 0 || len(m.projects) <= 1 {
 		return ErrProjectConflict
 	}
+	m.ensureSprints()
+	for sid, s := range m.sprints {
+		if s.ProjectID == id {
+			delete(m.sprints, sid)
+			delete(m.sprintItems, sid)
+		}
+	}
 	next := make([]Project, 0, len(m.projects)-1)
 	for _, p := range m.projects {
 		if p.ID != id {
@@ -567,10 +767,44 @@ func (m *memoryRepo) DeleteProject(_ context.Context, id int64) error {
 	m.projects = next
 	return nil
 }
+func (m *memoryRepo) ReorderProjects(_ context.Context, projectIDs []int64) ([]Project, error) {
+	if err := validateProjectOrder(projectIDs); err != nil {
+		return nil, err
+	}
+	if !sameProjectIDSet(m.projects, projectIDs) {
+		return nil, ErrProjectMismatch
+	}
+	byID := make(map[int64]Project, len(m.projects))
+	for _, p := range m.projects {
+		byID[p.ID] = p
+	}
+	now := time.Now().UTC()
+	next := make([]Project, 0, len(projectIDs))
+	for pos, id := range projectIDs {
+		p := byID[id]
+		p.Position = pos
+		p.UpdatedAt = now
+		next = append(next, p)
+	}
+	m.projects = next
+	out, err := m.ListProjects(context.Background())
+	return out, err
+}
 func request(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	return requestWithCookie(h, method, path, body, HandlerTestSessionID)
+}
+
+func requestAnon(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	return requestWithCookie(h, method, path, body, "")
+}
+
+func requestWithCookie(h http.Handler, method, path, body, sessionID string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
+	if sessionID != "" {
+		r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: sessionID})
+	}
 	h.ServeHTTP(w, r)
 	return w
 }
@@ -597,7 +831,13 @@ func TestValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			w := request(NewHandler(fresh()), tc.method, tc.path, tc.body)
+			m := fresh()
+			if tc.method == "PATCH" && strings.Contains(tc.path, "/api/items/1") {
+				if _, err := m.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: "seed", Description: ""}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			w := request(NewHandler(m), tc.method, tc.path, tc.body)
 			if w.Code != tc.status {
 				t.Fatalf("status=%d body=%s", w.Code, w.Body)
 			}
@@ -664,11 +904,29 @@ func TestUnicodeValidationBoundaries(t *testing.T) {
 
 func (m *memoryRepo) GetItemByNumber(_ context.Context, number, projectID int64) (Item, error) {
 	for _, card := range m.cards {
-		if card.Number == number && m.cardProjectID(card) == projectID {
+		if m.living(card) && card.Number == number && m.cardProjectID(card) == projectID {
 			return card, nil
 		}
 	}
 	return Item{}, ErrNotFound
+}
+
+func (m *memoryRepo) GetDeletedItem(_ context.Context, id, projectID int64) (Item, error) {
+	c, ok := m.cards[id]
+	if !ok || m.living(c) || m.cardProjectID(c) != projectID {
+		return Item{}, ErrNotFound
+	}
+	return c, nil
+}
+
+func (m *memoryRepo) ListLivingItems(_ context.Context) ([]Item, error) {
+	out := []Item{}
+	for _, c := range m.cards {
+		if m.living(c) {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 func TestGetItemByNumberProjectDistinguishesDuplicateNumbers(t *testing.T) {
 	repo := fresh()
@@ -825,7 +1083,8 @@ func (m *memoryRepo) validateTemplateIDs(ids []int64) error {
 }
 
 func (m *memoryRepo) ListItemCommandTemplates(_ context.Context, cardID int64) ([]CommandTemplate, error) {
-	if _, ok := m.cards[cardID]; !ok {
+	c, ok := m.cards[cardID]
+	if !ok || !m.living(c) {
 		return nil, ErrNotFound
 	}
 	ids := m.cardTemplateIDs[cardID]
@@ -842,7 +1101,8 @@ func (m *memoryRepo) ListItemCommandTemplates(_ context.Context, cardID int64) (
 }
 
 func (m *memoryRepo) ReplaceItemCommandTemplates(_ context.Context, cardID int64, templateIDs []int64) ([]CommandTemplate, error) {
-	if _, ok := m.cards[cardID]; !ok {
+	c, ok := m.cards[cardID]
+	if !ok || !m.living(c) {
 		return nil, ErrNotFound
 	}
 	ids := dedupeTemplateIDs(templateIDs)
@@ -874,39 +1134,195 @@ func (m *memoryRepo) ApplyCommandTemplatesToAllItems(_ context.Context, template
 	if err := m.validateTemplateIDs(ids); err != nil {
 		return err
 	}
-	for cardID := range m.cards {
+	for cardID, c := range m.cards {
+		if !m.living(c) {
+			continue
+		}
 		m.cardTemplateIDs[cardID] = append([]int64(nil), ids...)
 	}
 	return nil
 }
 
-func (m *memoryRepo) GetListFilter(context.Context) (ListFilter, error) {
+func (m *memoryRepo) GetListFilter(context.Context) (WorkspaceListFilters, error) {
 	if m.listFilter == nil {
-		return emptyListFilter(), nil
+		return defaultWorkspaceListFilters(m.columns), nil
 	}
-	out := *m.listFilter
-	if out.StatusIDs == nil {
-		out.StatusIDs = []int64{}
-	} else {
-		out.StatusIDs = append([]int64(nil), out.StatusIDs...)
-	}
-	return out, nil
+	return WorkspaceListFilters{
+		Board:   cloneListFilter(m.listFilter.Board),
+		Backlog: cloneListFilter(m.listFilter.Backlog),
+	}, nil
 }
 
-func (m *memoryRepo) PutListFilter(_ context.Context, in ListFilter) (ListFilter, error) {
+func (m *memoryRepo) PutListFilter(_ context.Context, in WorkspaceListFilters) (WorkspaceListFilters, error) {
 	known := make(map[int64]struct{}, len(m.columns))
 	for _, c := range m.columns {
 		known[c.ID] = struct{}{}
 	}
-	out := ListFilter{
-		Query:     strings.TrimSpace(in.Query),
-		StatusIDs: normalizeStatusIDs(in.StatusIDs, known),
+	out := WorkspaceListFilters{
+		Board:   normalizeListFilter(in.Board, known),
+		Backlog: normalizeListFilter(in.Backlog, known),
 	}
-	if out.StatusIDs == nil {
-		out.StatusIDs = []int64{}
+	cp := WorkspaceListFilters{
+		Board:   cloneListFilter(out.Board),
+		Backlog: cloneListFilter(out.Backlog),
 	}
-	cp := out
-	cp.StatusIDs = append([]int64(nil), out.StatusIDs...)
 	m.listFilter = &cp
 	return out, nil
+}
+
+func (m *memoryRepo) GetHeaderMenu(context.Context) (WorkspaceHeaderMenu, error) {
+	if m.headerMenu == nil {
+		return emptyWorkspaceHeaderMenu(), nil
+	}
+	return cloneWorkspaceHeaderMenu(*m.headerMenu), nil
+}
+
+func (m *memoryRepo) PutHeaderMenu(_ context.Context, in WorkspaceHeaderMenu) (WorkspaceHeaderMenu, error) {
+	out := WorkspaceHeaderMenu{
+		Board:      normalizePageHeaderMenuPut(in.Board),
+		Backlog:    normalizePageHeaderMenuPut(in.Backlog),
+		ItemDetail: normalizePageHeaderMenuPut(in.ItemDetail),
+	}
+	cp := cloneWorkspaceHeaderMenu(out)
+	m.headerMenu = &cp
+	return out, nil
+}
+
+func (m *memoryRepo) ListComments(_ context.Context, itemID int64) ([]Comment, error) {
+	out := make([]Comment, 0)
+	for _, c := range m.comments {
+		if c.ItemID == itemID {
+			out = append(out, c)
+		}
+	}
+	slices.SortFunc(out, func(a, b Comment) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return out, nil
+}
+
+func (m *memoryRepo) CreateComment(_ context.Context, itemID int64, author, body string) (Comment, error) {
+	c0, ok := m.cards[itemID]
+	if !ok || !m.living(c0) {
+		return Comment{}, ErrNotFound
+	}
+	now := time.Now().UTC()
+	id := m.nextCommentID
+	m.nextCommentID++
+	c := Comment{ID: id, ItemID: itemID, Author: author, Body: body, CreatedAt: now, UpdatedAt: now}
+	m.comments[id] = c
+	return c, nil
+}
+
+func (m *memoryRepo) UpdateComment(_ context.Context, itemID, commentID int64, author, body *string) (Comment, error) {
+	c, ok := m.comments[commentID]
+	if !ok || c.ItemID != itemID {
+		return Comment{}, ErrNotFound
+	}
+	if author != nil {
+		c.Author = *author
+	}
+	if body != nil {
+		c.Body = *body
+	}
+	c.UpdatedAt = time.Now().UTC()
+	m.comments[commentID] = c
+	return c, nil
+}
+
+func (m *memoryRepo) DeleteComment(_ context.Context, itemID, commentID int64) error {
+	c, ok := m.comments[commentID]
+	if !ok || c.ItemID != itemID {
+		return ErrNotFound
+	}
+	delete(m.comments, commentID)
+	return nil
+}
+
+func (m *memoryRepo) ListAIMessages(_ context.Context, itemID int64) ([]AIMessage, error) {
+	out := make([]AIMessage, 0)
+	for _, msg := range m.aiMessages {
+		if msg.ItemID == itemID {
+			out = append(out, msg)
+		}
+	}
+	slices.SortFunc(out, func(a, b AIMessage) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return out, nil
+}
+
+func (m *memoryRepo) AppendAITurn(_ context.Context, itemID int64, userBody, assistantBody string, inTok, outTok int64) error {
+	c0, ok := m.cards[itemID]
+	if !ok || !m.living(c0) {
+		return ErrNotFound
+	}
+	existing, _ := m.ListAIMessages(context.Background(), itemID)
+	overflow := len(existing) + 2 - maxAIChatStoredMessages
+	if overflow > 0 {
+		for i := 0; i < overflow; i++ {
+			delete(m.aiMessages, existing[i].ID)
+		}
+	}
+	now := time.Now().UTC()
+	uid := m.nextAIMessageID
+	m.nextAIMessageID++
+	m.aiMessages[uid] = AIMessage{ID: uid, ItemID: itemID, Role: AIRoleUser, Body: userBody, CreatedAt: now}
+	aid := m.nextAIMessageID
+	m.nextAIMessageID++
+	asst := AIMessage{ID: aid, ItemID: itemID, Role: AIRoleAssistant, Body: assistantBody, CreatedAt: now.Add(time.Nanosecond)}
+	if inTok > 0 {
+		v := int(inTok)
+		asst.InputTokens = &v
+	}
+	if outTok > 0 {
+		v := int(outTok)
+		asst.OutputTokens = &v
+	}
+	m.aiMessages[aid] = asst
+	return nil
+}
+
+func (m *memoryRepo) ClearAIMessages(_ context.Context, itemID int64) error {
+	for id, msg := range m.aiMessages {
+		if msg.ItemID == itemID {
+			delete(m.aiMessages, id)
+		}
+	}
+	return nil
+}
+
+func (m *memoryRepo) AddAIUsage(_ context.Context, requests, inTok, outTok int64) error {
+	m.aiUsage.RequestCount += requests
+	m.aiUsage.InputTokens += inTok
+	m.aiUsage.OutputTokens += outTok
+	return nil
+}
+
+func (m *memoryRepo) GetAIUsage(context.Context) (AIUsage, error) {
+	out := m.aiUsage
+	if m.aiUsage.LimitTokens != nil {
+		v := *m.aiUsage.LimitTokens
+		out.LimitTokens = &v
+	}
+	return out, nil
+}
+
+func (m *memoryRepo) SetAICreditLimit(_ context.Context, limit *int64) error {
+	if limit != nil && *limit < 0 {
+		return fmt.Errorf("negative limit")
+	}
+	if limit == nil {
+		m.aiUsage.LimitTokens = nil
+		return nil
+	}
+	v := *limit
+	m.aiUsage.LimitTokens = &v
+	return nil
 }

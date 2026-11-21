@@ -46,7 +46,7 @@ func TestMySQLRefinedItemFailureWritesNothingAndKeepsTheNumber(t *testing.T) {
 		return
 	}
 	cardsBefore, nextBefore := count()
-	failing := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) { return RefinedItem{}, errors.New("upstream down") }}
+	failing := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, int64, int64, error) { return RefinedItem{}, 0, 0, errors.New("upstream down") }}
 	if w := postJSON(NewHandler(r, WithItemFormatter(failing)), `{"title":"下書き"}`); w.Code != 502 {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}

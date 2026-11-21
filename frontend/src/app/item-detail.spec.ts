@@ -1,9 +1,12 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ItemDetail } from './item-detail';
+import { AiChatContext } from './ai-chat-context';
 import { Api } from './api';
+import { AuthSession } from './auth-session';
 import { formatDueAtUtc, fromLocalParts } from './due-at';
 import { Item } from './models';
 import { itemDetailUrl } from './item-link';
@@ -22,6 +25,26 @@ import {
   saveBoardScroll,
   saveReturnTo,
 } from './list-scroll-session';
+
+const testUser = {
+  id: 1,
+  loginName: 'admin',
+  displayName: 'Admin',
+  role: 'admin' as const,
+  disabled: false,
+};
+
+const authStub = {
+  user: signal(testUser),
+  status: signal<'authenticated'>('authenticated'),
+  loadError: signal(''),
+  ensureMe: () => of(testUser),
+  isAdmin: () => true,
+  clearSubject: () => undefined,
+  login: () => of(testUser),
+  logout: () => of(undefined),
+};
+
 const card: Item = {
   id: 18,
   projectId: 0,
@@ -31,37 +54,67 @@ const card: Item = {
   description: '元の説明',
   position: 0,
   backlogPosition: 0,
-    offsetY: 0,
+  offsetY: 0,
   prUrls: [],
   relatedItems: [],
   assignee: '',
   closeReason: '',
+  solution: '',
+  favorite: false,
   dueAt: null,
   createdAt: '',
   updatedAt: '',
+  canEdit: true,
+  canManage: true,
 };
 describe('ItemDetail autosave', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> };
+  let restoreDialog: () => void;
   beforeEach(() => {
     vi.useFakeTimers();
     sessionStorage.clear();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    restoreDialog = () => {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    };
     params = new BehaviorSubject(new Map([['number', '3']]));
     router = {
       navigate: vi.fn(),
       navigateByUrl: vi.fn().mockResolvedValue(true),
     };
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -76,11 +129,15 @@ describe('ItemDetail autosave', () => {
       updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -90,6 +147,7 @@ describe('ItemDetail autosave', () => {
     });
   });
   afterEach(() => {
+    restoreDialog();
     sessionStorage.clear();
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
@@ -100,6 +158,45 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     return f;
   };
+  it('does not render always-on inline AI chat (moved to fab)', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('app-item-ai-chat')).toBeNull();
+  });
+  it('clears AiChatContext when route number changes while item is null', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const ctx = TestBed.inject(AiChatContext);
+    expect(ctx.pageKind()).toBe('detail');
+    expect(ctx.routeTarget()?.number).toBe(3);
+    // Simulate navigation to another number before the new card arrives
+    (f.componentInstance as unknown as { routeNumber: { set: (n: number) => void } }).routeNumber.set(
+      99,
+    );
+    f.componentInstance.autosave.reset(null);
+    f.detectChanges();
+    expect(ctx.pageKind()).toBe('other');
+    expect(ctx.routeTarget()).toBeNull();
+  });
+  it('shows solution property link (empty label) without form field', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const link = f.nativeElement.querySelector('a.solution-link') as HTMLAnchorElement | null;
+    expect(link).toBeTruthy();
+    expect(link!.textContent?.trim()).toBe('ソリューション（未記入）');
+    expect(Object.keys(f.componentInstance.form.getRawValue())).not.toContain('solution');
+  });
+  it('shows filled solution property label when solution is set', async () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, solution: 'メモ', projectId: 2 }));
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const link = f.nativeElement.querySelector('a.solution-link') as HTMLAnchorElement;
+    expect(link.textContent?.trim()).toBe('ソリューション');
+  });
   it('goBackToList navigates to saved returnTo and clears list-return', async () => {
     saveReturnTo('/backlog');
     const f = create();
@@ -143,6 +240,16 @@ describe('ItemDetail autosave', () => {
     expect(readBoardScroll()).toBeNull();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
   });
+  it('places comments above history', () => {
+    const f = create();
+    const comments = f.nativeElement.querySelector('app-item-comments');
+    const history = f.nativeElement.querySelector('app-item-history');
+    expect(comments).toBeTruthy();
+    expect(history).toBeTruthy();
+    expect(
+      comments.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
   it('refreshes history after a successful autosave without resetting the draft', () => {
     api.updateItem.mockImplementation((_id, patch) =>
       of({ ...card, ...patch, updatedAt: '2026-11-13T00:00:00Z' }),
@@ -159,10 +266,10 @@ describe('ItemDetail autosave', () => {
   });
   it('has no manual save button and never saves just by loading', () => {
     const f = create();
-    expect(f.nativeElement.querySelector('button[type="submit"]')).toBeNull();
+    expect(f.nativeElement.querySelector('form.detail-layout button[type="submit"]')).toBeNull();
     vi.advanceTimersByTime(2500);
     expect(api.updateItem).not.toHaveBeenCalled();
-    expect(f.nativeElement.querySelector('.eyebrow').textContent).toBe('ITEM-003');
+    expect(f.nativeElement.querySelector('.eyebrow').textContent.trim()).toBe('ITEM-003');
   });
   it('saves the status selection immediately using the internal ID and leaves inputs enabled', () => {
     const pending = new Subject<Item>();
@@ -488,6 +595,52 @@ describe('ItemDetail autosave', () => {
     expect(input.value).toBe('draft-name');
     expect(f.nativeElement.textContent).toContain('対応の保存失敗');
   });
+  it('toggles favorite with immediate PATCH and aria-label', () => {
+    api.updateItem.mockReturnValue(
+      of({ ...card, favorite: true, updatedAt: '2026-11-18T00:00:00.000Z' }),
+    );
+    const f = create();
+    const btn = f.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-label')).toBe('お気に入りに追加');
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    btn.click();
+    f.detectChanges();
+    expect(api.updateItem).toHaveBeenCalledWith(18, { favorite: true });
+    expect(f.componentInstance.item()?.favorite).toBe(true);
+    expect(btn.getAttribute('aria-label')).toBe('お気に入りから外す');
+    expect(Object.keys(f.componentInstance.form.getRawValue())).not.toContain('favorite');
+  });
+  it('ignores second favorite toggle while saving and reverts on error', () => {
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValueOnce(pending);
+    const f = create();
+    const btn = f.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement;
+    btn.click();
+    f.detectChanges();
+    expect(f.componentInstance.busy()).toBe(true);
+    btn.click();
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    pending.error({ error: { message: 'お気に入りの保存失敗' } });
+    f.detectChanges();
+    expect(f.componentInstance.item()?.favorite).toBe(false);
+    expect(f.nativeElement.textContent).toContain('お気に入りの保存失敗');
+  });
+  it('keeps favorite while saving when live refresh would overwrite (L-037)', () => {
+    const pending = new Subject<Item>();
+    api.updateItem.mockReturnValueOnce(pending);
+    const f = create();
+    const btn = f.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement;
+    btn.click();
+    f.detectChanges();
+    expect(f.componentInstance.busy()).toBe(true);
+    expect(f.componentInstance.item()?.favorite).toBe(true);
+    // Simulate what live refresh apply would do — busy() must block callers.
+    expect(f.componentInstance.busy()).toBe(true);
+    pending.next({ ...card, favorite: true, updatedAt: '2026-11-18T00:00:00.000Z' });
+    pending.complete();
+    f.detectChanges();
+    expect(f.componentInstance.item()?.favorite).toBe(true);
+  });
   it('flushes edits before allowing navigation', async () => {
     const pending = new Subject<Item>();
     api.updateItem.mockReturnValue(pending);
@@ -542,6 +695,33 @@ describe('ItemDetail autosave', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/']);
     expect(await f.componentInstance.canLeave()).toBe(true);
   });
+  it('shows trash-bin delete dialog copy without irreversible wording', () => {
+    const f = create();
+    f.componentInstance.confirmDelete.set(true);
+    f.detectChanges();
+    const copy = f.nativeElement.querySelector('.delete-copy')?.textContent ?? '';
+    const title = f.nativeElement.querySelector('#delete-title')?.textContent ?? '';
+    const action =
+      [...(f.nativeElement.querySelectorAll('.danger-button') as NodeListOf<HTMLElement>)].find(
+        (el) => el.textContent?.includes('ゴミ箱'),
+      )?.textContent ?? '';
+    expect(title).toContain('ゴミ箱');
+    expect(copy).toContain('ゴミ箱に移します');
+    expect(copy).toMatch(/30日以内.*復元/);
+    expect(copy).not.toContain('取り消せません');
+    expect(action).toContain('ゴミ箱に移す');
+    f.destroy();
+  });
+  it('keeps Close reason dialog flow after trash dialog copy change', () => {
+    const f = create();
+    f.componentInstance.form.controls.columnId.setValue(3);
+    f.componentInstance.closeTransition.onStatusChange();
+    f.detectChanges();
+    expect(f.componentInstance.closeTransition.open()).toBe(true);
+    expect(f.nativeElement.querySelector('#close-reason-modal-input')).toBeTruthy();
+    expect(api.updateItem).not.toHaveBeenCalled();
+    f.destroy();
+  });
   it('confirms before leave while assignee PATCH is in flight', async () => {
     const pending = new Subject<Item>();
     api.updateItem.mockReturnValue(pending);
@@ -562,17 +742,26 @@ describe('ItemDetail copy card link', () => {
   const originalClipboard = navigator.clipboard;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [{ id: 1, name: 'Todo', position: 0 }],
@@ -583,11 +772,15 @@ describe('ItemDetail copy card link', () => {
       updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -717,7 +910,10 @@ describe('ItemDetail copy command menu and management', () => {
   ) => {
     const params = new BehaviorSubject(new Map([['number', '3']]));
     const api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
       itemByNumber: vi.fn(() => of(card)),
       updateItem: vi.fn(),
@@ -732,12 +928,16 @@ describe('ItemDetail copy command menu and management', () => {
       updateCommandTemplate: vi.fn(),
       deleteCommandTemplate: vi.fn(),
       ...overrides,
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     const router = { navigate: vi.fn() };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -1115,13 +1315,20 @@ describe('ItemDetail IME response handling', () => {
           {
             provide: Api,
             useValue: {
+              listUsers: () => of([]),
               history: () => of({ events: [], nextBefore: 0 }),
+              listComments: () => of([]),
+              listAIChat: () => of([]),
+              listAttachments: () => of([]),
+              uploadAttachment: () => of({ id: 1, originalName: 'x.png' }),
+              deleteAttachment: () => of(undefined),
               board: () => of({ columns: [], items: [] }),
               itemByNumber: () => of(card),
               updateItem: () => pending,
               listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
             },
           },
+          { provide: AuthSession, useValue: authStub },
           {
             provide: ActivatedRoute,
             useValue: {
@@ -1160,12 +1367,18 @@ describe('ItemDetail live refresh', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -1173,7 +1386,10 @@ describe('ItemDetail live refresh', () => {
     params = new BehaviorSubject(new Map([['number', '3']]));
     router = { navigate: vi.fn() };
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1188,11 +1404,15 @@ describe('ItemDetail live refresh', () => {
       updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -1270,12 +1490,18 @@ describe('ItemDetail Close reason', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   let restoreDialog: () => void;
   beforeEach(() => {
@@ -1299,7 +1525,10 @@ describe('ItemDetail Close reason', () => {
     };
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1315,11 +1544,15 @@ describe('ItemDetail Close reason', () => {
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })),
       listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -1441,6 +1674,8 @@ describe('ItemDetail Close reason', () => {
       ...card,
       columnId: 3,
       closeReason: '理由',
+      solution: '',
+      favorite: false,
       dueAt: null,
       title: '編集中',
       updatedAt: '2026-11-17T01:00:00Z',
@@ -1459,12 +1694,18 @@ describe('ItemDetail description text links', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   const buttonByText = (root: ParentNode, text: string) =>
     Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text) as
@@ -1492,7 +1733,10 @@ describe('ItemDetail description text links', () => {
     };
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1515,11 +1759,15 @@ describe('ItemDetail description text links', () => {
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })),
       listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -1716,19 +1964,28 @@ describe('ItemDetail dueAt picker', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     vi.useFakeTimers();
     params = new BehaviorSubject(new Map([['number', '3']]));
     api = {
+      listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1744,11 +2001,15 @@ describe('ItemDetail dueAt picker', () => {
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })),
       listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },

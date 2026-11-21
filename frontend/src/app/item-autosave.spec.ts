@@ -18,6 +18,8 @@ const initial: Item = {
   relatedItems: [],
   assignee: '',
   closeReason: '',
+  solution: '',
+  favorite: false,
   dueAt: null,
   createdAt: '',
   updatedAt: '',
@@ -356,6 +358,44 @@ describe('side field preservation', () => {
     expect(edit.item()?.title).toBe('編集');
     TestBed.resetTestingModule();
   });
+
+  it('keeps favorite set during an in-flight form flush via applyFavoriteSave', () => {
+    const response = new Subject<Item>();
+    const api = {
+      updateItem: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset({ ...initial, favorite: false });
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    edit.applyFavoriteSave({ favorite: true, updatedAt: '2026-11-18T12:00:00Z' });
+    expect(edit.item()?.favorite).toBe(true);
+    response.next({ ...initial, title: '編集', favorite: false });
+    response.complete();
+    expect(edit.item()?.favorite).toBe(true);
+    expect(edit.item()?.title).toBe('編集');
+    TestBed.resetTestingModule();
+  });
+
+  it('keeps favorite after toggle when a later form flush returns stale false', () => {
+    const response = new Subject<Item>();
+    const api = {
+      updateItem: vi.fn(() => response),
+    };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset({ ...initial, favorite: false });
+    edit.applyFavoriteSave({ favorite: true, updatedAt: '2026-11-18T12:00:00Z' });
+    expect(edit.item()?.favorite).toBe(true);
+    edit.form.controls.title.setValue('編集');
+    edit.flush();
+    response.next({ ...initial, title: '編集', favorite: false });
+    response.complete();
+    expect(edit.item()?.favorite).toBe(true);
+    expect(edit.item()?.title).toBe('編集');
+    TestBed.resetTestingModule();
+  });
 });
 
 describe('closeReason form field', () => {
@@ -442,12 +482,15 @@ describe('closeReason form field', () => {
       prUrls: [url],
       prTitles: ['表示名'],
       closeReason: '',
+      solution: '',
+      favorite: false,
       dueAt: null,
     });
     edit.applyCloseSave({
       ...initial,
       columnId: 3,
       closeReason: '理由',
+      solution: '',
       dueAt: null,
       prUrls: [url],
       updatedAt: '2026-11-17T02:00:00Z',

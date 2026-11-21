@@ -4,7 +4,9 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
+  HostListener,
   inject,
   Injector,
   NgZone,
@@ -12,16 +14,32 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { Location } from '@angular/common';
+import { Location, NgStyle } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { Subscription, finalize, forkJoin } from 'rxjs';
+import { Subscription, finalize, firstValueFrom, forkJoin } from 'rxjs';
+import { AiChatContext } from './ai-chat-context';
+import { toAiChatOptions } from './ai-chat-target';
 import { Api } from './api';
 import { errorMessage } from './api-error';
+import { AuthSession } from './auth-session';
 import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
+import { applyBoardDataWithActiveSync } from './board-active-sync';
+import { normalizeBoardData } from './board-data';
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
-import { itemAppPath } from './item-link';
+import { viewAccessLabel } from './item-acl';
+import { itemAppPath, itemDetailUrl } from './item-link';
+import {
+  COMMAND_ITEM_MENU_EMPTY,
+  CommandTemplate,
+  resolveCommand,
+} from './command-template';
+import { AppOrigin } from './app-origin';
+import { CopyCommandFeedback } from './copy-command-feedback';
+import { CopyFeedbackBanner } from './copy-feedback-banner';
+import { CopyLinkFeedback } from './copy-link-feedback';
+import { LatestCopyFeedback } from './latest-copy-feedback';
 import {
   scheduleScrollRestore,
 } from './list-scroll-restore';
@@ -37,20 +55,28 @@ import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
 import { Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
+import { itemsForActiveProject } from './project-items';
+import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 @Component({
   selector: 'app-backlog',
-  imports: [ReactiveFormsModule, RouterLink, Modal, ListFilterBar],
+  imports: [ReactiveFormsModule, RouterLink, Modal, ListFilterBar, CopyFeedbackBanner, NgStyle],
   templateUrl: './backlog.html',
   styleUrl: './backlog.css',
 })
 export class Backlog implements OnInit {
   readonly formatItemNumber = formatItemNumber;
+  readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
+  private readonly auth = inject(AuthSession);
+  private readonly aiChat = inject(AiChatContext);
   private readonly projectSession = inject(ProjectSession);
+  private readonly projectBoardCache = inject(ProjectBoardCache);
+  /** Template-safe busy flag while active project reload is in flight. */
+  readonly projectSwitching = computed(() => this.projectSession.switching());
   private backlogLoadGeneration = 0;
   private projectSwitchSub?: Subscription;
   private readonly router = inject(Router);
@@ -58,6 +84,21 @@ export class Backlog implements OnInit {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly zone = inject(NgZone);
+  private readonly appOrigin = inject(AppOrigin);
+  private readonly copyStatus = new LatestCopyFeedback(this.destroyRef);
+  private readonly linkCopy = new CopyLinkFeedback(this.destroyRef, this.copyStatus);
+  private readonly commandCopy = new CopyCommandFeedback(this.destroyRef, this.copyStatus);
+  readonly copyLinkAnnouncement = this.linkCopy.message;
+  readonly copyCommandAnnouncement = this.commandCopy.message;
+  readonly copyFeedback = this.copyStatus.message;
+  readonly copyFeedbackKind = this.copyStatus.kind;
+  readonly commandMenuEmpty = COMMAND_ITEM_MENU_EMPTY;
+  readonly openCommandItemId = signal<number | null>(null);
+  readonly commandMenuTemplates = signal<CommandTemplate[]>([]);
+  readonly commandMenuError = signal('');
+  readonly commandMenuLoading = signal(false);
+  private commandMenuLoadGeneration = 0;
+  readonly commandMenuStyle = signal<Record<string, string>>({});
   readonly listFilter = inject(ListFilterSession);
   private readonly backlogScroll = viewChild<ElementRef<HTMLElement>>('backlogScroll');
   private readonly listContainer = viewChild<ElementRef<HTMLElement>>('listContainer');
@@ -79,13 +120,24 @@ export class Backlog implements OnInit {
   readonly formError = signal('');
   readonly appliedFilter = computed(() =>
     appliedListFilter(
-      this.listFilter.filter(),
+      this.listFilter.filter('backlog'),
       this.columns().map((c) => c.id),
     ),
   );
+  readonly activeItems = computed(() =>
+    itemsForActiveProject(this.items(), this.projectSession.activeId()),
+  );
   readonly filteredItems = computed(() => {
     const filter = this.appliedFilter();
-    return this.items().filter((card) => itemMatchesFilter(card, filter));
+    return this.activeItems().filter((card) => itemMatchesFilter(card, filter));
+  });
+  /** AC5: filter / live refresh で開中行が一覧から消えたらメニューを閉じ generation を進める */
+  private readonly closeCommandMenuWhenRowHidden = effect(() => {
+    const openId = this.openCommandItemId();
+    if (openId === null) return;
+    if (!this.filteredItems().some((card) => card.id === openId)) {
+      this.closeCommandMenu();
+    }
   });
   readonly filterActive = computed(() =>
     listFilterActive(
@@ -113,6 +165,10 @@ export class Backlog implements OnInit {
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
   });
 
+  private readonly publishAiChatCandidates = effect(() => {
+    this.aiChat.setBacklog(toAiChatOptions(this.activeItems(), this.auth.user()));
+  });
+
   ngOnInit() {
     this.load();
     this.listFilter.load();
@@ -120,9 +176,11 @@ export class Backlog implements OnInit {
     this.destroyRef.onDestroy(() => {
       this.scrollRestoreGeneration++;
       this.backlogLoadGeneration++;
+      this.closeCommandMenu();
       this.projectSwitchSub?.unsubscribe();
       // Navigating away mid-switch must not leave the board stuck in `switching`.
       this.projectSession.endSwitch();
+      if (this.aiChat.pageKind() === 'backlog') this.aiChat.clear();
     });
     const stop = startLiveRefresh({
       enabled: () =>
@@ -135,7 +193,10 @@ export class Backlog implements OnInit {
       fetch: () => forkJoin({ backlog: this.api.backlog(), board: this.api.board() }),
       apply: ({ backlog, board }) => {
         this.error.set('');
-        if (!sameJson(this.items(), backlog.items)) this.items.set(backlog.items);
+        if (!sameJson(this.items(), backlog.items)) {
+          this.rememberBacklogCache(backlog.items);
+          this.items.set(backlog.items);
+        }
         if (!sameJson(this.columns(), board.columns)) this.columns.set(board.columns);
       },
       ...zoneAwareTimers(this.zone),
@@ -177,6 +238,7 @@ export class Backlog implements OnInit {
   }
 
   load() {
+    this.closeCommandMenu();
     const generation = ++this.backlogLoadGeneration;
     this.loading.set(true);
     this.error.set('');
@@ -191,11 +253,14 @@ export class Backlog implements OnInit {
       .subscribe({
         next: ({ backlog, board }) => {
           if (generation !== this.backlogLoadGeneration) return;
-          this.items.set(backlog.items);
-          this.columns.set(board.columns);
-          // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
-          // (not the loading-only first paint).
-          this.scheduleBacklogScrollRestore();
+          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board), () => {
+            this.rememberBacklogCache(backlog.items);
+            this.items.set(backlog.items);
+            this.columns.set(board.columns);
+            // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
+            // (not the loading-only first paint).
+            this.scheduleBacklogScrollRestore();
+          });
         },
         error: (e) => {
           if (generation !== this.backlogLoadGeneration) return;
@@ -209,7 +274,13 @@ export class Backlog implements OnInit {
    * request settles so a poll of the previous project cannot apply (L-040).
    */
   private reloadAfterProjectSwitch() {
+    this.closeCommandMenu();
     const generation = ++this.backlogLoadGeneration;
+    const activeId = this.projectSession.activeId();
+    const cached = activeId != null ? this.projectBoardCache.getBacklog(activeId) : undefined;
+    if (cached) {
+      this.items.set(cached);
+    }
     this.projectSwitchSub?.unsubscribe();
     this.projectSwitchSub = forkJoin({ backlog: this.api.backlog(), board: this.api.board() })
       .pipe(
@@ -223,14 +294,221 @@ export class Backlog implements OnInit {
         next: ({ backlog, board }) => {
           if (generation !== this.backlogLoadGeneration) return;
           this.error.set('');
-          this.items.set(backlog.items);
-          this.columns.set(board.columns);
+          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board), () => {
+            this.rememberBacklogCache(backlog.items);
+            this.items.set(backlog.items);
+            this.columns.set(board.columns);
+          });
         },
         error: (e) => {
           if (generation !== this.backlogLoadGeneration) return;
           this.error.set(errorMessage(e));
         },
       });
+  }
+
+  private rememberBacklogCache(items: Item[]) {
+    const activeId = this.projectSession.activeId();
+    if (activeId != null && activeId > 0) {
+      this.projectBoardCache.putBacklog(activeId, items);
+    }
+  }
+
+  async copyItemLink(number: number, projectId?: number) {
+    const origin = await this.appOrigin.resolve();
+    const scopedProjectId = projectId && projectId > 0 ? projectId : undefined;
+    return this.linkCopy.copyItemNumber(number, origin, scopedProjectId);
+  }
+
+  toggleCommandMenu(itemId: number, itemNumber: number, projectId: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const opening = this.openCommandItemId() !== itemId;
+    if (!opening) {
+      this.closeCommandMenu();
+      return;
+    }
+    const button = event.currentTarget;
+    if (!(button instanceof HTMLElement)) return;
+    const generation = ++this.commandMenuLoadGeneration;
+    const scopedProjectId = projectId > 0 ? projectId : undefined;
+    const listPromise = firstValueFrom(
+      this.api.listItemCommandTemplatesByNumber(itemNumber, scopedProjectId),
+    );
+
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      const textPromise = listPromise.then(async (res) => {
+        const templates = res?.templates ?? [];
+        if (templates.length !== 1) {
+          throw new Error('not-single');
+        }
+        const origin = await this.appOrigin.resolve();
+        return resolveCommand(
+          templates[0].template,
+          itemDetailUrl(origin, itemNumber, scopedProjectId),
+        );
+      });
+      void navigator.clipboard
+        .write([new ClipboardItem({ 'text/plain': textPromise })])
+        .then(() => {
+          this.zone.run(() => {
+            if (generation !== this.commandMenuLoadGeneration) return;
+            this.commandCopy.announce(true);
+            this.closeCommandMenu();
+          });
+        })
+        .catch(() => {
+          this.zone.run(() => {
+            if (generation !== this.commandMenuLoadGeneration) return;
+            this.openCommandMenuAfterList(
+              itemId,
+              itemNumber,
+              scopedProjectId,
+              button,
+              generation,
+              listPromise,
+            );
+          });
+        });
+      return;
+    }
+
+    this.openCommandMenuAfterList(
+      itemId,
+      itemNumber,
+      scopedProjectId,
+      button,
+      generation,
+      listPromise,
+    );
+  }
+
+  private openCommandMenuAfterList(
+    itemId: number,
+    itemNumber: number,
+    projectId: number | undefined,
+    button: HTMLElement,
+    generation: number,
+    listPromise: Promise<{ templates?: CommandTemplate[] }>,
+  ) {
+    this.commandMenuStyle.set({});
+    this.commandMenuTemplates.set([]);
+    this.commandMenuError.set('');
+    this.commandMenuLoading.set(true);
+    this.openCommandItemId.set(itemId);
+    void listPromise.then(
+      (res) => {
+        this.zone.run(() => {
+          if (generation !== this.commandMenuLoadGeneration || this.openCommandItemId() !== itemId) {
+            return;
+          }
+          const templates = res?.templates ?? [];
+          this.commandMenuTemplates.set(templates);
+          this.commandMenuError.set('');
+          this.commandMenuLoading.set(false);
+          if (templates.length === 1) {
+            void this.closeMenuAndCopyCommand(templates[0].template, itemNumber, projectId);
+          }
+        });
+      },
+      (error) => {
+        this.zone.run(() => {
+          if (generation !== this.commandMenuLoadGeneration || this.openCommandItemId() !== itemId) {
+            return;
+          }
+          this.commandMenuTemplates.set([]);
+          this.commandMenuError.set(errorMessage(error));
+          this.commandMenuLoading.set(false);
+        });
+      },
+    );
+    afterNextRender(
+      () => {
+        if (this.openCommandItemId() !== itemId) return;
+        this.commandMenuStyle.set(this.fixedCommandMenuStyle(button));
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private fixedCommandMenuStyle(button: HTMLElement): Record<string, string> {
+    const rect = button.getBoundingClientRect();
+    const menuMax = 240;
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const openUp = spaceBelow < menuMax && rect.top > spaceBelow;
+    return openUp
+      ? {
+          top: 'auto',
+          bottom: `${Math.max(8, window.innerHeight - rect.top + gap)}px`,
+          left: 'auto',
+          right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+        }
+      : {
+          top: `${rect.bottom + gap}px`,
+          bottom: 'auto',
+          left: 'auto',
+          right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+        };
+  }
+
+  private closeCommandMenu() {
+    this.commandMenuLoadGeneration++;
+    this.openCommandItemId.set(null);
+    this.commandMenuStyle.set({});
+    this.commandMenuTemplates.set([]);
+    this.commandMenuError.set('');
+    this.commandMenuLoading.set(false);
+  }
+
+  async copyCommand(
+    templateText: string,
+    number: number,
+    projectId: number | undefined,
+    event: Event,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    return this.closeMenuAndCopyCommand(templateText, number, projectId);
+  }
+
+  private async closeMenuAndCopyCommand(
+    templateText: string,
+    number: number,
+    projectId?: number,
+  ) {
+    this.closeCommandMenu();
+    const origin = await this.appOrigin.resolve();
+    const scopedProjectId = projectId && projectId > 0 ? projectId : undefined;
+    return this.commandCopy.copyResolved(templateText, number, origin, scopedProjectId);
+  }
+
+  @HostListener('document:click', ['$event'])
+  closeCommandMenuFromPointer(event: Event) {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.copy-command')) return;
+    this.closeCommandMenu();
+  }
+
+  @HostListener('document:keydown.escape')
+  closeCommandMenuFromKeyboard() {
+    this.closeCommandMenu();
+  }
+
+  @HostListener('window:resize')
+  @HostListener('window:scroll')
+  closeCommandMenuOnViewportChange() {
+    if (this.openCommandItemId() === null) return;
+    this.closeCommandMenu();
+  }
+
+  closeCommandMenuOnBacklogScroll() {
+    if (this.openCommandItemId() === null) return;
+    this.closeCommandMenu();
+  }
+
+  preventCopyDrag(event: DragEvent) {
+    event.preventDefault();
   }
 
   /** Real URL so modifier-clicks / copy-link keep working via href. */
@@ -321,7 +599,13 @@ export class Backlog implements OnInit {
 
   onItemDragStart(event: DragEvent, card: Item, rowEl: HTMLElement) {
     const target = event.target instanceof Element ? event.target : null;
-    if (!this.canReorder() || !target || target.closest('.backlog-detail-link')) {
+    if (
+      !this.canReorder() ||
+      !target ||
+      target.closest('.backlog-detail-link') ||
+      target.closest('.copy-command') ||
+      target.closest('.copy-card-link')
+    ) {
       event.preventDefault();
       return;
     }

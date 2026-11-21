@@ -43,12 +43,14 @@ export class ItemHistory implements OnChanges {
   readonly labels: Record<string, string> = {
     title: 'タイトル',
     description: '説明',
+    solution: 'ソリューション',
     status: 'ステータス',
     prUrl: 'GitHub PR',
     prUrls: 'GitHub PR',
     relatedItems: '関連',
     assignee: '対応',
     closeReason: 'Close理由',
+    favorite: 'お気に入り',
   };
   readonly kinds: Record<string, string> = {
     created: '作成',

@@ -1,0 +1,150 @@
+<main class="projects-page">
+  <nav class="breadcrumb" aria-label="パンくず">
+    <a routerLink="/">ボード</a><span>/</span><strong>プロジェクト</strong>
+  </nav>
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">PROJECTS</p>
+      <h1>プロジェクト<span class="heading-dot">.</span></h1>
+      <p>追加・名称変更・削除・並び替えができます。切替はヘッダーのセレクトのままです。</p>
+    </div>
+    <button
+      type="button"
+      class="primary"
+      (click)="openAdd()"
+      [disabled]="modalOpen() || pageBusy()"
+    >
+      追加
+    </button>
+  </div>
+
+  @if (projectSession.error()) {
+    <div class="state-panel" role="alert">{{ projectSession.error() }}</div>
+  }
+
+  @if (list().length === 0) {
+    <div class="state-panel" role="status">プロジェクトがありません。</div>
+  } @else {
+    <ul
+      class="projects-list"
+      cdkDropList
+      [cdkDropListData]="list()"
+      (cdkDropListDropped)="onDrop($event)"
+      aria-label="プロジェクト一覧"
+    >
+      @for (project of list(); track project.id; let i = $index) {
+        <li
+          class="project-row"
+          cdkDrag
+          [cdkDragDisabled]="pageBusy()"
+          [class.is-active]="project.id === projectSession.activeId()"
+        >
+          <button
+            type="button"
+            class="drag-handle"
+            cdkDragHandle
+            aria-label="ドラッグして並び替え"
+            [disabled]="pageBusy()"
+          >
+            ⋮⋮
+          </button>
+          <div class="project-main">
+            <strong>{{ project.name }}</strong>
+            @if (project.id === projectSession.activeId()) {
+              <span class="project-badge">選択中</span>
+            }
+          </div>
+          <div class="project-actions">
+            <button
+              type="button"
+              class="secondary"
+              aria-label="上へ"
+              [disabled]="i === 0 || pageBusy()"
+              (click)="move(i, -1)"
+              (keydown)="onMoveKeydown($event)"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="secondary"
+              aria-label="下へ"
+              [disabled]="i === list().length - 1 || pageBusy()"
+              (click)="move(i, 1)"
+              (keydown)="onMoveKeydown($event)"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="pageBusy()"
+              (click)="rename(project)"
+            >
+              名称変更
+            </button>
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="!canDelete() || saving()"
+              (click)="delete(project)"
+              (keydown)="onDestructiveKeydown($event)"
+            >
+              削除
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</main>
+
+@if (modalOpen()) {
+  <dialog
+    appModal
+    class="modal-backdrop"
+    aria-labelledby="modal-project-title"
+    (cancel)="$event.preventDefault(); closeModal()"
+  >
+    <section
+      class="modal"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeModal()"
+      tabindex="-1"
+    >
+      <header class="modal-header">
+        <h2 id="modal-project-title">プロジェクトを追加</h2>
+        <button
+          class="icon-button"
+          type="button"
+          (click)="closeModal()"
+          [disabled]="saving()"
+          aria-label="閉じる"
+        >
+          ×
+        </button>
+      </header>
+      <form [formGroup]="projectForm" (ngSubmit)="submitAdd()">
+        <label for="project-name">プロジェクト名 <span class="required">必須</span></label>
+        <input
+          id="project-name"
+          formControlName="name"
+          placeholder="例：モバイルアプリ"
+          autofocus
+        />
+        <p class="field-note">80文字以内。</p>
+        @if (projectForm.controls.name.touched && projectForm.invalid) {
+          <p class="form-error">プロジェクト名を1〜80文字で入力してください。</p>
+        }
+        @if (formError()) {
+          <p class="form-error" role="alert">{{ formError() }}</p>
+        }
+        <div class="form-actions">
+          <button class="primary" type="submit" [disabled]="saving()">
+            {{ saving() ? '作成中…' : '作成' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </dialog>
+}

@@ -1,5 +1,5 @@
 import { ApplicationRef } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, it, expect, vi } from 'vitest';
@@ -12,12 +12,21 @@ import {
 } from './list-scroll-session';
 import { Item, Column } from './models';
 import { TODO_COLUMN_MISSING } from './todo-column';
+import {
+  COMMAND_ITEM_MENU_EMPTY,
+  COPY_COMMAND_FAILURE,
+  COPY_COMMAND_SUCCESS,
+  resolveCommand,
+} from './command-template';
+import { COPY_LINK_SUCCESS } from './copy-link-feedback';
+import { itemDetailUrl } from './item-link';
+import { ProjectSession } from './project-session';
 
 function makeCards(): Item[] {
   return [
     {
       id: 1,
-      projectId: 0,
+      projectId: 1,
       number: 1,
       columnId: 1,
       title: 'A',
@@ -29,13 +38,15 @@ function makeCards(): Item[] {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
+      favorite: false,
       dueAt: null,
       createdAt: '',
       updatedAt: '',
     },
     {
       id: 2,
-      projectId: 0,
+      projectId: 1,
       number: 2,
       columnId: 2,
       title: 'B',
@@ -47,13 +58,15 @@ function makeCards(): Item[] {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
+      favorite: false,
       dueAt: null,
       createdAt: '',
       updatedAt: '',
     },
     {
       id: 3,
-      projectId: 0,
+      projectId: 1,
       number: 3,
       columnId: 3,
       title: 'C',
@@ -65,13 +78,15 @@ function makeCards(): Item[] {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
+      favorite: false,
       dueAt: null,
       createdAt: '',
       updatedAt: '',
     },
     {
       id: 9,
-      projectId: 0,
+      projectId: 1,
       number: 9,
       columnId: 1,
       title: 'D',
@@ -83,6 +98,8 @@ function makeCards(): Item[] {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
+      favorite: false,
       dueAt: null,
       createdAt: '',
       updatedAt: '',
@@ -153,6 +170,33 @@ function mockRowRects(root: HTMLElement, bounds: { top: number; height: number }
 }
 
 describe('Backlog reordering', () => {
+  it('does not show comment UI on backlog rows', async () => {
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards, settings: { cardLayout: 'pack' } }),
+            reorderBacklog: () => of({ items: cards }),
+            listCommandTemplates: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.querySelector('app-item-comments')).toBeNull();
+    expect(f.nativeElement.textContent).not.toMatch(/コメント/);
+  });
+
   it('shows status names for all columns including Done', async () => {
     const cards = makeCards();
     const columns = makeColumns();
@@ -164,9 +208,9 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -199,10 +243,10 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -250,10 +294,10 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -300,10 +344,10 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             reorderBacklog,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -336,7 +380,7 @@ describe('Backlog reordering', () => {
     const columns = makeColumns();
     const created: Item = {
       id: 10,
-      projectId: 0,
+      projectId: 1,
       number: 10,
       columnId: 1,
       title: 'New',
@@ -348,6 +392,8 @@ describe('Backlog reordering', () => {
       relatedItems: [],
       assignee: '',
       closeReason: '',
+      solution: '',
+      favorite: false,
       dueAt: null,
       createdAt: '',
       updatedAt: '',
@@ -361,10 +407,10 @@ describe('Backlog reordering', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             createItem,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -415,8 +461,8 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: [] }),
             board: () => of({ columns: [{ id: 2, name: 'Doing', position: 0 }], items: [] }),
             createItem,
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -441,8 +487,8 @@ describe('Backlog reordering', () => {
           useValue: {
             backlog: () => throwError(() => ({ status: 500, error: { message: '失敗' } })),
             board: () => throwError(() => ({ status: 500, error: { message: '失敗' } })),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -481,8 +527,8 @@ describe('Backlog live refresh', () => {
       board: vi.fn(() => of({ columns, items: [] })),
       createItem: vi.fn(),
       reorderBacklog: vi.fn(),
-      listFilter: () => of({ query: '', statusIds: [] }),
-      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+      listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+      putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Backlog],
@@ -510,8 +556,8 @@ describe('Backlog live refresh', () => {
       board: vi.fn(() => of({ columns, items: [] })),
       createItem: vi.fn(),
       reorderBacklog: vi.fn(),
-      listFilter: () => of({ query: '', statusIds: [] }),
-      putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+      listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+      putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
     };
     TestBed.configureTestingModule({
       imports: [Backlog],
@@ -547,9 +593,9 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -576,7 +622,7 @@ describe('Backlog scroll save and restore', () => {
     backlog.onDetailClick(new MouseEvent('click', { cancelable: true }), card);
     expect(readBacklogScroll()).toEqual({ scrollTop: 90, scrollLeft: 12 });
     expect(readReturnTo()).toBe('/backlog');
-    expect(navigate).toHaveBeenCalledWith(['/items', 1]);
+    expect(navigate).toHaveBeenCalledWith(['/items', 1], { queryParams: { project: 1 } });
   });
 
   it('restores backlog scroll once after render when saved', async () => {
@@ -592,9 +638,9 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -625,9 +671,9 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -669,9 +715,9 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -717,9 +763,9 @@ describe('Backlog scroll save and restore', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -749,10 +795,10 @@ describe('Backlog add dialog accidental close', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
             createItem: vi.fn(),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -805,6 +851,421 @@ describe('Backlog add dialog accidental close', () => {
   });
 });
 
+describe('Backlog copy card link', () => {
+  const originalClipboard = navigator.clipboard;
+
+  function apiMocks(cards = makeCards(), columns = makeColumns()) {
+    return {
+      backlog: () => of({ items: cards }),
+      board: () => of({ columns, items: cards, settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+      listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listFilter: () =>
+        of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+      putListFilter: (f: {
+        board: { query: string; statusIds: number[] };
+        backlog: { query: string; statusIds: number[] };
+      }) => of(f),
+    };
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [provideRouter([]), { provide: Api, useValue: apiMocks() }],
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: originalClipboard,
+    });
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  const create = async () => {
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    return f;
+  };
+
+  it('renders copy buttons outside the drag zone with expected a11y', async () => {
+    const f = await create();
+    const zone = f.nativeElement.querySelector('.backlog-drag-zone') as HTMLElement;
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement;
+    const cmdBtn = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    expect(copyBtn).not.toBeNull();
+    expect(cmdBtn).not.toBeNull();
+    expect(zone.contains(copyBtn)).toBe(false);
+    expect(zone.contains(cmdBtn)).toBe(false);
+    expect(copyBtn.getAttribute('draggable')).toBe('false');
+    expect(cmdBtn.getAttribute('draggable')).toBe('false');
+    expect(copyBtn.getAttribute('aria-label')).toBe('ITEM-001 のリンクをコピー');
+    expect(cmdBtn.getAttribute('aria-haspopup')).toBe('menu');
+    expect(cmdBtn.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('copies the public item detail URL on success without navigating', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const f = await create();
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement;
+    copyBtn.click();
+    await vi.waitUntil(() => f.componentInstance.copyLinkAnnouncement() !== '');
+    f.detectChanges();
+    expect(writeText).toHaveBeenCalledWith(itemDetailUrl(window.location.origin, 1, 1));
+    expect(navigateSpy).not.toHaveBeenCalled();
+    const live = f.nativeElement.querySelector('.copy-feedback-banner') as HTMLElement;
+    expect(live).not.toBeNull();
+    expect(live.classList.contains('copy-feedback-banner--ok')).toBe(true);
+    expect(live.textContent).toContain('リンクをコピーしました');
+  });
+});
+
+describe('Backlog copy command menu', () => {
+  const originalClipboard = navigator.clipboard;
+  const template = {
+    id: 4,
+    name: 'gh pr',
+    template: 'gh pr view {{url}} extra',
+    position: 0,
+  };
+
+  function apiMocks(
+    cards = makeCards(),
+    columns = makeColumns(),
+    listItemCommandTemplatesByNumber = vi.fn(() => of({ templates: [] as typeof template[] })),
+  ) {
+    return {
+      backlog: () => of({ items: cards }),
+      board: () => of({ columns, items: cards, settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+      listItemCommandTemplatesByNumber,
+      listFilter: () =>
+        of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+      putListFilter: (f: {
+        board: { query: string; statusIds: number[] };
+        backlog: { query: string; statusIds: number[] };
+      }) => of(f),
+    };
+  }
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: originalClipboard,
+    });
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  const create = async (
+    templates: typeof template[] = [],
+    listItemCommandTemplatesByNumber = vi.fn(() => of({ templates })),
+  ) => {
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        { provide: Api, useValue: apiMocks(makeCards(), makeColumns(), listItemCommandTemplatesByNumber) },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    return { f, listItemCommandTemplatesByNumber };
+  };
+
+  const openMenu = async (f: {
+    nativeElement: HTMLElement;
+    detectChanges(): void;
+    whenStable(): Promise<unknown>;
+  }) => {
+    const button = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    button.click();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    const menu = f.nativeElement.querySelector('.copy-command-menu') as HTMLElement;
+    expect(menu).not.toBeNull();
+    expect(menu.getAttribute('role')).toBe('menu');
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    return { button, menu };
+  };
+
+  it('copies immediately when only one template is linked', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { f, listItemCommandTemplatesByNumber } = await create([template]);
+    const button = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    button.click();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect(listItemCommandTemplatesByNumber).toHaveBeenCalled();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
+        COPY_COMMAND_SUCCESS,
+      );
+    });
+    expect(writeText).toHaveBeenCalledWith(
+      resolveCommand(template.template, itemDetailUrl(window.location.origin, 1, 1)),
+    );
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('keeps the menu open for multiple templates and copies the chosen item', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const second = { id: 8, name: 'echo', template: 'echo {{url}}', position: 1 };
+    const { f } = await create([template, second]);
+    const { menu } = await openMenu(f);
+    const item = menu.querySelector('[role="menuitem"]') as HTMLButtonElement;
+    expect(item).not.toBeNull();
+    item.click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
+        COPY_COMMAND_SUCCESS,
+      );
+    });
+    expect(writeText).toHaveBeenCalledWith(
+      resolveCommand(template.template, itemDetailUrl(window.location.origin, 1, 1)),
+    );
+  });
+
+  it('closes the menu when the command button is clicked again', async () => {
+    const second = { id: 8, name: 'echo', template: 'echo {{url}}', position: 1 };
+    const { f } = await create([template, second]);
+    const { button } = await openMenu(f);
+    button.click();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('closes on Escape, outside click, or backlog scroll', async () => {
+    const second = { id: 8, name: 'echo', template: 'echo {{url}}', position: 1 };
+    const { f } = await create([template, second]);
+    await openMenu(f);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+
+    await openMenu(f);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+
+    await openMenu(f);
+    const scrollEl = f.nativeElement.querySelector('.backlog-scroll') as HTMLElement;
+    scrollEl.dispatchEvent(new Event('scroll', { bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+  });
+
+  it('does not auto-copy a single template after the menu was closed before the response', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const delayed = new Subject<{ templates: typeof template[] }>();
+    const { f } = await create([template], vi.fn(() => delayed.asObservable()));
+    const button = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    button.click();
+    f.detectChanges();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    f.detectChanges();
+    delayed.next({ templates: [template] });
+    delayed.complete();
+    await f.whenStable();
+    f.detectChanges();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+  });
+
+  it('closes the menu when load is called', async () => {
+    const delayed = new Subject<{ templates: typeof template[] }>();
+    const { f } = await create([template], vi.fn(() => delayed.asObservable()));
+    const button = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    button.click();
+    f.detectChanges();
+    expect(f.componentInstance.openCommandItemId()).not.toBeNull();
+    f.componentInstance.load();
+    f.detectChanges();
+    expect(f.componentInstance.openCommandItemId()).toBeNull();
+    delayed.next({ templates: [template] });
+    delayed.complete();
+    await f.whenStable();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+  });
+
+  it('closes the menu when the open row leaves the filtered list', async () => {
+    const delayed = new Subject<{ templates: typeof template[] }>();
+    const { f } = await create(
+      [
+        { ...template, id: 1 },
+        { id: 2, name: 'other', template: 'y', position: 1 },
+      ],
+      vi.fn(() => delayed.asObservable()),
+    );
+    const button = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    button.click();
+    f.detectChanges();
+    expect(f.componentInstance.openCommandItemId()).not.toBeNull();
+    f.componentInstance.listFilter.setQuery('backlog', 'no-such-title');
+    f.detectChanges();
+    expect(f.componentInstance.filteredItems().length).toBe(0);
+    expect(f.componentInstance.openCommandItemId()).toBeNull();
+    delayed.next({
+      templates: [
+        { ...template, id: 1 },
+        { id: 2, name: 'other', template: 'y', position: 1 },
+      ],
+    });
+    delayed.complete();
+    await f.whenStable();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+  });
+
+  it('closes the menu when a project switch reload starts', async () => {
+    const cards = makeCards();
+    const columns = makeColumns();
+    const patch = new Subject<{ settings: { cardLayout: 'pack'; activeProjectId: number } }>();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards, settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            patchBoardSettings: vi.fn(() => patch.asObservable()),
+            listItemCommandTemplatesByNumber: vi.fn(() =>
+              of({ templates: [{ ...template }, { id: 5, name: 'b', template: 'x', position: 1 }] }),
+            ),
+            listFilter: () =>
+              of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: {
+              board: { query: string; statusIds: number[] };
+              backlog: { query: string; statusIds: number[] };
+            }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    await openMenu(f);
+    const session = TestBed.inject(ProjectSession);
+    session.activeId.set(1);
+    session.switchTo(2).subscribe({ error: () => undefined });
+    patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });
+    patch.complete();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.copy-command-menu')).toBeNull();
+    expect(f.componentInstance.openCommandItemId()).toBeNull();
+    f.destroy();
+  });
+
+  it('does not start row drag when dragstart originates on copy controls', async () => {
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards, settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            reorderBacklog: () => of({ items: cards }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () =>
+              of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: {
+              board: { query: string; statusIds: number[] };
+              backlog: { query: string; statusIds: number[] };
+            }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const zone = f.nativeElement.querySelector('.backlog-drag-zone') as HTMLElement;
+    const copyBtn = f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement;
+    const ev = dispatchDragEvent(copyBtn, 'dragstart', { clientY: 40 });
+    expect(ev.defaultPrevented).toBe(true);
+    expect(f.componentInstance.draggingItemId()).toBeNull();
+    const cmdBtn = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    const ev2 = dispatchDragEvent(cmdBtn, 'dragstart', { clientY: 40 });
+    expect(ev2.defaultPrevented).toBe(true);
+    dispatchDragEvent(zone, 'dragstart', { clientY: 40 });
+    expect(f.componentInstance.draggingItemId()).toBe(1);
+  });
+
+  it('shows empty notice when no templates exist', async () => {
+    const { f } = await create([]);
+    const { menu } = await openMenu(f);
+    expect(menu.textContent).toContain(COMMAND_ITEM_MENU_EMPTY);
+    expect(menu.querySelector('[role="menuitem"]')).toBeNull();
+  });
+
+  it('shows only the latest copy feedback when a link copy follows a command copy', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { f } = await create([template]);
+    const button = f.nativeElement.querySelector('.copy-command-button') as HTMLButtonElement;
+    button.click();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return (f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '').includes(
+        COPY_COMMAND_SUCCESS,
+      );
+    });
+    (f.nativeElement.querySelector('.copy-card-link') as HTMLButtonElement).click();
+    await vi.waitUntil(() => {
+      f.detectChanges();
+      return f.componentInstance.copyFeedback() === COPY_LINK_SUCCESS;
+    });
+    const live = f.nativeElement.querySelector('.copy-feedback-banner')?.textContent ?? '';
+    expect(live).toContain(COPY_LINK_SUCCESS);
+    expect(live).not.toContain(COPY_COMMAND_SUCCESS);
+  });
+});
+
 describe('Backlog list filter', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
@@ -822,9 +1283,9 @@ describe('Backlog list filter', () => {
           provide: Api,
           useValue: {
             backlog: () => of({ items: cards }),
-            board: () => of({ columns, items: cards }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            board: () => of({ columns, items: cards , settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],
@@ -836,11 +1297,11 @@ describe('Backlog list filter', () => {
     expect(f.nativeElement.querySelector('.list-filter')).not.toBeNull();
     expect(f.componentInstance.filteredItems().length).toBe(4);
     expect(f.componentInstance.canReorder()).toBe(true);
-    f.componentInstance.listFilter.setQuery('A');
+    f.componentInstance.listFilter.setQuery('backlog', 'A');
     f.detectChanges();
     expect(f.componentInstance.filteredItems().map((c) => c.title)).toEqual(['A']);
     expect(f.componentInstance.canReorder()).toBe(false);
-    f.componentInstance.listFilter.clear();
+    f.componentInstance.listFilter.clear('backlog');
     f.detectChanges();
     expect(f.componentInstance.filteredItems().length).toBe(4);
     expect(f.componentInstance.canReorder()).toBe(true);

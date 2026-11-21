@@ -21,7 +21,7 @@ function sample(settings: { cardLayout: 'pack' | 'free'; mobileBoardColumnId?: n
     items: [
       {
         id: 1,
-        projectId: 0,
+        projectId: 1,
         number: 1,
         columnId: 1,
         title: 'A',
@@ -33,6 +33,8 @@ function sample(settings: { cardLayout: 'pack' | 'free'; mobileBoardColumnId?: n
         relatedItems: [],
         assignee: '',
         closeReason: '',
+        solution: '',
+        favorite: false,
         dueAt: null,
         createdAt: '',
         updatedAt: '',
@@ -83,8 +85,8 @@ describe('Board mobile column select', () => {
             ),
             listCommandTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
             ...api,
           },
         },
@@ -128,7 +130,7 @@ describe('Board mobile column select', () => {
   it('mobile: empty columns disables select', async () => {
     matchMediaMatches = true;
     const f = mount({
-      board: () => of(normalizeBoardData({ columns: [], items: [], settings: { cardLayout: 'pack' } })),
+      board: () => of(normalizeBoardData({ columns: [], items: [], settings: { cardLayout: 'pack', activeProjectId: 1 } })),
     });
     await f.whenStable();
     f.detectChanges();

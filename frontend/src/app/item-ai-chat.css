@@ -1,0 +1,76 @@
+.ai-chat {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.ai-chat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.ai-chat-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.ai-chat-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  max-height: 28rem;
+  overflow: auto;
+}
+.ai-chat-msg {
+  display: grid;
+  gap: 0.35rem;
+}
+.ai-chat-role {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.ai-chat-body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.ai-chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.ai-chat-empty,
+.ai-chat-status {
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+.ai-chat-error {
+  color: var(--danger, #b00020);
+  margin: 0 0 0.75rem;
+}
+.ai-chat-compose {
+  display: grid;
+  gap: 0.5rem;
+}
+.ai-chat-compose textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -1,0 +1,65 @@
+.projects-page {
+  padding: 1rem 1.25rem 2rem;
+  max-width: 52rem;
+}
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.projects-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.project-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.project-row.is-active {
+  background: color-mix(in srgb, var(--accent, #2a6) 8%, transparent);
+}
+.drag-handle {
+  cursor: grab;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.25rem;
+  line-height: 1;
+}
+.drag-handle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.project-main {
+  flex: 1 1 8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.project-badge {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.cdk-drag-preview {
+  box-sizing: border-box;
+  background: var(--paper);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+}
+.cdk-drag-placeholder {
+  opacity: 0.35;
+}

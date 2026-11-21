@@ -65,10 +65,10 @@ type fakeFormatter struct {
 	drafts   []Draft
 	left     []time.Duration // remaining time until the context deadline, when there is one
 	hasLimit []bool
-	fn       func(context.Context, Draft) (RefinedItem, error)
+	fn       func(context.Context, Draft) (RefinedItem, int64, int64, error)
 }
 
-func (f *fakeFormatter) Format(ctx context.Context, d Draft) (RefinedItem, error) {
+func (f *fakeFormatter) Format(ctx context.Context, d Draft) (RefinedItem, int64, int64, error) {
 	f.mu.Lock()
 	f.calls++
 	f.drafts = append(f.drafts, d)
@@ -86,9 +86,9 @@ func (f *fakeFormatter) callCount() int {
 	return f.calls
 }
 
-func ok(title, description string) func(context.Context, Draft) (RefinedItem, error) {
-	return func(context.Context, Draft) (RefinedItem, error) {
-		return RefinedItem{Title: title, Description: description}, nil
+func ok(title, description string) func(context.Context, Draft) (RefinedItem, int64, int64, error) {
+	return func(context.Context, Draft) (RefinedItem, int64, int64, error) {
+		return RefinedItem{Title: title, Description: description}, 1, 1, nil
 	}
 }
 
@@ -142,6 +142,7 @@ func post(h http.Handler, ctx context.Context, contentType, body string) *httpte
 	if contentType != "" {
 		r.Header.Set("Content-Type", contentType)
 	}
+	r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
 	h.ServeHTTP(w, r)
 	return w
 }
@@ -347,7 +348,7 @@ func TestRefinedItemAIFailuresNeverCreateACardOrLeak(t *testing.T) {
 		"wrapped secret": errors.Join(errors.New("x"), failure{kind: "server"}),
 	} {
 		repo := &errRepo{memoryRepo: fresh()}
-		f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) { return RefinedItem{}, err }}
+		f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, int64, int64, error) { return RefinedItem{}, 0, 0, err }}
 		w := postJSON(newRefined(repo, f), `{"title":"`+secretDraft+`"}`)
 		if w.Code != 502 || decodeError(t, w).Code != "ai_failed" {
 			t.Fatalf("%s: status=%d body=%s", name, w.Code, w.Body)
@@ -374,9 +375,9 @@ func TestRefinedItemAIFailuresNeverCreateACardOrLeak(t *testing.T) {
 func TestRefinedItemLimitsConcurrentAICallsAndAlwaysReleasesTheSlot(t *testing.T) {
 	repo := &errRepo{memoryRepo: fresh()}
 	release := make(chan struct{})
-	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) {
+	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, int64, int64, error) {
 		<-release
-		return RefinedItem{}, errors.New("stop here") // never reach CreateItem: memoryRepo is not thread safe
+		return RefinedItem{}, 0, 0, errors.New("stop here") // never reach CreateItem: memoryRepo is not thread safe
 	}}
 	h := newRefined(repo, f)
 	var wg sync.WaitGroup
@@ -401,9 +402,9 @@ func TestRefinedItemLimitsConcurrentAICallsAndAlwaysReleasesTheSlot(t *testing.T
 	if w := postJSON(h, `{"title":"x"}`); w.Code != 201 {
 		t.Fatalf("after release: %d %s", w.Code, w.Body)
 	}
-	for name, fn := range map[string]func(context.Context, Draft) (RefinedItem, error){
-		"error": func(context.Context, Draft) (RefinedItem, error) { return RefinedItem{}, errors.New("x") },
-		"panic": func(context.Context, Draft) (RefinedItem, error) { panic("formatter exploded") },
+	for name, fn := range map[string]func(context.Context, Draft) (RefinedItem, int64, int64, error){
+		"error": func(context.Context, Draft) (RefinedItem, int64, int64, error) { return RefinedItem{}, 0, 0, errors.New("x") },
+		"panic": func(context.Context, Draft) (RefinedItem, int64, int64, error) { panic("formatter exploded") },
 	} {
 		f2 := &fakeFormatter{fn: fn}
 		h2 := newRefined(&errRepo{memoryRepo: fresh()}, f2)
@@ -418,7 +419,7 @@ func TestRefinedItemLimitsConcurrentAICallsAndAlwaysReleasesTheSlot(t *testing.T
 		}
 	}
 	// A canceled request also frees its slot.
-	f3 := &fakeFormatter{fn: func(ctx context.Context, _ Draft) (RefinedItem, error) { return RefinedItem{}, ctx.Err() }}
+	f3 := &fakeFormatter{fn: func(ctx context.Context, _ Draft) (RefinedItem, int64, int64, error) { return RefinedItem{}, 0, 0, ctx.Err() }}
 	h3 := newRefined(&errRepo{memoryRepo: fresh()}, f3)
 	for i := 0; i <= maxConcurrentFormats; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -481,9 +482,9 @@ func TestRefinedItemStoresTheCardWithTheRequestContextNotTheAIContext(t *testing
 
 func TestRefinedItemAnswersBusyWithoutWaiting(t *testing.T) {
 	release := make(chan struct{})
-	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) {
+	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, int64, int64, error) {
 		<-release
-		return RefinedItem{}, errors.New("stop here")
+		return RefinedItem{}, 0, 0, errors.New("stop here")
 	}}
 	h := newRefined(&errRepo{memoryRepo: fresh()}, f)
 	var wg sync.WaitGroup

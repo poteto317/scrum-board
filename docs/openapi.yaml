@@ -1,0 +1,2470 @@
+openapi: 3.1.0
+info:
+  title: Scrum Board API
+  version: 0.1.0
+  description: 'スクラムかんばん HTTP API の契約正本。本番 nginx の HTTP Basic はゲートウェイ層であり、operation の security には含めない。受け付けない入力は黙って別解釈へ落とさず
+    4xx 等で拒否する。v0.1.0: 全 HTTP ルートの paths・認証（exempt/optional/必須）・主要 operation の request/response を載せる。未具体化の応答は
+    JsonValue。当該 API を変更するときは update-api-doc スキルに従い JsonValue を具体 schema に置き換える。'
+servers:
+- url: http://127.0.0.1:4200
+  description: ローカル（compose / フロント nginx 経由）。本番 Basic はゲートウェイ層。
+paths:
+  /api/auth/login:
+    post:
+      summary: ログイン（セッション Cookie 発行）
+      operationId: post_api_auth_login
+      responses:
+        '200':
+          description: 'ログイン成功（Set-Cookie: sb_session）'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '401':
+          description: 認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+      description: セッション Cookie 不要（sessionExempt）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - loginName
+              - password
+              properties:
+                loginName:
+                  type: string
+                password:
+                  type: string
+              additionalProperties: false
+  /api/auth/logout:
+    post:
+      summary: ログアウト
+      operationId: post_api_auth_logout
+      responses:
+        '204':
+          description: ログアウト成功（本文なし。sessionExempt）
+      security: []
+      description: セッション Cookie 不要（sessionExempt）。
+  /api/auth/me:
+    get:
+      summary: 現在のユーザー
+      operationId: get_api_auth_me
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+  /api/backlog:
+    get:
+      summary: バックログ
+      operationId: get_api_backlog
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+  /api/backlog/order:
+    put:
+      summary: バックログ並び替え
+      operationId: put_api_backlog_order
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/board:
+    get:
+      summary: ボード（列＋アイテム）
+      operationId: get_api_board
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+  /api/board/settings:
+    patch:
+      summary: ボード設定の部分更新
+      operationId: patch_api_board_settings
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cardLayout:
+                  type: string
+                  enum:
+                  - pack
+                  - free
+                mobileBoardColumnId:
+                  type: integer
+                  nullable: true
+              additionalProperties: false
+  /api/columns:
+    post:
+      summary: 列作成
+      operationId: post_api_columns
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 列名重複
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/columns/order:
+    put:
+      summary: 列並び替え
+      operationId: put_api_columns_order
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/command-template-defaults:
+    get:
+      summary: 新規アイテム初期テンプレート
+      operationId: get_api_command_template_defaults
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+    put:
+      summary: 新規アイテム初期テンプレート置換
+      operationId: put_api_command_template_defaults
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/command-templates:
+    get:
+      summary: コマンドテンプレート一覧
+      operationId: get_api_command_templates
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+    post:
+      summary: コマンドテンプレート作成
+      operationId: post_api_command_templates
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/command-templates/apply-to-all-items:
+    post:
+      summary: 全アイテムの表示セット置換
+      operationId: post_api_command_templates_apply_to_all_items
+      responses:
+        '204':
+          description: 成功（本文なし）
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/command-templates/{id}:
+    patch:
+      summary: コマンドテンプレート更新
+      operationId: patch_api_command_templates_id
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+    delete:
+      summary: コマンドテンプレート削除
+      operationId: delete_api_command_templates_id
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/header-menu:
+    get:
+      summary: ヘッダーメニュー取得
+      operationId: get_api_header_menu
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+    put:
+      summary: ヘッダーメニュー保存
+      operationId: put_api_header_menu
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/health:
+    get:
+      summary: 起動確認
+      operationId: get_api_health
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+      security: []
+      description: セッション Cookie 不要（sessionExempt）。
+  /api/items:
+    post:
+      summary: アイテム作成
+      operationId: post_api_items
+      responses:
+        '201':
+          description: 作成されたアイテム
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - title
+              - columnId
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                columnId:
+                  type: integer
+                projectId:
+                  type: integer
+                prUrls:
+                  type: array
+                  items:
+                    type: string
+                assignee:
+                  type: string
+                favorite:
+                  type: boolean
+                solution:
+                  type: string
+                dueAt:
+                  type: string
+              additionalProperties: false
+  /api/items/by-number/{number}:
+    get:
+      summary: アイテム詳細（公開番号）
+      operationId: get_api_items_by_number_number
+      responses:
+        '200':
+          description: アイテム
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '401':
+          description: 未ログインかつ非 public
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 閲覧権限なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security: []
+      description: セッション Cookie は任意（sessionOptional）。Cookie が無く非 public のアイテムは 401。`viewAccess=public`
+        なら未ログインでも閲覧可。Cookie がある場合は ACL に従い 403 もありうる。ハンドラが強制する。
+  /api/items/by-number/{number}/assignee:
+    patch:
+      summary: 対応者変更
+      operationId: patch_api_items_by_number_number_assignee
+      responses:
+        '200':
+          description: 更新後のアイテム
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - assignee
+              properties:
+                assignee:
+                  type: string
+              additionalProperties: false
+  /api/items/by-number/{number}/attachments:
+    get:
+      summary: 添付一覧
+      operationId: get_api_items_by_number_number_attachments
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '401':
+          description: 未ログインかつ非 public
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 閲覧権限なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security: []
+      description: セッション Cookie は任意（sessionOptional）。Cookie が無く非 public のアイテムは 401。`viewAccess=public`
+        なら未ログインでも閲覧可。Cookie がある場合は ACL に従い 403 もありうる。ハンドラが強制する。
+    post:
+      summary: 添付アップロード
+      operationId: post_api_items_by_number_number_attachments
+      responses:
+        '201':
+          description: 添付メタ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な multipart／MIME／サイズ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 編集権限なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: ストレージ未設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              - field
+              properties:
+                file:
+                  type: string
+                  format: binary
+                field:
+                  type: string
+                  enum:
+                  - description
+                  - solution
+                  - comment
+                commentId:
+                  type: integer
+  /api/items/by-number/{number}/attachments/{id}:
+    delete:
+      summary: 添付削除
+      operationId: delete_api_items_by_number_number_attachments_id
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/items/by-number/{number}/attachments/{id}/content:
+    get:
+      summary: 添付バイト取得
+      operationId: get_api_items_by_number_number_attachments_id_content
+      responses:
+        '200':
+          description: バイナリ
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: 未ログインかつ非 public
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 閲覧権限なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 対象なし／他 item の id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security: []
+      description: セッション Cookie は任意（sessionOptional）。Cookie が無く非 public のアイテムは 401。`viewAccess=public`
+        なら未ログインでも閲覧可。Cookie がある場合は ACL に従い 403 もありうる。ハンドラが強制する。
+  /api/items/by-number/{number}/command-templates:
+    get:
+      summary: アイテムの表示セット
+      operationId: get_api_items_by_number_number_command_templates
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+    put:
+      summary: アイテムの表示セット置換
+      operationId: put_api_items_by_number_number_command_templates
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/items/by-number/{number}/comments:
+    get:
+      summary: コメント一覧
+      operationId: get_api_items_by_number_number_comments
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+    post:
+      summary: コメント作成
+      operationId: post_api_items_by_number_number_comments
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/items/by-number/{number}/ai-chat:
+    get:
+      summary: アイテム AI チャット履歴
+      operationId: get_api_items_by_number_number_ai_chat
+      description: |
+        セッション＋編集可が必要。ANTHROPIC_API_KEY 未設定でも履歴は返す。
+        古い順。この API は description／comments を変更しない。
+      responses:
+        '200':
+          description: 履歴
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - messages
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AIMessage'
+                additionalProperties: false
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 編集不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: アイテムなし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: プロジェクト ID（省略時はアクティブ）
+      security:
+      - cookieAuth: []
+    post:
+      summary: アイテム AI チャット送信
+      operationId: post_api_items_by_number_number_ai_chat
+      description: |
+        セッション＋編集可。キー未設定は 503。同時実行は refined と共有（超過 429 `ai_busy`）。
+        アプリ内トークン上限到達時も 429（`ai_credit_limit`）。
+        利用者別レート制限が有効なとき超過は 429（`ai_rate_limit`）。既定ではレート制限オフ。
+        本文・コメントは変更しない。空／過長／未知フィールドは 400。
+      responses:
+        '200':
+          description: アシスタント応答と更新後履歴
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - assistant
+                - messages
+                properties:
+                  assistant:
+                    $ref: '#/components/schemas/AIMessage'
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AIMessage'
+                additionalProperties: false
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 編集不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: アイテムなし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type 不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: |
+            同時実行上限（code=ai_busy）、アプリ内トークン上限到達（code=ai_credit_limit）、
+            または利用者別レート制限超過（code=ai_rate_limit。メッセージ「AIの利用頻度が高すぎます。少し待って再試行してください。」）。
+            レート制限は `AI_RATE_LIMIT_PER_MINUTE` が正のときのみ有効（既定オフ）。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: AI 上流失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: AI 未設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - message
+              properties:
+                message:
+                  type: string
+                  description: |
+                    1〜N Unicode 文字（既定 N=4000。サーバーの `AI_CHAT_MESSAGE_MAX` で上書き可）。
+              additionalProperties: false
+    delete:
+      summary: アイテム AI チャット履歴クリア
+      operationId: delete_api_items_by_number_number_ai_chat
+      description: セッション＋編集可。キー未設定でも可。
+      responses:
+        '204':
+          description: クリア成功
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 編集不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/ai/usage:
+    get:
+      summary: AI 利用状況（ワークスペース累計）
+      operationId: get_api_ai_usage
+      description: ログイン済みなら可。configured は ANTHROPIC_API_KEY の有無。
+      responses:
+        '200':
+          description: 集計
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - requestCount
+                - inputTokens
+                - outputTokens
+                - configured
+                properties:
+                  requestCount:
+                    type: integer
+                  inputTokens:
+                    type: integer
+                  outputTokens:
+                    type: integer
+                  configured:
+                    type: boolean
+                additionalProperties: false
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+  /api/ai/credits:
+    get:
+      summary: AI 利用上限と残量（アプリ内トークン予算）
+      operationId: get_api_ai_credits
+      description: ログイン済みなら可。usedTokens は input+output の累計。unlimited のとき limitTokens／remainingTokens は null。configured は ANTHROPIC_API_KEY の有無（usage と同じ）。approximate は常に true。
+      responses:
+        '200':
+          description: 残量ビュー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AICredits'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+    put:
+      summary: AI 利用上限の設定／解除（admin）
+      operationId: put_api_ai_credits
+      description: admin のみ。limitTokens は必須キー。非負整数で設定、null で解除。キー無し・負数・非整数・未知フィールドは 400。成功は 200 で GET と同形。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - limitTokens
+              properties:
+                limitTokens:
+                  description: 合計トークン上限。null で解除。
+                  oneOf:
+                  - type: integer
+                    minimum: 0
+                  - type: 'null'
+              additionalProperties: false
+      responses:
+        '200':
+          description: 更新後の残量ビュー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AICredits'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: admin 以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type 不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+  /api/items/by-number/{number}/comments/{id}:
+    patch:
+      summary: コメント更新
+      operationId: patch_api_items_by_number_number_comments_id
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+    delete:
+      summary: コメント削除
+      operationId: delete_api_items_by_number_number_comments_id
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/items/by-number/{number}/history:
+    get:
+      summary: 変更履歴
+      operationId: get_api_items_by_number_number_history
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/items/by-number/{number}/status:
+    patch:
+      summary: ステータス（列名）変更
+      operationId: patch_api_items_by_number_number_status
+      responses:
+        '200':
+          description: 更新後のアイテム
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 編集権限なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - status
+              properties:
+                status:
+                  type: string
+                  description: 移動先の列名（1〜60 Unicode 文字。前後空白除去）
+              additionalProperties: false
+      description: 公開タスク番号と列名でステータスだけ変更。番号と内部 ID を読み替えない。
+  /api/items/order:
+    put:
+      summary: アイテム並び替え・列間移動
+      operationId: put_api_items_order
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - columns
+              properties:
+                columns:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                    - columnId
+                    - itemIds
+                    properties:
+                      columnId:
+                        type: integer
+                      itemIds:
+                        type: array
+                        items:
+                          type: integer
+                      offsetYs:
+                        type: array
+                        items:
+                          type: integer
+              additionalProperties: false
+  /api/items/refined:
+    post:
+      summary: AI 整形して Todo 起票
+      operationId: post_api_items_refined
+      responses:
+        '201':
+          description: 作成されたアイテム
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type 不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: |
+            同時実行上限（code=ai_busy）、アプリ内トークン上限到達（code=ai_credit_limit）、
+            または利用者別レート制限超過（code=ai_rate_limit。メッセージ「AIの利用頻度が高すぎます。少し待って再試行してください。」）。
+            レート制限は `AI_RATE_LIMIT_PER_MINUTE` が正のときのみ有効（既定オフ）。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: AI 上流失敗／不正出力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: AI 未設定またはタイムアウト系
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+              additionalProperties: false
+  /api/items/{id}:
+    get:
+      summary: アイテム詳細（内部 ID）
+      operationId: get_api_items_id
+      responses:
+        '200':
+          description: アイテム
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '401':
+          description: 未ログインかつ非 public
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 閲覧権限なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security: []
+      description: セッション Cookie は任意（sessionOptional）。Cookie が無く非 public のアイテムは 401。`viewAccess=public`
+        なら未ログインでも閲覧可。Cookie がある場合は ACL に従い 403 もありうる。ハンドラが強制する。
+    patch:
+      summary: アイテム部分更新
+      operationId: patch_api_items_id
+      responses:
+        '200':
+          description: 更新後のアイテム
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                columnId:
+                  type: integer
+                projectId:
+                  type: integer
+                prUrls:
+                  type: array
+                  items:
+                    type: string
+                assignee:
+                  type: string
+                favorite:
+                  type: boolean
+                solution:
+                  type: string
+                dueAt:
+                  type: string
+                closeReason:
+                  type: string
+              additionalProperties: false
+              description: ACL キーは不可（専用 /acl）。空オブジェクトは 400。
+    delete:
+      summary: アイテム削除（ゴミ箱）
+      operationId: delete_api_items_id
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/items/{id}/acl:
+    patch:
+      summary: ACL 更新
+      operationId: patch_api_items_id_acl
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: manage 権限なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/items/{id}/restore:
+    post:
+      summary: ゴミ箱から復元
+      operationId: post_api_items_id_restore
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/list-filter:
+    get:
+      summary: 一覧フィルタ取得
+      operationId: get_api_list_filter
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+    put:
+      summary: 一覧フィルタ保存
+      operationId: put_api_list_filter
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/pr-titles:
+    post:
+      summary: PR タイトル一括取得
+      operationId: post_api_pr_titles
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/projects/order:
+    put:
+      summary: プロジェクト全件並び替え
+      operationId: put_api_projects_order
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: プロジェクト集合の不一致
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: '全プロジェクト ID の順列。集合不一致は 409。requestBody は暫定 JsonValue。'
+  /api/projects:
+    get:
+      summary: プロジェクト一覧
+      operationId: get_api_projects
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+    post:
+      summary: プロジェクト作成
+      operationId: post_api_projects
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/projects/{id}:
+    patch:
+      summary: プロジェクト更新
+      operationId: patch_api_projects_id
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+    delete:
+      summary: プロジェクト削除
+      operationId: delete_api_projects_id
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/public-config:
+    get:
+      summary: 公開設定（ログイン不要）
+      operationId: get_api_public_config
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security: []
+      description: セッション Cookie 不要（sessionExempt）。
+  /api/recurring-rules:
+    get:
+      summary: 繰り返しルール一覧
+      operationId: get_api_recurring_rules
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+    post:
+      summary: 繰り返しルール作成
+      operationId: post_api_recurring_rules
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/recurring-rules/{id}:
+    patch:
+      summary: 繰り返しルール更新
+      operationId: patch_api_recurring_rules_id
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+    delete:
+      summary: 繰り返しルール削除
+      operationId: delete_api_recurring_rules_id
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/recurring/run:
+    post:
+      summary: 繰り返し起票実行（セッション免除）
+      operationId: post_api_recurring_run
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security: []
+      description: セッション Cookie 不要（sessionExempt）。
+  /api/sprints:
+    get:
+      summary: スプリント一覧
+      operationId: get_api_sprints
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+    post:
+      summary: スプリント作成
+      operationId: post_api_sprints
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/sprints/{id}:
+    get:
+      summary: スプリント詳細
+      operationId: get_api_sprints_id
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+    patch:
+      summary: スプリント更新
+      operationId: patch_api_sprints_id
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+    delete:
+      summary: スプリント削除
+      operationId: delete_api_sprints_id
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/sprints/{id}/activate:
+    post:
+      summary: スプリントを Active に
+      operationId: post_api_sprints_id_activate
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/sprints/{id}/complete:
+    post:
+      summary: スプリント完了
+      operationId: post_api_sprints_id_complete
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/sprints/{id}/items:
+    put:
+      summary: スプリントメンバー置換
+      operationId: put_api_sprints_id_items
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/trash:
+    get:
+      summary: ゴミ箱一覧
+      operationId: get_api_trash
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+  /api/trash/purge:
+    post:
+      summary: ゴミ箱一括 purge（セッション免除）
+      operationId: post_api_trash_purge
+      responses:
+        '200':
+          description: パージ結果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  purged:
+                    type: integer
+                required:
+                - purged
+      security: []
+      description: セッション Cookie 不要（sessionExempt）。
+  /api/trash/{id}:
+    delete:
+      summary: ゴミ箱から完全削除
+      operationId: delete_api_trash_id
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/users:
+    get:
+      summary: ユーザー一覧
+      operationId: get_api_users
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+      security:
+      - cookieAuth: []
+    post:
+      summary: ユーザー作成
+      operationId: post_api_users
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/users/{id}:
+    patch:
+      summary: ユーザー更新
+      operationId: patch_api_users_id
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 衝突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sb_session
+      description: アプリのセッション Cookie（SessionCookieName）。
+  schemas:
+    Error:
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
+      additionalProperties: false
+    AIMessage:
+      type: object
+      required:
+      - id
+      - itemId
+      - role
+      - body
+      - createdAt
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        role:
+          type: string
+          enum:
+          - user
+          - assistant
+        body:
+          type: string
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    AICredits:
+      type: object
+      required:
+      - usedTokens
+      - unlimited
+      - approximate
+      - period
+      - configured
+      properties:
+        limitTokens:
+          description: 上限。unlimited のとき null
+          oneOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+        usedTokens:
+          type: integer
+          minimum: 0
+        remainingTokens:
+          description: 残り。unlimited のとき null。超過時は 0
+          oneOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+        unlimited:
+          type: boolean
+        approximate:
+          type: boolean
+          description: 常に true（トークンは概算）
+        period:
+          type: string
+          enum:
+          - cumulative
+        configured:
+          type: boolean
+          description: ANTHROPIC_API_KEY の有無
+      additionalProperties: false
+    JsonValue:
+      description: 当該エンドポイントの JSON 応答。フィールド詳細は必要に応じて本スキーマを具体化する。
+    Item:
+      type: object
+      description: アイテム JSON の主要フィールド。ACL 詳細は PATCH /acl を参照。
+      properties:
+        id:
+          type: integer
+        number:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        columnId:
+          type: integer
+        projectId:
+          type: integer
+        assignee:
+          type: string
+        favorite:
+          type: boolean
+        solution:
+          type: string
+        dueAt:
+          type: string
+          description: UTC。未設定は空文字または省略
+        closeReason:
+          type: string
+        viewAccess:
+          type: string
+          enum:
+          - public
+          - open
+          - restricted
+        editAccess:
+          type: string
+          enum:
+          - open
+          - restricted
+        prUrls:
+          type: array
+          items:
+            type: string

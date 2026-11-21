@@ -26,6 +26,18 @@ func resolveActiveProjectID(raw int64, projects []Project) int64 {
 	return best.ID
 }
 
+// resolveItemListScope picks which project owns listed items.
+// settings.active stays `active`; override>0 must exist or ErrProject.
+func resolveItemListScope(active, override int64, projects []Project) (int64, error) {
+	if override <= 0 {
+		return active, nil
+	}
+	if !projectIDExists(projects, override) {
+		return 0, ErrProject
+	}
+	return override, nil
+}
+
 func projectIDExists(projects []Project, id int64) bool {
 	for _, p := range projects {
 		if p.ID == id {
@@ -93,7 +105,13 @@ type settingsQuery interface {
 func listProjects(ctx context.Context, q interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }) ([]Project, error) {
-	rows, err := q.QueryContext(ctx, `SELECT id, name, position, created_at, updated_at FROM projects ORDER BY position, id`)
+	return queryProjects(ctx, q, `SELECT id, name, position, created_at, updated_at FROM projects ORDER BY position, id`)
+}
+
+func queryProjects(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, sqlQuery string) ([]Project, error) {
+	rows, err := q.QueryContext(ctx, sqlQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +231,9 @@ func (r MySQLRepository) DeleteProject(ctx context.Context, id int64) error {
 	}
 	defer tx.Rollback()
 	if err = assertProjectDeletable(ctx, tx, id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM sprints WHERE project_id=?`, id); err != nil {
 		return err
 	}
 	// Sequence FK blocks project DELETE; remove the per-project counter first.

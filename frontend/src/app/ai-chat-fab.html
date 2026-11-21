@@ -1,0 +1,59 @@
+@if (showEntry()) {
+  <div class="ai-chat-fab-root">
+    @if (open()) {
+      <div
+        #panel
+        id="ai-chat-fab-panel"
+        class="ai-chat-fab-panel"
+        role="dialog"
+        aria-modal="false"
+        aria-label="AIチャット"
+      >
+        <header class="ai-chat-fab-header">
+          <strong>AIに聞く</strong>
+          <button type="button" class="ai-chat-fab-close" (click)="closePanel({ restoreFocus: true })">
+            閉じる
+          </button>
+        </header>
+        @if (pageKind() === 'board' || pageKind() === 'backlog') {
+          <label class="ai-chat-fab-picker">
+            対象アイテム
+            <select
+              [value]="selectedKey()"
+              (change)="onSelectChange($any($event.target).value)"
+              aria-label="対象アイテム"
+            >
+              <option value="">選択してください</option>
+              @for (c of candidates(); track optionKey(c)) {
+                <option [value]="optionKey(c)" [disabled]="!c.canEdit">
+                  #{{ c.number }} {{ c.title }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+        @if (open() && activeTarget(); as target) {
+          <app-item-ai-chat
+            [number]="target.number"
+            [projectId]="target.projectId"
+            [itemId]="target.itemId"
+            (descriptionApplied)="onDescriptionApplied($event)"
+            (commentApplied)="onCommentApplied()"
+          />
+        } @else if (pageKind() === 'board' || pageKind() === 'backlog') {
+          <p class="ai-chat-fab-hint" role="status">アイテムを選ぶとチャットできます。</p>
+        }
+      </div>
+    }
+    <button
+      #entryBtn
+      type="button"
+      class="ai-chat-fab-entry"
+      (click)="toggle()"
+      [attr.aria-expanded]="open() ? 'true' : 'false'"
+      aria-controls="ai-chat-fab-panel"
+    >
+      AIに聞く
+    </button>
+  </div>
+}

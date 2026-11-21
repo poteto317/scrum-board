@@ -46,9 +46,19 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"command_template_defaults",
 		"command_templates",
 		"workspace_list_filter",
+		"item_attachments",
+		"item_ai_messages",
+		"ai_usage",
+		"item_comments",
+		"item_acl_entries",
+		"sessions",
+		"sprint_items",
+		"sprints",
+		"recurring_rules",
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
+		"users",
 		"projects",
 		"board_settings",
 		"board_columns",
@@ -73,6 +83,12 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 	if err = (MySQLRepository{DB: db}).InitializeProjects(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err = (MySQLRepository{DB: db}).InitializeSprints(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeRecurringRules(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if err = (MySQLRepository{DB: db}).InitializeBoardSettings(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -86,6 +102,15 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeDueAt(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeDeletedAt(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeSolution(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeFavorite(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).prepareHistory(t.Context()); err != nil {
@@ -102,6 +127,30 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeListFilter(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeHeaderMenu(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeComments(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeAIChat(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeUsers(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeSessions(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeItemACL(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeItemAttachments(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = seedHandlerTestAuth(t.Context(), repo); err != nil {
 		t.Fatal(err)
 	}
 	return db

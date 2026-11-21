@@ -6,7 +6,7 @@
       name="list-filter-query"
       placeholder="タイトル・説明で検索"
       maxlength="200"
-      [value]="session.filter().query"
+      [value]="queryValue()"
       (input)="onQueryInput($event)"
       autocomplete="off"
     />

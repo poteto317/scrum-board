@@ -1,0 +1,98 @@
+<main class="trash-page">
+  <nav class="breadcrumb" aria-label="パンくず">
+    <a routerLink="/">ボード</a><span>/</span><strong>ゴミ箱</strong>
+  </nav>
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">TRASH</p>
+      <h1>ゴミ箱<span class="heading-dot">.</span></h1>
+      <p>削除から30日以内のアイテムを復元できます。期限を過ぎると自動で完全削除されます。</p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="state-panel" role="status">読み込み中…</div>
+  } @else if (error()) {
+    <div class="state-panel" role="alert">
+      <p>{{ error() }}</p>
+      <button class="secondary" type="button" (click)="load()" [disabled]="projectSwitching()">
+        再読み込み
+      </button>
+    </div>
+  } @else if (items().length === 0) {
+    <div class="state-panel" role="status">ゴミ箱は空です。</div>
+  } @else {
+    @if (actionError()) {
+      <div class="state-panel" role="alert">{{ actionError() }}</div>
+    }
+    <ul class="trash-list" aria-label="ゴミ箱のアイテム">
+      @for (item of items(); track item.id) {
+        <li class="trash-row">
+          <div class="trash-main">
+            <span class="trash-number">{{ formatItemNumber(item.number) }}</span>
+            <span class="trash-title">{{ item.title }}</span>
+          </div>
+          <div class="trash-meta">
+            <span>削除: {{ item.deletedAt | date: 'yyyy/MM/dd HH:mm' }}</span>
+            <span>残りおよそ {{ remainingDays(item.deletedAt) }} 日</span>
+          </div>
+          <div class="trash-actions">
+            <button
+              type="button"
+              class="secondary"
+              [attr.aria-label]="formatItemNumber(item.number) + ' を復元'"
+              [disabled]="busyId() !== null || projectSwitching()"
+              (click)="restore(item)"
+            >
+              {{ busyId() === item.id ? '復元中…' : '復元' }}
+            </button>
+            <button
+              type="button"
+              class="danger-button"
+              [attr.aria-label]="formatItemNumber(item.number) + ' を完全削除'"
+              [disabled]="busyId() !== null || projectSwitching()"
+              (click)="askHardDelete(item)"
+            >
+              完全削除
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</main>
+
+@if (confirmHardDelete(); as target) {
+  <dialog
+    appModal
+    class="modal-backdrop"
+    aria-labelledby="hard-delete-title"
+    (cancel)="$event.preventDefault(); cancelHardDelete()"
+  >
+    <section class="modal">
+      <h2 id="hard-delete-title">完全に削除しますか？</h2>
+      <p class="delete-copy">
+        「{{ target.title }}」を完全に削除します。ゴミ箱からも取り除かれ、復元できなくなります。
+      </p>
+      <div class="form-actions">
+        <button
+          class="secondary"
+          type="button"
+          (click)="cancelHardDelete()"
+          [disabled]="busyId() !== null"
+        >
+          キャンセル
+        </button>
+        <button
+          class="danger-button"
+          type="button"
+          [attr.aria-label]="formatItemNumber(target.number) + ' を完全削除する'"
+          (click)="confirmHardDeleteNow()"
+          [disabled]="busyId() !== null || projectSwitching()"
+        >
+          {{ busyId() === target.id ? '削除中…' : '完全削除する' }}
+        </button>
+      </div>
+    </section>
+  </dialog>
+}

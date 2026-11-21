@@ -50,7 +50,7 @@
       >{{ done() }} 完了 <span>／</span> {{ data().columns.length }} ステータス</span
     >
   </section>
-  <app-list-filter-bar class="board-list-filter" [columns]="data().columns" />
+  <app-list-filter-bar class="board-list-filter" view="board" [columns]="data().columns" />
   @if (loading()) {
     <div class="state-panel" role="status">
       <span class="spinner"></span>ボードを読み込んでいます…
@@ -285,8 +285,15 @@
                     ><span class="card-topline"
                       ><span class="card-id"
                         >{{ formatItemNumber(card.number) }}</span
-                      ></span
-                    >
+                      >
+                      @if (viewAccessLabel(card.viewAccess); as accessLabel) {
+                        @if (accessLabel) {
+                          <span class="access-badge" [attr.data-access]="card.viewAccess">{{
+                            accessLabel
+                          }}</span>
+                        }
+                      }
+                    </span>
                     <h3>{{ card.title }}</h3>
                     @if (card.description) {
                       <p class="card-description">{{ card.description }}</p>
@@ -308,25 +315,29 @@
                   >
                 </article>
               } @empty {
-                <div class="empty-column">
-                  <span class="empty-symbol" aria-hidden="true">{{
-                    column.name === 'Done' ? '✓' : '＋'
-                  }}</span>
-                  <p>まだアイテムはありません</p>
-                  <span>{{
-                    column.name === 'Done'
-                      ? '完了したタスクがここに並びます'
-                      : '最初のタスクを追加しましょう'
-                  }}</span>
+                <div class="empty-column" [attr.role]="projectSwitching() ? 'status' : null">
+                  @if (projectSwitching()) {
+                    <p>プロジェクトを切り替え中…</p>
+                  } @else {
+                    <span class="empty-symbol" aria-hidden="true">{{
+                      column.name === 'Done' ? '✓' : '＋'
+                    }}</span>
+                    <p>まだアイテムはありません</p>
+                    <span>{{
+                      column.name === 'Done'
+                        ? '完了したタスクがここに並びます'
+                        : '最初のタスクを追加しましょう'
+                    }}</span>
+                  }
                 </div>
               }
             </div>
-            <button class="add-card" (click)="openItem(column.id)" [disabled]="reordering()">
+            <button class="add-card" (click)="openItem(column.id)" [disabled]="reordering() || projectSwitching()">
               <span aria-hidden="true">＋</span> アイテムを追加
             </button>
           </section>
         }
-        <button class="add-column-tile" (click)="openColumn()" [disabled]="reordering()">
+        <button class="add-column-tile" (click)="openColumn()" [disabled]="reordering() || projectSwitching()">
           <span aria-hidden="true">＋</span> 列を追加
         </button>
       </div>

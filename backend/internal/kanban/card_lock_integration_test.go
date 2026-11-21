@@ -319,7 +319,7 @@ func TestReorderKeepsUpdatedAtOfUnmovedCardsMySQL(t *testing.T) {
 	}
 }
 
-// DeleteItem joins the all-columns lock, so it reports a missing card the same way and still cascades.
+// DeleteItem soft-deletes; HardDeleteItem cascades children.
 func TestDeleteItemMySQL(t *testing.T) {
 	r, a, _ := newOrderedBoard(t)
 	ctx := context.Background()
@@ -330,11 +330,17 @@ func TestDeleteItemMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := r.DeleteItem(ctx, a.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("second delete want ErrNotFound, got %v", err)
+		t.Fatalf("second soft delete want ErrNotFound, got %v", err)
 	}
 	var rest int
+	if err := r.DB.QueryRow("SELECT (SELECT COUNT(*) FROM item_history WHERE item_id=?)+(SELECT COUNT(*) FROM item_numbers WHERE item_id=?)", a.ID, a.ID).Scan(&rest); err != nil || rest == 0 {
+		t.Fatalf("soft delete must keep history/number: %d %v", rest, err)
+	}
+	if err := r.HardDeleteItem(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := r.DB.QueryRow("SELECT (SELECT COUNT(*) FROM item_history WHERE item_id=?)+(SELECT COUNT(*) FROM item_numbers WHERE item_id=?)", a.ID, a.ID).Scan(&rest); err != nil || rest != 0 {
-		t.Fatalf("history/number cascade: %d %v", rest, err)
+		t.Fatalf("hard delete cascade: %d %v", rest, err)
 	}
 }
 

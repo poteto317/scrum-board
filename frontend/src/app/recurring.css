@@ -1,0 +1,110 @@
+.recurring-page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.recurring-help {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.recurring-help h2 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  color: inherit;
+}
+
+.recurring-help p {
+  margin: 0.35rem 0 0;
+}
+
+.recurring-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.recurring-row {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.disabled-rule {
+  opacity: 0.7;
+}
+
+.recurring-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+}
+
+.recurring-title,
+.recurring-meta,
+.recurring-badge {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.recurring-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.recurring-form fieldset {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.recurring-form label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+@media (min-width: 720px) {
+  .recurring-row {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .recurring-actions {
+    justify-content: flex-end;
+  }
+}

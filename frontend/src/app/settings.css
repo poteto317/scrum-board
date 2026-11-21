@@ -1,0 +1,73 @@
+.settings-page {
+  padding: 1rem 1.25rem 2rem;
+  max-width: 40rem;
+}
+.page-heading {
+  margin-bottom: 1.25rem;
+}
+.settings-section {
+  margin-bottom: 2rem;
+}
+.settings-section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+.usage-grid {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+.usage-grid > div {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.usage-grid dt {
+  color: var(--muted);
+  margin: 0;
+}
+.usage-grid dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.state-panel {
+  margin-bottom: 1rem;
+}
+.low-remaining {
+  border-left: 3px solid var(--line);
+  padding-left: 0.75rem;
+}
+.low-remaining strong {
+  font-weight: 700;
+}
+.approximate-note {
+  margin: 0.75rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.credits-edit {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+.unlimited-label,
+.limit-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.limit-label {
+  flex-wrap: wrap;
+}
+.limit-label input {
+  min-width: 10rem;
+  flex: 1;
+}
+
+@media (max-width: 375px) {
+  .usage-grid > div {
+    grid-template-columns: 1fr;
+  }
+}

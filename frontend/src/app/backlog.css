@@ -109,10 +109,19 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--paper);
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
   transition:
     opacity 0.15s,
     border-color 0.15s,
     box-shadow 0.15s;
+}
+.backlog-row.command-menu-open {
+  position: relative;
+  z-index: 2;
 }
 .backlog-row.dragging {
   opacity: 0.45;
@@ -126,10 +135,10 @@ h1 {
 }
 .backlog-drag-zone {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  grid-column: 1 / 5;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
 }
 .backlog-drag-zone[draggable='true'] {
   cursor: grab;
@@ -164,6 +173,15 @@ h1 {
   color: var(--accent);
   white-space: nowrap;
 }
+.access-badge {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.access-badge[data-access='restricted'] {
+  color: var(--accent);
+}
 .backlog-title {
   font-size: 14px;
   font-weight: 550;
@@ -179,7 +197,77 @@ h1 {
   border-radius: 999px;
   background: #eef1ea;
 }
+.backlog-quick-actions {
+  grid-column: 5;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.backlog-quick-actions .copy-card-link {
+  position: static;
+}
+.copy-command {
+  position: relative;
+}
+.backlog-row .copy-command-button {
+  color: var(--muted);
+}
+.backlog-row .copy-command-button:hover {
+  color: var(--accent);
+}
+.backlog-row .copy-command-icon,
+.backlog-row .copy-link-icon {
+  display: block;
+}
+.copy-command-menu {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 4px);
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 220px;
+  max-width: 280px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px #25332122;
+}
+.backlog-row .copy-command-menu {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+}
+.copy-command-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.copy-command-menu button:hover {
+  background: #e6ebdf;
+}
+.copy-command-empty {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
 .backlog-detail-link {
+  grid-column: 6;
   font-size: 12px;
   font-weight: 550;
   color: var(--accent);
@@ -231,11 +319,20 @@ h1 {
   h1 {
     font-size: 28px;
   }
+  .backlog-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'main quick detail';
+    gap: 6px 10px;
+    padding: 10px 12px;
+  }
   .backlog-drag-zone {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-area: main;
+    grid-column: auto;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
-      'rank title detail'
-      'rank status detail';
+      'rank title'
+      'rank status';
     gap: 6px 10px;
   }
   .backlog-rank {
@@ -251,7 +348,13 @@ h1 {
     grid-area: status;
     justify-self: start;
   }
+  .backlog-quick-actions {
+    grid-area: quick;
+    grid-column: auto;
+    align-self: center;
+  }
   .backlog-detail-link {
     grid-area: detail;
+    grid-column: auto;
   }
 }

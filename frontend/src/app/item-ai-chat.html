@@ -1,0 +1,84 @@
+<section class="ai-chat" aria-labelledby="ai-chat-heading">
+  <div class="ai-chat-head">
+    <h2 id="ai-chat-heading">AI</h2>
+    <button
+      type="button"
+      class="secondary"
+      (click)="clear()"
+      [disabled]="clearing() || sending() || messages().length === 0"
+    >
+      履歴をクリア
+    </button>
+  </div>
+
+  @if (blockReason()) {
+    <div class="ai-chat-error" role="alert">
+      <p>{{ blockedMessage() }}</p>
+      <a routerLink="/settings">設定を開く</a>
+    </div>
+  } @else if (lowRemaining()) {
+    <p class="ai-chat-status" role="status">{{ lowRemainingMessage }}</p>
+  }
+
+  @if (loading()) {
+    <p class="ai-chat-status" role="status">読み込み中…</p>
+  } @else if (loadError()) {
+    <div class="ai-chat-error" role="alert">
+      <p>{{ loadError() }}</p>
+      <button type="button" class="secondary" (click)="reload()">再読み込み</button>
+    </div>
+  } @else {
+    <ul class="ai-chat-list" aria-label="AIチャット履歴">
+      @for (msg of messages(); track msg.id) {
+        <li class="ai-chat-msg" [attr.data-role]="msg.role">
+          <span class="ai-chat-role">{{ msg.role === 'user' ? 'あなた' : 'AI' }}</span>
+          <pre class="ai-chat-body">{{ msg.body }}</pre>
+          @if (msg.role === 'assistant') {
+            <div class="ai-chat-actions">
+              <button
+                type="button"
+                class="secondary"
+                (click)="applyToDescription(msg.body)"
+                [disabled]="applying() || sending()"
+              >
+                説明に反映
+              </button>
+              <button
+                type="button"
+                class="secondary"
+                (click)="applyAsComment(msg.body)"
+                [disabled]="applying() || sending()"
+              >
+                コメント追加
+              </button>
+            </div>
+          }
+        </li>
+      } @empty {
+        <li class="ai-chat-empty">このアイテムについて質問できます。</li>
+      }
+    </ul>
+
+    @if (error()) {
+      <p class="ai-chat-error" role="alert">{{ error() }}</p>
+    }
+
+    <form class="ai-chat-compose" (ngSubmit)="send()">
+      <label class="sr-only" for="ai-chat-input">メッセージ</label>
+      <textarea
+        id="ai-chat-input"
+        name="message"
+        rows="3"
+        [ngModel]="draft()"
+        (ngModelChange)="draft.set($event)"
+        [attr.disabled]="composeInactive() ? true : null"
+        maxlength="4000"
+        placeholder="質問や依頼を入力…"
+        (keydown.enter)="onComposeKeydown($event)"
+      ></textarea>
+      <button type="submit" [attr.disabled]="composeInactive() ? true : null">
+        {{ sending() ? '送信中…' : '送信' }}
+      </button>
+    </form>
+  }
+</section>

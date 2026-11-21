@@ -433,11 +433,6 @@ dialog.modal-backdrop::backdrop {
 .task-card.cdk-drag-animating {
   transition: transform 200ms ease;
 }
-.task-card:hover {
-  transform: translateY(-2px);
-  border-color: #a2b5a2;
-  box-shadow: 0 5px 12px #2533210a;
-}
 .task-card-body {
   flex: 1;
   min-width: 0;
@@ -454,4 +449,21 @@ dialog.modal-backdrop::backdrop {
 }
 .task-card .copy-link-icon {
   display: block;
+}
+
+/* Shared status dots: board columns + project select (L-792 ancestors). */
+.kanban-column .status-dot,
+.project-select-list .status-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border: 2px solid #9ba698;
+  border-radius: 50%;
+  display: inline-block;
+  box-sizing: border-box;
+}
+.kanban-column.doing .status-dot,
+.project-select-list .doing .status-dot {
+  border-color: #b99342;
+  background: #cfb56b;
 }
