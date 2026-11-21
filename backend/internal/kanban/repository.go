@@ -188,7 +188,17 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 		return Item{}, err
 	}
 	defer tx.Rollback()
-	if err = lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
+	card, err := createItemInTx(ctx, tx, in)
+	if err != nil {
+		return Item{}, err
+	}
+	return card, tx.Commit()
+}
+
+// createItemInTx inserts an item inside an existing transaction (no Commit).
+// Used by CreateItem and RunRecurring so last_fired_at updates share the same TX (L-464).
+func createItemInTx(ctx context.Context, tx *sql.Tx, in ItemInput) (Item, error) {
+	if err := lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
 		return Item{}, err
 	}
 	layout, err := loadBoardSettings(ctx, tx)
@@ -257,7 +267,7 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, in.ColumnID, projectID, in.Title, in.Descr
 	if err = appendHistory(ctx, tx, nil, card, "created"); err != nil {
 		return Item{}, err
 	}
-	return card, tx.Commit()
+	return card, nil
 }
 func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
