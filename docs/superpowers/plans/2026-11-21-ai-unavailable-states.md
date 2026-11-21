@@ -20,9 +20,9 @@
 
 - [x] **Step 1:** `frontend/src/app/api.ts` に `AICredits` 型（OpenAPI 準拠: `limitTokens`/`usedTokens`/`remainingTokens`/`unlimited`/`approximate`/`period`/`configured`）と `getAICredits()` → `GET /api/ai/credits` を追加。`getAIUsage` は変更しない
 - [x] **Step 2:** `frontend/src/app/ai-credits-state.ts`（新規）に純関数:
-  - `isComposeBlocked(c: AICredits | null): boolean` — null は false；`!configured` または (`configured` && `!unlimited` && `remainingTokens === 0`)
-  - `isLowRemaining(c: AICredits | null): boolean` — blocked なら false；上限あり・`limitTokens != null`・remaining>0・remaining < limit*0.1
-  - `blockedReason(c: AICredits): 'unconfigured' | 'exhausted' | null` — 未設定優先
+  - `isComposeBlocked(c: CreditsGateView | null): boolean` — null は false；`!configured` または (`configured` && `!unlimited` && (`remainingTokens == null` \|\| `=== 0`))
+  - `isLowRemaining(c: CreditsGateView | null): boolean` — blocked なら false；上限あり・`limitTokens != null`・remaining>0・remaining < limit*0.1
+  - `blockedReason(c: CreditsGateView | null): 'unconfigured' | 'exhausted' | null` — 未設定優先
 - [x] **Step 3:** `ai-credits-state.spec.ts` 境界:
   - unlimited → blocked false・low false
   - `limitTokens: null` → low false
