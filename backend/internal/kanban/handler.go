@@ -14,6 +14,7 @@ type handler struct {
 	slots           chan struct{}
 	publicOrigin    string
 	prTitleResolver *PRTitleResolver
+	blobs           BlobStorage
 }
 
 // Option customizes NewHandler without changing the call sites that only need the repository.
@@ -34,10 +35,16 @@ func WithPRTitleResolver(r *PRTitleResolver) Option {
 	return func(h *handler) { h.prTitleResolver = r }
 }
 
+// WithBlobStorage injects attachment object storage (Memory in tests, GCS in production).
+func WithBlobStorage(store BlobStorage) Option {
+	return func(h *handler) { h.blobs = store }
+}
+
 func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{
 		repo:  repo,
 		slots: make(chan struct{}, maxConcurrentFormats),
+		blobs: UnavailableBlobStorage{},
 		// prTitleResolver nil by default so unit tests do not hit GitHub; wire in production via WithPRTitleResolver.
 	}
 	for _, opt := range opts {
@@ -73,6 +80,10 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/items/by-number/{number}/comments", h.createComment)
 	mux.HandleFunc("PATCH /api/items/by-number/{number}/comments/{id}", h.updateComment)
 	mux.HandleFunc("DELETE /api/items/by-number/{number}/comments/{id}", h.deleteComment)
+	mux.HandleFunc("GET /api/items/by-number/{number}/attachments", h.listAttachments)
+	mux.HandleFunc("POST /api/items/by-number/{number}/attachments", h.createAttachment)
+	mux.HandleFunc("GET /api/items/by-number/{number}/attachments/{id}/content", h.getAttachmentContent)
+	mux.HandleFunc("DELETE /api/items/by-number/{number}/attachments/{id}", h.deleteAttachment)
 	mux.HandleFunc("POST /api/columns", h.createColumn)
 	mux.HandleFunc("PUT /api/columns/order", h.reorderColumns)
 	mux.HandleFunc("PUT /api/items/order", h.reorderItems)

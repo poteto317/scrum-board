@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"log/slog"
 	"net/http"
 )
 
@@ -84,18 +85,32 @@ func (h handler) hardDeleteTrash(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.requireEdit(w, r, deleted); !ok {
 		return
 	}
+	keys, keyErr := h.repo.ListAttachmentObjectKeysByItemID(r.Context(), deleted.ID)
+	if keyErr != nil {
+		slog.Error("list attachment keys before hard delete", "itemId", deleted.ID, "error", keyErr)
+	}
 	if err := h.repo.HardDeleteTrashItem(r.Context(), n, pid); err != nil {
 		fail(w, err)
 		return
+	}
+	if keyErr == nil {
+		h.purgeBlobsBestEffort(r, keys)
 	}
 	w.WriteHeader(204)
 }
 
 func (h handler) purgeTrash(w http.ResponseWriter, r *http.Request) {
+	keys, keyErr := h.repo.ListAttachmentObjectKeysForExpiredTrash(r.Context(), 0)
+	if keyErr != nil {
+		slog.Error("list attachment keys before trash purge", "error", keyErr)
+	}
 	n, err := h.repo.PurgeExpiredTrash(r.Context())
 	if err != nil {
 		fail(w, err)
 		return
+	}
+	if keyErr == nil {
+		h.purgeBlobsBestEffort(r, keys)
 	}
 	reply(w, 200, map[string]int64{"purged": n})
 }

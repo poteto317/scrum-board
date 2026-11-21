@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 )
@@ -108,9 +109,16 @@ func (h handler) deleteComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	keys, keyErr := h.repo.ListAttachmentObjectKeysByCommentID(r.Context(), commentID)
+	if keyErr != nil {
+		slog.Error("list attachment keys before comment delete", "commentId", commentID, "error", keyErr)
+	}
 	if err := h.repo.DeleteComment(r.Context(), card.ID, commentID); err != nil {
 		fail(w, err)
 		return
+	}
+	if keyErr == nil {
+		h.purgeBlobsBestEffort(r, keys)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
