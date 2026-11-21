@@ -57,14 +57,20 @@
               <strong>{{ displayName(c.author) }}</strong>
               <time>{{ c.createdAt | date: 'yyyy/MM/dd HH:mm:ss' }}</time>
             </div>
-            <pre class="comment-body">{{ c.body }}</pre>
+            <app-description-rich-text
+              class="comment-body"
+              [text]="c.body"
+              [itemNumber]="number"
+              [canDelete]="!readOnly"
+              (deleteImage)="deleteAttachment($event)"
+            />
             @if (!readOnly) {
               <div class="row-actions">
                 <button
                   type="button"
                   class="secondary"
                   (click)="startEdit(c)"
-                  [disabled]="savingId() != null || deletingId() != null || posting()"
+                  [disabled]="savingId() != null || deletingId() != null || posting() || imageBusy()"
                 >
                   編集
                 </button>
@@ -72,7 +78,7 @@
                   type="button"
                   class="danger-link"
                   (click)="remove(c)"
-                  [disabled]="deletingId() != null || savingId() != null || posting()"
+                  [disabled]="deletingId() != null || savingId() != null || posting() || imageBusy()"
                 >
                   削除
                 </button>
@@ -84,7 +90,12 @@
     </ul>
 
     @if (!readOnly) {
-      <form class="compose" (submit)="$event.preventDefault(); submit()">
+      <form
+        class="compose"
+        (submit)="$event.preventDefault(); submit()"
+        (dragover)="onDraftDragOver($event)"
+        (drop)="onDraftDrop($event)"
+      >
         <label class="field">
           <span>表示名（任意）</span>
           <input
@@ -92,7 +103,7 @@
             [ngModel]="draftAuthor()"
             (ngModelChange)="draftAuthor.set($event)"
             name="draftAuthor"
-            [disabled]="posting()"
+            [disabled]="posting() || imageBusy()"
             maxlength="60"
           />
         </label>
@@ -103,13 +114,30 @@
             [ngModel]="draftBody()"
             (ngModelChange)="draftBody.set($event)"
             name="draftBody"
-            [disabled]="posting()"
+            [disabled]="posting() || imageBusy()"
             required
           ></textarea>
         </label>
-        <button type="submit" [disabled]="posting() || savingId() != null || deletingId() != null">
-          投稿
-        </button>
+        <div class="row-actions">
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="posting() || imageBusy()"
+            (click)="pickDraftImage()"
+          >
+            画像
+          </button>
+          <input
+            #draftImage
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            hidden
+            (change)="onDraftImageChange($event)"
+          />
+          <button type="submit" [disabled]="posting() || savingId() != null || deletingId() != null || imageBusy()">
+            投稿
+          </button>
+        </div>
       </form>
     }
   }
@@ -118,3 +146,31 @@
     <p class="form-error" role="alert">{{ actionError() }}</p>
   }
 </section>
+
+@if (confirmAttachmentId() != null) {
+  <dialog
+    open
+    class="modal-backdrop"
+    aria-labelledby="comment-attachment-delete-title"
+    (cancel)="$event.preventDefault(); !imageBusy() && cancelAttachmentDelete()"
+  >
+    <form method="dialog" class="modal" (submit)="$event.preventDefault()">
+      <h2 id="comment-attachment-delete-title">画像を削除しますか？</h2>
+      <p>コメント本文からもこの画像の参照が取り除かれます。</p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" [disabled]="imageBusy()" (click)="cancelAttachmentDelete()">
+          キャンセル
+        </button>
+        <button
+          type="button"
+          class="danger"
+          [disabled]="imageBusy()"
+          (click)="confirmAttachmentDelete($event)"
+          (keydown)="confirmAttachmentDelete($event)"
+        >
+          削除
+        </button>
+      </div>
+    </form>
+  </dialog>
+}

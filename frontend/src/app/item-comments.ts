@@ -1,17 +1,24 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   Input,
   OnChanges,
   SimpleChanges,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { Api } from './api';
+import { buildAttachmentMarkup, insertMarkupAt } from './description-link';
+import { DescriptionRichText } from './description-rich-text';
 import { ItemComment } from './models';
+
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const COMMENT_BODY_MAX = 4000;
 
 /** Pure list helpers — kept free of Http / component state (SRP). */
 export function appendComment(list: ItemComment[], created: ItemComment): ItemComment[] {
@@ -32,7 +39,7 @@ export function displayCommentAuthor(author: string): string {
 
 @Component({
   selector: 'app-item-comments',
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, DescriptionRichText],
   templateUrl: './item-comments.html',
   styleUrl: './item-comments.css',
 })
@@ -43,9 +50,12 @@ export class ItemComments implements OnChanges {
   @Input() readOnly = false;
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly draftImage = viewChild<ElementRef<HTMLInputElement>>('draftImage');
   private listRequest?: Subscription;
   private mutationRequest?: Subscription;
   private generation = 0;
+  private uploadGuard = false;
+  private deleteGuard = false;
   readonly comments = signal<ItemComment[]>([]);
   readonly loading = signal(false);
   readonly error = signal(false);
@@ -58,6 +68,8 @@ export class ItemComments implements OnChanges {
   readonly editAuthor = signal('');
   readonly editBody = signal('');
   readonly actionError = signal('');
+  readonly imageBusy = signal(false);
+  readonly confirmAttachmentId = signal<number | null>(null);
 
   constructor() {
     this.destroyRef.onDestroy(() => {
@@ -193,6 +205,103 @@ export class ItemComments implements OnChanges {
 
   retry() {
     if (!this.loading()) this.load();
+  }
+
+  pickDraftImage(): void {
+    if (this.readOnly || this.imageBusy() || this.uploadGuard || this.posting()) return;
+    this.draftImage()?.nativeElement.click();
+  }
+
+  onDraftImageChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) this.uploadDraftImage(file);
+  }
+
+  onDraftDragOver(event: DragEvent): void {
+    if (this.readOnly) return;
+    event.preventDefault();
+  }
+
+  onDraftDrop(event: DragEvent): void {
+    if (this.readOnly) return;
+    event.preventDefault();
+    const file = event.dataTransfer?.files?.[0];
+    if (file) this.uploadDraftImage(file);
+  }
+
+  uploadDraftImage(file: File): void {
+    if (this.readOnly || this.imageBusy() || this.uploadGuard || this.number <= 0) return;
+    if (!ALLOWED_IMAGE_TYPES.has(file.type) || file.size <= 0 || file.size > 5 * 1024 * 1024) {
+      this.actionError.set('JPEG / PNG / GIF / WebP（5MiB以下）を選んでください。');
+      return;
+    }
+    this.uploadGuard = true;
+    this.imageBusy.set(true);
+    this.actionError.set('');
+    const number = this.number;
+    const projectId = this.scopedProjectId();
+    const generation = this.generation;
+    this.api.uploadAttachment(number, file, 'comment', projectId).subscribe({
+      next: (att) => {
+        if (!this.stillCurrent(generation, number, projectId)) return;
+        this.uploadGuard = false;
+        this.imageBusy.set(false);
+        const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
+        const inserted = insertMarkupAt(this.draftBody(), this.draftBody().length, this.draftBody().length, markup, COMMENT_BODY_MAX);
+        if (!inserted) {
+          this.actionError.set('本文は4000文字以内にしてください。');
+          return;
+        }
+        this.draftBody.set(inserted.text);
+      },
+      error: () => {
+        if (!this.stillCurrent(generation, number, projectId)) return;
+        this.uploadGuard = false;
+        this.imageBusy.set(false);
+        this.actionError.set('画像のアップロードに失敗しました。');
+      },
+    });
+  }
+
+  deleteAttachment(attachmentId: number): void {
+    if (this.readOnly || this.deleteGuard || this.imageBusy() || this.confirmAttachmentId() != null) {
+      return;
+    }
+    this.confirmAttachmentId.set(attachmentId);
+  }
+
+  cancelAttachmentDelete(): void {
+    this.confirmAttachmentId.set(null);
+  }
+
+  confirmAttachmentDelete(event?: MouseEvent | KeyboardEvent): void {
+    if (event instanceof MouseEvent && event.detail > 1) return;
+    if (event instanceof KeyboardEvent && event.repeat) return;
+    const id = this.confirmAttachmentId();
+    if (id == null || this.deleteGuard || this.imageBusy() || this.number <= 0) return;
+    this.deleteGuard = true;
+    this.imageBusy.set(true);
+    const generation = this.generation;
+    const number = this.number;
+    const projectId = this.scopedProjectId();
+    this.api.deleteAttachment(number, id, projectId).subscribe({
+      next: () => {
+        if (!this.stillCurrent(generation, number, projectId)) return;
+        this.deleteGuard = false;
+        this.imageBusy.set(false);
+        this.confirmAttachmentId.set(null);
+        this.load();
+      },
+      error: () => {
+        if (!this.stillCurrent(generation, number, projectId)) return;
+        this.deleteGuard = false;
+        this.imageBusy.set(false);
+        this.confirmAttachmentId.set(null);
+        this.actionError.set('画像の削除に失敗しました。');
+      },
+    });
   }
 
   private load() {
