@@ -205,6 +205,11 @@ export class HeaderMenu implements OnInit {
           void this.router.navigate(['/recurring']);
         });
         break;
+      case 'open_settings':
+        this.runAction(id, () => {
+          void this.router.navigate(['/settings']);
+        });
+        break;
       case 'item_history':
         this.runAction(id, () => this.itemActions.scrollToHistory());
         break;
@@ -222,7 +227,12 @@ export class HeaderMenu implements OnInit {
   }
 
   actionDisabled(id: HeaderMenuItemId): boolean {
-    if (id === 'open_trash' || id === 'open_users' || id === 'open_recurring') {
+    if (
+      id === 'open_trash' ||
+      id === 'open_users' ||
+      id === 'open_recurring' ||
+      id === 'open_settings'
+    ) {
       return this.projectSwitching();
     }
     if (id.startsWith('project_')) {

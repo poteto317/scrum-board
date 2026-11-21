@@ -16,6 +16,7 @@ describe('header-menu pure helpers', () => {
     expect(resolvePageKind('/trash')).toBeNull();
     expect(resolvePageKind('/users')).toBeNull();
     expect(resolvePageKind('/recurring')).toBeNull();
+    expect(resolvePageKind('/settings')).toBeNull();
     expect(resolvePageKind('/items/12')).toBe('itemDetail');
     expect(resolvePageKind('/items/12/solution')).toBe('itemDetail');
     expect(resolvePageKind('/items/12/solution?project=1')).toBe('itemDetail');
@@ -31,11 +32,13 @@ describe('header-menu pure helpers', () => {
       'open_trash',
       'open_users',
       'open_recurring',
+      'open_settings',
     ]);
     expect(catalogIdsForPageKind('itemDetail')).toEqual([
       'open_trash',
       'open_users',
       'open_recurring',
+      'open_settings',
       'item_history',
       'item_solution',
       'item_favorite',
@@ -50,11 +53,13 @@ describe('header-menu pure helpers', () => {
       'open_trash',
       'open_users',
       'open_recurring',
+      'open_settings',
     ]);
     expect(visibleMenuItemIds('itemDetail', prefs)).toEqual([
       'open_trash',
       'open_users',
       'open_recurring',
+      'open_settings',
       'item_solution',
       'item_favorite',
     ]);
@@ -62,8 +67,8 @@ describe('header-menu pure helpers', () => {
 
   it('empty workspace has no hidden ids', () => {
     const empty = emptyWorkspaceHeaderMenu();
-    expect(visibleMenuItemIds('board', empty.board)).toHaveLength(6);
-    expect(visibleMenuItemIds('itemDetail', empty.itemDetail)).toHaveLength(6);
+    expect(visibleMenuItemIds('board', empty.board)).toHaveLength(7);
+    expect(visibleMenuItemIds('itemDetail', empty.itemDetail)).toHaveLength(7);
   });
 
   it('disables project menu actions with the same rules as the old header buttons', () => {
