@@ -56,6 +56,27 @@ func TestParseAILimitsInvalidKeepsDefault(t *testing.T) {
 	}
 }
 
+func TestParseAILimitsAboveMaxKeepsDefault(t *testing.T) {
+	got := ParseAILimits(func(k string) string {
+		switch k {
+		case "AI_RATE_LIMIT_PER_MINUTE":
+			return "10001"
+		case "AI_CHAT_MESSAGE_MAX":
+			return "100001"
+		case "AI_CHAT_HISTORY_TURNS":
+			return "501"
+		case "AI_CHAT_MAX_OUTPUT_TOKENS":
+			return "32001"
+		default:
+			return ""
+		}
+	})
+	want := DefaultAILimits()
+	if got != want {
+		t.Fatalf("got %+v want %+v", got, want)
+	}
+}
+
 func TestParseAILimitsAllSet(t *testing.T) {
 	got := ParseAILimits(func(k string) string {
 		switch k {

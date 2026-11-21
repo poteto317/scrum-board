@@ -17,6 +17,14 @@ type AILimits struct {
 // DefaultAIChatMaxOutputTokens is the chat Completions maxTokens default (format uses a separate constant).
 const DefaultAIChatMaxOutputTokens = 4096
 
+// Hard caps so a mistyped env cannot allocate unbounded hit slices or request huge completions.
+const (
+	maxAIRateLimitPerMinuteEnv = 10_000
+	maxAIChatMessageMaxEnv     = 100_000
+	maxAIChatHistoryTurnsEnv   = 500
+	maxAIChatMaxOutputTokensEnv = 32_000
+)
+
 // DefaultAILimits returns hard-coded defaults (rate limit off).
 func DefaultAILimits() AILimits {
 	return AILimits{
@@ -33,22 +41,22 @@ func ParseAILimits(getenv func(string) string) AILimits {
 	if getenv == nil {
 		return out
 	}
-	if v, ok, warn := parseOptionalPositiveInt(getenv("AI_RATE_LIMIT_PER_MINUTE")); ok {
+	if v, ok, warn := parseOptionalBoundedInt(getenv("AI_RATE_LIMIT_PER_MINUTE"), maxAIRateLimitPerMinuteEnv); ok {
 		out.RatePerMinute = v
 	} else if warn != "" {
 		slog.Warn("AI_RATE_LIMIT_PER_MINUTE ignored; rate limit off", "reason", warn)
 	}
-	if v, ok, warn := parseRequiredPositiveInt(getenv("AI_CHAT_MESSAGE_MAX")); ok {
+	if v, ok, warn := parseRequiredBoundedInt(getenv("AI_CHAT_MESSAGE_MAX"), maxAIChatMessageMaxEnv); ok {
 		out.MessageMax = v
 	} else if warn != "" {
 		slog.Warn("AI_CHAT_MESSAGE_MAX ignored; using default", "reason", warn, "default", out.MessageMax)
 	}
-	if v, ok, warn := parseRequiredPositiveInt(getenv("AI_CHAT_HISTORY_TURNS")); ok {
+	if v, ok, warn := parseRequiredBoundedInt(getenv("AI_CHAT_HISTORY_TURNS"), maxAIChatHistoryTurnsEnv); ok {
 		out.HistoryTurns = v
 	} else if warn != "" {
 		slog.Warn("AI_CHAT_HISTORY_TURNS ignored; using default", "reason", warn, "default", out.HistoryTurns)
 	}
-	if v, ok, warn := parseRequiredPositiveInt(getenv("AI_CHAT_MAX_OUTPUT_TOKENS")); ok {
+	if v, ok, warn := parseRequiredBoundedInt(getenv("AI_CHAT_MAX_OUTPUT_TOKENS"), maxAIChatMaxOutputTokensEnv); ok {
 		out.ChatMaxOutputTokens = v
 	} else if warn != "" {
 		slog.Warn("AI_CHAT_MAX_OUTPUT_TOKENS ignored; using default", "reason", warn, "default", out.ChatMaxOutputTokens)
@@ -56,8 +64,8 @@ func ParseAILimits(getenv func(string) string) AILimits {
 	return out
 }
 
-// parseOptionalPositiveInt: empty → unset (ok=false, warn=""); "0" → ok with 0; positive → ok; else warn.
-func parseOptionalPositiveInt(raw string) (int, bool, string) {
+// parseOptionalBoundedInt: empty → unset; "0" → ok with 0; 1..max inclusive → ok; else warn.
+func parseOptionalBoundedInt(raw string, max int) (int, bool, string) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
 		return 0, false, ""
@@ -69,11 +77,14 @@ func parseOptionalPositiveInt(raw string) (int, bool, string) {
 	if n < 0 {
 		return 0, false, "negative"
 	}
+	if n > max {
+		return 0, false, "above max"
+	}
 	return n, true, ""
 }
 
-// parseRequiredPositiveInt: empty → unset; must be >= 1 to apply.
-func parseRequiredPositiveInt(raw string) (int, bool, string) {
+// parseRequiredBoundedInt: empty → unset; must be 1..max inclusive.
+func parseRequiredBoundedInt(raw string, max int) (int, bool, string) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
 		return 0, false, ""
@@ -84,6 +95,9 @@ func parseRequiredPositiveInt(raw string) (int, bool, string) {
 	}
 	if n < 1 {
 		return 0, false, "must be >= 1"
+	}
+	if n > max {
+		return 0, false, "above max"
 	}
 	return n, true, ""
 }
