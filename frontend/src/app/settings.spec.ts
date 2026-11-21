@@ -4,7 +4,11 @@ import { of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api, AICredits } from './api';
 import { AuthSession } from './auth-session';
-import { AI_EXHAUSTED_MESSAGE, AI_LOW_REMAINING_MESSAGE } from './ai-unavailable-copy';
+import {
+  AI_EXHAUSTED_MESSAGE,
+  AI_LOW_REMAINING_MESSAGE,
+  AI_UNCONFIGURED_MESSAGE,
+} from './ai-unavailable-copy';
 import {
   AI_CREDITS_APPROXIMATE_NOTE,
   AI_CREDITS_EXHAUSTED_ADMIN,
@@ -66,6 +70,18 @@ describe('SettingsPage', () => {
     expect(AI_EXHAUSTED_MESSAGE).toBe(
       'AI の利用上限に達しています。設定で上限を確認・変更できます。',
     );
+  });
+
+  it('keeps settings unconfigured copy aligned with AI_UNCONFIGURED_MESSAGE', () => {
+    const { f } = setup({
+      getAIUsage: vi.fn(() =>
+        of({ requestCount: 0, inputTokens: 0, outputTokens: 0, configured: false }),
+      ),
+      getAICredits: vi.fn(() => of(credits({ configured: false }))),
+    });
+    const text = (f.nativeElement.textContent as string).replace(/\s+/g, ' ');
+    const expected = AI_UNCONFIGURED_MESSAGE.replace(/\s+/g, ' ');
+    expect(text).toContain(expected);
   });
 
   it('shows usage when configured', () => {
