@@ -10,18 +10,21 @@ import (
 	"scrumboard/internal/kanban"
 )
 
-const maxOutputTokens = 4096
-
 // Chatter implements kanban.ItemChatter on top of the official Anthropic SDK.
 type Chatter struct {
-	model  string
-	client anthropic.Client
+	model     string
+	maxTokens int64
+	client    anthropic.Client
 }
 
 // New builds a Chatter. The SDK never retries: a retry would outlast the request's own time limit.
-func New(apiKey, model string, opts ...option.RequestOption) *Chatter {
+// maxTokens < 1 uses kanban.DefaultAIChatMaxOutputTokens.
+func New(apiKey, model string, maxTokens int64, opts ...option.RequestOption) *Chatter {
+	if maxTokens < 1 {
+		maxTokens = int64(kanban.DefaultAIChatMaxOutputTokens)
+	}
 	all := append([]option.RequestOption{option.WithAPIKey(apiKey), option.WithMaxRetries(0)}, opts...)
-	return &Chatter{model: model, client: anthropic.NewClient(all...)}
+	return &Chatter{model: model, maxTokens: maxTokens, client: anthropic.NewClient(all...)}
 }
 
 // Chat asks Claude to reply. Every failure becomes a *Failure without upstream text.
@@ -42,7 +45,7 @@ func (c *Chatter) Chat(ctx context.Context, system string, messages []kanban.Cha
 	}
 	message, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.model),
-		MaxTokens: maxOutputTokens,
+		MaxTokens: c.maxTokens,
 		System:    []anthropic.TextBlockParam{{Text: system}},
 		Messages:  params,
 	})
