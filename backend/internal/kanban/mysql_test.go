@@ -51,6 +51,7 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"sessions",
 		"sprint_items",
 		"sprints",
+		"recurring_rules",
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
@@ -80,6 +81,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeSprints(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeRecurringRules(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeBoardSettings(t.Context()); err != nil {
