@@ -1,8 +1,16 @@
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Api } from './api';
 import { DescriptionBlocksEditor } from './description-blocks-editor';
 import { DESCRIPTION_MAX_LEN } from './description-blocks';
+
+const apiStub = {
+  uploadAttachment: vi.fn(() => of({})),
+  deleteAttachment: vi.fn(() => of(undefined)),
+  listAttachments: vi.fn(() => of([])),
+};
 
 @Component({
   imports: [DescriptionBlocksEditor],
@@ -36,7 +44,10 @@ class Host {
 
 describe('DescriptionBlocksEditor', () => {
   beforeEach(() => {
-    TestBed.configureTestingModule({ imports: [Host] });
+    TestBed.configureTestingModule({
+      imports: [Host],
+      providers: [{ provide: Api, useValue: apiStub }],
+    });
   });
   afterEach(() => {
     TestBed.resetTestingModule();

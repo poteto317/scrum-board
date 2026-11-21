@@ -200,6 +200,9 @@ export class ItemDetail implements OnInit {
   }): void {
     this.descriptionEditor.begin(sel);
   }
+  onAttachmentDeleted(): void {
+    this.reload$.next();
+  }
   confirmDescriptionLink(): void {
     const editor = this.blocksEditor();
     const blocks = editor?.blocks() ?? [this.form.controls.description.value ?? ''];

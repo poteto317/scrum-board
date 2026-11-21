@@ -219,12 +219,16 @@
         <app-description-blocks-editor
           [value]="form.controls.description.value"
           [disabled]="form.disabled"
+          [itemNumber]="item()?.number ?? 0"
+          [projectId]="item()?.projectId"
+          attachmentField="description"
           (textChange)="onDescriptionText($event)"
           (compositionChange)="onDescriptionComposition($event)"
           (linkRequest)="onDescriptionLinkRequest($event)"
           (blurLeave)="autosave.flush()"
+          (attachmentDeleted)="onAttachmentDeleted()"
         />
-        <p class="field-note">10000文字以内。リンクは https のみ。Enter で段落を分けます。</p>
+        <p class="field-note">10000文字以内。リンクは https のみ。画像は DnD または「画像」。Enter で段落を分けます。</p>
         @if (form.controls.description.invalid) {
           <p class="form-error">説明は10000文字以内で入力してください。</p>
         }

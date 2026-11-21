@@ -36,6 +36,9 @@ describe('ItemSolution', () => {
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   let restoreDialog: (() => void) | undefined;
 
@@ -67,6 +70,9 @@ describe('ItemSolution', () => {
       board: vi.fn(() =>
         of({ columns: [], items: [], settings: { cardLayout: 'pack', activeProjectId: 1 } }),
       ),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     await TestBed.configureTestingModule({
       imports: [ItemSolution],
