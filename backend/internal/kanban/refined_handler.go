@@ -110,6 +110,7 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 	aiCtx, cancel, hasTime := aiContext(r.Context())
 	defer cancel()
 	if !hasTime {
+		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		slog.Error("ai card formatting skipped", "kind", "no_time")
 		aiFailed(w)
 		return
