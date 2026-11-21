@@ -162,12 +162,31 @@ describe('SettingsPage', () => {
     expect(f.nativeElement.textContent).toContain(AI_CREDITS_EXHAUSTED_MEMBER);
   });
 
-  it('shows admin exhausted copy', () => {
+  it('shows admin exhausted copy with edit UI', () => {
     const { f } = setup({
       isAdmin: true,
       getAICredits: vi.fn(() => of(credits({ remainingTokens: 0 }))),
     });
     expect(f.nativeElement.textContent).toContain(AI_CREDITS_EXHAUSTED_ADMIN);
+    expect(f.nativeElement.querySelector('.credits-edit')).toBeTruthy();
+  });
+
+  it('reloads usage without refetching credits', () => {
+    const { f, getAICredits } = setup();
+    const before = getAICredits.mock.calls.length;
+    f.componentInstance.reloadUsage();
+    expect(getAICredits.mock.calls.length).toBe(before);
+  });
+
+  it('restores draft limit when unlimited is turned off', () => {
+    const { f } = setup({
+      isAdmin: true,
+      getAICredits: vi.fn(() => of(credits({ limitTokens: 1234, remainingTokens: 1000 }))),
+    });
+    f.componentInstance.onUnlimitedChange(true);
+    expect(f.componentInstance.draftLimit()).toBe('');
+    f.componentInstance.onUnlimitedChange(false);
+    expect(f.componentInstance.draftLimit()).toBe('1234');
   });
 
   it('shows unset guidance when key missing and hides exhausted', () => {
