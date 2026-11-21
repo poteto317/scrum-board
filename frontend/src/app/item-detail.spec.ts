@@ -1,9 +1,11 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ItemDetail } from './item-detail';
 import { Api } from './api';
+import { AuthSession } from './auth-session';
 import { formatDueAtUtc, fromLocalParts } from './due-at';
 import { Item } from './models';
 import { itemDetailUrl } from './item-link';
@@ -22,6 +24,26 @@ import {
   saveBoardScroll,
   saveReturnTo,
 } from './list-scroll-session';
+
+const testUser = {
+  id: 1,
+  loginName: 'admin',
+  displayName: 'Admin',
+  role: 'admin' as const,
+  disabled: false,
+};
+
+const authStub = {
+  user: signal(testUser),
+  status: signal<'authenticated'>('authenticated'),
+  loadError: signal(''),
+  ensureMe: () => of(testUser),
+  isAdmin: () => true,
+  clearSubject: () => undefined,
+  login: () => of(testUser),
+  logout: () => of(undefined),
+};
+
 const card: Item = {
   id: 18,
   projectId: 0,
@@ -31,7 +53,7 @@ const card: Item = {
   description: '元の説明',
   position: 0,
   backlogPosition: 0,
-    offsetY: 0,
+  offsetY: 0,
   prUrls: [],
   relatedItems: [],
   assignee: '',
@@ -41,6 +63,8 @@ const card: Item = {
   dueAt: null,
   createdAt: '',
   updatedAt: '',
+  canEdit: true,
+  canManage: true,
 };
 describe('ItemDetail autosave', () => {
   let params: BehaviorSubject<Map<string, string>>;
@@ -54,6 +78,9 @@ describe('ItemDetail autosave', () => {
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
     listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> };
   let restoreDialog: () => void;
@@ -99,11 +126,15 @@ describe('ItemDetail autosave', () => {
       updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -213,7 +244,7 @@ describe('ItemDetail autosave', () => {
     expect(f.nativeElement.querySelector('form.detail-layout button[type="submit"]')).toBeNull();
     vi.advanceTimersByTime(2500);
     expect(api.updateItem).not.toHaveBeenCalled();
-    expect(f.nativeElement.querySelector('.eyebrow').textContent).toBe('ITEM-003');
+    expect(f.nativeElement.querySelector('.eyebrow').textContent.trim()).toBe('ITEM-003');
   });
   it('saves the status selection immediately using the internal ID and leaves inputs enabled', () => {
     const pending = new Subject<Item>();
@@ -694,6 +725,9 @@ describe('ItemDetail copy card link', () => {
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
     listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
     params = new BehaviorSubject(new Map([['number', '3']]));
@@ -711,11 +745,15 @@ describe('ItemDetail copy card link', () => {
       updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -862,12 +900,16 @@ describe('ItemDetail copy command menu and management', () => {
       updateCommandTemplate: vi.fn(),
       deleteCommandTemplate: vi.fn(),
       ...overrides,
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     const router = { navigate: vi.fn() };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -1248,12 +1290,16 @@ describe('ItemDetail IME response handling', () => {
               listUsers: () => of([]),
               history: () => of({ events: [], nextBefore: 0 }),
               listComments: () => of([]),
+              listAttachments: () => of([]),
+              uploadAttachment: () => of({ id: 1, originalName: 'x.png' }),
+              deleteAttachment: () => of(undefined),
               board: () => of({ columns: [], items: [] }),
               itemByNumber: () => of(card),
               updateItem: () => pending,
               listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
             },
           },
+          { provide: AuthSession, useValue: authStub },
           {
             provide: ActivatedRoute,
             useValue: {
@@ -1300,6 +1346,9 @@ describe('ItemDetail live refresh', () => {
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
     listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -1324,11 +1373,15 @@ describe('ItemDetail live refresh', () => {
       updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -1414,6 +1467,9 @@ describe('ItemDetail Close reason', () => {
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
     listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   let restoreDialog: () => void;
   beforeEach(() => {
@@ -1455,11 +1511,15 @@ describe('ItemDetail Close reason', () => {
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })),
       listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -1609,6 +1669,9 @@ describe('ItemDetail description text links', () => {
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
     listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   const buttonByText = (root: ParentNode, text: string) =>
     Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text) as
@@ -1661,11 +1724,15 @@ describe('ItemDetail description text links', () => {
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })),
       listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -1870,6 +1937,9 @@ describe('ItemDetail dueAt picker', () => {
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
     listUsers: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -1894,11 +1964,15 @@ describe('ItemDetail dueAt picker', () => {
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })),
       listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },

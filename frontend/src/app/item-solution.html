@@ -22,9 +22,13 @@
       <app-description-blocks-editor
         [value]="control.value"
         [lengthErrorMessage]="solutionLengthError"
+        [itemNumber]="item()?.number ?? 0"
+        [projectId]="item()?.projectId"
+        attachmentField="solution"
         (textChange)="onTextChange($event)"
         (compositionChange)="onCompositionChange($event)"
         (linkRequest)="onLinkRequest($event)"
+        (attachmentDeleted)="load()"
       />
       @if (control.invalid) {
         <p class="form-error">{{ solutionLengthError }}</p>
