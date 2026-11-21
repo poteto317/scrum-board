@@ -57,6 +57,14 @@ describe('ai-credits-state', () => {
     expect(isLowRemaining(c)).toBe(false);
   });
 
+  it('remaining null with unlimited false is exhausted (fail-closed)', () => {
+    expect(
+      blockedReason(
+        credits({ unlimited: false, remainingTokens: null, limitTokens: 100 }),
+      ),
+    ).toBe('exhausted');
+  });
+
   it('unconfigured wins over exhausted remaining', () => {
     const c = credits({ configured: false, remainingTokens: 0 });
     expect(blockedReason(c)).toBe('unconfigured');

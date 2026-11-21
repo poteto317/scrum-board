@@ -15,7 +15,9 @@ export function isComposeBlocked(c: CreditsGateView | null): boolean {
 export function blockedReason(c: CreditsGateView | null): BlockedReason | null {
   if (!c) return null;
   if (!c.configured) return 'unconfigured';
-  if (!c.unlimited && c.remainingTokens === 0) return 'exhausted';
+  if (!c.unlimited && (c.remainingTokens == null || c.remainingTokens === 0)) {
+    return 'exhausted';
+  }
   return null;
 }
 
