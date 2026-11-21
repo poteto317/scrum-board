@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -1282,5 +1283,23 @@ func (m *memoryRepo) AddAIUsage(_ context.Context, requests, inTok, outTok int64
 }
 
 func (m *memoryRepo) GetAIUsage(context.Context) (AIUsage, error) {
-	return m.aiUsage, nil
+	out := m.aiUsage
+	if m.aiUsage.LimitTokens != nil {
+		v := *m.aiUsage.LimitTokens
+		out.LimitTokens = &v
+	}
+	return out, nil
+}
+
+func (m *memoryRepo) SetAICreditLimit(_ context.Context, limit *int64) error {
+	if limit != nil && *limit < 0 {
+		return fmt.Errorf("negative limit")
+	}
+	if limit == nil {
+		m.aiUsage.LimitTokens = nil
+		return nil
+	}
+	v := *limit
+	m.aiUsage.LimitTokens = &v
+	return nil
 }
