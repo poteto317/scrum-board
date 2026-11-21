@@ -1,9 +1,11 @@
 import {
+  buildAttachmentMarkup,
   formatDescriptionLink,
   insertDescriptionLink,
   normalizeDescriptionLinkLabel,
   normalizeDescriptionLinkUrl,
   parseDescriptionLinks,
+  sanitizeAttachmentAlt,
 } from './description-link';
 
 describe('normalizeDescriptionLinkUrl', () => {
@@ -108,5 +110,28 @@ describe('parseDescriptionLinks', () => {
     expect(parseDescriptionLinks('<script>alert(1)</script>')).toEqual([
       { kind: 'text', text: '<script>alert(1)</script>' },
     ]);
+  });
+
+  it('parses same-item attachment images before links', () => {
+    const src = '/api/items/by-number/7/attachments/3/content';
+    expect(parseDescriptionLinks(`see ![pic](${src}) now`, 7)).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'image', alt: 'pic', src, attachmentId: 3 },
+      { kind: 'text', text: ' now' },
+    ]);
+  });
+
+  it('leaves external image markdown and other-item paths as text', () => {
+    const external = '![x](https://evil.example/a.png)';
+    expect(parseDescriptionLinks(external, 7)).toEqual([{ kind: 'text', text: external }]);
+    const other = '![x](/api/items/by-number/8/attachments/3/content)';
+    expect(parseDescriptionLinks(other, 7)).toEqual([{ kind: 'text', text: other }]);
+  });
+
+  it('sanitizes alt and builds markup', () => {
+    expect(sanitizeAttachmentAlt('a]b\nc')).toBe('abc');
+    expect(buildAttachmentMarkup(2, 9, 'a]b')).toBe(
+      '![ab](/api/items/by-number/2/attachments/9/content)',
+    );
   });
 });
