@@ -164,6 +164,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: 列名重複
+          content:
+            application/json:
+              schema: &id001
+                $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
   /api/columns/order:
@@ -457,6 +463,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Item'
+        '401':
+          description: 未ログインかつ非 public
+          content:
+            application/json:
+              schema: *id001
+        '403':
+          description: 閲覧権限なし
+          content:
+            application/json:
+              schema: *id001
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema: *id001
       parameters:
       - name: number
         in: path
@@ -520,6 +541,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonValue'
+        '401':
+          description: 未ログインかつ非 public
+          content:
+            application/json:
+              schema: *id001
+        '403':
+          description: 閲覧権限なし
+          content:
+            application/json:
+              schema: *id001
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema: *id001
       parameters:
       - name: number
         in: path
@@ -982,6 +1018,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Item'
+        '401':
+          description: 未ログインかつ非 public
+          content:
+            application/json:
+              schema: *id001
+        '403':
+          description: 閲覧権限なし
+          content:
+            application/json:
+              schema: *id001
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema: *id001
       parameters:
       - name: id
         in: path
@@ -1094,6 +1145,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: manage 権限なし
+          content:
+            application/json:
+              schema: *id001
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema: *id001
       parameters:
       - name: id
         in: path
@@ -1614,8 +1675,17 @@ paths:
       summary: ゴミ箱一括 purge（セッション免除）
       operationId: post_api_trash_purge
       responses:
-        '204':
-          description: 成功（本文なし）
+        '200':
+          description: パージ結果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  purged:
+                    type: integer
+                required:
+                - purged
       security: []
       description: セッション Cookie 不要（sessionExempt）。
   /api/trash/{id}:
@@ -1674,6 +1744,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema: *id001
       security:
       - cookieAuth: []
   /api/users/{id}:
@@ -1699,6 +1774,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema: *id001
+        '404':
+          description: 対象なし
+          content:
+            application/json:
+              schema: *id001
+        '409':
+          description: 衝突
+          content:
+            application/json:
+              schema: *id001
       parameters:
       - name: id
         in: path
