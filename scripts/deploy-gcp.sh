@@ -125,3 +125,5 @@ echo "  curl -sS -o /dev/null -w '%{http_code}\n' '${SERVICE_URL}/health'   # ex
 echo ""
 echo "Trash purge Scheduler (daily POST /api/trash/purge):"
 echo "  AUTH_USER=... AUTH_PASSWORD=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-trash-purge-scheduler.sh"
+echo "Recurring run Scheduler (every 15m POST /api/recurring/run):"
+echo "  AUTH_USER=... AUTH_PASSWORD=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-recurring-run-scheduler.sh"
