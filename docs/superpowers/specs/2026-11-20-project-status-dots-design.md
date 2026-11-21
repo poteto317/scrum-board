@@ -10,7 +10,7 @@
 
 - `docs/superpowers/specs/2026-11-20-project-select-ui-design.md` — カスタム listbox（本機能の土台）
 - `docs/superpowers/specs/2026-11-20-project-switch-perf-design.md` — `ProjectBoardCache` と focus／pointerdown 先読み
-- `board.html` / `board.css` — 列見出しの `.status-dot`（`.doing` / `.done` のみ色上書き。Review は現状デフォルト）
+- `board.html` / `styles.css` / `board.css` — 列見出しの `.status-dot`（Doing=青・Review=金は #110 で共有。Done は board 側）
 
 ## 決めたこと
 
@@ -20,8 +20,8 @@
 | 判定対象の列名 | 完全一致 `"Doing"` / `"Review"` / `"Todo"`（カスタム列名・Close・Done は無視） |
 | 表示ルール | **Doing に1件以上** → Doing ドット。**Review に1件以上** → Review ドット。両方あれば **両方**（Doing→Review の順）。どちらも0件で **Todo に1件以上** → Todo ドットのみ。それ以外 → アイコンなし |
 | 件数 | 件数数字は出さない（ドットの有無だけ） |
-| 色 | **現行かんばんの status-dot と同じ**。Doing = `.doing .status-dot`（金）。Review / Todo = デフォルト `.status-dot`（灰リング）。ボードに Review 専用色は **足さない**（カード外の見た目変更を避ける）。Doing+Review 同時は金＋灰で区別。Review のみと Todo のみは同色（ボード現状どおり。既知の制約） |
-| セレクタ形 | Doing ドットは祖先 `.doing` + 子 `.status-dot`。Review ドットは識別用に祖先 `.review` を付けてよいが **色ルールはデフォルトのまま**（`.review .status-dot` の色上書きは書かない）。Todo は修飾なし `.status-dot`。子へ `.status-dot.doing` 直付与はしない |
+| 色 | **現行かんばんの status-dot と同じ**（#110 以降）。Doing = `.doing .status-dot`（青）。Review = `.review .status-dot`（金＝旧 Doing）。Todo = デフォルト `.status-dot`（灰リング）。Doing+Review 同時は青＋金で区別。色の正本は [#110 設計](./2026-11-22-status-column-colors-design.md) |
+| セレクタ形 | Doing ドットは祖先 `.doing` + 子 `.status-dot`。Review ドットは祖先 `.review` + 子 `.status-dot`（#110 で色上書きあり）。Todo は修飾なし `.status-dot`。子へ `.status-dot.doing` 直付与はしない |
 | データ源 | 既存の `GET /api/board?projectId=` 応答。**新規 API は作らない** |
 | キャッシュ | board スナップショットは **`{ items, columns }` 一体のみ**。items だけの put 経路は廃止。warm 判定は「columns が1列以上ある一体エントリがある」こと。先読みは既存どおり `putBoardIfAbsent`（または同等）で、**後から届いた古い prefetch が fresher な `putBoard` を上書きしない**（L-040） |
 | 未キャッシュ | ドットなし（開くのを待たない・エラー表示もしない）。先読み完了後にメニューが開いたままでも **再描画でドットが現れる** |
@@ -35,7 +35,7 @@
 - **専用 summary API**: 先読み board で足りる。BE 変更は非目標。
 - **列 ID を全プロジェクト共通とみなす**: プロジェクトごとに列が別行。禁止（L-035）。
 - **未キャッシュ中にスピナー**: メニューを重くするだけ。ドットなしでよい。
-- **ボードへ Review 専用色を新設**: セレクトのためだけにかんばん見た目を変えるのは範囲外。現行デフォルト色に合わせる。
+- **ボードへ Review 専用色を新設（#81 時点）**: セレクトのためだけにかんばん見た目を変えるのは範囲外だった。**#110 でボード側の色分けが要件になり撤回**（正本は #110 設計）。
 - **`.todo` 修飾クラス**: ボードの Todo 列はデフォルトのまま。セレクトも修飾なし。
 - **ライブ Board `data()` を優先参照**: キャッシュと二重源になり優先順位が曖昧。キャッシュ単一源に固定。
 - **items のみ旧 put を残す二系統**: プラン肥大と warm 判定の穴。一体 put の1経路だけ。
@@ -43,7 +43,7 @@
 ## 目的と受け入れ条件
 
 1. listbox を開くと、各 option の左に状態ドットが出る（ルールは上表）。
-2. Doing ドットの色はボードの Doing 列 status-dot と一致する。Review / Todo ドットはボードのデフォルト status-dot と一致する。
+2. Doing / Review ドットの色はボードの対応列 status-dot と一致する（#110: Doing=青、Review=金）。Todo ドットはボードのデフォルト status-dot と一致する。
 3. Done / Close だけあるプロジェクト、または該当3列がすべて空のプロジェクトはドットなし。
 4. 先読み前はドットなし。focus／pointerdown 先読み後（または切替後の `putBoard`）にデータが揃えば、開いたままでもドットが付く。
 5. 列名・切替・先読み・L-842 busy 契約は既存のまま。本機能は表示専用で `switchTo` を変えない。
@@ -56,7 +56,7 @@
 - Done / Close / カスタム列のインジケータ
 - 件数バッジ・ツールチップ必須化
 - お気に入り一覧や item-detail のプロジェクト UI
-- **ボード列の Review（や Todo）専用色の新設・変更**
+- ~~ボード列の Review（や Todo）専用色の新設・変更~~ → **#110 で実施**（本 #81 の非目標からは外す）
 
 ## 表示ルール（純関数）
 
@@ -106,14 +106,14 @@ function projectStatusDots(
 li[role=option][aria-label="…"]
   span.project-status-dots[aria-hidden]
     // Doing: <span class="doing"><span class="status-dot"></span></span>
-    // Review: <span class="review"><span class="status-dot"></span></span>  // 色上書きなし
+    // Review: <span class="review"><span class="status-dot"></span></span>  // #110 で金の色上書き
     // Todo のみ: <span class="status-dot"></span>
   span.project-option-name
     {{ project.name }}
 ```
 
-- Doing 色は既存 `.doing .status-dot` を流用。セレクト用に色を新規定義しない。グローバルへ移す場合は `.kanban-column` / `.project-select-list` で祖先限定（L-792）。
-- ボードの `board.html` / Review 列クラスは **変更しない**（非目標）。
+- Doing / Review 色はボード共有の `.doing` / `.review` + `.status-dot` を流用（#110）。セレクト専用色は定義しない。グローバルは `.kanban-column` / `.project-select-list` で祖先限定（L-792）。
+- ボードの Review 列クラスは **#110 で `[class.review]` を追加**（本 #81 時点の「変更しない」は撤回）。
 
 ## 知見（手順 4）
 
@@ -133,6 +133,6 @@ li[role=option][aria-label="…"]
 
 ## リスク
 
-- Review のみと Todo のみが同色（ボード現状の制約。受け入れ済み）。
+- ~~Review のみと Todo のみが同色~~ → **#110 で解消**（Review=金、Todo=灰）。
 - 先読み未完了の短い間はドットなし → 後から付く（許容）。
 - 列を改名したプロジェクトではドットが付かない（完全一致仕様。既知の制約）。
