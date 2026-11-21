@@ -245,6 +245,7 @@ type Repository interface {
 	ClearAIMessages(context.Context, int64) error
 	AddAIUsage(ctx context.Context, requests, inTok, outTok int64) error
 	GetAIUsage(context.Context) (AIUsage, error)
+	SetAICreditLimit(ctx context.Context, limit *int64) error
 	ListAttachments(context.Context, int64) ([]Attachment, error)
 	CreateAttachment(ctx context.Context, blobs BlobStorage, itemID int64, field string, commentID *int64, name, contentType string, size int64, body io.Reader, userID *int64) (Attachment, error)
 	OpenAttachmentContent(ctx context.Context, blobs BlobStorage, itemID, id int64) (io.ReadCloser, string, error)
