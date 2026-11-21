@@ -530,6 +530,63 @@ describe('ItemComments', () => {
     expect(f.componentInstance.actionError()).toContain('4000');
   });
 
+  it('edit drop without focus appends at end; focused caret inserts there', () => {
+    const f = setup({ listComments: vi.fn(() => of([c1])) });
+    f.componentInstance.startEdit(c1);
+    f.componentInstance.editBody.set('keep');
+    f.detectChanges();
+    expect(f.componentInstance.editingId()).toBe(c1.id);
+    const ta = f.nativeElement.querySelector(
+      '.comment-edit textarea',
+    ) as HTMLTextAreaElement | null;
+    expect(ta).toBeTruthy();
+    ta!.blur();
+    expect(document.activeElement === ta).toBe(false);
+
+    const markup = buildAttachmentMarkup(3, 11, 'tail');
+    f.componentInstance.tryInsertAttachmentRefFromDataTransfer(
+      mockDataTransfer({
+        types: [SCRUM_ATTACHMENT_MIME],
+        data: {
+          [SCRUM_ATTACHMENT_MIME]: encodeAttachmentDragPayload({
+            itemNumber: 3,
+            attachmentId: 11,
+            alt: 'tail',
+          }),
+        },
+      }),
+      'edit',
+    );
+    expect(f.componentInstance.editBody()).toBe(`keep${markup}`);
+
+    f.componentInstance.editBody.set('ab');
+    f.detectChanges();
+    const ta2 = f.nativeElement.querySelector(
+      '.comment-edit textarea',
+    ) as HTMLTextAreaElement;
+    ta2.value = 'ab';
+    ta2.focus();
+    ta2.setSelectionRange(1, 1);
+    expect(document.activeElement).toBe(ta2);
+    expect(ta2.selectionStart).toBe(1);
+    (f.componentInstance as unknown as { insertGuard: boolean }).insertGuard = false;
+    const mid = buildAttachmentMarkup(3, 12, 'mid');
+    f.componentInstance.tryInsertAttachmentRefFromDataTransfer(
+      mockDataTransfer({
+        types: [SCRUM_ATTACHMENT_MIME],
+        data: {
+          [SCRUM_ATTACHMENT_MIME]: encodeAttachmentDragPayload({
+            itemNumber: 3,
+            attachmentId: 12,
+            alt: 'mid',
+          }),
+        },
+      }),
+      'edit',
+    );
+    expect(f.componentInstance.editBody()).toBe(`a${mid}b`);
+  });
+
   it('edit drop ignores files-only and rejects bad payload', () => {
     const f = setup({ listComments: vi.fn(() => of([c1])) });
     const api = TestBed.inject(Api) as unknown as { uploadAttachment: ReturnType<typeof vi.fn> };

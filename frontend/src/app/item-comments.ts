@@ -378,8 +378,11 @@ export class ItemComments implements OnChanges {
         end = range.end;
       } else {
         const el = this.editBodyArea()?.nativeElement;
-        start = el?.selectionStart ?? body.length;
-        end = el?.selectionEnd ?? start;
+        // 未フォーカス時 selectionStart は 0 になりがちなので、キャレット無し＝末尾（設計どおり）
+        if (el && document.activeElement === el) {
+          start = el.selectionStart ?? body.length;
+          end = el.selectionEnd ?? start;
+        }
       }
     }
 
