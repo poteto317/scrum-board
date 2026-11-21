@@ -938,6 +938,7 @@ paths:
       description: |
         セッション＋編集可。キー未設定は 503。同時実行は refined と共有（超過 429 `ai_busy`）。
         アプリ内トークン上限到達時も 429（`ai_credit_limit`）。
+        利用者別レート制限が有効なとき超過は 429（`ai_rate_limit`）。既定ではレート制限オフ。
         本文・コメントは変更しない。空／過長／未知フィールドは 400。
       responses:
         '200':
@@ -988,7 +989,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '429':
-          description: 同時実行上限（code=ai_busy）またはアプリ内トークン上限到達（code=ai_credit_limit）
+          description: |
+            同時実行上限（code=ai_busy）、アプリ内トークン上限到達（code=ai_credit_limit）、
+            または利用者別レート制限超過（code=ai_rate_limit。メッセージ「AIの利用頻度が高すぎます。少し待って再試行してください。」）。
+            レート制限は `AI_RATE_LIMIT_PER_MINUTE` が正のときのみ有効（既定オフ）。
           content:
             application/json:
               schema:
@@ -1029,7 +1033,8 @@ paths:
               properties:
                 message:
                   type: string
-                  description: 1〜4000 Unicode 文字
+                  description: |
+                    1〜N Unicode 文字（既定 N=4000。サーバーの `AI_CHAT_MESSAGE_MAX` で上書き可）。
               additionalProperties: false
     delete:
       summary: アイテム AI チャット履歴クリア
@@ -1397,7 +1402,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '429':
-          description: 同時実行上限（code=ai_busy）またはアプリ内トークン上限到達（code=ai_credit_limit）
+          description: |
+            同時実行上限（code=ai_busy）、アプリ内トークン上限到達（code=ai_credit_limit）、
+            または利用者別レート制限超過（code=ai_rate_limit。メッセージ「AIの利用頻度が高すぎます。少し待って再試行してください。」）。
+            レート制限は `AI_RATE_LIMIT_PER_MINUTE` が正のときのみ有効（既定オフ）。
           content:
             application/json:
               schema:

@@ -112,6 +112,7 @@ Goの環境変数（ホストで`go run`する場合、ルートの`.env`は自�
 | `LISTEN_ADDRESS` | `127.0.0.1:8080` |
 | `ANTHROPIC_API_KEY` | 空（未設定ならAI起票APIだけが503） |
 | `ANTHROPIC_MODEL` | 空（`claude-haiku-5-5`。`effort`に対応したモデルのみ） |
+| `AI_RATE_LIMIT_PER_MINUTE` ほか | 既定オフ／長さ・maxTokens 上書きは [docs/ai-ops-limits.md](docs/ai-ops-limits.md) |
 | `ATTACHMENT_GCS_BUCKET` | 空（未設定なら画像アップロードは503。ローカルテストは MemoryBlobStorage） |
 
 変更した値は`DB_PASSWORD=... DB_ADDRESS=127.0.0.1:3307 go run ./cmd/server`のように渡してください。APIのポートを変えた場合は`frontend/proxy.conf.json`も合わせます。
