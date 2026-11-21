@@ -17,6 +17,10 @@
 - MySQLへの永続化
 - APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのアイテムを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[OpenAPI: refined](docs/openapi.yaml)）
 
+## ボード共有 URL
+
+ログイン後に `/?project=<プロジェクトID>` を開くと、そのプロジェクトのボードが表示されます（例: `/?project=2`）。不正・未知の ID はエラー表示し、黙って別プロジェクトには切り替えません。ヘッダーでプロジェクトを切り替えると、アドレスバーの `project` も更新されます。
+
 ## 最短で起動（Docker）
 
 Docker Desktopを起動してから、このディレクトリで実行してください。
