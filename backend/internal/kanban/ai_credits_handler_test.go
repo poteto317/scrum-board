@@ -122,9 +122,9 @@ func TestAICreditLimitBlocksChatAndRefined(t *testing.T) {
 		t.Fatal("chatter must not be called")
 		return "", 0, 0, nil
 	}}
-	formatter := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, error) {
+	formatter := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, int64, int64, error) {
 		t.Fatal("formatter must not be called")
-		return RefinedItem{}, nil
+		return RefinedItem{}, 0, 0, nil
 	}}
 	h := NewHandler(repo, WithAIChat(chatter), WithItemFormatter(formatter))
 
@@ -154,6 +154,27 @@ func TestAICreditLimitBlocksChatAndRefined(t *testing.T) {
 	w = request(h, "POST", aiChatPath(card.Number), `{"message":"hi"}`)
 	if w.Code != 200 {
 		t.Fatalf("unlimited chat: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRefinedAddsAIUsage(t *testing.T) {
+	repo := fresh()
+	formatter := &fakeFormatter{fn: ok("題名", "説明")}
+	h := NewHandler(repo, WithItemFormatter(formatter))
+	before, err := repo.GetAIUsage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := request(h, "POST", "/api/items/refined", `{"title":"下書きタイトルです"}`)
+	if w.Code != 201 {
+		t.Fatalf("refined: %d %s", w.Code, w.Body.String())
+	}
+	after, err := repo.GetAIUsage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.RequestCount != before.RequestCount+1 || after.InputTokens != before.InputTokens+1 || after.OutputTokens != before.OutputTokens+1 {
+		t.Fatalf("usage before=%+v after=%+v", before, after)
 	}
 }
 

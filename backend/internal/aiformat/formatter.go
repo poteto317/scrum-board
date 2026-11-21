@@ -33,10 +33,10 @@ type output struct {
 }
 
 // Format asks Claude to tidy the draft. Every failure becomes a *Failure without upstream text.
-func (f *Formatter) Format(ctx context.Context, draft kanban.Draft) (kanban.RefinedItem, error) {
+func (f *Formatter) Format(ctx context.Context, draft kanban.Draft) (kanban.RefinedItem, int64, int64, error) {
 	input, err := json.Marshal(draft)
 	if err != nil {
-		return kanban.RefinedItem{}, &Failure{Kind: kindInvalidOutput}
+		return kanban.RefinedItem{}, 0, 0, &Failure{Kind: kindInvalidOutput}
 	}
 	message, err := f.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(f.model),
@@ -49,19 +49,19 @@ func (f *Formatter) Format(ctx context.Context, draft kanban.Draft) (kanban.Refi
 		},
 	})
 	if err != nil {
-		return kanban.RefinedItem{}, classify(err)
+		return kanban.RefinedItem{}, 0, 0, classify(err)
 	}
 	if message == nil { // a gateway can answer 200 with a JSON null body
-		return kanban.RefinedItem{}, &Failure{Kind: kindInvalidOutput}
+		return kanban.RefinedItem{}, 0, 0, &Failure{Kind: kindInvalidOutput}
 	}
 	switch message.StopReason {
 	case anthropic.StopReasonEndTurn:
 	case anthropic.StopReasonRefusal:
-		return kanban.RefinedItem{}, &Failure{Kind: kindRefusal}
+		return kanban.RefinedItem{}, message.Usage.InputTokens, message.Usage.OutputTokens, &Failure{Kind: kindRefusal}
 	case anthropic.StopReasonMaxTokens:
-		return kanban.RefinedItem{}, &Failure{Kind: kindTruncated}
+		return kanban.RefinedItem{}, message.Usage.InputTokens, message.Usage.OutputTokens, &Failure{Kind: kindTruncated}
 	default:
-		return kanban.RefinedItem{}, &Failure{Kind: kindInvalidOutput}
+		return kanban.RefinedItem{}, message.Usage.InputTokens, message.Usage.OutputTokens, &Failure{Kind: kindInvalidOutput}
 	}
 	var text strings.Builder
 	for _, block := range message.Content {
@@ -69,7 +69,11 @@ func (f *Formatter) Format(ctx context.Context, draft kanban.Draft) (kanban.Refi
 			text.WriteString(block.Text)
 		}
 	}
-	return parse(text.String())
+	item, err := parse(text.String())
+	if err != nil {
+		return kanban.RefinedItem{}, message.Usage.InputTokens, message.Usage.OutputTokens, err
+	}
+	return item, message.Usage.InputTokens, message.Usage.OutputTokens, nil
 }
 
 func parse(text string) (kanban.RefinedItem, error) {
