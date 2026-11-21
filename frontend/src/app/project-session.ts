@@ -61,6 +61,8 @@ export class ProjectSession {
    * Adopt active project from a board GET.
    * `clearIfMissing`: ProjectSession.load だけ true（欠落時に null）。board/backlog 適用では false（poll 欠落で消さない）。
    * 既に正の `activeId` があるとき、欠落ではクリアしない（起動の二重 GET で消さない）。
+   * `switching` 中は no-op（L-860）: switchTo 直後の遅延 GET が旧 activeProjectId で巻き戻さない。
+   * GET 成功＝常に active 反映、ではない。
    */
   syncActiveFromBoard(activeProjectId: unknown, clearIfMissing = false): void {
     // While switchTo is in flight, a late board GET (initial load / poll) must not

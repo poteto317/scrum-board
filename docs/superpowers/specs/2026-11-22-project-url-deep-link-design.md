@@ -26,9 +26,9 @@
 | BE | **変更なし** |
 | docs | **`README.md` に「ボード共有 URL」1 節**。OpenAPI 必須変更なし |
 | コピー UI | 作らない |
-| 配置 | ロジックは `App`。解析は純関数 |
+| 配置 | **配線**は `App`（適用契機・outbound sync）。**判定**は `project-query` 純関数。**切替中の board 同期抑制**は `ProjectSession.syncActiveFromBoard`（`switching` 中 no-op） |
 | AC 検証 | 自動テスト必須 |
-| poll（L-860） | URL 適用成功後、poll／settings 再取得が別プロジェクトへ黙って戻さない（既存世代／busy を壊さない） |
+| poll（L-860） | URL 適用成功後、poll／settings 再取得が別プロジェクトへ黙って戻さない。`syncActiveFromBoard` は `switching` 中に activeId を変えない |
 | 遅延完了（L-037/L-040） | URL 起点も既存 `switchTo` の世代／busy に乗る。適用開始後に別切替が勝った場合、遅延成功で active／URL を上書きしない（新世代機構は作らない） |
 
 ## 非目標
