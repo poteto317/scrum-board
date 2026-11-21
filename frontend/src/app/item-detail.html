@@ -728,15 +728,6 @@
       [projectId]="item()!.projectId"
       [readOnly]="editLocked()"
     />
-    @if (canEdit()) {
-      <app-item-ai-chat
-        [number]="item()!.number"
-        [projectId]="item()!.projectId"
-        [itemId]="item()!.id"
-        (descriptionApplied)="autosave.applyDescriptionSave($event)"
-        (commentApplied)="commentsPanel()?.reload()"
-      />
-    }
     <app-item-history
       [number]="item()!.number"
       [projectId]="item()!.projectId"

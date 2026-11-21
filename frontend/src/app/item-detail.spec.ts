@@ -157,6 +157,12 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     return f;
   };
+  it('does not render always-on inline AI chat (moved to fab)', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('app-item-ai-chat')).toBeNull();
+  });
   it('shows solution property link (empty label) without form field', async () => {
     const f = create();
     await Promise.resolve();
