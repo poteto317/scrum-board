@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/anthropics/anthropic-sdk-go/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
+	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.59.0
 )
 
