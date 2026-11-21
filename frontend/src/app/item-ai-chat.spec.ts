@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api, AIChatMessage } from './api';
 import { ItemAiChat } from './item-ai-chat';
@@ -139,5 +139,29 @@ describe('ItemAiChat', () => {
     const f = setup({ updateItem });
     f.componentInstance.applyToDescription('x');
     expect(updateItem).not.toHaveBeenCalled();
+  });
+
+  it('drops stale list response after number change', () => {
+    const pending = new Subject<AIChatMessage[]>();
+    const listAIChat = vi
+      .fn()
+      .mockReturnValueOnce(pending)
+      .mockReturnValueOnce(of([m2]));
+    const f = setup({ listAIChat });
+    f.componentRef.setInput('number', 4);
+    f.detectChanges();
+    pending.next([m1]);
+    pending.complete();
+    expect(f.componentInstance.messages()).toEqual([m2]);
+  });
+
+  it('blocks overlong comment apply before confirm', () => {
+    const createComment = vi.fn(() => of({ id: 9 }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const f = setup({ createComment });
+    f.componentInstance.applyAsComment('あ'.repeat(4001));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(createComment).not.toHaveBeenCalled();
+    expect(f.componentInstance.error()).toContain('4000');
   });
 });
