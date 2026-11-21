@@ -410,6 +410,46 @@ curl --fail-with-body --request DELETE \
 - HTTP 400: 不正日付・範囲・空白名・goal 超過・未知フィールド・未完了での velocity・不正 ID。
 - HTTP 409: 状態遷移不可・メンバー重複・completed 削除/PUT・アイテム残存時のプロジェクト削除。
 
+# 繰り返しルール（CRUD）
+
+アクティブプロジェクトの繰り返しルールを管理します。**セッション必須**（`POST /api/recurring/run` のみセッション免除）。
+
+```sh
+curl --fail-with-body http://127.0.0.1:4200/api/recurring-rules
+curl --fail-with-body --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"name":"週次ライブラリ更新","title":"ライブラリのアップデート","description":"依存関係を確認する","cron":"0 9 * * 1","columnId":1}' \
+  http://127.0.0.1:4200/api/recurring-rules
+curl --fail-with-body --request PATCH \
+  --header 'Content-Type: application/json' \
+  --data '{"enabled":false}' \
+  http://127.0.0.1:4200/api/recurring-rules/1
+curl --fail-with-body --request DELETE \
+  http://127.0.0.1:4200/api/recurring-rules/1
+```
+
+- `GET /api/recurring-rules` は `{ "rules": [ RecurringRule ] }`。**アクティブプロジェクトのみ**。並びは `id` 昇順。`?projectId=` 先読みは初版対象外。
+- `POST` は 201 で作成行。必須: `name`（trim 後 1〜80）、`title`（アイテム title と同じ規則）、`cron`（5 フィールド）、`columnId`（存在する列）。任意: `description`（省略時 `""`、空文字可）、`timezone`（**キー省略時** `Asia/Tokyo`。**空文字は 400**。未知 IANA も 400）、`enabled`（省略時 `true`）、`projectId`（省略時はサーバがアクティブを付与。指定時はアクティブと一致必須、不一致は 400）。
+- `PATCH /api/recurring-rules/{id}` は部分更新（省略＝変更なし。L-002）。`description` の明示 `""` は空文字に更新、明示 `null` は 400。`enabled: false` で無効化可。不正 cron／空・未知 timezone／未知 columnId は 400。他プロジェクトの id・欠落は 404。
+- `DELETE` は成功時 204。他プロジェクト／欠落は 404。
+- ルール JSON: `id`, `projectId`, `name`, `title`, `description`, `cron`, `timezone`, `columnId`, `enabled`, `lastFiredAt`, `createdAt`, `updatedAt`。
+
+# 繰り返し起票（run）
+
+Cloud Scheduler 向けに、有効な繰り返しルールを評価してアイテムを自動起票します。**セッション不要**（Basic 認証ゲート前提。`POST /api/trash/purge` と同型）。CRUD は上記「繰り返しルール（CRUD）」節（セッション必須）。
+
+```sh
+curl --fail-with-body --request POST \
+  http://127.0.0.1:4200/api/recurring/run
+```
+
+- 成功時は HTTP 200 と `{ "created": number, "skipped": number, "failed": number }`。
+- `created`: アイテム作成に成功したルール数。
+- `skipped`: ロック後に評価し、次回発火時刻がまだ来ていないルール数。
+- `failed`: 列欠落・起票失敗・実行時の不正 cron／timezone など、起票を試みたが成功しなかった数。1 件の失敗でも他ルールは続行する。
+- 起点は `lastFiredAt`（未発火なら `createdAt`）。成功時のみ `lastFiredAt` を更新する。1 ティックあたり最大 1 起票（キャッチアップ複数なし）。
+- 自動起票の `createdByUserId` は `null`。`dueAt` は付けない。所属 `projectId` はルールのプロジェクト。
+
 # ボード設定（カード配置・モバイル表示列・アクティブプロジェクト）
 
 `PATCH /api/board/settings` でボード設定を更新します。本文は `cardLayout`（`"pack"` | `"free"`）、`mobileBoardColumnId`（正の列 ID）、`activeProjectId`（正のプロジェクト ID）を **それぞれ任意**（少なくとも1つ必須。未知フィールドは 400）。省略したキーは変更しません。設定は Basic Auth 共有のボード共通です。マージの基点は DB の生値です。
@@ -468,7 +508,7 @@ curl --fail-with-body --request PUT \
 
 - 応答は常に `{ "board": { "hiddenIds": string[] }, "backlog": { "hiddenIds": string[] }, "itemDetail": { "hiddenIds": string[] } }`。
 - 初期（行なし）: 3 キーとも `hiddenIds` は `[]`（カタログ既定ですべて表示）。
-- カタログ ID: `board` / `backlog` は `project_add`, `project_rename`, `project_delete`。`itemDetail` は `item_history`, `item_solution`, `item_favorite`。
+- カタログ ID: `board` / `backlog` は `project_add`, `project_rename`, `project_delete`, `open_trash`, `open_users`, `open_recurring`。`itemDetail` は `open_trash`, `open_users`, `open_recurring`, `item_history`, `item_solution`, `item_favorite`。ラベル例: `open_recurring` → 「繰り返し」。
 - PUT は 3 キーすべて必須（全体置換）。各ネストは `hiddenIds` のみ。要素は当該 pageKind のカタログ ID のみ（未知・他種別は 400）。重複 ID は除去して受理。未知トップキー・欠落キー・null・型不正は 400。
 - GET は壊れた／欠落した保存値を正規化して返すが、DB 行は書き換えない（余分キー無視、欠落キー補完、不正型はそのキーだけ空、未知・非 string 要素は除去してユニーク化）。
 

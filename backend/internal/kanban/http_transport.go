@@ -53,6 +53,8 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, 409, map[string]string{"message": "スプリントの状態またはメンバーの重複を確認してください。"})
 	case errors.Is(err, ErrSprint):
 		reply(w, 400, map[string]string{"message": "スプリントの入力内容を確認してください。"})
+	case errors.Is(err, ErrRecurring):
+		reply(w, 400, map[string]string{"message": "繰り返しルールの入力内容を確認してください。"})
 	default:
 		slog.Error("request failed", "error", err)
 		reply(w, 500, map[string]string{"message": "処理に失敗しました。時間をおいて再試行してください。"})
