@@ -3,6 +3,7 @@ package kanban
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 )
 
@@ -239,6 +240,13 @@ type Repository interface {
 	CreateComment(context.Context, int64, string, string) (Comment, error)
 	UpdateComment(context.Context, int64, int64, *string, *string) (Comment, error)
 	DeleteComment(context.Context, int64, int64) error
+	ListAttachments(context.Context, int64) ([]Attachment, error)
+	CreateAttachment(ctx context.Context, blobs BlobStorage, itemID int64, field string, commentID *int64, name, contentType string, size int64, body io.Reader, userID *int64) (Attachment, error)
+	OpenAttachmentContent(ctx context.Context, blobs BlobStorage, itemID, id int64) (io.ReadCloser, string, error)
+	DeleteAttachment(ctx context.Context, blobs BlobStorage, itemID, attachmentID, itemNumber int64) error
+	ListAttachmentObjectKeysByItemID(context.Context, int64) ([]string, error)
+	ListAttachmentObjectKeysByCommentID(context.Context, int64) ([]string, error)
+	ListAttachmentObjectKeysForExpiredTrash(ctx context.Context, projectID int64) ([]string, error)
 	CountUsers(context.Context) (int64, error)
 	ListUsers(context.Context) ([]User, error)
 	GetUser(context.Context, int64) (User, error)
