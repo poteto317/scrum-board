@@ -20,8 +20,9 @@
 
 | ファイル | 責務 |
 | --- | --- |
-| `frontend/src/app/project-query.ts` (+spec) | `parseProjectQueryParam`、型 `ProjectQueryParse`、定数 `PROJECT_QUERY_NOT_FOUND` |
+| `frontend/src/app/project-query.ts` (+spec) | `parseProjectQueryParam`、`resolveProjectDeepLinkAction`、`withProjectQueryParam`、定数 |
 | `frontend/src/app/app.ts` (+spec 追加) | inbound 1 回適用、outbound URL 同期 |
+| `frontend/src/app/project-session.ts` (+spec) | `syncActiveFromBoard` は `switching` 中 no-op（L-860） |
 | `README.md` | 「ボード共有 URL」1 節 |
 
 ---
@@ -63,7 +64,7 @@
 
 ### Task 3: outbound URL 同期
 
-- [x] **Step 1:** `syncProjectQueryToUrl(id: number)`: `router.navigate([], { queryParams: { project: id }, queryParamsHandling: 'merge', replaceUrl: true })`（現在ルート相対）。
+- [x] **Step 1:** `syncProjectQueryToUrl(id: number)`: `withProjectQueryParam` で UrlTree の query を merge し `navigateByUrl(..., { replaceUrl: true })`（App root では `navigate([], merge)` が効かないため）。
 - [x] **Step 2:** `onProjectOptionSelect`: `switchTo(id).subscribe({ next: (resolved) => syncProjectQueryToUrl(resolved) })`。**要求 id ではなく next の resolved** を使う。error では sync しない（L-001）。
 - [x] **Step 3:** `switchToCreatedProject`: 同様に `next: (resolved) => syncProjectQueryToUrl(resolved)`。
 - [x] **Step 4:** テストを **経路別に**:
@@ -79,7 +80,7 @@
 
 ### Task 5: 検証（L-860 含む）
 
-- [x] **Step 1:** board／project-session の poll・切替ガードを **本カードで編集しない**。合格条件: `git diff` で `board.ts` / `project-session.ts` の poll・`syncActiveFromBoard`・`switchTo` 本体に差分が無い。既存回帰として次を実行して通す: `project-session.spec.ts`、および board の poll／切替関連 spec（ファイル名に `board` / `poll` / `switch` があるもの）。差分が出た場合のみ当該回帰テストを追加してから進む。
+- [x] **Step 1:** board の poll 経路は触らない。`project-session.syncActiveFromBoard` のみ `switching` 中 no-op を追加（L-860／deep-link race）。合格条件: 当該回帰テスト＋`project-session.spec.ts` が通る。`board.ts` に差分が無いこと。
 - [x] **Step 2:** FE テスト全体（または Task1–3 + Step1 列挙）が通る。
 - [x] **Step 3:** BE／OpenAPI 差分が無いことを `git diff --stat` で確認。
 
