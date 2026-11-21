@@ -13,12 +13,18 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { Api } from './api';
+import {
+  SCRUM_ATTACHMENT_MIME,
+  attachmentDragBelongsToItem,
+  dataTransferHasAttachmentMime,
+  decodeAttachmentDragPayload,
+} from './attachment-dnd';
 import { buildAttachmentMarkup, insertMarkupAt } from './description-link';
 import { DescriptionRichText } from './description-rich-text';
 import { ItemComment } from './models';
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
-const COMMENT_BODY_MAX = 4000;
+export const COMMENT_BODY_MAX = 4000;
 
 /** Pure list helpers — kept free of Http / component state (SRP). */
 export function appendComment(list: ItemComment[], created: ItemComment): ItemComment[] {
@@ -37,6 +43,39 @@ export function displayCommentAuthor(author: string): string {
   return author.trim() ? author : '（無名）';
 }
 
+/** DnD 参照挿入の純粋結果（I/O・signal 更新は呼び出し側）。 */
+export type AttachmentRefInsertResult =
+  | { kind: 'noop' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ok'; text: string };
+
+/**
+ * MIME 有無〜decode〜所属検証〜markup 挿入までを副作用なしで計算する。
+ * DataTransfer / DOM selection / signal は呼び出し側が渡す・適用する。
+ */
+export function resolveAttachmentRefInsert(input: {
+  hasMime: boolean;
+  rawPayload: string;
+  itemNumber: number;
+  body: string;
+  start: number;
+  end: number;
+  maxLen?: number;
+}): AttachmentRefInsertResult {
+  if (!input.hasMime) return { kind: 'noop' };
+  const payload = decodeAttachmentDragPayload(input.rawPayload);
+  if (!payload || !attachmentDragBelongsToItem(payload, input.itemNumber)) {
+    return { kind: 'error', message: '画像の参照を挿入できませんでした。' };
+  }
+  const markup = buildAttachmentMarkup(input.itemNumber, payload.attachmentId, payload.alt);
+  const maxLen = input.maxLen ?? COMMENT_BODY_MAX;
+  const inserted = insertMarkupAt(input.body, input.start, input.end, markup, maxLen);
+  if (!inserted) {
+    return { kind: 'error', message: `本文は${maxLen}文字以内にしてください。` };
+  }
+  return { kind: 'ok', text: inserted.text };
+}
+
 @Component({
   selector: 'app-item-comments',
   imports: [DatePipe, FormsModule, DescriptionRichText],
@@ -51,11 +90,13 @@ export class ItemComments implements OnChanges {
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
   private readonly draftImage = viewChild<ElementRef<HTMLInputElement>>('draftImage');
+  private readonly editBodyArea = viewChild<ElementRef<HTMLTextAreaElement>>('editBodyArea');
   private listRequest?: Subscription;
   private mutationRequest?: Subscription;
   private generation = 0;
   private uploadGuard = false;
   private deleteGuard = false;
+  private insertGuard = false;
   readonly comments = signal<ItemComment[]>([]);
   readonly loading = signal(false);
   readonly error = signal(false);
@@ -219,7 +260,7 @@ export class ItemComments implements OnChanges {
     if (file) this.uploadDraftImage(file);
   }
 
-  onDraftDragOver(event: DragEvent): void {
+  onCommentDragOver(event: DragEvent): void {
     if (this.readOnly) return;
     event.preventDefault();
   }
@@ -227,8 +268,23 @@ export class ItemComments implements OnChanges {
   onDraftDrop(event: DragEvent): void {
     if (this.readOnly) return;
     event.preventDefault();
-    const file = event.dataTransfer?.files?.[0];
+    const dt = event.dataTransfer;
+    if (!dt) return;
+    // MIME あり → 参照挿入のみ。無し → 従来どおりファイル upload（責務を分ける）。
+    if (dataTransferHasAttachmentMime(dt.types)) {
+      this.tryInsertAttachmentRefFromDataTransfer(dt, 'draft');
+      return;
+    }
+    const file = dt.files?.[0];
     if (file) this.uploadDraftImage(file);
+  }
+
+  onEditDrop(event: DragEvent): void {
+    if (this.readOnly) return;
+    event.preventDefault();
+    const dt = event.dataTransfer;
+    if (!dt) return;
+    this.tryInsertAttachmentRefFromDataTransfer(dt, 'edit');
   }
 
   uploadDraftImage(file: File): void {
@@ -251,7 +307,7 @@ export class ItemComments implements OnChanges {
         const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
         const inserted = insertMarkupAt(this.draftBody(), this.draftBody().length, this.draftBody().length, markup, COMMENT_BODY_MAX);
         if (!inserted) {
-          this.actionError.set('本文は4000文字以内にしてください。');
+          this.actionError.set(`本文は${COMMENT_BODY_MAX}文字以内にしてください。`);
           return;
         }
         this.draftBody.set(inserted.text);
@@ -301,6 +357,55 @@ export class ItemComments implements OnChanges {
         this.confirmAttachmentId.set(null);
         this.actionError.set('画像の削除に失敗しました。');
       },
+    });
+  }
+
+  /** draft/edit 共通: DataTransfer／selection を集め、純粋結果を signal へ適用（upload はしない）。 */
+  tryInsertAttachmentRefFromDataTransfer(
+    dt: DataTransfer,
+    target: 'draft' | 'edit',
+    range?: { start: number; end: number },
+  ): void {
+    if (this.readOnly || this.imageBusy() || this.number <= 0) return;
+    if (this.insertGuard) return;
+
+    const body = target === 'draft' ? this.draftBody() : this.editBody();
+    let start = body.length;
+    let end = body.length;
+    if (target === 'edit') {
+      if (range) {
+        start = range.start;
+        end = range.end;
+      } else {
+        const el = this.editBodyArea()?.nativeElement;
+        start = el?.selectionStart ?? body.length;
+        end = el?.selectionEnd ?? start;
+      }
+    }
+
+    const result = resolveAttachmentRefInsert({
+      hasMime: dataTransferHasAttachmentMime(dt.types),
+      rawPayload: dt.getData(SCRUM_ATTACHMENT_MIME),
+      itemNumber: this.number,
+      body,
+      start,
+      end,
+    });
+    if (result.kind === 'noop') return;
+    if (result.kind === 'error') {
+      this.actionError.set(result.message);
+      return;
+    }
+
+    this.insertGuard = true;
+    this.actionError.set('');
+    if (target === 'draft') {
+      this.draftBody.set(result.text);
+    } else {
+      this.editBody.set(result.text);
+    }
+    queueMicrotask(() => {
+      this.insertGuard = false;
     });
   }
 

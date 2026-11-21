@@ -26,31 +26,38 @@
                 maxlength="60"
               />
             </label>
-            <label class="field">
-              <span>本文</span>
-              <textarea
-                rows="3"
-                [ngModel]="editBody()"
-                (ngModelChange)="editBody.set($event)"
-                [disabled]="savingId() === c.id"
-              ></textarea>
-            </label>
-            <div class="row-actions">
-              <button
-                type="button"
-                (click)="saveEdit(c)"
-                [disabled]="savingId() === c.id"
-              >
-                保存
-              </button>
-              <button
-                type="button"
-                class="secondary"
-                (click)="cancelEdit()"
-                [disabled]="savingId() === c.id"
-              >
-                キャンセル
-              </button>
+            <div
+              class="comment-edit"
+              (dragover)="onCommentDragOver($event)"
+              (drop)="onEditDrop($event)"
+            >
+              <label class="field">
+                <span>本文</span>
+                <textarea
+                  #editBodyArea
+                  rows="3"
+                  [ngModel]="editBody()"
+                  (ngModelChange)="editBody.set($event)"
+                  [disabled]="savingId() === c.id || imageBusy()"
+                ></textarea>
+              </label>
+              <div class="row-actions">
+                <button
+                  type="button"
+                  (click)="saveEdit(c)"
+                  [disabled]="savingId() === c.id || imageBusy()"
+                >
+                  保存
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="cancelEdit()"
+                  [disabled]="savingId() === c.id || imageBusy()"
+                >
+                  キャンセル
+                </button>
+              </div>
             </div>
           } @else {
             <div class="comment-heading">
@@ -93,7 +100,7 @@
       <form
         class="compose"
         (submit)="$event.preventDefault(); submit()"
-        (dragover)="onDraftDragOver($event)"
+        (dragover)="onCommentDragOver($event)"
         (drop)="onDraftDrop($event)"
       >
         <label class="field">
