@@ -94,6 +94,7 @@ func (h handler) hardDeleteTrash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if keyErr == nil {
+		// Hard-deleted: rows are gone; keys are orphans.
 		h.purgeBlobsBestEffort(r, keys)
 	}
 	w.WriteHeader(204)
@@ -110,7 +111,8 @@ func (h handler) purgeTrash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if keyErr == nil {
-		h.purgeBlobsBestEffort(r, keys)
+		// Skip keys that still exist (item restored between list and purge).
+		h.purgeOrphanAttachmentBlobs(r, keys)
 	}
 	reply(w, 200, map[string]int64{"purged": n})
 }
