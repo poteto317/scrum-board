@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   HostListener,
   inject,
@@ -25,8 +26,11 @@ import {
   CdkDropList,
 } from '@angular/cdk/drag-drop';
 import { Subscription, filter, finalize, firstValueFrom, map } from 'rxjs';
+import { AiChatContext } from './ai-chat-context';
+import { toAiChatOptions } from './ai-chat-target';
 import { Api } from './api';
 import { errorMessage } from './api-error';
+import { AuthSession } from './auth-session';
 import { assigneeKind } from './assignee';
 import { itemAppPath, itemDetailUrl } from './item-link';
 import { normalizeBoardData, NormalizedBoardData, normalizeItem } from './board-data';
@@ -129,6 +133,8 @@ export class Board implements OnInit {
   readonly assigneeKind = assigneeKind;
   readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
+  private readonly auth = inject(AuthSession);
+  private readonly aiChat = inject(AiChatContext);
   private readonly projectSession = inject(ProjectSession);
   private readonly projectBoardCache = inject(ProjectBoardCache);
   /** Template-safe busy flag while active project reload is in flight. */
@@ -301,6 +307,11 @@ export class Board implements OnInit {
     return this.grouped().get(id ?? -1)?.length ?? 0;
   });
 
+  private readonly publishAiChatCandidates = effect(() => {
+    const scoped = itemsForActiveProject(this.data().items, this.projectSession.activeId());
+    this.aiChat.setBoard(toAiChatOptions(scoped, this.auth.user()));
+  });
+
   ngOnInit() {
     this.bindBoardMobileMedia();
     this.load();
@@ -312,6 +323,7 @@ export class Board implements OnInit {
       this.projectSwitchSub?.unsubscribe();
       // Navigating away mid-switch must not leave the next view stuck in `switching`.
       this.projectSession.endSwitch();
+      if (this.aiChat.pageKind() === 'board') this.aiChat.clear();
     });
     const stop = startLiveRefresh({
       enabled: () =>

@@ -1,7 +1,7 @@
 import { formatItemNumber } from './item-number';
 import { ItemHistory } from './item-history';
 import { ItemComments } from './item-comments';
-import { ItemAiChat } from './item-ai-chat';
+import { AiChatContext } from './ai-chat-context';
 import { Modal } from './modal';
 import {
   Component,
@@ -80,7 +80,6 @@ import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
     DatePipe,
     Modal,
     ItemComments,
-    ItemAiChat,
     ItemHistory,
     CdkDropList,
     CdkDrag,
@@ -109,6 +108,7 @@ export class ItemDetail implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   private readonly api = inject(Api);
   readonly projectSession = inject(ProjectSession);
+  private readonly aiChat = inject(AiChatContext);
   private readonly appOrigin = inject(AppOrigin);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -287,6 +287,25 @@ export class ItemDetail implements OnInit {
         this.relatedItems.draft.enable({ emitEvent: false });
         this.relatedItems.labelDraft.enable({ emitEvent: false });
       }
+    });
+    effect(() => {
+      const card = this.item();
+      // item が一瞬 null（reload 中）のときは clear しない（入口消失・再マウント防止）
+      if (!card) return;
+      if (this.canEdit()) {
+        this.aiChat.setDetail(
+          { number: card.number, projectId: card.projectId, itemId: card.id },
+          {
+            onDescriptionApplied: (updated) => this.autosave.applyDescriptionSave(updated),
+            onCommentApplied: () => this.commentsPanel()?.reload(),
+          },
+        );
+      } else if (this.aiChat.pageKind() === 'detail') {
+        this.aiChat.clear();
+      }
+    });
+    this.destroyRef.onDestroy(() => {
+      if (this.aiChat.pageKind() === 'detail') this.aiChat.clear();
     });
   }
 

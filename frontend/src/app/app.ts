@@ -13,6 +13,8 @@ import {
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
+import { AiChatFab } from './ai-chat-fab';
+import { isAiChatRoute } from './ai-chat-target';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { AuthSession } from './auth-session';
@@ -39,7 +41,15 @@ import { Project } from './models';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, ReactiveFormsModule, Modal, HeaderMenu],
+  imports: [
+    RouterLink,
+    RouterLinkActive,
+    RouterOutlet,
+    ReactiveFormsModule,
+    Modal,
+    HeaderMenu,
+    AiChatFab,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -53,6 +63,7 @@ export class App implements OnInit {
   readonly displayFavoriteTitle = displayFavoriteTitle;
   private readonly router = inject(Router);
   private readonly loginPath = signal(false);
+  private readonly routeUrl = signal(this.router.url);
   private readonly projectSwitcherRef = viewChild<ElementRef<HTMLElement>>('projectSwitcher');
   private readonly projectSelectTriggerRef =
     viewChild<ElementRef<HTMLElement>>('projectSelectTrigger');
@@ -62,6 +73,8 @@ export class App implements OnInit {
     const s = this.auth.status();
     return s === 'authenticated' || s === 'error';
   });
+
+  readonly showAiChatFab = computed(() => isAiChatRoute(this.routeUrl()));
 
   readonly projectModalOpen = signal(false);
   readonly formError = signal('');
@@ -135,10 +148,12 @@ export class App implements OnInit {
 
   ngOnInit() {
     this.loginPath.set(this.router.url.split('?')[0] === '/login');
+    this.routeUrl.set(this.router.url);
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => {
         this.loginPath.set(e.urlAfterRedirects.split('?')[0] === '/login');
+        this.routeUrl.set(e.urlAfterRedirects);
       });
     this.auth.ensureMe().subscribe({
       next: () => {

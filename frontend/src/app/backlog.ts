@@ -18,8 +18,11 @@ import { Location, NgStyle } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Subscription, finalize, firstValueFrom, forkJoin } from 'rxjs';
+import { AiChatContext } from './ai-chat-context';
+import { toAiChatOptions } from './ai-chat-target';
 import { Api } from './api';
 import { errorMessage } from './api-error';
+import { AuthSession } from './auth-session';
 import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
 import { applyBoardDataWithActiveSync } from './board-active-sync';
 import { normalizeBoardData } from './board-data';
@@ -68,6 +71,8 @@ export class Backlog implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
+  private readonly auth = inject(AuthSession);
+  private readonly aiChat = inject(AiChatContext);
   private readonly projectSession = inject(ProjectSession);
   private readonly projectBoardCache = inject(ProjectBoardCache);
   /** Template-safe busy flag while active project reload is in flight. */
@@ -160,6 +165,10 @@ export class Backlog implements OnInit {
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
   });
 
+  private readonly publishAiChatCandidates = effect(() => {
+    this.aiChat.setBacklog(toAiChatOptions(this.activeItems(), this.auth.user()));
+  });
+
   ngOnInit() {
     this.load();
     this.listFilter.load();
@@ -171,6 +180,7 @@ export class Backlog implements OnInit {
       this.projectSwitchSub?.unsubscribe();
       // Navigating away mid-switch must not leave the board stuck in `switching`.
       this.projectSession.endSwitch();
+      if (this.aiChat.pageKind() === 'backlog') this.aiChat.clear();
     });
     const stop = startLiveRefresh({
       enabled: () =>
