@@ -47,6 +47,8 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"command_templates",
 		"workspace_list_filter",
 		"item_attachments",
+		"item_ai_messages",
+		"ai_usage",
 		"item_comments",
 		"item_acl_entries",
 		"sessions",
@@ -131,6 +133,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeComments(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeAIChat(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeUsers(t.Context()); err != nil {

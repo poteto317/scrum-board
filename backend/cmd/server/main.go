@@ -120,6 +120,9 @@ func run() error {
 		err = repo.InitializeComments(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeAIChat(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeUsers(migrationCtx)
 	}
 	if err == nil {
