@@ -240,6 +240,11 @@ type Repository interface {
 	CreateComment(context.Context, int64, string, string) (Comment, error)
 	UpdateComment(context.Context, int64, int64, *string, *string) (Comment, error)
 	DeleteComment(context.Context, int64, int64) error
+	ListAIMessages(context.Context, int64) ([]AIMessage, error)
+	AppendAITurn(ctx context.Context, itemID int64, userBody, assistantBody string, inTok, outTok int64) error
+	ClearAIMessages(context.Context, int64) error
+	AddAIUsage(ctx context.Context, requests, inTok, outTok int64) error
+	GetAIUsage(context.Context) (AIUsage, error)
 	ListAttachments(context.Context, int64) ([]Attachment, error)
 	CreateAttachment(ctx context.Context, blobs BlobStorage, itemID int64, field string, commentID *int64, name, contentType string, size int64, body io.Reader, userID *int64) (Attachment, error)
 	OpenAttachmentContent(ctx context.Context, blobs BlobStorage, itemID, id int64) (io.ReadCloser, string, error)
