@@ -7,25 +7,40 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
+	"scrumboard/internal/aichat"
 	"scrumboard/internal/aiformat"
 	"scrumboard/internal/kanban"
 )
 
 const defaultModel = "claude-haiku-5-5"
 
-// newFormatter returns the Claude-backed formatter, or a nil interface when ANTHROPIC_API_KEY is empty.
-// It must return an untyped nil: a typed nil pointer would look configured to the handler.
-func newFormatter(getenv func(string) string, opts ...option.RequestOption) kanban.ItemFormatter {
+func anthropicKeyAndModel(getenv func(string) string) (key, model string) {
 	// Secrets often come with a trailing newline; sent as is, the key would fail in the HTTP client with no useful message.
-	key := strings.TrimSpace(getenv("ANTHROPIC_API_KEY"))
-	if key == "" {
-		return nil
-	}
-	model := strings.TrimSpace(getenv("ANTHROPIC_MODEL"))
+	key = strings.TrimSpace(getenv("ANTHROPIC_API_KEY"))
+	model = strings.TrimSpace(getenv("ANTHROPIC_MODEL"))
 	if model == "" {
 		model = defaultModel
 	}
+	return key, model
+}
+
+// newFormatter returns the Claude-backed formatter, or a nil interface when ANTHROPIC_API_KEY is empty.
+// It must return an untyped nil: a typed nil pointer would look configured to the handler.
+func newFormatter(getenv func(string) string, opts ...option.RequestOption) kanban.ItemFormatter {
+	key, model := anthropicKeyAndModel(getenv)
+	if key == "" {
+		return nil
+	}
 	return aiformat.New(key, model, opts...)
+}
+
+// newChatter returns the Claude-backed chat client, or a nil interface when ANTHROPIC_API_KEY is empty.
+func newChatter(getenv func(string) string, opts ...option.RequestOption) kanban.ItemChatter {
+	key, model := anthropicKeyAndModel(getenv)
+	if key == "" {
+		return nil
+	}
+	return aichat.New(key, model, opts...)
 }
 
 // buildHandler assembles the API handler. The AI endpoint is only wired up when a key is configured; the key is never logged.
@@ -33,6 +48,9 @@ func buildHandler(repo kanban.Repository, getenv func(string) string, opts ...op
 	var handlerOpts []kanban.Option
 	if formatter := newFormatter(getenv, opts...); formatter != nil {
 		handlerOpts = append(handlerOpts, kanban.WithItemFormatter(formatter))
+	}
+	if chatter := newChatter(getenv, opts...); chatter != nil {
+		handlerOpts = append(handlerOpts, kanban.WithAIChat(chatter))
 	}
 	handlerOpts = append(handlerOpts, kanban.WithPublicOrigin(getenv("PUBLIC_ORIGIN")))
 	handlerOpts = append(

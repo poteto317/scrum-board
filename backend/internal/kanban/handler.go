@@ -11,6 +11,7 @@ import (
 type handler struct {
 	repo            Repository
 	formatter       ItemFormatter
+	chatter         ItemChatter
 	slots           chan struct{}
 	publicOrigin    string
 	prTitleResolver *PRTitleResolver
@@ -23,6 +24,11 @@ type Option func(*handler)
 // WithItemFormatter enables POST /api/items/refined. A nil formatter keeps the endpoint answering 503.
 func WithItemFormatter(f ItemFormatter) Option {
 	return func(h *handler) { h.formatter = f }
+}
+
+// WithAIChat enables POST /api/items/.../ai-chat. A nil chatter keeps that POST answering 503.
+func WithAIChat(c ItemChatter) Option {
+	return func(h *handler) { h.chatter = c }
 }
 
 // WithPublicOrigin sets the canonical public origin for GET /api/public-config (already normalized).
@@ -80,6 +86,10 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/items/by-number/{number}/comments", h.createComment)
 	mux.HandleFunc("PATCH /api/items/by-number/{number}/comments/{id}", h.updateComment)
 	mux.HandleFunc("DELETE /api/items/by-number/{number}/comments/{id}", h.deleteComment)
+	mux.HandleFunc("GET /api/items/by-number/{number}/ai-chat", h.listAIChat)
+	mux.HandleFunc("POST /api/items/by-number/{number}/ai-chat", h.postAIChat)
+	mux.HandleFunc("DELETE /api/items/by-number/{number}/ai-chat", h.clearAIChat)
+	mux.HandleFunc("GET /api/ai/usage", h.getAIUsage)
 	mux.HandleFunc("GET /api/items/by-number/{number}/attachments", h.listAttachments)
 	mux.HandleFunc("POST /api/items/by-number/{number}/attachments", h.createAttachment)
 	mux.HandleFunc("GET /api/items/by-number/{number}/attachments/{id}/content", h.getAttachmentContent)
