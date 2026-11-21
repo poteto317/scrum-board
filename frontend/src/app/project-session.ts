@@ -63,6 +63,9 @@ export class ProjectSession {
    * 既に正の `activeId` があるとき、欠落ではクリアしない（起動の二重 GET で消さない）。
    */
   syncActiveFromBoard(activeProjectId: unknown, clearIfMissing = false): void {
+    // While switchTo is in flight, a late board GET (initial load / poll) must not
+    // rewind activeId to the previous project (L-860 / deep-link race).
+    if (this.switching()) return;
     const next = parseActiveProjectId(activeProjectId);
     if (next != null) {
       this.activeId.set(next);

@@ -76,6 +76,16 @@ describe('ProjectSession', () => {
     expect(session.activeId()).toBeNull();
   });
 
+  it('ignores board active sync while switching (deep-link / late GET race)', () => {
+    session.activeId.set(2);
+    session.switching.set(true);
+    session.syncActiveFromBoard(1, false);
+    expect(session.activeId()).toBe(2);
+    session.switching.set(false);
+    session.syncActiveFromBoard(1, false);
+    expect(session.activeId()).toBe(1);
+  });
+
   it('does not replace the list when load fails', () => {
     session.projects.set([main]);
     session.activeId.set(1);
