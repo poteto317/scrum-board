@@ -9,6 +9,7 @@ import { FavoritesSession } from './favorites-session';
 import { Column, Item } from './models';
 import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
+import { PROJECT_QUERY_NOT_FOUND } from './project-query';
 import { SIDEBAR_COLLAPSED_KEY } from './sidebar-collapse-storage';
 
 @Component({ standalone: true, template: '' })
@@ -181,13 +182,33 @@ describe('App project switcher', () => {
     expect(headerMenuItem(f, 'project_delete')?.disabled).toBe(true);
   });
 
-  it('updates the select after a successful switch when no board is mounted', () => {
-    const { f, api, session } = setup();
+  it('updates the select after a successful switch when no board is mounted', async () => {
+    const { f, api, session } = setup(undefined, chromeToggleRoutes);
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/');
+    f.detectChanges();
     selectProjectOption(f, 2);
     expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
     expect(session.activeId()).toBe(2);
     expect(session.switching()).toBe(false);
     expect(projectTrigger(f).textContent?.trim()).toBe('次');
+    await f.whenStable();
+    expect(router.url).toContain('project=2');
+  });
+
+  it('does not update the URL when header switch fails', async () => {
+    const { f } = setup(
+      {
+        patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
+      },
+      chromeToggleRoutes,
+    );
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/');
+    const navigateSpy = vi.spyOn(router, 'navigateByUrl');
+    selectProjectOption(f, 2);
+    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(router.url).toBe('/');
   });
 
   it('prefetches other projects on select focus and pointerdown', () => {
@@ -465,8 +486,10 @@ describe('App project switcher', () => {
     });
   });
 
-  it('creates then switches to the new project and closes the dialog', () => {
-    const { f, api, session } = setup();
+  it('creates then switches to the new project and closes the dialog', async () => {
+    const { f, api, session } = setup(undefined, chromeToggleRoutes);
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/');
     withDialogPolyfill(f, () => {
       clickHeaderMenuItem(f, 'project_add');
       f.detectChanges();
@@ -481,6 +504,32 @@ describe('App project switcher', () => {
       expect(session.activeId()).toBe(3);
       expect(f.nativeElement.querySelector('dialog')).toBeNull();
       expect(session.mutating()).toBe(false);
+    });
+    await f.whenStable();
+    expect(router.url).toContain('project=3');
+  });
+
+  it('does not update the URL when switch after create fails', async () => {
+    const { f } = setup(
+      {
+        patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
+      },
+      chromeToggleRoutes,
+    );
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/');
+    const navigateSpy = vi.spyOn(router, 'navigateByUrl');
+    withDialogPolyfill(f, () => {
+      clickHeaderMenuItem(f, 'project_add');
+      f.detectChanges();
+      f.componentInstance.projectForm.controls.name.setValue('新規');
+      f.detectChanges();
+      (f.nativeElement.querySelector('dialog form') as HTMLFormElement).dispatchEvent(
+        new Event('submit'),
+      );
+      f.detectChanges();
+      expect(navigateSpy).not.toHaveBeenCalled();
+      expect(router.url).toBe('/');
     });
   });
 
@@ -834,5 +883,194 @@ describe('App sidebar collapse', () => {
     });
     toggle.dispatchEvent(enterOnce);
     expect(enterOnce.defaultPrevented).toBe(false);
+  });
+});
+
+const deepLinkRoutes: Routes = [
+  { path: '', component: SpecStubPage },
+  { path: 'backlog', component: SpecStubPage },
+  { path: 'items/:number', component: SpecStubPage },
+  { path: 'login', component: SpecStubPage },
+];
+
+async function setupAppAtUrl(url: string, extra: Record<string, unknown> = {}) {
+  const api = {
+    me: vi.fn(() =>
+      of({ id: 1, loginName: 'admin', displayName: 'admin', role: 'admin', disabled: false }),
+    ),
+    listProjects: vi.fn(() => of({ projects })),
+    board: vi.fn(() =>
+      of({
+        columns: [],
+        items: [],
+        settings: { cardLayout: 'pack', activeProjectId: 1 },
+      }),
+    ),
+    patchBoardSettings: vi.fn((body: { activeProjectId: number }) =>
+      of({ settings: { cardLayout: 'pack', activeProjectId: body.activeProjectId } }),
+    ),
+    createProject: vi.fn(() => of({ id: 3, name: '新規', position: 2 })),
+    patchProject: vi.fn(() => of({ id: 1, name: '改名', position: 0 })),
+    deleteProject: vi.fn(() => of(undefined)),
+    headerMenu: vi.fn(() => of(headerMenuPrefs)),
+    listUsers: vi.fn(() => of([])),
+    ...extra,
+  };
+  TestBed.configureTestingModule({
+    imports: [App],
+    providers: [provideRouter(deepLinkRoutes), { provide: Api, useValue: api }],
+  });
+  const router = TestBed.inject(Router);
+  await router.navigateByUrl(url);
+  const f = TestBed.createComponent(App);
+  f.detectChanges();
+  return { f, api, session: TestBed.inject(ProjectSession), router };
+}
+
+describe('App project URL deep link', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  it('switches to the project from /?project= when active differs', async () => {
+    const { api, session } = await setupAppAtUrl('/?project=2');
+    expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
+    expect(session.activeId()).toBe(2);
+  });
+
+  it('does not switch when URL project matches activeId', async () => {
+    const { api, session } = await setupAppAtUrl('/?project=1');
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+    expect(session.activeId()).toBe(1);
+  });
+
+  it('shows fixed error and keeps activeId for unknown project', async () => {
+    const { api, session } = await setupAppAtUrl('/?project=999');
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+    expect(session.activeId()).toBe(1);
+    expect(session.error()).toBe(PROJECT_QUERY_NOT_FOUND);
+  });
+
+  it('shows fixed error and keeps activeId for invalid project', async () => {
+    const { api, session } = await setupAppAtUrl('/?project=abc');
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+    expect(session.activeId()).toBe(1);
+    expect(session.error()).toBe(PROJECT_QUERY_NOT_FOUND);
+  });
+
+  it('does nothing when project query is absent', async () => {
+    const { api, session } = await setupAppAtUrl('/');
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+    expect(session.error()).toBe('');
+  });
+
+  it('does not apply deep link on /items/:n', async () => {
+    const { api, session } = await setupAppAtUrl('/items/1?project=2');
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+    expect(session.activeId()).toBe(1);
+  });
+
+  it('does not apply deep link on /backlog', async () => {
+    const { api, session } = await setupAppAtUrl('/backlog?project=2');
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+    expect(session.activeId()).toBe(1);
+  });
+
+  it('applies deep link after login navigates from /login to /?project=', async () => {
+    const pendingProjects = new Subject<{ projects: typeof projects }>();
+    const pendingBoard = new Subject<{
+      columns: [];
+      items: [];
+      settings: { cardLayout: 'pack'; activeProjectId: number };
+    }>();
+    const api = {
+      me: vi.fn(() =>
+        of({ id: 1, loginName: 'admin', displayName: 'admin', role: 'admin', disabled: false }),
+      ),
+      listProjects: vi.fn(() => pendingProjects.asObservable()),
+      board: vi.fn(() => pendingBoard.asObservable()),
+      patchBoardSettings: vi.fn((body: { activeProjectId: number }) =>
+        of({ settings: { cardLayout: 'pack', activeProjectId: body.activeProjectId } }),
+      ),
+      createProject: vi.fn(() => of({ id: 3, name: '新規', position: 2 })),
+      patchProject: vi.fn(() => of({ id: 1, name: '改名', position: 0 })),
+      deleteProject: vi.fn(() => of(undefined)),
+      headerMenu: vi.fn(() => of(headerMenuPrefs)),
+      listUsers: vi.fn(() => of([])),
+    };
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(deepLinkRoutes), { provide: Api, useValue: api }],
+    });
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/login');
+    const f = TestBed.createComponent(App);
+    f.detectChanges();
+    pendingProjects.next({ projects });
+    pendingBoard.next({
+      columns: [],
+      items: [],
+      settings: { cardLayout: 'pack', activeProjectId: 1 },
+    });
+    pendingProjects.complete();
+    pendingBoard.complete();
+    f.detectChanges();
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+    await router.navigateByUrl('/?project=2');
+    f.detectChanges();
+    await f.whenStable();
+    expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
+  });
+
+  it('applies deep link only once after bootstrap', async () => {
+    const pendingProjects = new Subject<{ projects: typeof projects }>();
+    const pendingBoard = new Subject<{
+      columns: [];
+      items: [];
+      settings: { cardLayout: 'pack'; activeProjectId: number };
+    }>();
+    const api = {
+      me: vi.fn(() =>
+        of({ id: 1, loginName: 'admin', displayName: 'admin', role: 'admin', disabled: false }),
+      ),
+      listProjects: vi.fn(() => pendingProjects.asObservable()),
+      board: vi.fn(() => pendingBoard.asObservable()),
+      patchBoardSettings: vi.fn((body: { activeProjectId: number }) =>
+        of({ settings: { cardLayout: 'pack', activeProjectId: body.activeProjectId } }),
+      ),
+      createProject: vi.fn(() => of({ id: 3, name: '新規', position: 2 })),
+      patchProject: vi.fn(() => of({ id: 1, name: '改名', position: 0 })),
+      deleteProject: vi.fn(() => of(undefined)),
+      headerMenu: vi.fn(() => of(headerMenuPrefs)),
+      listUsers: vi.fn(() => of([])),
+    };
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(deepLinkRoutes), { provide: Api, useValue: api }],
+    });
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/?project=2');
+    const f = TestBed.createComponent(App);
+    f.detectChanges();
+    const session = TestBed.inject(ProjectSession);
+    const switchSpy = vi.spyOn(session, 'switchTo');
+    expect(session.bootstrapped()).toBe(false);
+    expect(switchSpy).not.toHaveBeenCalled();
+    pendingProjects.next({ projects });
+    pendingBoard.next({
+      columns: [],
+      items: [],
+      settings: { cardLayout: 'pack', activeProjectId: 1 },
+    });
+    pendingProjects.complete();
+    pendingBoard.complete();
+    f.detectChanges();
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith(2);
+    session.bootstrapped.set(false);
+    session.bootstrapped.set(true);
+    f.detectChanges();
+    expect(switchSpy).toHaveBeenCalledTimes(1);
   });
 });
