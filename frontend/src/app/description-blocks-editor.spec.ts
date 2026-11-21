@@ -1,13 +1,23 @@
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Api } from './api';
 import { DescriptionBlocksEditor } from './description-blocks-editor';
 import { DESCRIPTION_MAX_LEN } from './description-blocks';
 
 const apiStub = {
-  uploadAttachment: vi.fn(() => of({})),
+  uploadAttachment: vi.fn(() =>
+    of({
+      id: 9,
+      itemId: 1,
+      field: 'description',
+      contentType: 'image/png',
+      byteSize: 10,
+      originalName: 'shot.png',
+      createdAt: '',
+    }),
+  ),
   deleteAttachment: vi.fn(() => of(undefined)),
   listAttachments: vi.fn(() => of([])),
 };
@@ -348,5 +358,65 @@ describe('DescriptionBlocksEditor', () => {
     f.componentRef.setInput('value', 'two');
     f.detectChanges();
     expect(f.componentInstance.insertMenuIndex()).toBeNull();
+  });
+
+  it('inserts markup only after successful upload', () => {
+    apiStub.uploadAttachment.mockReturnValueOnce(
+      of({
+        id: 9,
+        itemId: 1,
+        field: 'description',
+        contentType: 'image/png',
+        byteSize: 10,
+        originalName: 'shot.png',
+        createdAt: '',
+      }),
+    );
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', 'hello');
+    f.componentRef.setInput('itemNumber', 3);
+    f.componentRef.setInput('attachmentField', 'description');
+    f.detectChanges();
+    const before = f.componentInstance.blocks()[0];
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'shot.png', {
+      type: 'image/png',
+    });
+    Object.defineProperty(file, 'size', { value: 4 });
+    f.componentInstance.uploadImage(file);
+    f.detectChanges();
+    expect(apiStub.uploadAttachment).toHaveBeenCalled();
+    expect(f.componentInstance.blocks()[0]).toContain('/attachments/9/content');
+    expect(f.componentInstance.blocks()[0]).not.toBe(before);
+  });
+
+  it('does not change body when upload fails', () => {
+    apiStub.uploadAttachment.mockReturnValueOnce(throwError(() => new Error('fail')));
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', 'hello');
+    f.componentRef.setInput('itemNumber', 3);
+    f.componentRef.setInput('attachmentField', 'description');
+    f.detectChanges();
+    const before = f.componentInstance.blocks()[0];
+    const file = new File([new Uint8Array([1, 2, 3])], 'shot.png', { type: 'image/png' });
+    Object.defineProperty(file, 'size', { value: 3 });
+    f.componentInstance.uploadImage(file);
+    f.detectChanges();
+    expect(f.componentInstance.blocks()[0]).toBe(before);
+    expect(f.componentInstance.imageError()).toContain('アップロード');
+  });
+
+  it('opens delete confirm and calls API only after confirm', () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', 'hello');
+    f.componentRef.setInput('itemNumber', 3);
+    f.componentRef.setInput('attachmentField', 'description');
+    f.detectChanges();
+    f.componentInstance.requestDeleteImage(4);
+    f.detectChanges();
+    expect(f.componentInstance.confirmDeleteId()).toBe(4);
+    expect(apiStub.deleteAttachment).not.toHaveBeenCalled();
+    f.componentInstance.confirmDeleteImage();
+    f.detectChanges();
+    expect(apiStub.deleteAttachment).toHaveBeenCalledWith(3, 4, undefined);
   });
 });
