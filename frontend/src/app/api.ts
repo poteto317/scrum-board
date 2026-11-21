@@ -84,6 +84,24 @@ export type RecurringRulePatch = {
   enabled?: boolean;
 };
 
+export type AIChatMessage = {
+  id: number;
+  role: 'user' | 'assistant';
+  body: string;
+  createdAt: string;
+};
+
+export type AIChatPostResponse = {
+  messages: AIChatMessage[];
+};
+
+export type AIUsage = {
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  configured: boolean;
+};
+
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
@@ -205,6 +223,33 @@ export class Api {
       `/api/items/by-number/${number}/comments/${id}`,
       params ? { params } : {},
     );
+  }
+  listAIChat(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http
+      .get<{ messages: AIChatMessage[] }>(
+        `/api/items/by-number/${number}/ai-chat`,
+        params ? { params } : {},
+      )
+      .pipe(map((res) => res.messages ?? []));
+  }
+  postAIChat(number: number, message: string, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.post<AIChatPostResponse>(
+      `/api/items/by-number/${number}/ai-chat`,
+      { message },
+      params ? { params } : {},
+    );
+  }
+  clearAIChat(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(
+      `/api/items/by-number/${number}/ai-chat`,
+      params ? { params } : {},
+    );
+  }
+  getAIUsage() {
+    return this.http.get<AIUsage>('/api/ai/usage');
   }
   listAttachments(number: number, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
