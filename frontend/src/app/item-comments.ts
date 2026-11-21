@@ -412,6 +412,10 @@ export class ItemComments implements OnChanges {
     });
   }
 
+  reload() {
+    this.load();
+  }
+
   private load() {
     if (this.number <= 0) return;
     this.listRequest?.unsubscribe();

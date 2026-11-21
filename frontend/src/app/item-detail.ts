@@ -1,6 +1,7 @@
 import { formatItemNumber } from './item-number';
 import { ItemHistory } from './item-history';
 import { ItemComments } from './item-comments';
+import { ItemAiChat } from './item-ai-chat';
 import { Modal } from './modal';
 import {
   Component,
@@ -79,6 +80,7 @@ import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
     DatePipe,
     Modal,
     ItemComments,
+    ItemAiChat,
     ItemHistory,
     CdkDropList,
     CdkDrag,
@@ -128,6 +130,7 @@ export class ItemDetail implements OnInit {
   readonly closeTransition = inject(ItemCloseTransition);
   readonly descriptionEditor = inject(DescriptionEditor);
   private readonly blocksEditor = viewChild(DescriptionBlocksEditor);
+  readonly commentsPanel = viewChild(ItemComments);
   private readonly dueAtPicker = viewChild(DueAtPicker);
   readonly relatedDisplayLabel = displayLabel;
   readonly commands = inject(CommandTemplatesSession);
