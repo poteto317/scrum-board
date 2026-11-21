@@ -154,9 +154,10 @@ CREATE TABLE IF NOT EXISTS ai_usage (
  id TINYINT NOT NULL PRIMARY KEY,
  request_count BIGINT NOT NULL DEFAULT 0,
  input_tokens BIGINT NOT NULL DEFAULT 0,
- output_tokens BIGINT NOT NULL DEFAULT 0
+ output_tokens BIGINT NOT NULL DEFAULT 0,
+ limit_tokens BIGINT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-INSERT IGNORE INTO ai_usage (id, request_count, input_tokens, output_tokens) VALUES (1, 0, 0, 0);
+INSERT IGNORE INTO ai_usage (id, request_count, input_tokens, output_tokens, limit_tokens) VALUES (1, 0, 0, 0, NULL);
 -- Keep in sync with backend/internal/kanban/attachment_migrate.go (itemAttachmentsDDL).
 CREATE TABLE IF NOT EXISTS item_attachments (
  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
