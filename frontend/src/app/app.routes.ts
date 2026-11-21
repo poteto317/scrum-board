@@ -37,6 +37,11 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'recurring',
+    loadComponent: () => import('./recurring').then((m) => m.RecurringPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'items/:number/solution',
     loadComponent: () => import('./item-solution').then((m) => m.ItemSolution),
     canActivate: [authGuard],
