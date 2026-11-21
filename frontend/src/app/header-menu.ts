@@ -7,6 +7,7 @@ export type HeaderMenuItemId =
   | 'open_trash'
   | 'open_users'
   | 'open_recurring'
+  | 'open_settings'
   | 'item_history'
   | 'item_solution'
   | 'item_favorite';
@@ -32,6 +33,7 @@ export const HEADER_MENU_CATALOG: readonly MenuCatalogEntry[] = [
   { id: 'open_trash', label: 'ゴミ箱', pageKinds: ['board', 'backlog', 'itemDetail'] },
   { id: 'open_users', label: 'ユーザー', pageKinds: ['board', 'backlog', 'itemDetail'] },
   { id: 'open_recurring', label: '繰り返し', pageKinds: ['board', 'backlog', 'itemDetail'] },
+  { id: 'open_settings', label: '設定', pageKinds: ['board', 'backlog', 'itemDetail'] },
   { id: 'item_history', label: '更新履歴', pageKinds: ['itemDetail'] },
   { id: 'item_solution', label: 'ソリューション', pageKinds: ['itemDetail'] },
   { id: 'item_favorite', label: 'お気に入り', pageKinds: ['itemDetail'] },
@@ -61,6 +63,7 @@ export function resolvePageKind(url: string): PageKind | null {
     normalized === '/trash' ||
     normalized === '/users' ||
     normalized === '/recurring' ||
+    normalized === '/settings' ||
     normalized === '/login'
   ) {
     return null;

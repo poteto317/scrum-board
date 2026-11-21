@@ -26,11 +26,13 @@ var (
 		"open_trash":     {},
 		"open_users":     {},
 		"open_recurring": {},
+		"open_settings":  {},
 	}
 	itemDetailHeaderMenuIDs = map[string]struct{}{
 		"open_trash":     {},
 		"open_users":     {},
 		"open_recurring": {},
+		"open_settings":  {},
 		"item_history":   {},
 		"item_solution":  {},
 		"item_favorite":  {},
