@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   HostListener,
   inject,
@@ -25,8 +26,11 @@ import {
   CdkDropList,
 } from '@angular/cdk/drag-drop';
 import { Subscription, filter, finalize, firstValueFrom, map } from 'rxjs';
+import { AiChatContext } from './ai-chat-context';
+import { toAiChatOptions } from './ai-chat-target';
 import { Api } from './api';
 import { errorMessage } from './api-error';
+import { AuthSession } from './auth-session';
 import { assigneeKind } from './assignee';
 import { itemAppPath, itemDetailUrl } from './item-link';
 import { normalizeBoardData, NormalizedBoardData, normalizeItem } from './board-data';
@@ -66,6 +70,7 @@ import {
 } from './column-order';
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
+import { viewAccessLabel } from './item-acl';
 import { CardLayout, Item, Column } from './models';
 import {
   COMMAND_ITEM_MENU_EMPTY,
@@ -92,6 +97,9 @@ import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-f
 import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
+import { applyBoardDataWithActiveSync } from './board-active-sync';
+import { ProjectBoardCache } from './project-board-cache';
+import { itemsForActiveProject } from './project-items';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
@@ -123,8 +131,14 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 export class Board implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   readonly assigneeKind = assigneeKind;
+  readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
+  private readonly auth = inject(AuthSession);
+  private readonly aiChat = inject(AiChatContext);
   private readonly projectSession = inject(ProjectSession);
+  private readonly projectBoardCache = inject(ProjectBoardCache);
+  /** Template-safe busy flag while active project reload is in flight. */
+  readonly projectSwitching = computed(() => this.projectSession.switching());
   private boardLoadGeneration = 0;
   private projectSwitchSub?: Subscription;
   private readonly appOrigin = inject(AppOrigin);
@@ -253,7 +267,7 @@ export class Board implements OnInit {
   });
   readonly appliedFilter = computed(() =>
     appliedListFilter(
-      this.listFilter.filter(),
+      this.listFilter.filter('board'),
       this.data().columns.map((c) => c.id),
     ),
   );
@@ -262,7 +276,8 @@ export class Board implements OnInit {
     const filter = this.appliedFilter();
     const groups = new Map<number, Item[]>();
     for (const column of this.data().columns) groups.set(column.id, []);
-    for (const card of this.data().items) {
+    const scoped = itemsForActiveProject(this.data().items, this.projectSession.activeId());
+    for (const card of scoped) {
       if (!itemMatchesFilter(card, filter)) continue;
       groups.get(card.columnId)?.push(card);
     }
@@ -292,6 +307,11 @@ export class Board implements OnInit {
     return this.grouped().get(id ?? -1)?.length ?? 0;
   });
 
+  private readonly publishAiChatCandidates = effect(() => {
+    const scoped = itemsForActiveProject(this.data().items, this.projectSession.activeId());
+    this.aiChat.setBoard(toAiChatOptions(scoped, this.auth.user()));
+  });
+
   ngOnInit() {
     this.bindBoardMobileMedia();
     this.load();
@@ -303,6 +323,7 @@ export class Board implements OnInit {
       this.projectSwitchSub?.unsubscribe();
       // Navigating away mid-switch must not leave the next view stuck in `switching`.
       this.projectSession.endSwitch();
+      if (this.aiChat.pageKind() === 'board') this.aiChat.clear();
     });
     const stop = startLiveRefresh({
       enabled: () =>
@@ -318,7 +339,10 @@ export class Board implements OnInit {
       fetch: () => this.pollBoard(),
       apply: (d) => {
         this.error.set('');
+        // Always refresh cache: local mutations may match poll JSON while cache is stale.
+        this.rememberBoardCache(d);
         if (sameJson(this.data(), d)) return;
+        // Do not sync activeProjectId from poll — only initial load / post-switch reload.
         this.data.set(d);
         this.scheduleCardHeightMeasure();
       },
@@ -591,11 +615,18 @@ export class Board implements OnInit {
       .subscribe({
         next: (d) => {
           if (generation !== this.boardLoadGeneration) return;
-          this.data.set(applyBoardMobileSettings(d));
-          // Schedule after data arrives so the first afterNextRender sees #boardScroll
-          // (not the loading-only first paint).
-          this.scheduleBoardScrollRestore();
-          this.scheduleCardHeightMeasure();
+          applyBoardDataWithActiveSync(
+            this.projectSession,
+            applyBoardMobileSettings(d),
+            (board) => {
+              this.rememberBoardCache(board);
+              this.data.set(board);
+              // Schedule after data arrives so the first afterNextRender sees #boardScroll
+              // (not the loading-only first paint).
+              this.scheduleBoardScrollRestore();
+              this.scheduleCardHeightMeasure();
+            },
+          );
         },
         error: (e) => {
           if (generation !== this.boardLoadGeneration) return;
@@ -610,6 +641,12 @@ export class Board implements OnInit {
    */
   private reloadAfterProjectSwitch() {
     const generation = ++this.boardLoadGeneration;
+    const activeId = this.projectSession.activeId();
+    const cached = activeId != null ? this.projectBoardCache.getBoard(activeId) : undefined;
+    if (cached) {
+      // Items only; do not syncActiveFromBoard (prefetch settings.active may be stale).
+      this.data.update((d) => ({ ...d, items: cached }));
+    }
     this.projectSwitchSub?.unsubscribe();
     this.projectSwitchSub = this.api
       .board()
@@ -624,14 +661,28 @@ export class Board implements OnInit {
         next: (d) => {
           if (generation !== this.boardLoadGeneration) return;
           this.error.set('');
-          this.data.set(applyBoardMobileSettings(d));
-          this.scheduleCardHeightMeasure();
+          applyBoardDataWithActiveSync(
+            this.projectSession,
+            applyBoardMobileSettings(d),
+            (board) => {
+              this.rememberBoardCache(board);
+              this.data.set(board);
+              this.scheduleCardHeightMeasure();
+            },
+          );
         },
         error: (e) => {
           if (generation !== this.boardLoadGeneration) return;
           this.error.set(errorMessage(e));
         },
       });
+  }
+
+  private rememberBoardCache(board: { items: Item[]; columns: Column[] }) {
+    const activeId = this.projectSession.activeId();
+    if (activeId != null && activeId > 0) {
+      this.projectBoardCache.putBoard(activeId, board.items, board.columns);
+    }
   }
 
   onMobileColumnChange(rawId: string): Promise<void> | void {
@@ -702,6 +753,7 @@ export class Board implements OnInit {
       .subscribe({
         next: (column) => {
           this.data.update((d) => ({ ...d, columns: [...d.columns, column] }));
+          this.rememberBoardCache(this.data());
           this.modal.set(null);
         },
         error: (e) => this.formError.set(errorMessage(e)),
@@ -738,6 +790,7 @@ export class Board implements OnInit {
       .subscribe({
         next: (card) => {
           this.data.update((d) => ({ ...d, items: [...d.items, normalizeItem(card)] }));
+          this.rememberBoardCache(this.data());
           this.modal.set(null);
           this.scheduleCardHeightMeasure();
         },
@@ -807,6 +860,11 @@ export class Board implements OnInit {
   onItemClick(event: MouseEvent, card: Item) {
     // Ctrl/Cmd/Shift/Alt-click and non-primary buttons are the browser's: let the href do its job.
     if (!isUnmodifiedPrimaryClick(event)) {
+      return;
+    }
+    // A second click of a double-tap must not open the detail (L-408). Keyboard clicks are detail 0.
+    if (event.detail > 1) {
+      event.preventDefault();
       return;
     }
     event.preventDefault();
@@ -941,6 +999,7 @@ export class Board implements OnInit {
     this.reorderError.set('');
     this.reorderConflict.set(false);
     this.data.update((d) => ({ ...d, items: nextCards }));
+    this.rememberBoardCache(this.data());
     this.scheduleCardHeightMeasure();
     restoreFocus();
     this.api
@@ -952,12 +1011,14 @@ export class Board implements OnInit {
             ...d,
             items: (res.items ?? []).map((item) => normalizeItem(item)),
           }));
+          this.rememberBoardCache(this.data());
           this.reorderAnnouncement.set(announcement);
           this.scheduleCardHeightMeasure();
           restoreFocus();
         },
         error: (e) => {
           this.data.update((d) => ({ ...d, items: previous }));
+          this.rememberBoardCache(this.data());
           this.reorderError.set(errorMessage(e));
           this.reorderConflict.set((e as { status?: number } | null)?.status === 409);
           this.reorderAnnouncement.set('アイテムの移動を保存できませんでした');

@@ -22,7 +22,7 @@ function mockPageScroller() {
 function card(id: number, columnId: number, position: number, title: string): Item {
   return {
     id,
-    projectId: 0,
+    projectId: 1,
     number: id,
     columnId,
     title,
@@ -34,6 +34,8 @@ function card(id: number, columnId: number, position: number, title: string): It
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
+    favorite: false,
     dueAt: null,
     createdAt: '',
     updatedAt: '',
@@ -47,7 +49,7 @@ function initialBoard(): BoardData {
       { id: 2, name: 'Doing', position: 1 },
     ],
     items: [card(1, 1, 0, 'A'), card(2, 1, 1, 'B'), card(3, 2, 0, 'C')],
-    settings: { cardLayout: 'pack' },
+    settings: { cardLayout: 'pack', activeProjectId: 1 },
   };
 }
 
@@ -64,8 +66,8 @@ async function setup(reorderItems: ReturnType<typeof vi.fn>) {
           reorderItems,
           reorderColumns: vi.fn(),
           listCommandTemplates: () => of({ templates: [] }),
-          listFilter: () => of({ query: '', statusIds: [] }),
-          putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+          listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+          putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
       },
     ],

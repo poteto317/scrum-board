@@ -1,0 +1,142 @@
+<main class="settings-page">
+  <ng-template #aiUnconfigured>
+    <p>
+      AI は未設定です。サーバーに <code>ANTHROPIC_API_KEY</code> を設定するとチャットと整形が使えます。
+    </p>
+  </ng-template>
+  <nav class="breadcrumb" aria-label="パンくず">
+    <a routerLink="/">ボード</a><span>/</span><strong>設定</strong>
+  </nav>
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">SETTINGS</p>
+      <h1>設定<span class="heading-dot">.</span></h1>
+      <p>AI の利用状況・クレジット残量・キー設定の有無を確認できます。上限は管理者のみ変更できます。</p>
+    </div>
+  </div>
+
+  <section class="settings-section" aria-labelledby="ai-usage-heading">
+    <h2 id="ai-usage-heading">AI 利用状況</h2>
+    @if (loading()) {
+      <div class="state-panel" role="status">読み込み中…</div>
+    } @else if (error()) {
+      <div class="state-panel" role="alert">
+        <p>{{ error() }}</p>
+        <button class="secondary" type="button" (click)="reloadUsage()">再読み込み</button>
+      </div>
+    } @else if (usage(); as u) {
+      @if (!u.configured) {
+        <div class="state-panel" role="alert">
+          <ng-container *ngTemplateOutlet="aiUnconfigured" />
+        </div>
+      }
+      <dl class="usage-grid">
+        <div>
+          <dt>リクエスト数</dt>
+          <dd>{{ u.requestCount }}</dd>
+        </div>
+        <div>
+          <dt>入力トークン（概算）</dt>
+          <dd>{{ u.inputTokens }}</dd>
+        </div>
+        <div>
+          <dt>出力トークン（概算）</dt>
+          <dd>{{ u.outputTokens }}</dd>
+        </div>
+        <div>
+          <dt>キー</dt>
+          <dd>{{ u.configured ? '設定済み' : '未設定' }}</dd>
+        </div>
+      </dl>
+    }
+  </section>
+
+  <section class="settings-section" aria-labelledby="ai-credits-heading">
+    <h2 id="ai-credits-heading">AIクレジット</h2>
+    @if (creditsLoading()) {
+      <div class="state-panel" role="status">読み込み中…</div>
+    } @else if (creditsError()) {
+      <div class="state-panel" role="alert">
+        <p>{{ creditsError() }}</p>
+        <button class="secondary" type="button" (click)="reloadCredits()">再読み込み</button>
+      </div>
+    } @else if (credits(); as c) {
+      @if (creditBlockReason() === 'unconfigured') {
+        <div class="state-panel" role="alert">
+          <ng-container *ngTemplateOutlet="aiUnconfigured" />
+        </div>
+      } @else if (creditBlockReason() === 'exhausted') {
+        <div class="state-panel" role="alert">
+          <p>{{ isAdmin ? exhaustedAdminMessage : exhaustedMemberMessage }}</p>
+        </div>
+      }
+      @if (lowRemaining()) {
+        <div class="state-panel low-remaining" role="status">
+          <p><strong>{{ lowRemainingMessage }}</strong></p>
+        </div>
+      }
+      <dl class="usage-grid">
+        <div>
+          <dt>残り</dt>
+          <dd>{{ displayRemaining(c) }}</dd>
+        </div>
+        <div>
+          <dt>使用済み</dt>
+          <dd>{{ c.usedTokens }}</dd>
+        </div>
+        <div>
+          <dt>上限</dt>
+          <dd>{{ displayLimit(c) }}</dd>
+        </div>
+        <div>
+          <dt>期間</dt>
+          <dd>{{ displayPeriod(c) }}</dd>
+        </div>
+      </dl>
+      <p class="approximate-note">{{ approximateNote }}</p>
+
+      @if (isAdmin) {
+        <div class="credits-edit">
+          <label class="unlimited-label">
+            <input
+              type="checkbox"
+              [checked]="draftUnlimited()"
+              (change)="onUnlimitedChange($any($event.target).checked)"
+              [attr.disabled]="saving() ? true : null"
+            />
+            上限なし
+          </label>
+          <label class="limit-label">
+            上限トークン
+            <input
+              type="text"
+              inputmode="numeric"
+              [value]="draftLimit()"
+              (input)="onLimitInput($any($event.target).value)"
+              [attr.disabled]="draftUnlimited() || saving() ? true : null"
+              aria-label="上限トークン"
+            />
+          </label>
+          <button
+            type="button"
+            class="primary"
+            (click)="saveCredits()"
+            [attr.disabled]="saving() ? true : null"
+          >
+            {{ saving() ? '保存中…' : '保存' }}
+          </button>
+          @if (clientError()) {
+            <div class="state-panel" role="alert">
+              <p>{{ clientError() }}</p>
+            </div>
+          }
+          @if (saveError()) {
+            <div class="state-panel" role="alert">
+              <p>{{ saveError() }}</p>
+            </div>
+          }
+        </div>
+      }
+    }
+  </section>
+</main>

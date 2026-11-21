@@ -43,6 +43,21 @@ func (r *smallRepo) CreateItem(_ context.Context, in kanban.ItemInput) (kanban.I
 	return kanban.Item{ID: 1, Number: 1, ColumnID: in.ColumnID, Title: in.Title, Description: in.Description}, nil
 }
 
+func (r *smallRepo) UserBySessionID(_ context.Context, sessionID string, _ time.Time) (kanban.User, error) {
+	if sessionID != kanban.HandlerTestSessionID {
+		return kanban.User{}, kanban.ErrUnauthorized
+	}
+	return kanban.User{ID: 1, LoginName: "admin", DisplayName: "admin", Role: kanban.RoleAdmin}, nil
+}
+
+func (r *smallRepo) GetAIUsage(context.Context) (kanban.AIUsage, error) {
+	return kanban.AIUsage{}, nil
+}
+
+func (r *smallRepo) AddAIUsage(context.Context, int64, int64, int64) error {
+	return nil
+}
+
 func getenvFrom(values map[string]string) func(string) string {
 	return func(key string) string { return values[key] }
 }
@@ -84,6 +99,7 @@ func postRefined(h http.Handler, body string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/api/items/refined", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
+	r.AddCookie(&http.Cookie{Name: kanban.SessionCookieName, Value: kanban.HandlerTestSessionID})
 	h.ServeHTTP(w, r)
 	return w
 }
@@ -147,6 +163,27 @@ func TestWithAKeyTheRefinedEndpointReachesTheModelFromTheEnvironment(t *testing.
 		if w.Code != 201 || card.Title != "整えた題名" || repo.created.Load() != 1 || model.Load() != tc.want {
 			t.Fatalf("%s: status=%d card=%+v created=%d model=%v body=%s", name, w.Code, card, repo.created.Load(), model.Load(), w.Body)
 		}
+	}
+}
+
+func TestRateLimitEnvViaBuildHandler(t *testing.T) {
+	isolate(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, answer("題名", "説明"))
+	}))
+	defer srv.Close()
+	repo := &smallRepo{}
+	env := map[string]string{"ANTHROPIC_API_KEY": secretKey, "AI_RATE_LIMIT_PER_MINUTE": "1"}
+	h := buildHandler(repo, getenvFrom(env), option.WithBaseURL(srv.URL))
+	if w := postRefined(h, `{"title":"下書きタイトルです"}`); w.Code != 201 {
+		t.Fatalf("first: %d %s", w.Code, w.Body)
+	}
+	w := postRefined(h, `{"title":"下書きタイトルです"}`)
+	var body map[string]string
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	if w.Code != 429 || body["code"] != "ai_rate_limit" {
+		t.Fatalf("second: status=%d body=%s", w.Code, w.Body)
 	}
 }
 

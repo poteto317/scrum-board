@@ -40,6 +40,8 @@ export class ItemAutosave {
   private sideDirty = new Set<SideField>();
   /** Shield projectId from an in-flight title/description flush after a move. */
   private projectDirty = false;
+  /** Shield favorite from an in-flight title/description flush after a toggle. */
+  private favoriteDirty = false;
   private waiters: ((saved: boolean) => void)[] = [];
   /** Blocks debounced/explicit flush while a modal holds uncommitted form state. */
   private suspended = false;
@@ -69,6 +71,20 @@ export class ItemAutosave {
     this.request = undefined;
     this.saving.set(false);
     for (const resolve of this.waiters.splice(0)) resolve(false);
+  }
+  /** Apply AI「説明に反映」: sync description form+item without a conflicting autosave flush. */
+  applyDescriptionSave(updated: Pick<Item, 'description' | 'updatedAt'>) {
+    const card = this.item();
+    if (!card) return;
+    this.dropInFlight();
+    const description = updated.description ?? '';
+    this.item.set({
+      ...card,
+      description,
+      updatedAt: updated.updatedAt || card.updatedAt,
+    });
+    this.form.controls.description.setValue(description, { emitEvent: false });
+    this.changed.set(false);
   }
   /** Apply Close transition response: merge side fields and sync columnId/closeReason controls. */
   applyCloseSave(updated: Item) {
@@ -146,6 +162,19 @@ export class ItemAutosave {
   }
   applyAssigneeSave(updated: Pick<Item, 'assignee' | 'updatedAt'>) {
     this.applySideSave(updated);
+  }
+  /** Merge favorite without putting it on the autosave form (L-453 / L-790). */
+  applyFavoriteSave(updated: Pick<Item, 'favorite' | 'updatedAt'>) {
+    const card = this.item();
+    if (!card) return;
+    // Always shield: a later title/description flush must not overwrite the star
+    // with a stale PATCH response (same pattern as projectDirty).
+    this.favoriteDirty = true;
+    this.item.set({
+      ...card,
+      favorite: updated.favorite === true,
+      updatedAt: updated.updatedAt || card.updatedAt,
+    });
   }
   /** Shield dueAt from an in-flight title/description flush (L-453). */
   markDueSideDirty() {
@@ -274,6 +303,10 @@ export class ItemAutosave {
               merged.prUrls,
             );
           }
+          if (this.favoriteDirty) {
+            merged.favorite = local.favorite === true;
+            this.favoriteDirty = false;
+          }
           if (this.projectDirty) {
             merged.projectId = local.projectId;
             this.projectDirty = false;
@@ -319,6 +352,7 @@ export class ItemAutosave {
     this.request = undefined;
     this.sideDirty.clear();
     this.projectDirty = false;
+    this.favoriteDirty = false;
     this.saving.set(false);
     for (const resolve of this.waiters.splice(0)) resolve(false);
   }

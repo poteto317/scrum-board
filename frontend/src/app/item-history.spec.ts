@@ -268,6 +268,24 @@ it('labels each kind and shows the note, restore time and before/after values', 
   expect(created).not.toContain('変更前');
   expect(created).toContain('変更後');
 });
+it('labels favorite changes as お気に入り with オン/オフ values', () => {
+  const f = setup({
+    history: vi.fn(() =>
+      of({
+        events: [
+          {
+            ...event,
+            changes: [{ field: 'favorite', before: 'false', after: 'true' }],
+          },
+        ],
+        nextBefore: 0,
+      }),
+    ),
+  });
+  expect(f.nativeElement.textContent).toContain('お気に入り');
+  expect(f.nativeElement.textContent).toContain('オフ');
+  expect(f.nativeElement.textContent).toContain('オン');
+});
 it('shows an empty placeholder for blank values and the empty state', () => {
   const blank = setup({
     history: vi.fn(() =>

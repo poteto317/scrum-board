@@ -43,8 +43,14 @@ export class DescriptionEditor {
     this.url.set(v);
   }
 
-  /** On success returns serialized text + focus target; on failure sets error and returns null (L-001). */
-  apply(blocks: string[]): { text: string; blockIndex: number; caret: number } | null {
+  /**
+   * On success returns serialized text + focus target; on failure sets error and returns null (L-001).
+   * `fieldLabel` customizes the limit error (default「説明」; solution passes「ソリューション」).
+   */
+  apply(
+    blocks: string[],
+    fieldLabel = '説明',
+  ): { text: string; blockIndex: number; caret: number } | null {
     const label = normalizeDescriptionLinkLabel(this.label());
     const url = normalizeDescriptionLinkUrl(this.url());
     if (!label) {
@@ -64,7 +70,7 @@ export class DescriptionEditor {
       url,
     );
     if (!inserted) {
-      this.error.set(`説明が${DESCRIPTION_LINK_MAX_LEN}文字を超えるため挿入できません。`);
+      this.error.set(`${fieldLabel}が${DESCRIPTION_LINK_MAX_LEN}文字を超えるため挿入できません。`);
       return null;
     }
     this.cancel();

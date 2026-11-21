@@ -61,6 +61,8 @@ import { renderLinkChange } from './history-link-change';
           <pre>（空欄）</pre>
         }
       }
+    } @else if (field === 'favorite') {
+      <pre>{{ favoriteLabel(value) }}</pre>
     } @else {
       <pre>{{ value || '（空欄）' }}</pre>
     }
@@ -76,6 +78,11 @@ export class HistoryLinkValue {
   readonly relatedKey = relatedItemKey;
   safePr(value: string) {
     return !!value && validPrUrl(value) && value === value.trim();
+  }
+  favoriteLabel(value: string) {
+    if (value === 'true') return 'オン';
+    if (value === 'false') return 'オフ';
+    return value || '（空欄）';
   }
   labelForPr(url: string) {
     return this.titleMap[url] || fallbackPrLabel(url);

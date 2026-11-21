@@ -1,7 +1,16 @@
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { Api } from './api';
 import { errorMessage } from './api-error';
-import { emptyListFilter, ListFilter } from './list-filter';
+import {
+  ListFilter,
+  ListFilterView,
+  WorkspaceListFilters,
+  cloneListFilter,
+  cloneWorkspaceListFilters,
+  emptyListFilter,
+  emptyWorkspaceListFilters,
+  listFiltersEqual,
+} from './list-filter';
 
 export const LIST_FILTER_LOAD_FAILURE = 'フィルタ設定を読み込めませんでした。再試行してください。';
 export const LIST_FILTER_SAVE_FAILURE = 'フィルタ設定の保存に失敗しました。';
@@ -13,15 +22,19 @@ const SAVE_DEBOUNCE_MS = 300;
 export class ListFilterSession {
   private readonly api = inject(Api);
   private readonly destroyRef = inject(DestroyRef);
-  /** Draft used for UI and client-side matching. */
-  readonly filter = signal<ListFilter>(emptyListFilter());
+  /** Draft used for UI and client-side matching (both views). */
+  readonly filters = signal<WorkspaceListFilters>(emptyWorkspaceListFilters());
   readonly loadError = signal('');
   readonly saveError = signal('');
-  private confirmed: ListFilter = emptyListFilter();
+  private confirmed: WorkspaceListFilters = emptyWorkspaceListFilters();
   private loadGeneration = 0;
   private saveGeneration = 0;
   private timer?: ReturnType<typeof setTimeout>;
   private saveInFlight = false;
+  /** True when a debounced whole-workspace PUT should run (both views). */
+  private saveQueued = false;
+  /** True after at least one successful GET so PUT never ships empty sibling views. */
+  private hydrated = false;
 
   constructor() {
     this.destroyRef.onDestroy(() => {
@@ -32,26 +45,43 @@ export class ListFilterSession {
     });
   }
 
+  filter(view: ListFilterView): ListFilter {
+    return this.filters()[view];
+  }
+
   load(options?: { force?: boolean }) {
     const force = options?.force === true;
-    if (!force && this.isDirty()) {
-      // Keep local draft across board↔backlog; do not cancel pending PUT/debounce.
-      return;
-    }
-    this.clearTimer();
+    const hadQueuedSave = this.saveQueued || this.timer !== undefined;
+    // Invalidate in-flight PUT so a stale whole-workspace body cannot overwrite a fresher GET.
+    this.saveGeneration++;
+    this.saveInFlight = false;
     if (force) {
-      this.saveGeneration++;
-      this.saveInFlight = false;
+      this.clearTimer();
+      this.saveQueued = false;
     }
     const generation = ++this.loadGeneration;
     this.api.listFilter().subscribe({
       next: (res) => {
         if (generation !== this.loadGeneration) return;
-        const next = cloneFilter(res);
-        this.confirmed = next;
-        this.filter.set(cloneFilter(next));
+        const incoming = cloneWorkspaceListFilters(res);
+        const boardDirty = !force && this.isDirty('board');
+        const backlogDirty = !force && this.isDirty('backlog');
+        const next = cloneWorkspaceListFilters(incoming);
+        if (boardDirty) next.board = cloneListFilter(this.filters().board);
+        if (backlogDirty) next.backlog = cloneListFilter(this.filters().backlog);
+        this.confirmed = {
+          board: boardDirty ? cloneListFilter(this.confirmed.board) : cloneListFilter(incoming.board),
+          backlog: backlogDirty
+            ? cloneListFilter(this.confirmed.backlog)
+            : cloneListFilter(incoming.backlog),
+        };
+        this.filters.set(next);
+        this.hydrated = true;
         this.loadError.set('');
         this.saveError.set('');
+        if (boardDirty || backlogDirty || hadQueuedSave || this.saveQueued) {
+          this.scheduleSave();
+        }
       },
       error: () => {
         if (generation !== this.loadGeneration) return;
@@ -64,69 +94,85 @@ export class ListFilterSession {
     this.load({ force: true });
   }
 
-  setQuery(query: string) {
-    this.bumpLoadGeneration();
+  setQuery(view: ListFilterView, query: string) {
     const clipped = [...query].slice(0, LIST_FILTER_QUERY_MAX).join('');
-    this.filter.update((f) => ({ ...f, query: clipped }));
-    this.scheduleSave();
+    this.filters.update((f) => ({
+      ...f,
+      [view]: { ...f[view], query: clipped },
+    }));
+    this.afterLocalEdit(view);
   }
 
-  toggleStatus(columnId: number) {
-    this.bumpLoadGeneration();
-    this.filter.update((f) => {
-      const has = f.statusIds.includes(columnId);
+  toggleStatus(view: ListFilterView, columnId: number) {
+    this.filters.update((f) => {
+      const cur = f[view];
+      const has = cur.statusIds.includes(columnId);
       return {
         ...f,
-        statusIds: has ? f.statusIds.filter((id) => id !== columnId) : [...f.statusIds, columnId],
+        [view]: {
+          ...cur,
+          statusIds: has ? cur.statusIds.filter((id) => id !== columnId) : [...cur.statusIds, columnId],
+        },
       };
     });
+    this.afterLocalEdit(view);
+  }
+
+  clear(view: ListFilterView) {
+    this.filters.update((f) => ({
+      ...f,
+      [view]: emptyListFilter(),
+    }));
+    this.afterLocalEdit(view);
+  }
+
+  private afterLocalEdit(_view: ListFilterView) {
+    if (this.hydrated) {
+      this.bumpLoadGeneration();
+    }
     this.scheduleSave();
   }
 
-  clear() {
-    this.bumpLoadGeneration();
-    this.filter.set(emptyListFilter());
-    this.scheduleSave();
-  }
-
-  private isDirty(): boolean {
-    if (this.timer !== undefined || this.saveInFlight) return true;
-    const draft = this.filter();
-    if (draft.query !== this.confirmed.query) return true;
-    if (draft.statusIds.length !== this.confirmed.statusIds.length) return true;
-    return draft.statusIds.some((id, i) => id !== this.confirmed.statusIds[i]);
+  private isDirty(view: ListFilterView): boolean {
+    return !listFiltersEqual(this.filters()[view], this.confirmed[view]);
   }
 
   private bumpLoadGeneration() {
     this.loadGeneration++;
-    // Invalidate in-flight PUT so its response cannot rewind a newer draft (L-040).
     this.saveGeneration++;
     this.saveInFlight = false;
   }
 
   private scheduleSave() {
     this.clearTimer();
+    this.saveQueued = true;
     this.timer = setTimeout(() => this.flushSave(), SAVE_DEBOUNCE_MS);
   }
 
   private flushSave() {
     this.timer = undefined;
+    if (!this.hydrated) {
+      // Wait for first GET so the other view is not PUT as empty defaults.
+      return;
+    }
     const generation = ++this.saveGeneration;
     this.saveInFlight = true;
-    const payload = cloneFilter(this.filter());
+    const payload = cloneWorkspaceListFilters(this.filters());
     this.api.putListFilter(payload).subscribe({
       next: (res) => {
         if (generation !== this.saveGeneration) return;
         this.saveInFlight = false;
-        const next = cloneFilter(res);
+        this.saveQueued = false;
+        const next = cloneWorkspaceListFilters(res);
         this.confirmed = next;
-        this.filter.set(cloneFilter(next));
+        this.filters.set(cloneWorkspaceListFilters(next));
         this.saveError.set('');
       },
       error: (error: unknown) => {
         if (generation !== this.saveGeneration) return;
         this.saveInFlight = false;
-        this.filter.set(cloneFilter(this.confirmed));
+        this.saveQueued = false;
+        this.filters.set(cloneWorkspaceListFilters(this.confirmed));
         this.saveError.set(errorMessage(error) || LIST_FILTER_SAVE_FAILURE);
       },
     });
@@ -138,11 +184,4 @@ export class ListFilterSession {
       this.timer = undefined;
     }
   }
-}
-
-function cloneFilter(f: ListFilter | null | undefined): ListFilter {
-  return {
-    query: f?.query ?? '',
-    statusIds: [...(f?.statusIds ?? [])],
-  };
 }

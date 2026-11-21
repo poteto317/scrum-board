@@ -433,6 +433,38 @@ func settingValue(t *testing.T, db *sql.DB, key string) string {
 	return value
 }
 
+func TestMySQLDeleteProjectClearsSprintsWhenNoItems(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	r := MySQLRepository{DB: db}
+	p, err := r.CreateProject(ctx, "with-sprint")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := r.CreateSprint(ctx, SprintCreateInput{
+		Name: "S", StartDate: "2026-11-01", EndDate: "2026-11-14", ProjectID: p.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.CompleteSprint(ctx, s.ID, nil); !errors.Is(err, ErrSprintConflict) {
+		t.Fatalf("complete planned: %v", err)
+	}
+	if _, err = r.ActivateSprint(ctx, s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.CompleteSprint(ctx, s.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.DeleteProject(ctx, p.ID); err != nil {
+		t.Fatalf("delete with completed sprint: %v", err)
+	}
+	var n int
+	if err = db.QueryRow(`SELECT COUNT(*) FROM sprints WHERE project_id=?`, p.ID).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("sprints left: n=%d err=%v", n, err)
+	}
+}
+
 func containsID(items []Item, id int64) bool {
 	for _, item := range items {
 		if item.ID == id {

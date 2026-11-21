@@ -1,6 +1,7 @@
 export type DescriptionSegment =
   | { kind: 'text'; text: string }
-  | { kind: 'link'; label: string; url: string };
+  | { kind: 'link'; label: string; url: string }
+  | { kind: 'image'; alt: string; src: string; attachmentId: number };
 
 const MAX_URL_LEN = 2048;
 /** Max Unicode length for description after link insert (matches form textLimit). */
@@ -34,6 +35,37 @@ export function normalizeDescriptionLinkLabel(value: string): string | null {
   return text;
 }
 
+export function sanitizeAttachmentAlt(name: string): string {
+  let text = name.replace(/]/g, '').replace(/[\r\n]/g, '').trim();
+  if (!text) text = 'image';
+  if ([...text].length > 200) text = [...text].slice(0, 200).join('');
+  return text;
+}
+
+export function attachmentContentPath(itemNumber: number, attachmentId: number): string {
+  return `/api/items/by-number/${itemNumber}/attachments/${attachmentId}/content`;
+}
+
+export function isAttachmentContentPath(
+  path: string,
+  itemNumber: number,
+): number | null {
+  const m = path.match(
+    new RegExp(`^/api/items/by-number/${itemNumber}/attachments/(\\d+)/content$`),
+  );
+  if (!m) return null;
+  const id = Number(m[1]);
+  return id > 0 ? id : null;
+}
+
+export function buildAttachmentMarkup(
+  itemNumber: number,
+  attachmentId: number,
+  alt: string,
+): string {
+  return `![${sanitizeAttachmentAlt(alt)}](${attachmentContentPath(itemNumber, attachmentId)})`;
+}
+
 export function formatDescriptionLink(label: string, url: string): string | null {
   const normalizedLabel = normalizeDescriptionLinkLabel(label);
   const normalizedUrl = normalizeDescriptionLinkUrl(url);
@@ -51,6 +83,16 @@ export function insertDescriptionLink(
 ): { text: string; caret: number } | null {
   const markdown = formatDescriptionLink(label, url);
   if (!markdown) return null;
+  return insertMarkupAt(text, start, end, markdown, maxLen);
+}
+
+export function insertMarkupAt(
+  text: string,
+  start: number,
+  end: number,
+  markdown: string,
+  maxLen: number = DESCRIPTION_LINK_MAX_LEN,
+): { text: string; caret: number } | null {
   const from = Math.max(0, Math.min(start, end, text.length));
   const to = Math.max(0, Math.min(Math.max(start, end), text.length));
   const next = text.slice(0, from) + markdown + text.slice(to);
@@ -58,7 +100,15 @@ export function insertDescriptionLink(
   return { text: next, caret: from + markdown.length };
 }
 
-export function parseDescriptionLinks(text: string): DescriptionSegment[] {
+/**
+ * Parse description/solution/comment text into display segments.
+ * Image markdown `![alt](path)` is recognized before normal links; only same-item
+ * attachment content paths become images. External image URLs stay as text.
+ */
+export function parseDescriptionLinks(
+  text: string,
+  itemNumber?: number,
+): DescriptionSegment[] {
   const segments: DescriptionSegment[] = [];
   let i = 0;
   let textStart = 0;
@@ -70,6 +120,45 @@ export function parseDescriptionLinks(text: string): DescriptionSegment[] {
   };
 
   while (i < text.length) {
+    // Prefer ![alt](path) over [label](url)
+    if (text[i] === '!' && text[i + 1] === '[') {
+      const labelEnd = text.indexOf('](', i + 2);
+      if (labelEnd < 0) {
+        i += 1;
+        continue;
+      }
+      const urlEnd = text.indexOf(')', labelEnd + 2);
+      if (urlEnd < 0) {
+        i += 1;
+        continue;
+      }
+      const alt = text.slice(i + 2, labelEnd);
+      const path = text.slice(labelEnd + 2, urlEnd);
+      const attachmentId =
+        itemNumber != null && itemNumber > 0 ? isAttachmentContentPath(path, itemNumber) : null;
+      if (
+        attachmentId != null &&
+        !alt.includes(']') &&
+        !alt.includes('\n') &&
+        !alt.includes('\r')
+      ) {
+        pushText(i);
+        segments.push({
+          kind: 'image',
+          alt: alt || 'image',
+          src: path,
+          attachmentId,
+        });
+        i = urlEnd + 1;
+        textStart = i;
+        continue;
+      }
+      // Complete ![…](…) that is not a same-item attachment stays plain text
+      // (do not fall through to link parsing on the `[`).
+      i = urlEnd + 1;
+      continue;
+    }
+
     if (text[i] !== '[') {
       i += 1;
       continue;

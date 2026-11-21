@@ -28,6 +28,7 @@ describe('Board card drag start', () => {
       items: [
         {
           id: 1,
+          projectId: 1,
           number: 1,
           columnId: 1,
           title: 'A',
@@ -39,12 +40,14 @@ describe('Board card drag start', () => {
           relatedItems: [],
           assignee: '',
           closeReason: '',
+          solution: '',
+          favorite: false,
           dueAt: null,
           createdAt: '',
           updatedAt: '',
         },
       ],
-      settings: { cardLayout: 'pack' as const },
+      settings: { cardLayout: 'pack' as const, activeProjectId: 1 },
     };
     TestBed.configureTestingModule({
       imports: [Board],
@@ -56,8 +59,8 @@ describe('Board card drag start', () => {
             board: () => of(board),
             reorderItems: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
         },
       ],

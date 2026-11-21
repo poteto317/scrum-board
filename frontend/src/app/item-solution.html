@@ -1,0 +1,81 @@
+<main class="solution-page">
+  <a class="back-link" [routerLink]="detailLink()" [queryParams]="detailQuery()">
+    ← {{ item() ? formatItemNumber(item()!.number) + ' の詳細へ' : '詳細へ' }}
+  </a>
+  @if (loading()) {
+    <div class="state-panel" role="status">
+      <span class="spinner"></span>ソリューションを読み込んでいます…
+    </div>
+  } @else if (!item()) {
+    <div class="state-panel" role="alert">
+      <p>{{ error() }}</p>
+      <button class="secondary" type="button" (click)="load()">再試行</button>
+    </div>
+  } @else {
+    <header class="solution-heading">
+      <div class="eyebrow">{{ formatItemNumber(item()!.number) }}</div>
+      <h1>ソリューション</h1>
+      <p class="solution-title">{{ item()!.title }}</p>
+      <p class="field-note">実装の整理を書くページです。詳細の説明とは別です。</p>
+    </header>
+    <section class="solution-editor" aria-label="ソリューション本文">
+      <app-description-blocks-editor
+        [value]="control.value"
+        [lengthErrorMessage]="solutionLengthError"
+        [itemNumber]="item()?.number ?? 0"
+        [projectId]="item()?.projectId"
+        attachmentField="solution"
+        (textChange)="onTextChange($event)"
+        (compositionChange)="onCompositionChange($event)"
+        (linkRequest)="onLinkRequest($event)"
+        (attachmentDeleted)="onAttachmentDeleted()"
+      />
+      @if (control.invalid) {
+        <p class="form-error">{{ solutionLengthError }}</p>
+      }
+      @if (saveError()) {
+        <p class="form-error" role="alert">{{ saveError() }}</p>
+      }
+      @if (saving()) {
+        <p class="field-note" role="status">保存中…</p>
+      } @else if (control.value === '') {
+        <p class="field-note">未記入です。ここに実装内容を書けます。</p>
+      }
+    </section>
+  }
+</main>
+@if (descriptionEditor.open()) {
+  <dialog
+    appModal
+    class="modal-backdrop description-link-dialog"
+    aria-labelledby="solution-link-title"
+    (cancel)="$event.preventDefault(); descriptionEditor.cancel()"
+  >
+    <section class="modal">
+      <h2 id="solution-link-title">リンクを追加</h2>
+      <label for="solution-link-label">表示名</label>
+      <input
+        id="solution-link-label"
+        type="text"
+        [value]="descriptionEditor.label()"
+        (input)="descriptionEditor.setLabel($any($event.target).value)"
+        placeholder="リンクの表示名"
+      />
+      <label for="solution-link-url">URL</label>
+      <input
+        id="solution-link-url"
+        type="url"
+        [value]="descriptionEditor.url()"
+        (input)="descriptionEditor.setUrl($any($event.target).value)"
+        placeholder="https://example.com"
+      />
+      @if (descriptionEditor.error()) {
+        <p class="form-error">{{ descriptionEditor.error() }}</p>
+      }
+      <div class="form-actions">
+        <button type="button" class="secondary" (click)="descriptionEditor.cancel()">キャンセル</button>
+        <button type="button" (click)="confirmDescriptionLink()">確定</button>
+      </div>
+    </section>
+  </dialog>
+}

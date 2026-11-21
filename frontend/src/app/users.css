@@ -1,0 +1,58 @@
+.users-page {
+  padding: 1rem 1.25rem 2rem;
+  max-width: 52rem;
+}
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.users-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.user-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.user-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.user-login,
+.user-role,
+.user-badge {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.disabled-user {
+  opacity: 0.7;
+}
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.users-create {
+  margin-top: 1.5rem;
+}
+.users-create-form {
+  display: grid;
+  gap: 0.4rem;
+  max-width: 20rem;
+}
+.users-create-form label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}

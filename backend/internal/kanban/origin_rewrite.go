@@ -27,6 +27,7 @@ type originRewriteColumn struct {
 
 var originRewriteColumns = []originRewriteColumn{
 	{table: "items", column: "description"},
+	{table: "items", column: "solution"},
 	{table: "items", column: "title"},
 	{table: "item_history", column: "note"},
 	{table: "item_history", column: "evidence_url"},

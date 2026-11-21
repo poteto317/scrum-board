@@ -1,0 +1,183 @@
+<section class="comments" aria-label="コメント">
+  <h2>コメント</h2>
+
+  @if (loading()) {
+    <p role="status">コメントを読み込んでいます…</p>
+  }
+  @if (error()) {
+    <p role="alert">コメントを読み込めませんでした。</p>
+    <button type="button" class="secondary" (click)="retry()">再試行</button>
+  } @else if (!loading() && !comments().length) {
+    <p class="empty">まだコメントはありません。</p>
+  }
+
+  @if (!error()) {
+    <ul class="comment-list">
+      @for (c of comments(); track c.id) {
+        <li class="comment-row">
+          @if (editingId() === c.id) {
+            <label class="field">
+              <span>表示名</span>
+              <input
+                type="text"
+                [ngModel]="editAuthor()"
+                (ngModelChange)="editAuthor.set($event)"
+                [disabled]="savingId() === c.id"
+                maxlength="60"
+              />
+            </label>
+            <div
+              class="comment-edit"
+              (dragover)="onCommentDragOver($event)"
+              (drop)="onEditDrop($event)"
+            >
+              <label class="field">
+                <span>本文</span>
+                <textarea
+                  #editBodyArea
+                  rows="3"
+                  [ngModel]="editBody()"
+                  (ngModelChange)="editBody.set($event)"
+                  [disabled]="savingId() === c.id"
+                ></textarea>
+              </label>
+              <div class="row-actions">
+                <button
+                  type="button"
+                  (click)="saveEdit(c)"
+                  [disabled]="savingId() === c.id"
+                >
+                  保存
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="cancelEdit()"
+                  [disabled]="savingId() === c.id"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          } @else {
+            <div class="comment-heading">
+              <strong>{{ displayName(c.author) }}</strong>
+              <time>{{ c.createdAt | date: 'yyyy/MM/dd HH:mm:ss' }}</time>
+            </div>
+            <app-description-rich-text
+              class="comment-body"
+              [text]="c.body"
+              [itemNumber]="number"
+              [canDelete]="!readOnly"
+              (deleteImage)="deleteAttachment($event)"
+            />
+            @if (!readOnly) {
+              <div class="row-actions">
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="startEdit(c)"
+                  [disabled]="savingId() != null || deletingId() != null || posting() || imageBusy()"
+                >
+                  編集
+                </button>
+                <button
+                  type="button"
+                  class="danger-link"
+                  (click)="remove(c)"
+                  [disabled]="deletingId() != null || savingId() != null || posting() || imageBusy()"
+                >
+                  削除
+                </button>
+              </div>
+            }
+          }
+        </li>
+      }
+    </ul>
+
+    @if (!readOnly) {
+      <form
+        class="compose"
+        (submit)="$event.preventDefault(); submit()"
+        (dragover)="onCommentDragOver($event)"
+        (drop)="onDraftDrop($event)"
+      >
+        <label class="field">
+          <span>表示名（任意）</span>
+          <input
+            type="text"
+            [ngModel]="draftAuthor()"
+            (ngModelChange)="draftAuthor.set($event)"
+            name="draftAuthor"
+            [disabled]="posting() || imageBusy()"
+            maxlength="60"
+          />
+        </label>
+        <label class="field">
+          <span>本文</span>
+          <textarea
+            rows="3"
+            [ngModel]="draftBody()"
+            (ngModelChange)="draftBody.set($event)"
+            name="draftBody"
+            [disabled]="posting() || imageBusy()"
+            required
+          ></textarea>
+        </label>
+        <div class="row-actions">
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="posting() || imageBusy()"
+            (click)="pickDraftImage()"
+          >
+            画像
+          </button>
+          <input
+            #draftImage
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            hidden
+            (change)="onDraftImageChange($event)"
+          />
+          <button type="submit" [disabled]="posting() || savingId() != null || deletingId() != null || imageBusy()">
+            投稿
+          </button>
+        </div>
+      </form>
+    }
+  }
+
+  @if (actionError()) {
+    <p class="form-error" role="alert">{{ actionError() }}</p>
+  }
+</section>
+
+@if (confirmAttachmentId() != null) {
+  <dialog
+    open
+    class="modal-backdrop"
+    aria-labelledby="comment-attachment-delete-title"
+    (cancel)="$event.preventDefault(); !imageBusy() && cancelAttachmentDelete()"
+  >
+    <form method="dialog" class="modal" (submit)="$event.preventDefault()">
+      <h2 id="comment-attachment-delete-title">画像を削除しますか？</h2>
+      <p>コメント本文からもこの画像の参照が取り除かれます。</p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" [disabled]="imageBusy()" (click)="cancelAttachmentDelete()">
+          キャンセル
+        </button>
+        <button
+          type="button"
+          class="danger"
+          [disabled]="imageBusy()"
+          (click)="confirmAttachmentDelete($event)"
+          (keydown)="confirmAttachmentDelete($event)"
+        >
+          削除
+        </button>
+      </div>
+    </form>
+  </dialog>
+}

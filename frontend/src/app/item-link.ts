@@ -3,6 +3,11 @@ export const itemAppPath = (number: number, projectId?: number): string => {
   return projectId && projectId > 0 ? `${base}?project=${projectId}` : base;
 };
 
+export const itemSolutionAppPath = (number: number, projectId?: number): string => {
+  const base = `/items/${number}/solution`;
+  return projectId && projectId > 0 ? `${base}?project=${projectId}` : base;
+};
+
 export const itemDetailUrl = (origin: string, number: number, projectId?: number): string =>
   `${origin.replace(/\/$/, '')}${itemAppPath(number, projectId)}`;
 

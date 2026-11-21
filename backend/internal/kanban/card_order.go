@@ -148,7 +148,7 @@ func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64, proj
 	if len(columnIDs) == 0 {
 		return nil, ErrItemOrder
 	}
-	query := "SELECT id FROM items WHERE project_id=? AND column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
+	query := "SELECT id FROM items WHERE project_id=? AND deleted_at IS NULL AND column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
 	args := make([]any, 0, len(columnIDs)+1)
 	args = append(args, projectID)
 	for _, id := range columnIDs {
