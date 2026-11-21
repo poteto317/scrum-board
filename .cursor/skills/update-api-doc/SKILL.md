@@ -33,6 +33,7 @@ description: >-
    - `sessionOptional`（一部 item GET・添付）→ `security: []` ＋ description に未ログイン 401 と `viewAccess=public` の分岐  
    - それ以外 → `cookieAuth`（Cookie 名 `sb_session`）  
    - 本番 nginx Basic はゲートウェイ層。operation の `security` に載せない（`info`／`servers` の説明のみ）
+   - `scripts/check-openapi-routes.py` の `EXEMPT`／`OPTIONAL` を middleware と食い違わないよう同じ変更で更新する
 
 4. **他文書の突合（同じ変更で）**  
    - README の認証説明が OpenAPI／middleware と矛盾していないか（詳細一覧は OpenAPI に委譲）  

@@ -103,6 +103,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/board:
     get:
       summary: ボード（列＋アイテム）
@@ -141,6 +147,22 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cardLayout:
+                  type: string
+                  enum:
+                  - pack
+                  - free
+                mobileBoardColumnId:
+                  type: integer
+                  nullable: true
+              additionalProperties: false
   /api/columns:
     post:
       summary: 列作成
@@ -168,10 +190,16 @@ paths:
           description: 列名重複
           content:
             application/json:
-              schema: &id001
+              schema:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/columns/order:
     put:
       summary: 列並び替え
@@ -197,6 +225,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/command-template-defaults:
     get:
       summary: 新規アイテム初期テンプレート
@@ -234,6 +268,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/command-templates:
     get:
       summary: コマンドテンプレート一覧
@@ -271,6 +311,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/command-templates/apply-to-all-items:
     post:
       summary: 全アイテムの表示セット置換
@@ -292,6 +338,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/command-templates/{id}:
     patch:
       summary: コマンドテンプレート更新
@@ -323,6 +375,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
     delete:
       summary: コマンドテンプレート削除
       operationId: delete_api_command_templates_id
@@ -380,6 +438,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/health:
     get:
       summary: 起動確認
@@ -467,17 +531,20 @@ paths:
           description: 未ログインかつ非 public
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           description: 閲覧権限なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: 対象なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
       parameters:
       - name: number
         in: path
@@ -545,17 +612,20 @@ paths:
           description: 未ログインかつ非 public
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           description: 閲覧権限なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: 対象なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
       parameters:
       - name: number
         in: path
@@ -747,6 +817,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/items/by-number/{number}/comments:
     get:
       summary: コメント一覧
@@ -796,6 +872,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/items/by-number/{number}/comments/{id}:
     patch:
       summary: コメント更新
@@ -832,6 +914,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
     delete:
       summary: コメント削除
       operationId: delete_api_items_by_number_number_comments_id
@@ -958,6 +1046,34 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - columns
+              properties:
+                columns:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                    - columnId
+                    - itemIds
+                    properties:
+                      columnId:
+                        type: integer
+                      itemIds:
+                        type: array
+                        items:
+                          type: integer
+                      offsetYs:
+                        type: array
+                        items:
+                          type: integer
+              additionalProperties: false
   /api/items/refined:
     post:
       summary: AI 整形して Todo 起票
@@ -1007,6 +1123,17 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+              additionalProperties: false
   /api/items/{id}:
     get:
       summary: アイテム詳細（内部 ID）
@@ -1022,17 +1149,20 @@ paths:
           description: 未ログインかつ非 public
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           description: 閲覧権限なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: 対象なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
       parameters:
       - name: id
         in: path
@@ -1149,12 +1279,14 @@ paths:
           description: manage 権限なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: 対象なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
       parameters:
       - name: id
         in: path
@@ -1163,6 +1295,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/items/{id}/restore:
     post:
       summary: ゴミ箱から復元
@@ -1231,6 +1369,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/pr-titles:
     post:
       summary: PR タイトル一括取得
@@ -1256,6 +1400,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/projects:
     get:
       summary: プロジェクト一覧
@@ -1293,6 +1443,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/projects/{id}:
     patch:
       summary: プロジェクト更新
@@ -1324,6 +1480,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
     delete:
       summary: プロジェクト削除
       operationId: delete_api_projects_id
@@ -1394,6 +1556,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/recurring-rules/{id}:
     patch:
       summary: 繰り返しルール更新
@@ -1425,6 +1593,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
     delete:
       summary: 繰り返しルール削除
       operationId: delete_api_recurring_rules_id
@@ -1495,6 +1669,12 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/sprints/{id}:
     get:
       summary: スプリント詳細
@@ -1544,6 +1724,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
     delete:
       summary: スプリント削除
       operationId: delete_api_sprints_id
@@ -1657,6 +1843,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/trash:
     get:
       summary: ゴミ箱一覧
@@ -1748,9 +1940,16 @@ paths:
           description: 管理者以外
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
   /api/users/{id}:
     patch:
       summary: ユーザー更新
@@ -1778,17 +1977,20 @@ paths:
           description: 管理者以外
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: 対象なし
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
           description: 衝突
           content:
             application/json:
-              schema: *id001
+              schema:
+                $ref: '#/components/schemas/Error'
       parameters:
       - name: id
         in: path
@@ -1797,6 +1999,12 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
 components:
   securitySchemes:
     cookieAuth:
