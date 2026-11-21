@@ -1,4 +1,8 @@
 import { Component, input, output } from '@angular/core';
+import {
+  SCRUM_ATTACHMENT_MIME,
+  encodeAttachmentDragPayload,
+} from './attachment-dnd';
 import { parseDescriptionLinks } from './description-link';
 
 @Component({
@@ -12,7 +16,12 @@ import { parseDescriptionLinks } from './description-link';
           <a [href]="seg.url" target="_blank" rel="noopener noreferrer">{{ seg.label }}</a>
         } @else if (seg.kind === 'image') {
           <span class="rich-image">
-            <img [src]="seg.src" [alt]="seg.alt" />
+            <img
+              [src]="seg.src"
+              [alt]="seg.alt"
+              [attr.draggable]="draggableImages() ? 'true' : 'false'"
+              (dragstart)="onDragStart(seg.attachmentId, seg.alt, $event)"
+            />
             @if (canDelete()) {
               <button
                 type="button"
@@ -56,10 +65,26 @@ export class DescriptionRichText {
   readonly text = input.required<string>();
   readonly itemNumber = input.required<number>();
   readonly canDelete = input(false);
+  readonly draggableImages = input(false);
   readonly deleteImage = output<number>();
 
   segments() {
     return parseDescriptionLinks(this.text(), this.itemNumber());
+  }
+
+  onDragStart(attachmentId: number, alt: string, event: DragEvent): void {
+    if (!this.draggableImages()) return;
+    const dt = event.dataTransfer;
+    if (!dt) return;
+    dt.setData(
+      SCRUM_ATTACHMENT_MIME,
+      encodeAttachmentDragPayload({
+        itemNumber: this.itemNumber(),
+        attachmentId,
+        alt,
+      }),
+    );
+    dt.effectAllowed = 'copy';
   }
 
   onDelete(attachmentId: number, event: MouseEvent): void {

@@ -94,6 +94,7 @@
         [text]="value()"
         [itemNumber]="itemNumber()"
         [canDelete]="imagesEnabled()"
+        [draggableImages]="attachmentField() === 'description'"
         (deleteImage)="requestDeleteImage($event)"
       />
     </div>
