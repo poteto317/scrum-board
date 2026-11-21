@@ -217,7 +217,7 @@ describe('ItemAiChat', () => {
     expect(postAIChat).toHaveBeenCalled();
   });
 
-  it('does not POST while credits are loading', () => {
+  it('does not POST while credits are loading, then allows send', () => {
     const pending = new Subject<AICredits>();
     const postAIChat = vi.fn(() => of({ messages: [m1, m2] }));
     const getAICredits = vi.fn(() => pending);
@@ -228,6 +228,10 @@ describe('ItemAiChat', () => {
     expect(postAIChat).not.toHaveBeenCalled();
     pending.next(okCredits);
     pending.complete();
+    f.detectChanges();
+    expect(f.componentInstance.creditsLoading()).toBe(false);
+    f.componentInstance.send();
+    expect(postAIChat).toHaveBeenCalled();
   });
 
   it('clears blocked state when credits request fails after success', () => {
