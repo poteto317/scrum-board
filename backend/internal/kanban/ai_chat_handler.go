@@ -96,6 +96,9 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 		aiChatError(w, http.StatusServiceUnavailable, "ai_not_configured", "AIチャットが設定されていません。サーバーにANTHROPIC_API_KEYを設定してください。")
 		return
 	}
+	if h.rejectIfAICreditLimitReached(w, r, aiChatError) {
+		return
+	}
 	release, acquired := h.acquireSlot()
 	if !acquired {
 		aiChatError(w, http.StatusTooManyRequests, "ai_busy", "AIが混み合っています。少し待って再試行してください。")
