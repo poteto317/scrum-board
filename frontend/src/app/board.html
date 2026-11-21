@@ -114,6 +114,7 @@
             class="kanban-column"
             [attr.data-column-id]="column.id"
             [class.doing]="column.name === 'Doing'"
+            [class.review]="column.name === 'Review'"
             [class.done]="column.name === 'Done'"
             [class.dragging]="draggingColumnId() === column.id"
             [class.drop-before]="dropSlot() === index"

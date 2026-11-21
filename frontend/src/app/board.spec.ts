@@ -260,6 +260,106 @@ const singleCardBoard = (assignee = '') =>
     ],
   });
 
+describe('Board status column classes', () => {
+  it('marks Review column with .review and card-status under it (L-060)', async () => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () =>
+              of({
+                columns: [
+                  { id: 1, name: 'Todo', position: 0 },
+                  { id: 2, name: 'Doing', position: 1 },
+                  { id: 9, name: 'Review', position: 2 },
+                  { id: 3, name: 'Done', position: 3 },
+                ],
+                settings: { cardLayout: 'pack' as const, activeProjectId: 1 },
+                items: [
+                  {
+                    id: 19,
+                    projectId: 1,
+                    number: 4,
+                    columnId: 2,
+                    title: 'In doing',
+                    description: '',
+                    position: 0,
+                    backlogPosition: 0,
+                    offsetY: 0,
+                    prUrls: [],
+                    relatedItems: [],
+                    assignee: '',
+                    closeReason: '',
+                    solution: '',
+                    favorite: false,
+                    dueAt: null,
+                    createdAt: '',
+                    updatedAt: '',
+                  },
+                  {
+                    id: 20,
+                    projectId: 1,
+                    number: 5,
+                    columnId: 9,
+                    title: 'In review',
+                    description: '',
+                    position: 0,
+                    backlogPosition: 0,
+                    offsetY: 0,
+                    prUrls: [],
+                    relatedItems: [],
+                    assignee: '',
+                    closeReason: '',
+                    solution: '',
+                    favorite: false,
+                    dueAt: null,
+                    createdAt: '',
+                    updatedAt: '',
+                  },
+                ],
+              }),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () =>
+              of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: {
+              board: { query: string; statusIds: number[] };
+              backlog: { query: string; statusIds: number[] };
+            }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    const reviewCol = f.nativeElement.querySelector(
+      '.kanban-column.review',
+    ) as HTMLElement | null;
+    const doingCol = f.nativeElement.querySelector(
+      '.kanban-column.doing',
+    ) as HTMLElement | null;
+    expect(reviewCol).toBeTruthy();
+    expect(doingCol).toBeTruthy();
+    expect(reviewCol!.querySelector('.status-dot')).toBeTruthy();
+    expect(doingCol!.querySelector('.status-dot')).toBeTruthy();
+    expect(reviewCol!.querySelector('.card-status')).toBeTruthy();
+    expect(doingCol!.querySelector('.card-status')).toBeTruthy();
+    expect(f.nativeElement.querySelector('.kanban-column.done')).toBeTruthy();
+    const todoCol = f.nativeElement.querySelector(
+      '.kanban-column[data-column-id="1"]',
+    ) as HTMLElement | null;
+    expect(todoCol).toBeTruthy();
+    expect(todoCol!.classList.contains('doing')).toBe(false);
+    expect(todoCol!.classList.contains('review')).toBe(false);
+    expect(todoCol!.classList.contains('done')).toBe(false);
+  });
+});
+
 describe('Board assignee chip', () => {
   it('shows an assignee chip when set and hides it when empty', async () => {
     TestBed.configureTestingModule({
