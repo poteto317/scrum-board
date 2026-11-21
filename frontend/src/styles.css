@@ -464,6 +464,11 @@ dialog.modal-backdrop::backdrop {
 }
 .kanban-column.doing .status-dot,
 .project-select-list .doing .status-dot {
+  border-color: #4a7ab0;
+  background: #6b9ac9;
+}
+.kanban-column.review .status-dot,
+.project-select-list .review .status-dot {
   border-color: #b99342;
   background: #cfb56b;
 }
