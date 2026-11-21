@@ -206,6 +206,25 @@ curl -u "$USER:$PASS" -X POST -H 'Content-Type: application/json' \
   http://127.0.0.1:4200/api/items/by-number/7/comments
 ```
 
+## 画像添付
+
+説明・ソリューション・コメント本文へ埋め込む画像です。バイト列は GCS（`ATTACHMENT_GCS_BUCKET`）、メタは `item_attachments`。本文への挿入はクライアント。DELETE 時のみサーバが description／solution／全 comment body から該当マークアップを除去します。
+
+| 方法 | パス | 認証 | 応答 |
+|------|------|------|------|
+| GET | `/api/items/by-number/{n}/attachments` | 閲覧可 | `{ "attachments": [ ... ] }` |
+| POST | `/api/items/by-number/{n}/attachments` | セッション＋編集可 | 201 + メタ。multipart: `file` + `field`（`description`\|`solution`\|`comment`）+ 任意 `commentId` |
+| GET | `/api/items/by-number/{n}/attachments/{id}/content` | 閲覧可（item GET と同規則） | バイナリ。他 item の id は 404 |
+| DELETE | `/api/items/by-number/{n}/attachments/{id}` | セッション＋編集可 | 204。GCS＋DB＋本文掃除。他 item id は 404 |
+
+制約: MIME は `image/jpeg|png|gif|webp`（宣言とマジックバイト一致）、1枚 ≤5MiB、1 item ≤20枚。未知 multipart フィールド・`file` 欠落・不正 `field` は 400。バケット未設定時の POST は 503。マークアップ形: `![alt](/api/items/by-number/{n}/attachments/{id}/content)`。
+
+```bash
+curl -u "$USER:$PASS" -X POST \
+  -F 'field=description' -F 'file=@shot.png;type=image/png' \
+  http://127.0.0.1:4200/api/items/by-number/7/attachments
+```
+
 ## 変更履歴
 
 `GET /api/items/by-number/{number}/history` は `{events: [...], nextBefore: 0}` を返します。eventsにはid、kind、occurredAt、recordedAt、changes（field/before/after）、note、evidenceUrlがあります。kindはcreated/updated/baseline/restoredです。statusの値は列名、assigneeは対応者ラベル、closeReasonはClose理由、solutionはソリューション本文、favoriteは`true`/`false`文字列、dueAtはUTCの期限（未設定は空文字）です。
