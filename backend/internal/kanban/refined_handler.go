@@ -85,6 +85,9 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 		refinedError(w, http.StatusServiceUnavailable, "ai_not_configured", "AI整形が設定されていません。サーバーにANTHROPIC_API_KEYを設定してください。")
 		return
 	}
+	if h.rejectIfAICreditLimitReached(w, r, refinedError) {
+		return
+	}
 	// Resolve the column before spending money on the AI call.
 	todo, err := h.repo.GetColumnByName(r.Context(), todoColumnName)
 	if err != nil {

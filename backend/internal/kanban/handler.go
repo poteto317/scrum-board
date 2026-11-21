@@ -90,6 +90,8 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/items/by-number/{number}/ai-chat", h.postAIChat)
 	mux.HandleFunc("DELETE /api/items/by-number/{number}/ai-chat", h.clearAIChat)
 	mux.HandleFunc("GET /api/ai/usage", h.getAIUsage)
+	mux.HandleFunc("GET /api/ai/credits", h.getAICredits)
+	mux.HandleFunc("PUT /api/ai/credits", h.putAICredits)
 	mux.HandleFunc("GET /api/items/by-number/{number}/attachments", h.listAttachments)
 	mux.HandleFunc("POST /api/items/by-number/{number}/attachments", h.createAttachment)
 	mux.HandleFunc("GET /api/items/by-number/{number}/attachments/{id}/content", h.getAttachmentContent)
