@@ -286,6 +286,9 @@ func TestRecurringRulesCRUD(t *testing.T) {
 		t.Fatalf("empty desc patch=%+v", patched)
 	}
 
+	if w = request(h, "PATCH", "/api/recurring-rules/"+id, `{}`); w.Code != 400 {
+		t.Fatalf("empty patch want 400, got %d %s", w.Code, w.Body)
+	}
 	if w = request(h, "PATCH", "/api/recurring-rules/"+id, `{"description":null}`); w.Code != 400 {
 		t.Fatalf("null desc want 400, got %d %s", w.Code, w.Body)
 	}

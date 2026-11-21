@@ -252,6 +252,11 @@ func (h handler) updateRecurringRule(w http.ResponseWriter, r *http.Request) {
 		}
 		patch.Enabled = &enabled
 	}
+	if patch.Name == nil && patch.Title == nil && patch.Description == nil &&
+		patch.Cron == nil && patch.Timezone == nil && patch.ColumnID == nil && patch.Enabled == nil {
+		invalid(w, "更新する項目を指定してください。")
+		return
+	}
 	projectID, err := h.activeProjectForByNumber(r.Context())
 	if err != nil {
 		fail(w, err)
