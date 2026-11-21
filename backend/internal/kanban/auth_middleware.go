@@ -50,8 +50,18 @@ func sessionOptional(r *http.Request) bool {
 	path := r.URL.Path
 	if strings.HasPrefix(path, "/api/items/by-number/") {
 		rest := strings.TrimPrefix(path, "/api/items/by-number/")
-		// only bare by-number/{n}, not .../comments or .../history
-		return !strings.Contains(rest, "/")
+		// bare by-number/{n}, or attachment list/content (ACL enforced in handler)
+		if !strings.Contains(rest, "/") {
+			return true
+		}
+		parts := strings.Split(rest, "/")
+		if len(parts) == 2 && parts[1] == "attachments" {
+			return true
+		}
+		if len(parts) == 4 && parts[1] == "attachments" && parts[3] == "content" {
+			return true
+		}
+		return false
 	}
 	if strings.HasPrefix(path, "/api/items/") {
 		rest := strings.TrimPrefix(path, "/api/items/")
