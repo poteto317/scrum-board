@@ -1707,6 +1707,43 @@ paths:
             schema:
               $ref: '#/components/schemas/JsonValue'
       description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/projects/order:
+    put:
+      summary: プロジェクト全件並び替え
+      operationId: put_api_projects_order
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: プロジェクト集合の不一致
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+      description: '全プロジェクト ID の順列。集合不一致は 409。requestBody は暫定 JsonValue。'
   /api/projects:
     get:
       summary: プロジェクト一覧
