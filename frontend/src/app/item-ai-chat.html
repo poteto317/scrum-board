@@ -50,6 +50,15 @@
       }
     </ul>
 
+    @if (blockReason()) {
+      <div class="ai-chat-error" role="alert">
+        <p>{{ blockedMessage() }}</p>
+        <a routerLink="/settings">設定を開く</a>
+      </div>
+    } @else if (lowRemaining()) {
+      <p class="ai-chat-status" role="status">{{ lowRemainingMessage }}</p>
+    }
+
     @if (error()) {
       <p class="ai-chat-error" role="alert">{{ error() }}</p>
     }
@@ -62,12 +71,12 @@
         rows="3"
         [ngModel]="draft()"
         (ngModelChange)="draft.set($event)"
-        [disabled]="sending()"
+        [attr.disabled]="composeInactive() ? true : null"
         maxlength="4000"
         placeholder="質問や依頼を入力…"
         (keydown.enter)="onComposeKeydown($event)"
       ></textarea>
-      <button type="submit" [disabled]="sending() || applying()">
+      <button type="submit" [attr.disabled]="composeInactive() ? true : null">
         {{ sending() ? '送信中…' : '送信' }}
       </button>
     </form>

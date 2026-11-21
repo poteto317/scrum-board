@@ -1,8 +1,19 @@
-import { Component, OnChanges, SimpleChanges, inject, input, output, signal } from '@angular/core';
+import { Component, OnChanges, SimpleChanges, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { Api, AIChatMessage } from './api';
+import { Api, AIChatMessage, AICredits } from './api';
 import { errorMessage } from './api-error';
+import {
+  blockedReason,
+  isComposeBlocked,
+  isLowRemaining,
+} from './ai-credits-state';
+import {
+  AI_EXHAUSTED_MESSAGE,
+  AI_LOW_REMAINING_MESSAGE,
+  AI_UNCONFIGURED_MESSAGE,
+} from './ai-unavailable-copy';
 import { COMMENT_BODY_MAX } from './item-comments';
 import { Item } from './models';
 
@@ -10,7 +21,7 @@ export const AI_CHAT_MESSAGE_MAX = 4000;
 
 @Component({
   selector: 'app-item-ai-chat',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './item-ai-chat.html',
   styleUrl: './item-ai-chat.css',
 })
@@ -24,6 +35,7 @@ export class ItemAiChat implements OnChanges {
   private readonly api = inject(Api);
   private generation = 0;
   private listRequest?: Subscription;
+  private creditsRequest?: Subscription;
   private sendRequest?: Subscription;
   private clearRequest?: Subscription;
   private applyRequest?: Subscription;
@@ -31,11 +43,28 @@ export class ItemAiChat implements OnChanges {
   readonly messages = signal<AIChatMessage[]>([]);
   readonly draft = signal('');
   readonly loading = signal(false);
+  readonly credits = signal<AICredits | null>(null);
+  readonly creditsLoading = signal(false);
   readonly sending = signal(false);
   readonly clearing = signal(false);
   readonly applying = signal(false);
   readonly error = signal('');
   readonly loadError = signal('');
+
+  readonly composeBlocked = computed(() => isComposeBlocked(this.credits()));
+  readonly lowRemaining = computed(() => isLowRemaining(this.credits()));
+  readonly blockReason = computed(() => blockedReason(this.credits()));
+  readonly composeInactive = computed(
+    () => this.sending() || this.applying() || this.creditsLoading() || this.composeBlocked(),
+  );
+  readonly blockedMessage = computed(() => {
+    const reason = this.blockReason();
+    if (reason === 'unconfigured') return AI_UNCONFIGURED_MESSAGE;
+    if (reason === 'exhausted') return AI_EXHAUSTED_MESSAGE;
+    return '';
+  });
+
+  readonly lowRemainingMessage = AI_LOW_REMAINING_MESSAGE;
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['number'] || changes['projectId'] || changes['itemId']) {
@@ -47,8 +76,13 @@ export class ItemAiChat implements OnChanges {
   }
 
   reload() {
-    this.listRequest?.unsubscribe();
     const generation = ++this.generation;
+    this.loadHistory(generation);
+    this.loadCredits(generation);
+  }
+
+  private loadHistory(generation: number) {
+    this.listRequest?.unsubscribe();
     const number = this.number();
     const projectId = this.scopedProjectId();
     this.loading.set(true);
@@ -67,6 +101,27 @@ export class ItemAiChat implements OnChanges {
     });
   }
 
+  /** Workspace credits（アイテム非依存）。generation でアイテム切替の stale を捨てる */
+  private loadCredits(generation: number) {
+    this.creditsRequest?.unsubscribe();
+    const number = this.number();
+    const projectId = this.scopedProjectId();
+    this.creditsLoading.set(true);
+    this.credits.set(null);
+    this.creditsRequest = this.api.getAICredits().subscribe({
+      next: (view) => {
+        if (!this.stillCurrent(generation, number, projectId)) return;
+        this.credits.set(view);
+        this.creditsLoading.set(false);
+      },
+      error: () => {
+        if (!this.stillCurrent(generation, number, projectId)) return;
+        this.credits.set(null);
+        this.creditsLoading.set(false);
+      },
+    });
+  }
+
   onComposeKeydown(event: Event) {
     const e = event as KeyboardEvent;
     if (e.key !== 'Enter' || e.shiftKey) return;
@@ -77,7 +132,7 @@ export class ItemAiChat implements OnChanges {
 
   send(event?: Event) {
     if (event instanceof KeyboardEvent && event.repeat) return;
-    if (this.sending() || this.applying()) return;
+    if (this.composeInactive()) return;
     const text = this.draft().trim();
     if (!text) {
       this.error.set('メッセージを入力してください。');
