@@ -28,7 +28,7 @@
         (textChange)="onTextChange($event)"
         (compositionChange)="onCompositionChange($event)"
         (linkRequest)="onLinkRequest($event)"
-        (attachmentDeleted)="load()"
+        (attachmentDeleted)="onAttachmentDeleted()"
       />
       @if (control.invalid) {
         <p class="form-error">{{ solutionLengthError }}</p>

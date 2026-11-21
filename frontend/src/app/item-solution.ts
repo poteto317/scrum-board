@@ -258,6 +258,13 @@ export class ItemSolution implements OnInit {
     this.reload$.next();
   }
 
+  onAttachmentDeleted(): void {
+    // Invalidate in-flight solution PATCH so it cannot resurrect stripped markup.
+    this.saveGeneration++;
+    this.saving.set(false);
+    this.reload$.next();
+  }
+
   private persist(value: string): Observable<Item | null> {
     const card = this.item();
     if (!card) {
