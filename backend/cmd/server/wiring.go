@@ -35,23 +35,25 @@ func newFormatter(getenv func(string) string, opts ...option.RequestOption) kanb
 }
 
 // newChatter returns the Claude-backed chat client, or a nil interface when ANTHROPIC_API_KEY is empty.
-func newChatter(getenv func(string) string, opts ...option.RequestOption) kanban.ItemChatter {
+func newChatter(getenv func(string) string, maxTokens int64, opts ...option.RequestOption) kanban.ItemChatter {
 	key, model := anthropicKeyAndModel(getenv)
 	if key == "" {
 		return nil
 	}
-	return aichat.New(key, model, opts...)
+	return aichat.New(key, model, maxTokens, opts...)
 }
 
 // buildHandler assembles the API handler. The AI endpoint is only wired up when a key is configured; the key is never logged.
 func buildHandler(repo kanban.Repository, getenv func(string) string, opts ...option.RequestOption) http.Handler {
+	limits := kanban.ParseAILimits(getenv)
 	var handlerOpts []kanban.Option
 	if formatter := newFormatter(getenv, opts...); formatter != nil {
 		handlerOpts = append(handlerOpts, kanban.WithItemFormatter(formatter))
 	}
-	if chatter := newChatter(getenv, opts...); chatter != nil {
+	if chatter := newChatter(getenv, int64(limits.ChatMaxOutputTokens), opts...); chatter != nil {
 		handlerOpts = append(handlerOpts, kanban.WithAIChat(chatter))
 	}
+	handlerOpts = append(handlerOpts, kanban.WithAILimits(limits))
 	handlerOpts = append(handlerOpts, kanban.WithPublicOrigin(getenv("PUBLIC_ORIGIN")))
 	handlerOpts = append(
 		handlerOpts,

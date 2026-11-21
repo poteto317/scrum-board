@@ -16,6 +16,9 @@ type handler struct {
 	publicOrigin    string
 	prTitleResolver *PRTitleResolver
 	blobs           BlobStorage
+	rateLimiter     AIRateLimiter
+	messageMax      int
+	historyTurns    int
 }
 
 // Option customizes NewHandler without changing the call sites that only need the repository.
@@ -46,11 +49,39 @@ func WithBlobStorage(store BlobStorage) Option {
 	return func(h *handler) { h.blobs = store }
 }
 
+// WithAILimits applies message/history caps and installs a sliding rate limiter from RatePerMinute (0 = off).
+// ChatMaxOutputTokens is applied by wiring at aichat.New, not here (handler does not own the chatter client).
+// If both WithAILimits and WithAIRateLimiter are used, pass WithAIRateLimiter after this so the custom limiter wins.
+func WithAILimits(l AILimits) Option {
+	return func(h *handler) {
+		if l.MessageMax >= 1 {
+			h.messageMax = l.MessageMax
+		}
+		if l.HistoryTurns >= 1 {
+			h.historyTurns = l.HistoryTurns
+		}
+		h.rateLimiter = NewSlidingAIRateLimiter(l.RatePerMinute)
+	}
+}
+
+// WithAIRateLimiter injects a custom limiter (tests). Nil keeps the current limiter.
+// Place after WithAILimits when both are used.
+func WithAIRateLimiter(l AIRateLimiter) Option {
+	return func(h *handler) {
+		if l != nil {
+			h.rateLimiter = l
+		}
+	}
+}
+
 func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{
-		repo:  repo,
-		slots: make(chan struct{}, maxConcurrentFormats),
-		blobs: UnavailableBlobStorage{},
+		repo:         repo,
+		slots:        make(chan struct{}, maxConcurrentFormats),
+		blobs:        UnavailableBlobStorage{},
+		rateLimiter:  NewNoopAIRateLimiter(),
+		messageMax:   maxAIChatMessageLen,
+		historyTurns: maxAIChatHistoryTurns,
 		// prTitleResolver nil by default so unit tests do not hit GitHub; wire in production via WithPRTitleResolver.
 	}
 	for _, opt := range opts {

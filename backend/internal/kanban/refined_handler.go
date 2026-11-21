@@ -88,14 +88,21 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 	if h.rejectIfAICreditLimitReached(w, r, refinedError) {
 		return
 	}
+	rateUser, rateAt, rateReserved, rateLimited := h.reserveAIRateLimit(r)
+	if rateLimited {
+		writeAIRateLimited(w, refinedError)
+		return
+	}
 	// Resolve the column before spending money on the AI call.
 	todo, err := h.repo.GetColumnByName(r.Context(), todoColumnName)
 	if err != nil {
+		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		storageFailed(w, "column")
 		return
 	}
 	release, acquired := h.acquireSlot()
 	if !acquired {
+		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		refinedError(w, http.StatusTooManyRequests, "ai_busy", "AI整形が混み合っています。少し待って再試行してください。")
 		return
 	}
