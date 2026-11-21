@@ -37,6 +37,8 @@ type memoryRepo struct {
 	nextSprintID       int64
 	recurringRules     map[int64]RecurringRule
 	nextRecurringID    int64
+	attachments        map[int64]memoryAttachment
+	nextAttachmentID   int64
 }
 
 func fresh() *memoryRepo {
