@@ -936,7 +936,8 @@ paths:
       summary: アイテム AI チャット送信
       operationId: post_api_items_by_number_number_ai_chat
       description: |
-        セッション＋編集可。キー未設定は 503。同時実行は refined と共有（超過 429）。
+        セッション＋編集可。キー未設定は 503。同時実行は refined と共有（超過 429 `ai_busy`）。
+        アプリ内トークン上限到達時も 429（`ai_credit_limit`）。
         本文・コメントは変更しない。空／過長／未知フィールドは 400。
       responses:
         '200':
@@ -987,7 +988,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '429':
-          description: 同時実行上限
+          description: 同時実行上限（code=ai_busy）またはアプリ内トークン上限到達（code=ai_credit_limit）
           content:
             application/json:
               schema:
@@ -1091,6 +1092,79 @@ paths:
                 additionalProperties: false
         '401':
           description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+  /api/ai/credits:
+    get:
+      summary: AI 利用上限と残量（アプリ内トークン予算）
+      operationId: get_api_ai_credits
+      description: ログイン済みなら可。usedTokens は input+output の累計。unlimited のとき limitTokens／remainingTokens は null。configured は ANTHROPIC_API_KEY の有無（usage と同じ）。approximate は常に true。
+      responses:
+        '200':
+          description: 残量ビュー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AICredits'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+    put:
+      summary: AI 利用上限の設定／解除（admin）
+      operationId: put_api_ai_credits
+      description: admin のみ。limitTokens は必須キー。非負整数で設定、null で解除。キー無し・負数・非整数・未知フィールドは 400。成功は 200 で GET と同形。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - limitTokens
+              properties:
+                limitTokens:
+                  description: 合計トークン上限。null で解除。
+                  oneOf:
+                  - type: integer
+                    minimum: 0
+                  - type: 'null'
+              additionalProperties: false
+      responses:
+        '200':
+          description: 更新後の残量ビュー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AICredits'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: admin 以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type 不正
           content:
             application/json:
               schema:
@@ -1323,7 +1397,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '429':
-          description: 同時実行上限
+          description: 同時実行上限（code=ai_busy）またはアプリ内トークン上限到達（code=ai_credit_limit）
           content:
             application/json:
               schema:
@@ -2267,6 +2341,43 @@ components:
         createdAt:
           type: string
           format: date-time
+      additionalProperties: false
+    AICredits:
+      type: object
+      required:
+      - usedTokens
+      - unlimited
+      - approximate
+      - period
+      - configured
+      properties:
+        limitTokens:
+          description: 上限。unlimited のとき null
+          oneOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+        usedTokens:
+          type: integer
+          minimum: 0
+        remainingTokens:
+          description: 残り。unlimited のとき null。超過時は 0
+          oneOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+        unlimited:
+          type: boolean
+        approximate:
+          type: boolean
+          description: 常に true（トークンは概算）
+        period:
+          type: string
+          enum:
+          - cumulative
+        configured:
+          type: boolean
+          description: ANTHROPIC_API_KEY の有無
       additionalProperties: false
     JsonValue:
       description: 当該エンドポイントの JSON 応答。フィールド詳細は必要に応じて本スキーマを具体化する。
