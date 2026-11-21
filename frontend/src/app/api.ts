@@ -264,6 +264,9 @@ export class Api {
   getAICredits() {
     return this.http.get<AICredits>('/api/ai/credits');
   }
+  putAICredits(body: { limitTokens: number | null }) {
+    return this.http.put<AICredits>('/api/ai/credits', body);
+  }
   listAttachments(number: number, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http

@@ -399,6 +399,23 @@ describe('Api', () => {
     });
     req.flush(req.request.body);
   });
+
+  it('PUTs AI credits with explicit limitTokens null for unlimited', () => {
+    api.putAICredits({ limitTokens: null }).subscribe();
+    const req = http.expectOne('/api/ai/credits');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ limitTokens: null });
+    expect(JSON.stringify(req.request.body)).toContain('"limitTokens":null');
+    req.flush({
+      limitTokens: null,
+      usedTokens: 0,
+      remainingTokens: null,
+      unlimited: true,
+      approximate: true,
+      period: 'cumulative',
+      configured: true,
+    });
+  });
 });
 
 it('requests history by public number and an optional event cursor', () => {
