@@ -878,6 +878,225 @@ paths:
             schema:
               $ref: '#/components/schemas/JsonValue'
       description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/items/by-number/{number}/ai-chat:
+    get:
+      summary: アイテム AI チャット履歴
+      operationId: get_api_items_by_number_number_ai_chat
+      description: |
+        セッション＋編集可が必要。ANTHROPIC_API_KEY 未設定でも履歴は返す。
+        古い順。この API は description／comments を変更しない。
+      responses:
+        '200':
+          description: 履歴
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - messages
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AIMessage'
+                additionalProperties: false
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 編集不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: アイテムなし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: プロジェクト ID（省略時はアクティブ）
+      security:
+      - cookieAuth: []
+    post:
+      summary: アイテム AI チャット送信
+      operationId: post_api_items_by_number_number_ai_chat
+      description: |
+        セッション＋編集可。キー未設定は 503。同時実行は refined と共有（超過 429）。
+        本文・コメントは変更しない。空／過長／未知フィールドは 400。
+      responses:
+        '200':
+          description: アシスタント応答と更新後履歴
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - assistant
+                - messages
+                properties:
+                  assistant:
+                    $ref: '#/components/schemas/AIMessage'
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AIMessage'
+                additionalProperties: false
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 編集不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: アイテムなし
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type 不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 同時実行上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: AI 上流失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: AI 未設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - message
+              properties:
+                message:
+                  type: string
+                  description: 1〜4000 Unicode 文字
+              additionalProperties: false
+    delete:
+      summary: アイテム AI チャット履歴クリア
+      operationId: delete_api_items_by_number_number_ai_chat
+      description: セッション＋編集可。キー未設定でも可。
+      responses:
+        '204':
+          description: クリア成功
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 編集不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+      security:
+      - cookieAuth: []
+  /api/ai/usage:
+    get:
+      summary: AI 利用状況（ワークスペース累計）
+      operationId: get_api_ai_usage
+      description: ログイン済みなら可。configured は ANTHROPIC_API_KEY の有無。
+      responses:
+        '200':
+          description: 集計
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - requestCount
+                - inputTokens
+                - outputTokens
+                - configured
+                properties:
+                  requestCount:
+                    type: integer
+                  inputTokens:
+                    type: integer
+                  outputTokens:
+                    type: integer
+                  configured:
+                    type: boolean
+                additionalProperties: false
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
   /api/items/by-number/{number}/comments/{id}:
     patch:
       summary: コメント更新
@@ -2020,6 +2239,34 @@ components:
       properties:
         message:
           type: string
+      additionalProperties: false
+    AIMessage:
+      type: object
+      required:
+      - id
+      - itemId
+      - role
+      - body
+      - createdAt
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        role:
+          type: string
+          enum:
+          - user
+          - assistant
+        body:
+          type: string
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
       additionalProperties: false
     JsonValue:
       description: 当該エンドポイントの JSON 応答。フィールド詳細は必要に応じて本スキーマを具体化する。
