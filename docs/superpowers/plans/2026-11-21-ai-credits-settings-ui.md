@@ -22,6 +22,9 @@
 | --- | --- |
 | `frontend/src/app/api.ts` | `putAICredits({ limitTokens })` 追加 |
 | `frontend/src/app/ai-unavailable-copy.ts` | `AI_EXHAUSTED_MESSAGE` 更新 |
+| `frontend/src/app/ai-credits-display.ts` | 残量／上限／期間の表示整形（API 非依存） |
+| `frontend/src/app/ai-credits-limit-parse.ts` | 上限入力の非負整数パース |
+| `frontend/src/app/ai-credits-settings-copy.ts` | 設定ページ固定文言 |
 | `frontend/src/app/settings.ts` | credits 読込・編集・保存ロジック |
 | `frontend/src/app/settings.html` | AIクレジット section UI |
 | `frontend/src/app/settings.css` | 低残量強調・編集フォーム・375px |
