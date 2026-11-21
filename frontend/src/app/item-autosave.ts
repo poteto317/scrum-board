@@ -72,6 +72,20 @@ export class ItemAutosave {
     this.saving.set(false);
     for (const resolve of this.waiters.splice(0)) resolve(false);
   }
+  /** Apply AI「説明に反映」: sync description form+item without a conflicting autosave flush. */
+  applyDescriptionSave(updated: Pick<Item, 'description' | 'updatedAt'>) {
+    const card = this.item();
+    if (!card) return;
+    this.dropInFlight();
+    const description = updated.description ?? '';
+    this.item.set({
+      ...card,
+      description,
+      updatedAt: updated.updatedAt || card.updatedAt,
+    });
+    this.form.controls.description.setValue(description, { emitEvent: false });
+    this.changed.set(false);
+  }
   /** Apply Close transition response: merge side fields and sync columnId/closeReason controls. */
   applyCloseSave(updated: Item) {
     const local = this.item();

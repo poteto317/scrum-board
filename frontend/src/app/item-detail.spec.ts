@@ -71,6 +71,7 @@ describe('ItemDetail autosave', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -112,6 +113,7 @@ describe('ItemDetail autosave', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -718,6 +720,7 @@ describe('ItemDetail copy card link', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -735,6 +738,7 @@ describe('ItemDetail copy card link', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [{ id: 1, name: 'Todo', position: 0 }],
@@ -886,6 +890,7 @@ describe('ItemDetail copy command menu and management', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
       itemByNumber: vi.fn(() => of(card)),
       updateItem: vi.fn(),
@@ -1290,6 +1295,7 @@ describe('ItemDetail IME response handling', () => {
               listUsers: () => of([]),
               history: () => of({ events: [], nextBefore: 0 }),
               listComments: () => of([]),
+              listAIChat: () => of([]),
               listAttachments: () => of([]),
               uploadAttachment: () => of({ id: 1, originalName: 'x.png' }),
               deleteAttachment: () => of(undefined),
@@ -1339,6 +1345,7 @@ describe('ItemDetail live refresh', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1359,6 +1366,7 @@ describe('ItemDetail live refresh', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1460,6 +1468,7 @@ describe('ItemDetail Close reason', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1496,6 +1505,7 @@ describe('ItemDetail Close reason', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1662,6 +1672,7 @@ describe('ItemDetail description text links', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1702,6 +1713,7 @@ describe('ItemDetail description text links', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1930,6 +1942,7 @@ describe('ItemDetail dueAt picker', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
+    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1949,6 +1962,7 @@ describe('ItemDetail dueAt picker', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
