@@ -38,6 +38,17 @@ export type TrashItem = {
   deletedAt: string;
 };
 
+export type ItemAttachment = {
+  id: number;
+  itemId: number;
+  commentId?: number;
+  field: string;
+  contentType: string;
+  byteSize: number;
+  originalName: string;
+  createdAt: string;
+};
+
 export type RecurringRule = {
   id: number;
   projectId: number;
@@ -192,6 +203,42 @@ export class Api {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.delete<void>(
       `/api/items/by-number/${number}/comments/${id}`,
+      params ? { params } : {},
+    );
+  }
+  listAttachments(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http
+      .get<{ attachments: ItemAttachment[] }>(
+        `/api/items/by-number/${number}/attachments`,
+        params ? { params } : {},
+      )
+      .pipe(map((res) => res.attachments ?? []));
+  }
+  uploadAttachment(
+    number: number,
+    file: File,
+    field: 'description' | 'solution' | 'comment',
+    projectId?: number,
+    commentId?: number,
+  ) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    const body = new FormData();
+    body.append('file', file, file.name);
+    body.append('field', field);
+    if (commentId != null && commentId > 0) {
+      body.append('commentId', String(commentId));
+    }
+    return this.http.post<ItemAttachment>(
+      `/api/items/by-number/${number}/attachments`,
+      body,
+      params ? { params } : {},
+    );
+  }
+  deleteAttachment(number: number, id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(
+      `/api/items/by-number/${number}/attachments/${id}`,
       params ? { params } : {},
     );
   }
