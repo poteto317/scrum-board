@@ -6,6 +6,6 @@ export const AI_UNCONFIGURED_MESSAGE =
   'AI は未設定です。サーバーに ANTHROPIC_API_KEY を設定するとチャットと整形が使えます。';
 
 export const AI_EXHAUSTED_MESSAGE =
-  'AI の利用上限に達しています。利用状況は設定で確認できます。';
+  'AI の利用上限に達しています。設定で上限を確認・変更できます。';
 
 export const AI_LOW_REMAINING_MESSAGE = 'AI の残りトークンが少なくなっています（概算）。';
