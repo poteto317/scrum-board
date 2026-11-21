@@ -20,8 +20,9 @@ type RefinedItem struct {
 }
 
 // ItemFormatter turns a draft into a tidy title and description (the AI behind POST /api/items/refined).
+// inTok/outTok are provider usage for the call (0,0 when unknown); the handler adds them to ai_usage.
 type ItemFormatter interface {
-	Format(context.Context, Draft) (RefinedItem, error)
+	Format(context.Context, Draft) (item RefinedItem, inTok, outTok int64, err error)
 }
 
 // FormatFailure lets a formatter report why it failed without exposing upstream text.

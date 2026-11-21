@@ -107,7 +107,7 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 		aiFailed(w)
 		return
 	}
-	refined, err := h.formatter.Format(aiCtx, draft)
+	refined, inTok, outTok, err := h.formatter.Format(aiCtx, draft)
 	if err != nil {
 		logFormatFailure(err)
 		aiFailed(w)
@@ -128,6 +128,10 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		storageFailed(w, "create")
 		return
+	}
+	// Usage is best-effort after create: failing here must not 500 (would invite retry-duplicate cards).
+	if err := h.repo.AddAIUsage(r.Context(), 1, inTok, outTok); err != nil {
+		slog.Error("refined usage add failed", "stage", "usage")
 	}
 	reply(w, http.StatusCreated, card)
 }
