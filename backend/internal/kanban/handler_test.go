@@ -39,6 +39,9 @@ type memoryRepo struct {
 	nextRecurringID    int64
 	attachments        map[int64]memoryAttachment
 	nextAttachmentID   int64
+	aiMessages         map[int64]AIMessage
+	nextAIMessageID    int64
+	aiUsage            AIUsage
 }
 
 func fresh() *memoryRepo {
@@ -58,6 +61,8 @@ func fresh() *memoryRepo {
 		nextProject:     2,
 		comments:        map[int64]Comment{},
 		nextCommentID:   1,
+		aiMessages:      map[int64]AIMessage{},
+		nextAIMessageID: 1,
 		users: []User{{
 			ID: 1, LoginName: "admin", DisplayName: "admin",
 			PasswordHash: hash, Role: RoleAdmin, Disabled: false,
@@ -480,6 +485,11 @@ func (m *memoryRepo) HardDeleteItem(ctx context.Context, id int64) error {
 	for cid, comment := range m.comments {
 		if comment.ItemID == id {
 			delete(m.comments, cid)
+		}
+	}
+	for mid, msg := range m.aiMessages {
+		if msg.ItemID == id {
+			delete(m.aiMessages, mid)
 		}
 	}
 	return nil
@@ -1206,4 +1216,71 @@ func (m *memoryRepo) DeleteComment(_ context.Context, itemID, commentID int64) e
 	}
 	delete(m.comments, commentID)
 	return nil
+}
+
+func (m *memoryRepo) ListAIMessages(_ context.Context, itemID int64) ([]AIMessage, error) {
+	out := make([]AIMessage, 0)
+	for _, msg := range m.aiMessages {
+		if msg.ItemID == itemID {
+			out = append(out, msg)
+		}
+	}
+	slices.SortFunc(out, func(a, b AIMessage) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return out, nil
+}
+
+func (m *memoryRepo) AppendAITurn(_ context.Context, itemID int64, userBody, assistantBody string, inTok, outTok int64) error {
+	c0, ok := m.cards[itemID]
+	if !ok || !m.living(c0) {
+		return ErrNotFound
+	}
+	existing, _ := m.ListAIMessages(context.Background(), itemID)
+	overflow := len(existing) + 2 - maxAIChatStoredMessages
+	if overflow > 0 {
+		for i := 0; i < overflow; i++ {
+			delete(m.aiMessages, existing[i].ID)
+		}
+	}
+	now := time.Now().UTC()
+	uid := m.nextAIMessageID
+	m.nextAIMessageID++
+	m.aiMessages[uid] = AIMessage{ID: uid, ItemID: itemID, Role: AIRoleUser, Body: userBody, CreatedAt: now}
+	aid := m.nextAIMessageID
+	m.nextAIMessageID++
+	asst := AIMessage{ID: aid, ItemID: itemID, Role: AIRoleAssistant, Body: assistantBody, CreatedAt: now.Add(time.Nanosecond)}
+	if inTok > 0 {
+		v := int(inTok)
+		asst.InputTokens = &v
+	}
+	if outTok > 0 {
+		v := int(outTok)
+		asst.OutputTokens = &v
+	}
+	m.aiMessages[aid] = asst
+	return nil
+}
+
+func (m *memoryRepo) ClearAIMessages(_ context.Context, itemID int64) error {
+	for id, msg := range m.aiMessages {
+		if msg.ItemID == itemID {
+			delete(m.aiMessages, id)
+		}
+	}
+	return nil
+}
+
+func (m *memoryRepo) AddAIUsage(_ context.Context, requests, inTok, outTok int64) error {
+	m.aiUsage.RequestCount += requests
+	m.aiUsage.InputTokens += inTok
+	m.aiUsage.OutputTokens += outTok
+	return nil
+}
+
+func (m *memoryRepo) GetAIUsage(context.Context) (AIUsage, error) {
+	return m.aiUsage, nil
 }
