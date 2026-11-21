@@ -320,20 +320,6 @@ func (r MySQLRepository) AttachmentObjectKeyExists(ctx context.Context, objectKe
 	return n > 0, nil
 }
 
-func (r MySQLRepository) ListAttachmentObjectKeysByItemIDs(ctx context.Context, itemIDs []int64) ([]string, error) {
-	if len(itemIDs) == 0 {
-		return nil, nil
-	}
-	placeholders := make([]string, len(itemIDs))
-	args := make([]any, len(itemIDs))
-	for i, id := range itemIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	q := `SELECT object_key FROM item_attachments WHERE item_id IN (` + strings.Join(placeholders, ",") + `)`
-	return r.listAttachmentKeys(ctx, q, args...)
-}
-
 func (r MySQLRepository) listAttachmentKeys(ctx context.Context, query string, args ...any) ([]string, error) {
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -422,10 +408,6 @@ type dbQuerier interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
-}
-
-func (r MySQLRepository) stripAttachmentFromBodies(ctx context.Context, itemID, itemNumber, attachmentID int64) error {
-	return r.stripAttachmentFromBodiesTx(ctx, r.DB, itemID, itemNumber, attachmentID)
 }
 
 func (r MySQLRepository) stripAttachmentFromBodiesTx(ctx context.Context, db dbQuerier, itemID, itemNumber, attachmentID int64) error {
