@@ -20,7 +20,7 @@
 | 低残量 UI | パネル内の**非ブロッキング**警告（`role="status"`）。送信は可能 |
 | 状態の優先 | `configured === false` を最優先の alert とする。キー未設定かつ残量ゼロでも未設定文言のみ（残量ゼロ文言は出さない） |
 | キー未設定 UI | `configured === false` のとき入力・送信を無効化し、設定ページ（`/settings`）への案内を出す（`role="alert"`）。履歴の閲覧・クリアは可 |
-| 残量ゼロ UI | `configured === true` かつ `unlimited === false` かつ `remainingTokens === 0` のとき入力・送信を無効化し、理由＋設定への案内（`role="alert"`）。履歴の閲覧・クリアは可 |
+| 残量ゼロ UI | `configured === true` かつ `unlimited === false` かつ（`remainingTokens === 0` **または** `remainingTokens == null`）のとき入力・送信を無効化（欠落は fail-closed）。理由＋設定への案内（`role="alert"`）。履歴の閲覧・クリアは可 |
 | データ源 | パネル表示時に **`GET /api/ai/credits` のみ**（`configured` もここに含まれる）。`GET /api/ai/usage` は二重取得しない |
 | credits 読込中 | 履歴の loading と同様、credits 取得完了まで入力・送信は **disabled**（誤送信防止）。完了後に状態を適用 |
 | credits 失敗 | 取得失敗時は **blocked なし**（直前の成功結果も捨てる）。送信は従来どおり可能にし、サーバ 503／429 に任せる。専用バナーは出さない |
