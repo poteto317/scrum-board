@@ -93,16 +93,20 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 		writeAIRateLimited(w, refinedError)
 		return
 	}
+	keepRate := false
+	defer func() {
+		if !keepRate {
+			h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
+		}
+	}()
 	// Resolve the column before spending money on the AI call.
 	todo, err := h.repo.GetColumnByName(r.Context(), todoColumnName)
 	if err != nil {
-		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		storageFailed(w, "column")
 		return
 	}
 	release, acquired := h.acquireSlot()
 	if !acquired {
-		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		refinedError(w, http.StatusTooManyRequests, "ai_busy", "AI整形が混み合っています。少し待って再試行してください。")
 		return
 	}
@@ -110,11 +114,11 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 	aiCtx, cancel, hasTime := aiContext(r.Context())
 	defer cancel()
 	if !hasTime {
-		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		slog.Error("ai card formatting skipped", "kind", "no_time")
 		aiFailed(w)
 		return
 	}
+	keepRate = true // model call starts; reservation counts even if Format fails
 	refined, inTok, outTok, err := h.formatter.Format(aiCtx, draft)
 	if err != nil {
 		logFormatFailure(err)

@@ -105,9 +105,14 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 		writeAIRateLimited(w, aiChatError)
 		return
 	}
+	keepRate := false
+	defer func() {
+		if !keepRate {
+			h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
+		}
+	}()
 	release, acquired := h.acquireSlot()
 	if !acquired {
-		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		aiChatError(w, http.StatusTooManyRequests, "ai_busy", "AIが混み合っています。少し待って再試行してください。")
 		return
 	}
@@ -115,13 +120,11 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 
 	comments, err := h.repo.ListComments(r.Context(), card.ID)
 	if err != nil {
-		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		fail(w, err)
 		return
 	}
 	history, err := h.repo.ListAIMessages(r.Context(), card.ID)
 	if err != nil {
-		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		fail(w, err)
 		return
 	}
@@ -132,11 +135,11 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	aiCtx, cancel, hasTime := aiContext(r.Context())
 	defer cancel()
 	if !hasTime {
-		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		slog.Error("ai chat skipped", "kind", "no_time")
 		aiChatFailed(w)
 		return
 	}
+	keepRate = true // model call starts; reservation counts even if Chat fails
 	replyText, inTok, outTok, err := h.chatter.Chat(aiCtx, system, turns)
 	if err != nil {
 		logChatFailure(err)
