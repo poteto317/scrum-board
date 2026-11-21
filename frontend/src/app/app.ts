@@ -36,6 +36,11 @@ import {
   StatusKind,
 } from './project-status-dots';
 import { PROJECT_NAME_REQUIRED, ProjectSession } from './project-session';
+import {
+  isBoardPath,
+  resolveProjectDeepLinkAction,
+  withProjectQueryParam,
+} from './project-query';
 import { readSidebarCollapsed, writeSidebarCollapsed } from './sidebar-collapse-storage';
 import { Project } from './models';
 
@@ -83,6 +88,7 @@ export class App implements OnInit {
   readonly collapsed = signal(readSidebarCollapsed());
   readonly projectMenuOpen = signal(false);
   readonly highlightedProjectId = signal<number | null>(null);
+  private projectDeepLinkApplied = false;
   readonly projectForm = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [textLimit(80, true)] }),
   });
@@ -131,6 +137,15 @@ export class App implements OnInit {
       if (next !== current) {
         this.highlightedProjectId.set(next);
       }
+    });
+    effect(() => {
+      if (!this.projectSession.bootstrapped()) return;
+      if (this.projectDeepLinkApplied) return;
+      // Wait until board: load may finish on /login before returnUrl navigate (L-044 race).
+      const path = this.routeUrl().split('?')[0];
+      if (!isBoardPath(path)) return;
+      this.projectDeepLinkApplied = true;
+      untracked(() => this.applyProjectDeepLink());
     });
   }
 
@@ -242,6 +257,7 @@ export class App implements OnInit {
     this.closeProjectMenu(true);
     if (id === this.projectSession.activeId()) return;
     this.projectSession.switchTo(id).subscribe({
+      next: (resolved) => this.syncProjectQueryToUrl(resolved),
       error: () => {
         /* activeId restored inside switchTo; trigger text follows activeProjectName */
       },
@@ -374,9 +390,10 @@ export class App implements OnInit {
   private switchToCreatedProject(projectId: number) {
     let gotSwitched = false;
     this.projectSession.switchTo(projectId).subscribe({
-      next: () => {
+      next: (resolved) => {
         gotSwitched = true;
         this.saving.set(false);
+        this.syncProjectQueryToUrl(resolved);
       },
       error: () => this.saving.set(false),
       complete: () => {
@@ -387,6 +404,38 @@ export class App implements OnInit {
       },
     });
     this.projectSession.endMutating();
+  }
+
+  /** Board `/` only: apply `?project=` once after session bootstrap (design #86). */
+  private applyProjectDeepLink() {
+    const url = this.routeUrl();
+    const path = url.split('?')[0];
+    const values = this.router.parseUrl(url).queryParamMap.getAll('project');
+    const action = resolveProjectDeepLinkAction({
+      path,
+      projectValues: values,
+      projectIds: this.projectSession.projects().map((p) => p.id),
+      activeId: this.projectSession.activeId(),
+    });
+    if (action.kind === 'skip') return;
+    if (action.kind === 'error') {
+      this.projectSession.error.set(action.message);
+      return;
+    }
+    this.projectSession.switchTo(action.id).subscribe({
+      error: () => {
+        /* existing switchTo error surface; do not replace with PROJECT_QUERY_NOT_FOUND */
+      },
+    });
+  }
+
+  /** Outbound only: sync `?project=` after header/create switch success (not inbound). */
+  private syncProjectQueryToUrl(id: number) {
+    if (!Number.isFinite(id) || id <= 0) return;
+    const tree = this.router.parseUrl(this.routeUrl());
+    tree.queryParams = withProjectQueryParam(tree.queryParams, id);
+    // navigateByUrl+UrlTree: App root では navigate([], merge) が URL を更新しないため同等の merge を純関数で行う。
+    void this.router.navigateByUrl(tree, { replaceUrl: true });
   }
 
   renameProject() {
