@@ -26,7 +26,7 @@
       </div>
     } @else if (usage(); as u) {
       @if (!u.configured) {
-        <div class="state-panel" role="status">
+        <div class="state-panel" role="alert">
           <ng-container *ngTemplateOutlet="aiUnconfigured" />
         </div>
       }
