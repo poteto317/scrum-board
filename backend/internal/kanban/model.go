@@ -21,6 +21,7 @@ var (
 	ErrProjectConflict   = errors.New("project conflict")
 	ErrSprint            = errors.New("invalid sprint")
 	ErrSprintConflict    = errors.New("sprint conflict")
+	ErrRecurring         = errors.New("invalid recurring rule")
 )
 
 const (
@@ -261,4 +262,9 @@ type Repository interface {
 	CompleteSprint(context.Context, int64, *int) (Sprint, error)
 	CountSprintsForProject(context.Context, int64) (int64, error)
 	DeleteSprintItemsForItem(context.Context, int64) error
+	ListRecurringRules(context.Context, int64) ([]RecurringRule, error)
+	CreateRecurringRule(context.Context, int64, RecurringRuleInput) (RecurringRule, error)
+	UpdateRecurringRule(context.Context, int64, int64, RecurringRulePatch) (RecurringRule, error)
+	DeleteRecurringRule(context.Context, int64, int64) error
+	RunRecurring(context.Context) (created, skipped, failed int, err error)
 }

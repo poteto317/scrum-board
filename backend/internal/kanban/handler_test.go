@@ -35,6 +35,8 @@ type memoryRepo struct {
 	sprints            map[int64]Sprint
 	sprintItems        map[int64][]int64
 	nextSprintID       int64
+	recurringRules     map[int64]RecurringRule
+	nextRecurringID    int64
 }
 
 func fresh() *memoryRepo {
