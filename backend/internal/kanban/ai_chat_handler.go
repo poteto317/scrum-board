@@ -115,11 +115,13 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 
 	comments, err := h.repo.ListComments(r.Context(), card.ID)
 	if err != nil {
+		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		fail(w, err)
 		return
 	}
 	history, err := h.repo.ListAIMessages(r.Context(), card.ID)
 	if err != nil {
+		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		fail(w, err)
 		return
 	}
@@ -130,6 +132,7 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	aiCtx, cancel, hasTime := aiContext(r.Context())
 	defer cancel()
 	if !hasTime {
+		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		slog.Error("ai chat skipped", "kind", "no_time")
 		aiChatFailed(w)
 		return

@@ -120,6 +120,64 @@ func TestAIRateLimitBusyReleasesReservation(t *testing.T) {
 	wg.Wait()
 }
 
+func TestAIRateLimitColumnFailureReleases(t *testing.T) {
+	repo := &errRepo{memoryRepo: fresh(), colErr: ErrNotFound}
+	formatter := &fakeFormatter{fn: ok("題名", "説明")}
+	lim := &countingAIRateLimiter{allow: true}
+	h := NewHandler(repo, WithItemFormatter(formatter), WithAIRateLimiter(lim))
+	w := postJSON(h, `{"title":"下書きタイトルです"}`)
+	if w.Code != 500 {
+		t.Fatalf("want 500, got %d %s", w.Code, w.Body.String())
+	}
+	tries, releases := lim.counts()
+	if tries != 1 || releases != 1 {
+		t.Fatalf("column fail must Release: tries=%d releases=%d", tries, releases)
+	}
+}
+
+func TestAIChatBusyReleasesRateReservation(t *testing.T) {
+	repo := fresh()
+	card, _ := repo.CreateItem(context.Background(), ItemInput{ColumnID: 1, Title: "t", Description: "d"})
+	release := make(chan struct{})
+	chatter := &fakeChatter{fn: func(context.Context, string, []ChatTurn) (string, int64, int64, error) {
+		<-release
+		return "", 0, 0, context.Canceled // avoid concurrent Append on memoryRepo
+	}}
+	lim := &countingAIRateLimiter{allow: true}
+	h := NewHandler(repo, WithAIChat(chatter), WithAIRateLimiter(lim))
+	var wg sync.WaitGroup
+	for range maxConcurrentFormats {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			request(h, "POST", aiChatPath(card.Number), `{"message":"hi"}`)
+		}()
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		chatter.mu.Lock()
+		n := chatter.calls
+		chatter.mu.Unlock()
+		if n >= maxConcurrentFormats {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("chatters did not start")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	w := request(h, "POST", aiChatPath(card.Number), `{"message":"busy"}`)
+	if w.Code != 429 || decodeError(t, w).Code != "ai_busy" {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	tries, releases := lim.counts()
+	if tries != maxConcurrentFormats+1 || releases != 1 {
+		t.Fatalf("chat busy must Release once: tries=%d releases=%d", tries, releases)
+	}
+	close(release)
+	wg.Wait()
+}
+
 func TestAIChatMessageMaxOverride(t *testing.T) {
 	repo := fresh()
 	card, _ := repo.CreateItem(context.Background(), ItemInput{ColumnID: 1, Title: "t", Description: "d"})

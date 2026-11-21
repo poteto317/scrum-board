@@ -93,7 +93,7 @@ func (l *slidingAIRateLimiter) pruneLocked(userID int64, now time.Time) []time.T
 
 // reserveAIRateLimit tries to reserve one rate-limit slot. limited=true means write 429 ai_rate_limit.
 // If reserved, call releaseAIRateLimit when the request does not proceed to the model
-// (acquireSlot busy, or refined column lookup failure before the AI call).
+// (busy, column lookup failure, comment/history load failure, or no_time before the AI call).
 func (h handler) reserveAIRateLimit(r *http.Request) (userID int64, at time.Time, reserved bool, limited bool) {
 	if h.rateLimiter == nil || !h.rateLimiter.Enabled() {
 		return 0, time.Time{}, false, false
