@@ -133,7 +133,7 @@ h1 {
   overflow-wrap: anywhere;
   min-width: 0;
 }
-/* Base + Doing shared in styles.css; Done stays board-only. */
+/* Base + Doing/Review status-dot shared in styles.css; Done stays board-only. */
 .kanban-column.done .status-dot {
   border-color: var(--accent);
   background: var(--accent);
@@ -246,6 +246,10 @@ h1 {
   color: #43345a;
 }
 .doing .card-status {
+  color: #2f4f6a;
+  background: #dce8f5;
+}
+.review .card-status {
   color: #93712e;
   background: #f6efdc;
 }
