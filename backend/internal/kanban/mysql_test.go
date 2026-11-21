@@ -46,6 +46,7 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"command_template_defaults",
 		"command_templates",
 		"workspace_list_filter",
+		"item_attachments",
 		"item_comments",
 		"item_acl_entries",
 		"sessions",
@@ -139,6 +140,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeItemACL(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = repo.InitializeItemAttachments(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = seedHandlerTestAuth(t.Context(), repo); err != nil {

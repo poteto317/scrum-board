@@ -129,6 +129,9 @@ func run() error {
 		err = repo.InitializeItemACL(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeItemAttachments(migrationCtx)
+	}
+	if err == nil {
 		err = repo.SeedAdminFromEnv(migrationCtx, os.Getenv)
 	}
 	migrationCancel()
@@ -136,7 +139,8 @@ func run() error {
 		return err
 	}
 	handler := buildHandler(repo, os.Getenv)
-	server := &http.Server{Addr: env("LISTEN_ADDRESS", "127.0.0.1:8080"), Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
+	// Read/Write timeouts allow ≤5 MiB multipart attachment uploads (see ATTACHMENT_GCS_BUCKET).
+	server := &http.Server{Addr: env("LISTEN_ADDRESS", "127.0.0.1:8080"), Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errCh := make(chan error, 1)
