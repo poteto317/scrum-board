@@ -65,6 +65,9 @@ func run() error {
 		err = repo.InitializeSprints(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeRecurringRules(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeBoardSettings(migrationCtx)
 	}
 	if err == nil {
