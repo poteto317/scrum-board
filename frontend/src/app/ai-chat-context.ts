@@ -1,7 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 import type { Item } from './models';
 import { sameJson } from './live-refresh';
-import type { AiChatPageKind, AiChatTarget, AiChatTargetOption } from './ai-chat-target';
+import {
+  sameTarget,
+  type AiChatPageKind,
+  type AiChatTarget,
+  type AiChatTargetOption,
+} from './ai-chat-target';
 
 export type { AiChatPageKind };
 
@@ -29,8 +34,10 @@ export class AiChatContext {
     },
   ) {
     this.pageKind.set('detail');
-    this.candidates.set([]);
-    this.routeTarget.set(target);
+    if (this.candidates().length > 0) this.candidates.set([]);
+    if (!sameTarget(this.routeTarget(), target)) {
+      this.routeTarget.set(target);
+    }
     this.onDescriptionApplied.set(handlers.onDescriptionApplied);
     this.onCommentApplied.set(handlers.onCommentApplied);
   }

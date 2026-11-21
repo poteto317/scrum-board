@@ -52,4 +52,15 @@ describe('AiChatContext', () => {
     ctx.setBoard([{ number: 1, projectId: 1, itemId: 10, title: 'A', canEdit: true }]);
     expect(ctx.candidates()).toBe(first);
   });
+
+  it('skips routeTarget set when detail target is unchanged', () => {
+    TestBed.configureTestingModule({ providers: [AiChatContext] });
+    const ctx = TestBed.inject(AiChatContext);
+    const target = { number: 3, projectId: 1, itemId: 30 };
+    const handlers = { onDescriptionApplied: () => {}, onCommentApplied: () => {} };
+    ctx.setDetail(target, handlers);
+    const first = ctx.routeTarget();
+    ctx.setDetail({ ...target }, handlers);
+    expect(ctx.routeTarget()).toBe(first);
+  });
 });
