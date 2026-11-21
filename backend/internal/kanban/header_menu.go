@@ -25,13 +25,15 @@ var (
 		"project_delete": {},
 		"open_trash":     {},
 		"open_users":     {},
+		"open_recurring": {},
 	}
 	itemDetailHeaderMenuIDs = map[string]struct{}{
-		"open_trash":    {},
-		"open_users":    {},
-		"item_history":  {},
-		"item_solution": {},
-		"item_favorite": {},
+		"open_trash":     {},
+		"open_users":     {},
+		"open_recurring": {},
+		"item_history":   {},
+		"item_solution":  {},
+		"item_favorite":  {},
 	}
 )
 
