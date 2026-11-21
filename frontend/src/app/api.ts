@@ -38,6 +38,41 @@ export type TrashItem = {
   deletedAt: string;
 };
 
+export type RecurringRule = {
+  id: number;
+  projectId: number;
+  name: string;
+  title: string;
+  description: string;
+  cron: string;
+  timezone: string;
+  columnId: number;
+  enabled: boolean;
+  lastFiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RecurringRuleInput = {
+  name: string;
+  title: string;
+  description?: string;
+  cron: string;
+  timezone?: string;
+  columnId: number;
+  enabled?: boolean;
+};
+
+export type RecurringRulePatch = {
+  name?: string;
+  title?: string;
+  description?: string;
+  cron?: string;
+  timezone?: string;
+  columnId?: number;
+  enabled?: boolean;
+};
+
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
@@ -295,6 +330,18 @@ export class Api {
   }
   purgeTrash() {
     return this.http.post<{ purged: number }>('/api/trash/purge', {});
+  }
+  listRecurringRules() {
+    return this.http.get<{ rules: RecurringRule[] }>('/api/recurring-rules');
+  }
+  createRecurringRule(input: RecurringRuleInput) {
+    return this.http.post<RecurringRule>('/api/recurring-rules', input);
+  }
+  patchRecurringRule(id: number, patch: RecurringRulePatch) {
+    return this.http.patch<RecurringRule>(`/api/recurring-rules/${id}`, patch);
+  }
+  deleteRecurringRule(id: number) {
+    return this.http.delete<void>(`/api/recurring-rules/${id}`);
   }
   listCommandTemplates() {
     return this.http.get<{ templates: CommandTemplate[] }>('/api/command-templates');
