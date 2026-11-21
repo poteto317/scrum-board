@@ -105,11 +105,42 @@ func TestHistoricalRecordLimits(t *testing.T) {
 		}, true},
 		"nine changes": {func(v *HistoricalRecord) {
 			v.Changes = []HistoryChange{
-				{Field: "title"}, {Field: "description"}, {Field: "status"},
+				{Field: "title"}, {Field: "description"}, {Field: "solution"}, {Field: "status"},
 				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
 				{Field: "assignee"}, {Field: "closeReason"},
-				{Field: "dueAt", Before: "", After: "2026-11-17T08:30:00Z"}, {Field: "x"},
+				{Field: "dueAt", Before: "", After: "2026-11-17T08:30:00Z"},
 			}
+		}, true},
+		"ten changes": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{
+				{Field: "title"}, {Field: "description"}, {Field: "solution"}, {Field: "status"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
+				{Field: "assignee"}, {Field: "closeReason"},
+				{Field: "dueAt", Before: "", After: "2026-11-17T08:30:00Z"},
+				{Field: "favorite", Before: "false", After: "true"},
+			}
+		}, true},
+		"eleven changes": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{
+				{Field: "title"}, {Field: "description"}, {Field: "solution"}, {Field: "status"},
+				{Field: "prUrls", Before: "[]", After: "[]"}, {Field: "relatedItems", Before: "[]", After: "[]"},
+				{Field: "assignee"}, {Field: "closeReason"},
+				{Field: "dueAt", Before: "", After: "2026-11-17T08:30:00Z"},
+				{Field: "favorite", Before: "false", After: "true"},
+				{Field: "title"},
+			}
+		}, false},
+		"favorite bool strings": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "favorite", Before: "false", After: "true"}}
+		}, true},
+		"favorite invalid": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "favorite", Before: "0", After: "1"}}
+		}, false},
+		"solution 10000": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "solution", After: long(10000)}}
+		}, true},
+		"solution after big": {func(v *HistoricalRecord) {
+			v.Changes = []HistoryChange{{Field: "solution", After: long(10001)}}
 		}, false},
 		"dueAt empty ok": {func(v *HistoricalRecord) {
 			v.Changes = []HistoryChange{{Field: "dueAt", Before: "", After: ""}}

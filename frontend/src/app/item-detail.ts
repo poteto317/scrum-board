@@ -1,9 +1,13 @@
 import { formatItemNumber } from './item-number';
 import { ItemHistory } from './item-history';
+import { ItemComments } from './item-comments';
+import { AiChatContext } from './ai-chat-context';
 import { Modal } from './modal';
 import {
   Component,
+  computed,
   DestroyRef,
+  effect,
   HostListener,
   inject,
   NgZone,
@@ -21,6 +25,7 @@ import {
   EMPTY,
   finalize,
   forkJoin,
+  map,
   startWith,
   Subject,
   switchMap,
@@ -31,10 +36,15 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
+import { UsersSession } from './users-session';
+import { AuthSession } from './auth-session';
+import { canEditItem, canManageItem, viewAccessLabel } from './item-acl';
+import { ItemAclPanel } from './item-acl-panel';
 import { formatDueAtLocal } from './due-at';
 import { DueAtPicker } from './due-at-picker';
 import { ItemAssignee } from './item-assignee';
 import { ItemAutosave } from './item-autosave';
+import { ItemFavorite } from './item-favorite';
 import { ItemCloseTransition } from './item-close-transition';
 import { ItemDueAt } from './item-due-at';
 import { ItemPrLinks } from './item-pr-links';
@@ -60,6 +70,7 @@ import {
 import { DescriptionEditor } from './description-editor';
 import { DescriptionBlocksEditor } from './description-blocks-editor';
 import { ProjectSession } from './project-session';
+import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
 
 @Component({
   selector: 'app-item-detail',
@@ -68,6 +79,7 @@ import { ProjectSession } from './project-session';
     RouterLink,
     DatePipe,
     Modal,
+    ItemComments,
     ItemHistory,
     CdkDropList,
     CdkDrag,
@@ -81,6 +93,8 @@ import { ProjectSession } from './project-session';
     ItemPrLinks,
     ItemRelatedItems,
     ItemAssignee,
+    ItemFavorite,
+    ItemAclPanel,
     ItemDueAt,
     ItemCloseTransition,
     DescriptionEditor,
@@ -94,6 +108,7 @@ export class ItemDetail implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   private readonly api = inject(Api);
   readonly projectSession = inject(ProjectSession);
+  private readonly aiChat = inject(AiChatContext);
   private readonly appOrigin = inject(AppOrigin);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -106,18 +121,46 @@ export class ItemDetail implements OnInit {
   readonly prLinks = inject(ItemPrLinks);
   readonly relatedItems = inject(ItemRelatedItems);
   readonly assignee = inject(ItemAssignee);
+  readonly usersSession = inject(UsersSession);
+  private readonly auth = inject(AuthSession);
+  readonly favorite = inject(ItemFavorite);
+  readonly acl = inject(ItemAclPanel);
+  private readonly itemMenuActions = inject(ItemMenuActions);
   readonly dueAt = inject(ItemDueAt);
   readonly closeTransition = inject(ItemCloseTransition);
   readonly descriptionEditor = inject(DescriptionEditor);
   private readonly blocksEditor = viewChild(DescriptionBlocksEditor);
+  readonly commentsPanel = viewChild(ItemComments);
   private readonly dueAtPicker = viewChild(DueAtPicker);
   readonly relatedDisplayLabel = displayLabel;
   readonly commands = inject(CommandTemplatesSession);
   readonly itemCommands = inject(ItemCommandsSession);
   readonly presets = ASSIGNEE_PRESETS;
+  /** Users (incl. disabled) + presets (deduped, users first). */
+  readonly assigneeChips = computed(() => {
+    const chips = [...this.usersSession.assigneeChipUsers()];
+    const names = new Set(chips.map((c) => c.name));
+    for (const p of ASSIGNEE_PRESETS) {
+      if (!names.has(p)) chips.push({ name: p, disabled: false });
+    }
+    return chips;
+  });
+  readonly usersLoadError = this.usersSession.loadError;
   readonly assigneeKind = assigneeKind;
+  readonly viewAccessLabel = viewAccessLabel;
   readonly item = this.autosave.item;
   readonly form = this.autosave.form;
+  readonly canEdit = computed(() => {
+    const card = this.item();
+    return !!card && canEditItem(card, this.auth.user());
+  });
+  readonly canManage = computed(() => {
+    const card = this.item();
+    return !!card && canManageItem(card, this.auth.user());
+  });
+  readonly authReady = computed(() => this.auth.status() !== 'unknown');
+  /** L-463: /me 未確定 or 編集不可ならサイド操作も止める。 */
+  readonly editLocked = computed(() => !this.authReady() || !this.canEdit());
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
   readonly deleting = signal(false);
@@ -160,6 +203,11 @@ export class ItemDetail implements OnInit {
   }): void {
     this.descriptionEditor.begin(sel);
   }
+  onAttachmentDeleted(): void {
+    // Drop in-flight description PATCH so it cannot resurrect stripped markup (L-001).
+    this.autosave.dropInFlight();
+    this.reload$.next();
+  }
   confirmDescriptionLink(): void {
     const editor = this.blocksEditor();
     const blocks = editor?.blocks() ?? [this.form.controls.description.value ?? ''];
@@ -193,6 +241,12 @@ export class ItemDetail implements OnInit {
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
+    this.favorite.bind({
+      item: () => this.item(),
+      applyFavoriteSave: (updated) => this.autosave.applyFavoriteSave(updated),
+      onError: (message) => this.error.set(message),
+      cancel$: this.changed$,
+    });
     this.dueAt.bind({
       item: () => this.item(),
       applyDueSave: (updated) => this.autosave.applyDueSave(updated),
@@ -211,6 +265,60 @@ export class ItemDetail implements OnInit {
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
     });
+    this.acl.bind({
+      item: () => this.item(),
+      canManage: () => this.canManage(),
+      applySaved: (saved) => this.autosave.reset(saved),
+    });
+    effect(() => {
+      const card = this.item();
+      const locked = this.editLocked();
+      if (!card) return;
+      if (locked) {
+        this.form.disable({ emitEvent: false });
+        this.assignee.draft.disable({ emitEvent: false });
+        this.prLinks.draft.disable({ emitEvent: false });
+        this.relatedItems.draft.disable({ emitEvent: false });
+        this.relatedItems.labelDraft.disable({ emitEvent: false });
+      } else {
+        this.form.enable({ emitEvent: false });
+        this.assignee.draft.enable({ emitEvent: false });
+        this.prLinks.draft.enable({ emitEvent: false });
+        this.relatedItems.draft.enable({ emitEvent: false });
+        this.relatedItems.labelDraft.enable({ emitEvent: false });
+      }
+    });
+    effect(() => {
+      const card = this.item();
+      const routeNum = this.routeNumber();
+      if (card && this.canEdit()) {
+        this.aiChat.setDetail(
+          { number: card.number, projectId: card.projectId, itemId: card.id },
+          {
+            onDescriptionApplied: (updated) => this.autosave.applyDescriptionSave(updated),
+            onCommentApplied: () => this.commentsPanel()?.reload(),
+          },
+        );
+        return;
+      }
+      if (card && !this.canEdit()) {
+        if (this.aiChat.pageKind() === 'detail') this.aiChat.clear();
+        return;
+      }
+      // item が一瞬 null（同一番号の reload）は残す。ルート番号が変わったら旧 target を捨てる
+      const target = this.aiChat.routeTarget();
+      if (
+        this.aiChat.pageKind() === 'detail' &&
+        target &&
+        routeNum > 0 &&
+        target.number !== routeNum
+      ) {
+        this.aiChat.clear();
+      }
+    });
+    this.destroyRef.onDestroy(() => {
+      if (this.aiChat.pageKind() === 'detail') this.aiChat.clear();
+    });
   }
 
   async copyItemLink(): Promise<void> {
@@ -221,7 +329,30 @@ export class ItemDetail implements OnInit {
     return this.linkCopy.copyItemNumber(card.number, origin, projectId);
   }
 
+  private scrollToHistorySection() {
+    requestAnimationFrame(() => {
+      document.querySelector('app-item-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  private navigateToSolution(): boolean {
+    const card = this.item();
+    if (!card) return false;
+    const queryParams = card.projectId > 0 ? { project: card.projectId } : {};
+    void this.router.navigate(['/items', card.number, 'solution'], { queryParams });
+    return true;
+  }
+
   ngOnInit() {
+    this.itemMenuActions.register({
+      scrollToHistory: () => this.scrollToHistorySection(),
+      goToSolution: () => this.navigateToSolution(),
+      toggleFavorite: () => this.favorite.toggle(),
+      favoriteLabel: () => favoriteMenuLabel(this.item()?.favorite),
+      favoriteDisabled: () => this.favorite.saving() || !this.item(),
+    });
+    this.destroyRef.onDestroy(() => this.itemMenuActions.unregister());
+    this.usersSession.load();
     this.commands.load();
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       this.routeNumber.set(Number(params.get('number')));
@@ -238,6 +369,7 @@ export class ItemDetail implements OnInit {
           this.prLinks.reset();
           this.relatedItems.reset();
           this.assignee.reset();
+          this.favorite.reset();
           this.dueAt.reset();
           this.closeTransition.reset();
           this.descriptionEditor.reset();
@@ -251,11 +383,11 @@ export class ItemDetail implements OnInit {
           this.error.set('');
           const num = Number(params.get('number'));
           const queryProjectId = Number(query.get('project'));
-          return this.loadCardForRoute(num, queryProjectId);
+          return this.loadCardForRoute(num, queryProjectId).pipe(map((data) => ({ ...data, query })));
         }),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(({ board, card }) => {
+      .subscribe(({ board, card, query }) => {
         this.columns.set(board.columns);
         const projectId = card.projectId ?? 0;
         this.autosave.reset({
@@ -265,9 +397,16 @@ export class ItemDetail implements OnInit {
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
+          solution: card.solution ?? '',
+          favorite: card.favorite === true,
           dueAt: card.dueAt ?? null,
         });
+        this.acl.syncFrom(card);
         this.itemCommands.load(card.number, projectId > 0 ? projectId : undefined);
+        if (query.get('scrollHistory') === '1') {
+          // finalize() clears loading after this next; wait a macrotask so history is rendered.
+          setTimeout(() => this.scrollToHistorySection(), 0);
+        }
       });
     const stop = startLiveRefresh({
       enabled: () =>
@@ -302,10 +441,13 @@ export class ItemDetail implements OnInit {
           relatedItems: card.relatedItems ?? [],
           assignee: card.assignee ?? '',
           closeReason: card.closeReason ?? '',
+          solution: card.solution ?? '',
+          favorite: card.favorite === true,
           dueAt: card.dueAt ?? null,
         };
         if (this.item() && sameJson(this.item(), next)) return;
         this.autosave.reset(next);
+        this.acl.syncFrom(next);
       },
       ...zoneAwareTimers(this.zone),
     });
@@ -441,6 +583,8 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.favorite.saving() ||
+      this.acl.saving() ||
       this.dueAt.open() ||
       this.dueAt.saving() ||
       this.itemCommands.saving() ||
@@ -460,6 +604,8 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.favorite.saving() ||
+      this.acl.saving() ||
       this.dueAt.saving() ||
       this.itemCommands.saving() ||
       this.closeTransition.saving() ||
@@ -473,6 +619,7 @@ export class ItemDetail implements OnInit {
       this.prLinks.saving() ||
       this.relatedItems.saving() ||
       this.assignee.saving() ||
+      this.acl.saving() ||
       this.dueAt.saving() ||
       this.closeTransition.saving() ||
       this.itemCommands.saving() ||
@@ -498,6 +645,7 @@ export class ItemDetail implements OnInit {
         this.prLinks.saving() ||
         this.relatedItems.saving() ||
         this.assignee.saving() ||
+        this.acl.saving() ||
         this.dueAt.saving() ||
         this.closeTransition.saving() ||
         this.itemCommands.saving() ||

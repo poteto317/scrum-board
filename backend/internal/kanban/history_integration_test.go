@@ -49,11 +49,13 @@ func TestMySQLHistory(t *testing.T) {
 	wantBaseline := []HistoryChange{
 		{Field: "title", After: after.Title},
 		{Field: "description", After: after.Description},
+		{Field: "solution", After: after.Solution},
 		{Field: "status", After: status},
 		{Field: "prUrls", After: prURLsJSON(after.PRURLs)},
 		{Field: "relatedItems", After: relatedItemsJSON(after.RelatedItems)},
 		{Field: "assignee", After: after.Assignee},
 		{Field: "closeReason", After: after.CloseReason},
+		{Field: "favorite", After: "false"},
 		{Field: "dueAt", After: dueAtHistoryValue(after.DueAt)},
 	}
 	if !reflect.DeepEqual(baseline.Changes, wantBaseline) || baseline.Note == "" || baseline.OccurredAt.Year() < 2020 || baseline.EvidenceURL != "" {
@@ -226,7 +228,7 @@ func TestMySQLHistoryParallelAndConflictingImport(t *testing.T) {
 	if err = r.ImportHistory(ctx, []HistoricalRecord{v}); err == nil {
 		t.Fatal("existing key content was silently ignored")
 	}
-	if err = r.DeleteItem(ctx, 1); err != nil {
+	if err = r.HardDeleteItem(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	var count int
@@ -487,8 +489,74 @@ func TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter(t *testing.T) {
 		t.Fatalf("changes: %+v", page.Events[0])
 	}
 	created := page.Events[1]
-	if created.Kind != "created" || len(created.Changes) != 8 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[2].After != "Todo" {
+	if created.Kind != "created" || len(created.Changes) != 10 || created.Changes[0].After != "history subject" || created.Changes[1].After != "body" || created.Changes[3].After != "Todo" {
 		t.Fatalf("created event: %+v", created)
+	}
+}
+
+func TestMySQLHistoryRecordsSolutionChange(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	sol := "implemented via X"
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{Solution: &sol}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := r.History(ctx, c.Number, c.ProjectID, 0)
+	if err != nil || len(page.Events) < 1 {
+		t.Fatal(page, err)
+	}
+	updated := page.Events[0]
+	if updated.Kind != "updated" || len(updated.Changes) != 1 {
+		t.Fatalf("updated: %+v", updated)
+	}
+	want := HistoryChange{Field: "solution", Before: "", After: "implemented via X"}
+	if updated.Changes[0] != want {
+		t.Fatalf("solution change: %+v", updated.Changes[0])
+	}
+	beforeCount := len(page.Events)
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{Solution: &sol}); err != nil {
+		t.Fatal(err)
+	}
+	page, err = r.History(ctx, c.Number, c.ProjectID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Events) != beforeCount {
+		t.Fatalf("same solution should not add history: before=%d after=%d", beforeCount, len(page.Events))
+	}
+}
+
+func TestMySQLHistoryRecordsFavoriteChange(t *testing.T) {
+	r := MySQLRepository{DB: mysqlTestDB(t, "")}
+	ctx := context.Background()
+	c := newHistoryCard(t, r)
+	on := true
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{Favorite: &on}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := r.History(ctx, c.Number, c.ProjectID, 0)
+	if err != nil || len(page.Events) < 1 {
+		t.Fatal(page, err)
+	}
+	updated := page.Events[0]
+	if updated.Kind != "updated" || len(updated.Changes) != 1 {
+		t.Fatalf("updated: %+v", updated)
+	}
+	want := HistoryChange{Field: "favorite", Before: "false", After: "true"}
+	if updated.Changes[0] != want {
+		t.Fatalf("favorite change: %+v", updated.Changes[0])
+	}
+	beforeCount := len(page.Events)
+	if _, err := r.UpdateItem(ctx, c.ID, ItemPatch{Favorite: &on}); err != nil {
+		t.Fatal(err)
+	}
+	page, err = r.History(ctx, c.Number, c.ProjectID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Events) != beforeCount {
+		t.Fatalf("same favorite should not add history: before=%d after=%d", beforeCount, len(page.Events))
 	}
 }
 

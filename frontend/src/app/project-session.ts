@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { EMPTY, Observable, Subject, forkJoin, throwError } from 'rxjs';
+import { defer, EMPTY, Observable, Subject, forkJoin, throwError } from 'rxjs';
 import { catchError, map, tap } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
@@ -7,6 +7,12 @@ import { normalizeBoardData } from './board-data';
 import { Project } from './models';
 
 export const PROJECT_NAME_REQUIRED = 'プロジェクト名を1〜80文字で入力してください。';
+
+/** Positive integer project id, or null when missing/invalid. */
+export function parseActiveProjectId(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+  return null;
+}
 
 /**
  * Project list and the active project for the workspace.
@@ -35,15 +41,43 @@ export class ProjectSession {
   private readonly api = inject(Api);
   readonly projects = signal<Project[]>([]);
   readonly activeId = signal<number | null>(null);
+  /** True after the first successful load (projects + activeId hydrate). */
+  readonly bootstrapped = signal(false);
   /** True from the start of a project switch until board/backlog reload ends. */
   readonly switching = signal(false);
-  /** True during create / rename / delete. Not the switch busy flag. */
+  /**
+   * True during create / rename / delete / reorder.
+   * create 成功後は呼び出し側が `endMutating()` するまで true のまま（切替開始まで追加を塞ぐ）。
+   * Not the switch busy flag (`switching`).
+   */
   readonly mutating = signal(false);
   readonly error = signal('');
 
   private readonly switched$ = new Subject<number>();
   private switchListeners = 0;
   private loadGeneration = 0;
+
+  /**
+   * Adopt active project from a board GET.
+   * `clearIfMissing`: ProjectSession.load だけ true（欠落時に null）。board/backlog 適用では false（poll 欠落で消さない）。
+   * 既に正の `activeId` があるとき、欠落ではクリアしない（起動の二重 GET で消さない）。
+   * `switching` 中は no-op（L-860）: switchTo 直後の遅延 GET が旧 activeProjectId で巻き戻さない。
+   * GET 成功＝常に active 反映、ではない。
+   */
+  syncActiveFromBoard(activeProjectId: unknown, clearIfMissing = false): void {
+    // While switchTo is in flight, a late board GET (initial load / poll) must not
+    // rewind activeId to the previous project (L-860 / deep-link race).
+    if (this.switching()) return;
+    const next = parseActiveProjectId(activeProjectId);
+    if (next != null) {
+      this.activeId.set(next);
+      return;
+    }
+    if (!clearIfMissing) return;
+    const current = this.activeId();
+    if (current != null && current > 0) return;
+    this.activeId.set(null);
+  }
 
   load(): void {
     const generation = ++this.loadGeneration;
@@ -53,9 +87,10 @@ export class ProjectSession {
     }).subscribe({
       next: ({ projects, board }) => {
         if (generation !== this.loadGeneration) return;
+        // Resolve activeId before projects; header select mounts only after bootstrapped.
+        this.syncActiveFromBoard(normalizeBoardData(board).settings.activeProjectId, true);
         this.projects.set(sortProjects(projects.projects ?? []));
-        const active = normalizeBoardData(board).settings.activeProjectId;
-        this.activeId.set(typeof active === 'number' ? active : null);
+        this.bootstrapped.set(true);
         this.error.set('');
       },
       error: (e) => {
@@ -66,24 +101,57 @@ export class ProjectSession {
     });
   }
 
-  create(name: string): void {
+  /**
+   * Create a project. Does not switch activeId (caller runs switchTo).
+   * On success, `mutating` stays true until `endMutating()`.
+   */
+  create(name: string): Observable<Project> {
     const trimmed = name.trim();
-    if (this.switching() || this.mutating()) return;
-    if (!trimmed) {
-      this.error.set(PROJECT_NAME_REQUIRED);
-      return;
-    }
-    this.mutating.set(true);
-    this.error.set('');
-    this.api.createProject(trimmed).subscribe({
-      next: (project) => {
-        this.projects.update((list) => sortProjects([...list, project]));
-        this.mutating.set(false);
-      },
-      error: (e) => {
-        this.error.set(errorMessage(e));
-        this.mutating.set(false);
-      },
+    return defer(() => {
+      if (this.switching() || this.mutating()) return EMPTY;
+      if (!trimmed || [...trimmed].length > 80) {
+        return throwError(() => new Error(PROJECT_NAME_REQUIRED));
+      }
+      this.mutating.set(true);
+      this.error.set('');
+      return this.api.createProject(trimmed).pipe(
+        tap((project) => {
+          this.projects.update((list) => sortProjects([...list, project]));
+        }),
+        catchError((e) => {
+          this.mutating.set(false);
+          return throwError(() => e);
+        }),
+      );
+    });
+  }
+
+  endMutating(): void {
+    this.mutating.set(false);
+  }
+
+  /**
+   * Reorder all projects. Busy / invalid id permutation → EMPTY (no HTTP).
+   * Sets `mutating` while the PUT is in flight. Updates `projects` only on success.
+   */
+  reorder(projectIds: number[]): Observable<Project[]> {
+    return defer(() => {
+      if (this.switching() || this.mutating()) return EMPTY;
+      if (!isFullProjectPermutation(projectIds, this.projects())) return EMPTY;
+      this.mutating.set(true);
+      this.error.set('');
+      return this.api.reorderProjects(projectIds).pipe(
+        map((res) => sortProjects(res.projects ?? [])),
+        tap((list) => {
+          this.projects.set(list);
+          this.mutating.set(false);
+        }),
+        catchError((e) => {
+          this.error.set(errorMessage(e));
+          this.mutating.set(false);
+          return throwError(() => e);
+        }),
+      );
     });
   }
 
@@ -119,16 +187,6 @@ export class ProjectSession {
     return this.projects().length >= 2 && !this.switching() && !this.mutating();
   }
 
-  canRename(): boolean {
-    const id = this.activeId();
-    return (
-      id != null &&
-      !this.switching() &&
-      !this.mutating() &&
-      this.projects().some((p) => p.id === id)
-    );
-  }
-
   delete(id: number): void {
     if (!this.canDelete() || !this.projects().some((p) => p.id === id)) return;
     this.mutating.set(true);
@@ -145,8 +203,9 @@ export class ProjectSession {
         this.switching.set(true);
         this.api.board().subscribe({
           next: (board) => {
-            const active = normalizeBoardData(board).settings.activeProjectId;
-            const next = typeof active === 'number' ? active : null;
+            const next = parseActiveProjectId(
+              normalizeBoardData(board).settings.activeProjectId,
+            );
             this.activeId.set(next);
             this.mutating.set(false);
             if (next == null || this.switchListeners === 0) {
@@ -245,4 +304,16 @@ function resolvedActiveFromSettings(raw: unknown, fallback: number): number {
 
 function sortProjects(list: Project[]): Project[] {
   return [...list].sort((a, b) => a.position - b.position || a.id - b.id);
+}
+
+/** True when ids are a positive permutation of the current project list (no filter subset). */
+function isFullProjectPermutation(ids: number[], list: Project[]): boolean {
+  if (ids.length === 0 || ids.length !== list.length) return false;
+  const known = new Set(list.map((p) => p.id));
+  const seen = new Set<number>();
+  for (const id of ids) {
+    if (!Number.isInteger(id) || id <= 0 || !known.has(id) || seen.has(id)) return false;
+    seen.add(id);
+  }
+  return seen.size === known.size;
 }

@@ -28,6 +28,14 @@ func (h handler) history(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	card, err := h.repo.GetItemByNumber(r.Context(), number, pid)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if _, _, ok := h.requireView(w, r, card); !ok {
+		return
+	}
 	page, err := h.repo.History(r.Context(), number, pid, before)
 	if err != nil {
 		fail(w, err)

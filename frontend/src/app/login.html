@@ -1,0 +1,27 @@
+<main class="login-page">
+  <div class="login-panel">
+    <p class="eyebrow">SCRUMBOARD</p>
+    <h1>ログイン<span class="heading-dot">.</span></h1>
+    <p class="login-lead">アプリ用のアカウントでサインインしてください。</p>
+    <form class="login-form" (ngSubmit)="submit()" novalidate>
+      <label for="login-name">ログイン名</label>
+      <input
+        id="login-name"
+        type="text"
+        autocomplete="username"
+        [formControl]="form.controls.loginName"
+      />
+      <label for="login-password">パスワード</label>
+      <input
+        id="login-password"
+        type="password"
+        autocomplete="current-password"
+        [formControl]="form.controls.password"
+      />
+      @if (error()) {
+        <p class="form-error" role="alert">{{ error() }}</p>
+      }
+      <button type="submit" [disabled]="submitting()">ログイン</button>
+    </form>
+  </div>
+</main>

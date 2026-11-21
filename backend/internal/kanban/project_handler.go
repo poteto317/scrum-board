@@ -81,3 +81,25 @@ func (h handler) deleteProject(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(204)
 }
+
+func (h handler) reorderProjects(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		ProjectIDs []int64 `json:"projectIds"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if err := validateProjectOrder(in.ProjectIDs); err != nil {
+		fail(w, err)
+		return
+	}
+	projects, err := h.repo.ReorderProjects(r.Context(), in.ProjectIDs)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if projects == nil {
+		projects = []Project{}
+	}
+	reply(w, 200, map[string][]Project{"projects": projects})
+}

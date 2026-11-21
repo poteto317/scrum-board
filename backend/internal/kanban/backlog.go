@@ -6,16 +6,36 @@ import (
 )
 
 func (r MySQLRepository) Backlog(ctx context.Context) ([]Item, error) {
+	return r.loadBacklog(ctx, 0)
+}
+
+func (r MySQLRepository) BacklogForProject(ctx context.Context, projectID int64) ([]Item, error) {
+	if projectID <= 0 {
+		return nil, ErrProject
+	}
+	return r.loadBacklog(ctx, projectID)
+}
+
+func (r MySQLRepository) loadBacklog(ctx context.Context, itemProjectID int64) ([]Item, error) {
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	active, err := resolvedActiveProjectID(ctx, tx)
+	rawSettings, err := loadBoardSettings(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-	cards, err := listBacklogCards(ctx, tx, active)
+	projects, err := listProjects(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
+	scope, err := resolveItemListScope(active, itemProjectID, projects)
+	if err != nil {
+		return nil, err
+	}
+	cards, err := listBacklogCards(ctx, tx, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +99,7 @@ func nextBacklogPosition(ctx context.Context, tx *sql.Tx, projectID int64) (int,
 }
 
 func lockProjectCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]int64, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE project_id=? ORDER BY id FOR UPDATE", projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE project_id=? AND deleted_at IS NULL ORDER BY id FOR UPDATE", projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +133,7 @@ func lockAllCards(ctx context.Context, tx *sql.Tx) ([]int64, error) {
 }
 
 func listBacklogCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? ORDER BY c.backlog_position,c.id", projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.backlog_position,c.id", projectID)
 	if err != nil {
 		return nil, err
 	}

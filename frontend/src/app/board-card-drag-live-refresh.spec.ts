@@ -14,7 +14,7 @@ const POLL_MS = 5000;
 function card(id: number, position: number, title: string): Item {
   return {
     id,
-    projectId: 0,
+    projectId: 1,
     number: id,
     columnId: 1,
     title,
@@ -26,6 +26,8 @@ function card(id: number, position: number, title: string): Item {
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
+    favorite: false,
     dueAt: null,
     createdAt: '',
     updatedAt: '',
@@ -42,7 +44,7 @@ function todoBoard(items: Item[]): NormalizedBoardData {
   return normalizeBoardData({
     columns: [{ id: 1, name: 'Todo', position: 0 }],
     items,
-    settings: { cardLayout: 'pack' },
+    settings: { cardLayout: 'pack', activeProjectId: 1 },
   });
 }
 
@@ -65,8 +67,8 @@ async function setup(reorderItems: ReturnType<typeof vi.fn> = vi.fn()) {
           reorderItems,
           reorderColumns: vi.fn(),
           listCommandTemplates: () => of({ templates: [] }),
-          listFilter: () => of({ query: '', statusIds: [] }),
-          putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+          listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+          putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
       },
     ],

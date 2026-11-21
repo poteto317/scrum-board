@@ -62,6 +62,12 @@ func run() error {
 		err = repo.InitializeProjects(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeSprints(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeRecurringRules(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeBoardSettings(migrationCtx)
 	}
 	if err == nil {
@@ -87,6 +93,15 @@ func run() error {
 		err = repo.InitializeDueAt(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeDeletedAt(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeSolution(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeFavorite(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeHistory(migrationCtx)
 	}
 	if err == nil {
@@ -98,12 +113,37 @@ func run() error {
 	if err == nil {
 		err = repo.InitializeListFilter(migrationCtx)
 	}
+	if err == nil {
+		err = repo.InitializeHeaderMenu(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeComments(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeAIChat(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeUsers(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeSessions(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeItemACL(migrationCtx)
+	}
+	if err == nil {
+		err = repo.InitializeItemAttachments(migrationCtx)
+	}
+	if err == nil {
+		err = repo.SeedAdminFromEnv(migrationCtx, os.Getenv)
+	}
 	migrationCancel()
 	if err != nil {
 		return err
 	}
 	handler := buildHandler(repo, os.Getenv)
-	server := &http.Server{Addr: env("LISTEN_ADDRESS", "127.0.0.1:8080"), Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
+	// Read/Write timeouts allow ≤5 MiB multipart attachment uploads (see ATTACHMENT_GCS_BUCKET).
+	server := &http.Server{Addr: env("LISTEN_ADDRESS", "127.0.0.1:8080"), Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errCh := make(chan error, 1)

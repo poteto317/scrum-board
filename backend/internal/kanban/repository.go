@@ -43,13 +43,24 @@ type scanner interface{ Scan(...any) error }
 func scanCard(s scanner) (Item, error) {
 	var c Item
 	var dueAt sql.NullTime
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.ProjectID, &c.Title, &c.Description, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &dueAt, &c.CreatedAt, &c.UpdatedAt)
+	var createdBy sql.NullInt64
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.ProjectID, &c.Title, &c.Description, &c.Solution, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &c.Favorite, &dueAt, &c.ViewAccess, &c.EditAccess, &createdBy, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
 	}
 	if dueAt.Valid {
 		u := TruncateDueAtMinute(dueAt.Time)
 		c.DueAt = &u
+	}
+	if createdBy.Valid {
+		id := createdBy.Int64
+		c.CreatedByUserID = &id
+	}
+	if c.ViewAccess == "" {
+		c.ViewAccess = ViewAccessOpen
+	}
+	if c.EditAccess == "" {
+		c.EditAccess = EditAccessOpen
 	}
 	c.PRURLs = []string{}
 	c.RelatedItems = []RelatedItem{}
@@ -59,7 +70,7 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.item_number, c.column_id, c.project_id, c.title, c.description, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.due_at, c.created_at, c.updated_at"
+const cardFields = "c.id, n.item_number, c.column_id, c.project_id, c.title, c.description, c.solution, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.favorite, c.due_at, c.view_access, c.edit_access, c.created_by_user_id, c.created_at, c.updated_at"
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -80,6 +91,19 @@ func loadCard(ctx context.Context, q interface {
 }
 
 func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
+	return r.loadBoard(ctx, 0)
+}
+
+func (r MySQLRepository) BoardForProject(ctx context.Context, projectID int64) (Board, error) {
+	if projectID <= 0 {
+		return Board{}, ErrProject
+	}
+	return r.loadBoard(ctx, projectID)
+}
+
+// loadBoard loads columns/settings with resolved active. If itemProjectID > 0, items are
+// for that project (must exist); otherwise items use the resolved active project.
+func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Board, error) {
 	b := Board{Columns: []Column{}, Items: []Item{}, Settings: BoardSettings{CardLayout: CardLayoutPack}}
 	// A consistent snapshot prevents a concurrent column/card creation from splitting the board response.
 	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -103,7 +127,11 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	b.Settings.MobileBoardColumnID = resolveMobileBoardColumnID(rawSettings.MobileBoardColumnID, b.Columns)
 	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
 	b.Settings.ActiveProjectID = active
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? ORDER BY c.position,c.id", active)
+	scope, err := resolveItemListScope(active, itemProjectID, projects)
+	if err != nil {
+		return b, err
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.position,c.id", scope)
 	if err != nil {
 		return b, err
 	}
@@ -128,10 +156,31 @@ func (r MySQLRepository) Board(ctx context.Context) (Board, error) {
 	return b, tx.Commit()
 }
 func (r MySQLRepository) GetItem(ctx context.Context, id int64) (Item, error) {
-	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.deleted_at IS NULL", id)
 }
 func (r MySQLRepository) GetItemByNumber(ctx context.Context, number, projectID int64) (Item, error) {
-	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.project_id=? AND n.item_number=?", projectID, number)
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE n.project_id=? AND n.item_number=? AND c.deleted_at IS NULL", projectID, number)
+}
+
+func (r MySQLRepository) GetDeletedItem(ctx context.Context, id, projectID int64) (Item, error) {
+	return loadCard(ctx, r.DB, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.project_id=? AND c.deleted_at IS NOT NULL", id, projectID)
+}
+
+func (r MySQLRepository) ListLivingItems(ctx context.Context) ([]Item, error) {
+	rows, err := r.DB.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.deleted_at IS NULL ORDER BY c.id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Item{}
+	for rows.Next() {
+		c, err := scanCard(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }
 func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -139,7 +188,17 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 		return Item{}, err
 	}
 	defer tx.Rollback()
-	if err = lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
+	card, err := createItemInTx(ctx, tx, in)
+	if err != nil {
+		return Item{}, err
+	}
+	return card, tx.Commit()
+}
+
+// createItemInTx inserts an item inside an existing transaction (no Commit).
+// Used by CreateItem and RunRecurring so last_fired_at updates share the same TX (L-464).
+func createItemInTx(ctx context.Context, tx *sql.Tx, in ItemInput) (Item, error) {
+	if err := lockExistingColumn(ctx, tx, in.ColumnID); err != nil {
 		return Item{}, err
 	}
 	layout, err := loadBoardSettings(ctx, tx)
@@ -173,7 +232,8 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 	if err != nil {
 		return Item{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO items(column_id,project_id,title,description,position,offset_y,backlog_position,assignee,close_reason) VALUES(?,?,?,?,?,?,?,?,?)", in.ColumnID, projectID, in.Title, in.Description, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason)
+	result, err := tx.ExecContext(ctx, `INSERT INTO items(column_id,project_id,title,description,solution,position,offset_y,backlog_position,assignee,close_reason,favorite,view_access,edit_access,created_by_user_id)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, in.ColumnID, projectID, in.Title, in.Description, in.Solution, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason, in.Favorite, ViewAccessOpen, EditAccessOpen, in.CreatedByUserID)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
@@ -207,7 +267,7 @@ func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, er
 	if err = appendHistory(ctx, tx, nil, card, "created"); err != nil {
 		return Item{}, err
 	}
-	return card, tx.Commit()
+	return card, nil
 }
 func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -241,11 +301,11 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		}
 	} else {
 		var lockedID int64
-		if err = tx.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? FOR UPDATE", id).Scan(&lockedID); err != nil {
+		if err = tx.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? AND deleted_at IS NULL FOR UPDATE", id).Scan(&lockedID); err != nil {
 			return Item{}, dbError(err)
 		}
 	}
-	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id)
+	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.deleted_at IS NULL", id)
 	if err != nil {
 		return c, err
 	}
@@ -256,6 +316,9 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	}
 	if p.Description != nil {
 		c.Description = *p.Description
+	}
+	if p.Solution != nil {
+		c.Solution = *p.Solution
 	}
 	sourceColumnID := c.ColumnID
 	sourceProjectID := c.ProjectID
@@ -290,6 +353,9 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 			return Item{}, err
 		}
 		c.Number = number
+		if err = deleteSprintItemsForItemTx(ctx, tx, id); err != nil {
+			return Item{}, err
+		}
 	} else if columnChanged {
 		nextPos, err := nextCardPosition(ctx, tx, c.ColumnID, c.ProjectID)
 		if err != nil {
@@ -314,13 +380,16 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	if p.CloseReason != nil {
 		c.CloseReason = *p.CloseReason
 	}
+	if p.Favorite != nil {
+		c.Favorite = *p.Favorite
+	}
 	if p.ClearDueAt {
 		c.DueAt = nil
 	} else if p.DueAt != nil {
 		u := TruncateDueAtMinute(*p.DueAt)
 		c.DueAt = &u
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,column_id=?,project_id=?,position=?,offset_y=?,backlog_position=?,assignee=?,close_reason=?,due_at=?,updated_at=? WHERE id=?", c.Title, c.Description, c.ColumnID, c.ProjectID, c.Position, c.OffsetY, c.BacklogPosition, c.Assignee, c.CloseReason, c.DueAt, now, id)
+	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,solution=?,column_id=?,project_id=?,position=?,offset_y=?,backlog_position=?,assignee=?,close_reason=?,favorite=?,due_at=?,updated_at=? WHERE id=?", c.Title, c.Description, c.Solution, c.ColumnID, c.ProjectID, c.Position, c.OffsetY, c.BacklogPosition, c.Assignee, c.CloseReason, c.Favorite, c.DueAt, now, id)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
@@ -348,7 +417,38 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	}
 	return c, tx.Commit()
 }
+// DeleteItem soft-deletes a living item (sets deleted_at). Already soft-deleted or missing → ErrNotFound.
+// Other columns are left unchanged (L-015).
 func (r MySQLRepository) DeleteItem(ctx context.Context, id int64) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// Soft delete still joins the all-columns lock so writers stay ordered with Create/Update/Reorder.
+	if _, err = lockColumnRows(ctx, tx); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	res, err := tx.ExecContext(ctx, "UPDATE items SET deleted_at=? WHERE id=? AND deleted_at IS NULL", now, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	if err = deleteSprintItemsForItemTx(ctx, tx, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// HardDeleteItem permanently removes a row (CASCADE children). Used by trash purge / hard delete.
+func (r MySQLRepository) HardDeleteItem(ctx context.Context, id int64) error {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err

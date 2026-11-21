@@ -2,6 +2,7 @@ import { DESCRIPTION_LINK_MAX_LEN } from './description-link';
 import {
   DESCRIPTION_MAX_LEN,
   descriptionLength,
+  insertEmptyBlockAt,
   insertLinkInDescriptionBlocks,
   mergeDescriptionBlockWithPrevious,
   normalizeDescriptionBlocks,
@@ -47,6 +48,19 @@ describe('description-blocks', () => {
     const almost = 'x'.repeat(DESCRIPTION_MAX_LEN);
     // splitting '' into ['', ''] serializes to '\n' (len 1) — use full-length single block
     expect(splitDescriptionBlock([almost], 0, 0)).toBeNull();
+  });
+
+  it('inserts an empty block at start, middle, and end', () => {
+    expect(insertEmptyBlockAt(['a', 'b'], 0)).toEqual(['', 'a', 'b']);
+    expect(insertEmptyBlockAt(['a', 'b'], 1)).toEqual(['a', '', 'b']);
+    expect(insertEmptyBlockAt(['a', 'b'], 2)).toEqual(['a', 'b', '']);
+  });
+
+  it('rejects insertEmptyBlockAt out of range or over max length', () => {
+    expect(insertEmptyBlockAt(['a'], -1)).toBeNull();
+    expect(insertEmptyBlockAt(['a'], 2)).toBeNull();
+    const almost = 'x'.repeat(DESCRIPTION_MAX_LEN);
+    expect(insertEmptyBlockAt([almost], 1)).toBeNull();
   });
 
   it('merges with previous and returns caret at join', () => {

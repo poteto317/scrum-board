@@ -55,6 +55,14 @@ export function splitDescriptionBlock(
   return next;
 }
 
+/** Insert an empty text block at `index` (`0..=blocks.length`). Null if out of range or over max length. */
+export function insertEmptyBlockAt(blocks: string[], index: number): string[] | null {
+  if (index < 0 || index > blocks.length) return null;
+  const next = [...blocks.slice(0, index), '', ...blocks.slice(index)];
+  if (!withinLimit(next)) return null;
+  return next;
+}
+
 export function mergeDescriptionBlockWithPrevious(
   blocks: string[],
   index: number,

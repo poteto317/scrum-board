@@ -2,7 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { signal } from '@angular/core';
 import { Api } from './api';
+import { AuthSession } from './auth-session';
 import { ItemDetail } from './item-detail';
 import { Item } from './models';
 import { ProjectSession } from './project-session';
@@ -22,11 +24,36 @@ function card(projectId: number): Item {
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
+    favorite: false,
     dueAt: null,
     createdAt: '',
     updatedAt: '',
+    canEdit: true,
+    canManage: true,
+    viewAccess: 'open',
+    editAccess: 'open',
   };
 }
+
+
+const testUser = {
+  id: 1,
+  loginName: 'admin',
+  displayName: 'Admin',
+  role: 'admin' as const,
+  disabled: false,
+};
+const authStub = {
+  user: signal(testUser),
+  status: signal<'authenticated'>('authenticated'),
+  loadError: signal(''),
+  ensureMe: () => of(testUser),
+  isAdmin: () => true,
+  clearSubject: () => undefined,
+  login: () => of(testUser),
+  logout: () => of(undefined),
+};
 
 describe('ItemDetail project move', () => {
   let params: BehaviorSubject<Map<string, string>>;
@@ -34,6 +61,7 @@ describe('ItemDetail project move', () => {
   let current: Item;
   let api: {
     history: ReturnType<typeof vi.fn>;
+    listComments: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -41,6 +69,10 @@ describe('ItemDetail project move', () => {
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
     listItemCommandTemplatesByNumber: ReturnType<typeof vi.fn>;
+    uploadAttachment: ReturnType<typeof vi.fn>;
+    deleteAttachment: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
+    listUsers: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -50,6 +82,11 @@ describe('ItemDetail project move', () => {
     current = card(1);
     api = {
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listUsers: vi.fn(() => of([])),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -76,6 +113,7 @@ describe('ItemDetail project move', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: query.asObservable() },

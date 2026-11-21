@@ -2,18 +2,26 @@ import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CommandTemplate } from './command-template';
 import { ItemOrderColumn } from './item-order';
-import { ListFilter } from './list-filter';
+import { WorkspaceListFilters } from './list-filter';
+import { WorkspaceHeaderMenu } from './header-menu';
+import { UserPublic } from './auth';
 import {
   BoardData,
   BoardSettings,
   CardLayout,
   Item,
+  ItemComment,
   ItemInput,
   ItemPatch,
   Column,
   HistoryPage,
   Project,
+  Sprint,
+  SprintPatch,
+  SprintSummary,
+  normalizeComment,
 } from './models';
+import { map } from 'rxjs';
 
 export type { ItemOrderColumn };
 
@@ -22,14 +30,124 @@ export type BoardSettingsPatchResponse = {
   items?: Item[];
 };
 
+export type TrashItem = {
+  id: number;
+  number: number;
+  title: string;
+  projectId: number;
+  deletedAt: string;
+};
+
+export type ItemAttachment = {
+  id: number;
+  itemId: number;
+  commentId?: number;
+  field: string;
+  contentType: string;
+  byteSize: number;
+  originalName: string;
+  createdAt: string;
+};
+
+export type RecurringRule = {
+  id: number;
+  projectId: number;
+  name: string;
+  title: string;
+  description: string;
+  cron: string;
+  timezone: string;
+  columnId: number;
+  enabled: boolean;
+  lastFiredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RecurringRuleInput = {
+  name: string;
+  title: string;
+  description?: string;
+  cron: string;
+  timezone?: string;
+  columnId: number;
+  enabled?: boolean;
+};
+
+export type RecurringRulePatch = {
+  name?: string;
+  title?: string;
+  description?: string;
+  cron?: string;
+  timezone?: string;
+  columnId?: number;
+  enabled?: boolean;
+};
+
+export type AIChatMessage = {
+  id: number;
+  role: 'user' | 'assistant';
+  body: string;
+  createdAt: string;
+};
+
+export type AIChatPostResponse = {
+  messages: AIChatMessage[];
+};
+
+export type AIUsage = {
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  configured: boolean;
+};
+
+export type AICredits = {
+  limitTokens: number | null;
+  usedTokens: number;
+  remainingTokens: number | null;
+  unlimited: boolean;
+  approximate: boolean;
+  period: string;
+  configured: boolean;
+};
+
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
   publicConfig() {
     return this.http.get<{ publicOrigin: string }>('/api/public-config');
   }
-  board() {
-    return this.http.get<BoardData>('/api/board');
+  me() {
+    return this.http.get<UserPublic>('/api/auth/me');
+  }
+  login(loginName: string, password: string) {
+    return this.http.post<UserPublic>('/api/auth/login', { loginName, password });
+  }
+  logout() {
+    return this.http.post('/api/auth/logout', {}, { responseType: 'text' });
+  }
+  listUsers() {
+    return this.http.get<UserPublic[]>('/api/users');
+  }
+  createUser(input: {
+    loginName: string;
+    password: string;
+    displayName: string;
+    role?: string;
+  }) {
+    return this.http.post<UserPublic>('/api/users', input);
+  }
+  patchUser(
+    id: number,
+    patch: { displayName?: string; role?: string; disabled?: boolean; password?: string },
+  ) {
+    return this.http.patch<UserPublic>(`/api/users/${id}`, patch);
+  }
+  board(projectId?: number) {
+    const params =
+      projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<BoardData>('/api/board', params ? { params } : {});
   }
   patchBoardSettings(body: {
     cardLayout?: CardLayout;
@@ -60,6 +178,9 @@ export class Api {
   deleteProject(id: number) {
     return this.http.delete<void>(`/api/projects/${id}`);
   }
+  reorderProjects(projectIds: number[]) {
+    return this.http.put<{ projects: Project[] }>('/api/projects/order', { projectIds });
+  }
   itemByNumber(number: number, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.get<Item>(`/api/items/by-number/${number}`, params ? { params } : {});
@@ -71,6 +192,119 @@ export class Api {
     return this.http.get<HistoryPage>(`/api/items/by-number/${number}/history`, {
       params: Object.keys(params).length ? params : {},
     });
+  }
+  listComments(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http
+      .get<{ comments: ItemComment[] }>(
+        `/api/items/by-number/${number}/comments`,
+        params ? { params } : {},
+      )
+      .pipe(map((res) => (res.comments ?? []).map((c) => normalizeComment(c))));
+  }
+  createComment(
+    number: number,
+    input: { author?: string; body: string },
+    projectId?: number,
+  ) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http
+      .post<ItemComment>(`/api/items/by-number/${number}/comments`, input, params ? { params } : {})
+      .pipe(map((c) => normalizeComment(c)));
+  }
+  updateComment(
+    number: number,
+    id: number,
+    patch: { author?: string; body?: string },
+    projectId?: number,
+  ) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    const body: Record<string, string> = {};
+    if (patch.author !== undefined) body['author'] = patch.author;
+    if (patch.body !== undefined) body['body'] = patch.body;
+    return this.http
+      .patch<ItemComment>(
+        `/api/items/by-number/${number}/comments/${id}`,
+        body,
+        params ? { params } : {},
+      )
+      .pipe(map((c) => normalizeComment(c)));
+  }
+  deleteComment(number: number, id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(
+      `/api/items/by-number/${number}/comments/${id}`,
+      params ? { params } : {},
+    );
+  }
+  listAIChat(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http
+      .get<{ messages: AIChatMessage[] }>(
+        `/api/items/by-number/${number}/ai-chat`,
+        params ? { params } : {},
+      )
+      .pipe(map((res) => res.messages ?? []));
+  }
+  postAIChat(number: number, message: string, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.post<AIChatPostResponse>(
+      `/api/items/by-number/${number}/ai-chat`,
+      { message },
+      params ? { params } : {},
+    );
+  }
+  clearAIChat(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(
+      `/api/items/by-number/${number}/ai-chat`,
+      params ? { params } : {},
+    );
+  }
+  getAIUsage() {
+    return this.http.get<AIUsage>('/api/ai/usage');
+  }
+  getAICredits() {
+    return this.http.get<AICredits>('/api/ai/credits');
+  }
+  putAICredits(body: { limitTokens: number | null }) {
+    return this.http.put<AICredits>('/api/ai/credits', body);
+  }
+  listAttachments(number: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http
+      .get<{ attachments: ItemAttachment[] }>(
+        `/api/items/by-number/${number}/attachments`,
+        params ? { params } : {},
+      )
+      .pipe(map((res) => res.attachments ?? []));
+  }
+  uploadAttachment(
+    number: number,
+    file: File,
+    field: 'description' | 'solution' | 'comment',
+    projectId?: number,
+    commentId?: number,
+  ) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    const body = new FormData();
+    body.append('file', file, file.name);
+    body.append('field', field);
+    if (commentId != null && commentId > 0) {
+      body.append('commentId', String(commentId));
+    }
+    return this.http.post<ItemAttachment>(
+      `/api/items/by-number/${number}/attachments`,
+      body,
+      params ? { params } : {},
+    );
+  }
+  deleteAttachment(number: number, id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(
+      `/api/items/by-number/${number}/attachments/${id}`,
+      params ? { params } : {},
+    );
   }
   prTitles(urls: string[]) {
     return this.http.post<{ titles: Record<string, string> }>('/api/pr-titles', { urls });
@@ -84,8 +318,10 @@ export class Api {
   reorderItems(columns: ItemOrderColumn[]) {
     return this.http.put<{ items: Item[] }>('/api/items/order', { columns });
   }
-  backlog() {
-    return this.http.get<{ items: Item[] }>('/api/backlog');
+  backlog(projectId?: number) {
+    const params =
+      projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<{ items: Item[] }>('/api/backlog', params ? { params } : {});
   }
   reorderBacklog(itemIds: number[]) {
     return this.http.put<{ items: Item[] }>('/api/backlog/order', { itemIds });
@@ -95,6 +331,17 @@ export class Api {
   }
   updateItem(id: number, input: ItemPatch) {
     return this.http.patch<Item>(`/api/items/${id}`, input);
+  }
+  patchItemAcl(
+    id: number,
+    body: {
+      viewAccess: 'public' | 'open' | 'restricted';
+      editAccess: 'open' | 'restricted';
+      viewUserIds: number[];
+      editUserIds: number[];
+    },
+  ) {
+    return this.http.patch<Item>(`/api/items/${id}/acl`, body);
   }
   updateAssigneeByNumber(number: number, assignee: string, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
@@ -106,6 +353,106 @@ export class Api {
   }
   deleteItem(id: number) {
     return this.http.delete<void>(`/api/items/${id}`);
+  }
+  listSprints(projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<{ sprints: SprintSummary[] }>('/api/sprints', params ? { params } : {});
+  }
+  createSprint(input: {
+    name: string;
+    goal?: string;
+    startDate: string;
+    endDate: string;
+    projectId?: number;
+  }) {
+    const body: {
+      name: string;
+      goal?: string;
+      startDate: string;
+      endDate: string;
+      projectId?: number;
+    } = {
+      name: input.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    };
+    if (input.goal !== undefined) body.goal = input.goal;
+    if (input.projectId !== undefined && input.projectId > 0) body.projectId = input.projectId;
+    return this.http.post<Sprint>('/api/sprints', body);
+  }
+  getSprint(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<Sprint>(`/api/sprints/${id}`, params ? { params } : {});
+  }
+  patchSprint(id: number, patch: SprintPatch, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    const body: Record<string, unknown> = {};
+    if (patch.name !== undefined) body['name'] = patch.name;
+    if (patch.goal !== undefined) body['goal'] = patch.goal;
+    if (patch.startDate !== undefined) body['startDate'] = patch.startDate;
+    if (patch.endDate !== undefined) body['endDate'] = patch.endDate;
+    if (patch.velocity !== undefined) body['velocity'] = patch.velocity;
+    return this.http.patch<Sprint>(`/api/sprints/${id}`, body, params ? { params } : {});
+  }
+  deleteSprint(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(`/api/sprints/${id}`, params ? { params } : {});
+  }
+  replaceSprintItems(id: number, itemIds: number[], projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.put<Sprint>(
+      `/api/sprints/${id}/items`,
+      { itemIds },
+      params ? { params } : {},
+    );
+  }
+  activateSprint(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.post<Sprint>(
+      `/api/sprints/${id}/activate`,
+      {},
+      params ? { params } : {},
+    );
+  }
+  completeSprint(id: number, velocity?: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    const body = velocity !== undefined ? { velocity } : {};
+    return this.http.post<Sprint>(
+      `/api/sprints/${id}/complete`,
+      body,
+      params ? { params } : {},
+    );
+  }
+  listTrash(projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<{ items: TrashItem[] }>('/api/trash', params ? { params } : {});
+  }
+  restoreItem(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.post<Item>(
+      `/api/items/${id}/restore`,
+      {},
+      params ? { params } : {},
+    );
+  }
+  hardDeleteTrashItem(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.delete<void>(`/api/trash/${id}`, params ? { params } : {});
+  }
+  purgeTrash() {
+    return this.http.post<{ purged: number }>('/api/trash/purge', {});
+  }
+  listRecurringRules() {
+    return this.http.get<{ rules: RecurringRule[] }>('/api/recurring-rules');
+  }
+  createRecurringRule(input: RecurringRuleInput) {
+    return this.http.post<RecurringRule>('/api/recurring-rules', input);
+  }
+  patchRecurringRule(id: number, patch: RecurringRulePatch) {
+    return this.http.patch<RecurringRule>(`/api/recurring-rules/${id}`, patch);
+  }
+  deleteRecurringRule(id: number) {
+    return this.http.delete<void>(`/api/recurring-rules/${id}`);
   }
   listCommandTemplates() {
     return this.http.get<{ templates: CommandTemplate[] }>('/api/command-templates');
@@ -146,9 +493,15 @@ export class Api {
     return this.http.post<void>('/api/command-templates/apply-to-all-items', { templateIds });
   }
   listFilter() {
-    return this.http.get<ListFilter>('/api/list-filter');
+    return this.http.get<WorkspaceListFilters>('/api/list-filter');
   }
-  putListFilter(filter: ListFilter) {
-    return this.http.put<ListFilter>('/api/list-filter', filter);
+  putListFilter(filter: WorkspaceListFilters) {
+    return this.http.put<WorkspaceListFilters>('/api/list-filter', filter);
+  }
+  headerMenu() {
+    return this.http.get<WorkspaceHeaderMenu>('/api/header-menu');
+  }
+  putHeaderMenu(menu: WorkspaceHeaderMenu) {
+    return this.http.put<WorkspaceHeaderMenu>('/api/header-menu', menu);
   }
 }

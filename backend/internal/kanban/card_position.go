@@ -209,7 +209,7 @@ SELECT id FROM items WHERE column_id=? AND project_id=?
 }
 
 func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID, projectID int64) error {
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE column_id=? AND project_id=? ORDER BY position,id FOR UPDATE", columnID, projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE column_id=? AND project_id=? AND deleted_at IS NULL ORDER BY position,id FOR UPDATE", columnID, projectID)
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID, projectID
 }
 
 func listOrderedCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? ORDER BY c.position,c.id", projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.position,c.id", projectID)
 	if err != nil {
 		return nil, err
 	}

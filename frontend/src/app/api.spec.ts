@@ -47,6 +47,30 @@ describe('Api', () => {
     expect(req.request.body).toEqual({ assignee: 'Claude' });
     req.flush({ id: 22, number: 7, assignee: 'Claude' });
   });
+  it('sends PUT /api/projects/order with projectIds and returns reordered projects', () => {
+    let result: unknown;
+    api.reorderProjects([3, 1, 2]).subscribe((res) => (result = res));
+    const req = http.expectOne('/api/projects/order');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ projectIds: [3, 1, 2] });
+    const payload = {
+      projects: [
+        { id: 3, name: 'C', position: 0 },
+        { id: 1, name: 'A', position: 1 },
+        { id: 2, name: 'B', position: 2 },
+      ],
+    };
+    req.flush(payload);
+    expect(result).toEqual(payload);
+  });
+  it('propagates project reorder conflict errors', () => {
+    let status = 0;
+    api.reorderProjects([1, 2]).subscribe({ error: (e) => (status = e.status) });
+    http
+      .expectOne('/api/projects/order')
+      .flush({ message: '競合' }, { status: 409, statusText: 'Conflict' });
+    expect(status).toBe(409);
+  });
   it('sends PUT /api/columns/order with columnIds and returns reordered columns', () => {
     let result: unknown;
     api.reorderColumns([1, 2, 9, 3]).subscribe((res) => (result = res));
@@ -259,14 +283,162 @@ describe('Api', () => {
     expect(removed.request.method).toBe('DELETE');
     removed.flush(null);
   });
+  it('lists and mutates sprints with projectId query and velocity tri-state', () => {
+    api.listSprints(3).subscribe();
+    const list = http.expectOne('/api/sprints?projectId=3');
+    expect(list.request.method).toBe('GET');
+    list.flush({ sprints: [] });
+
+    api
+      .createSprint({
+        name: 'Sprint 1',
+        startDate: '2026-11-21',
+        endDate: '2026-12-04',
+        projectId: 3,
+      })
+      .subscribe();
+    const created = http.expectOne('/api/sprints');
+    expect(created.request.method).toBe('POST');
+    expect(created.request.body).toEqual({
+      name: 'Sprint 1',
+      startDate: '2026-11-21',
+      endDate: '2026-12-04',
+      projectId: 3,
+    });
+    created.flush({
+      id: 1,
+      projectId: 3,
+      name: 'Sprint 1',
+      goal: '',
+      startDate: '2026-11-21',
+      endDate: '2026-12-04',
+      status: 'planned',
+      velocity: null,
+      suggestedVelocity: 0,
+      itemCount: 0,
+      items: [],
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    api.getSprint(1, 3).subscribe();
+    const got = http.expectOne('/api/sprints/1?projectId=3');
+    expect(got.request.method).toBe('GET');
+    got.flush({
+      id: 1,
+      projectId: 3,
+      name: 'Sprint 1',
+      goal: '',
+      startDate: '2026-11-21',
+      endDate: '2026-12-04',
+      status: 'completed',
+      velocity: 4,
+      suggestedVelocity: 2,
+      itemCount: 2,
+      items: [],
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    api.patchSprint(1, { goal: 'g' }).subscribe();
+    const omitVelocity = http.expectOne('/api/sprints/1');
+    expect(omitVelocity.request.method).toBe('PATCH');
+    expect(omitVelocity.request.body).toEqual({ goal: 'g' });
+    expect(Object.prototype.hasOwnProperty.call(omitVelocity.request.body, 'velocity')).toBe(false);
+    omitVelocity.flush({ id: 1, goal: 'g' });
+
+    api.patchSprint(1, { velocity: null }, 3).subscribe();
+    const clearVelocity = http.expectOne('/api/sprints/1?projectId=3');
+    expect(clearVelocity.request.body).toEqual({ velocity: null });
+    clearVelocity.flush({ id: 1, velocity: null });
+
+    api.patchSprint(1, { velocity: 5 }).subscribe();
+    const setVelocity = http.expectOne('/api/sprints/1');
+    expect(setVelocity.request.body).toEqual({ velocity: 5 });
+    setVelocity.flush({ id: 1, velocity: 5 });
+
+    api.replaceSprintItems(1, [10, 11], 3).subscribe();
+    const putItems = http.expectOne('/api/sprints/1/items?projectId=3');
+    expect(putItems.request.method).toBe('PUT');
+    expect(putItems.request.body).toEqual({ itemIds: [10, 11] });
+    putItems.flush({ id: 1, items: [] });
+
+    api.activateSprint(1).subscribe();
+    const activate = http.expectOne('/api/sprints/1/activate');
+    expect(activate.request.method).toBe('POST');
+    activate.flush({ id: 1, status: 'active' });
+
+    api.completeSprint(1, 5, 3).subscribe();
+    const complete = http.expectOne('/api/sprints/1/complete?projectId=3');
+    expect(complete.request.method).toBe('POST');
+    expect(complete.request.body).toEqual({ velocity: 5 });
+    complete.flush({ id: 1, status: 'completed', velocity: 5 });
+
+    api.completeSprint(1).subscribe();
+    const completeOmit = http.expectOne('/api/sprints/1/complete');
+    expect(completeOmit.request.body).toEqual({});
+    completeOmit.flush({ id: 1, status: 'completed' });
+
+    api.deleteSprint(1, 3).subscribe();
+    const removed = http.expectOne('/api/sprints/1?projectId=3');
+    expect(removed.request.method).toBe('DELETE');
+    removed.flush(null);
+  });
+  it('gets and puts header menu', () => {
+    api.headerMenu().subscribe();
+    http.expectOne('/api/header-menu').flush({
+      board: { hiddenIds: [] },
+      backlog: { hiddenIds: [] },
+      itemDetail: { hiddenIds: [] },
+    });
+    api
+      .putHeaderMenu({
+        board: { hiddenIds: ['open_projects'] },
+        backlog: { hiddenIds: [] },
+        itemDetail: { hiddenIds: [] },
+      })
+      .subscribe();
+    const req = http.expectOne('/api/header-menu');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body.board.hiddenIds).toEqual(['open_projects']);
+    req.flush(req.request.body);
+  });
   it('gets and puts list filter', () => {
     api.listFilter().subscribe();
-    http.expectOne('/api/list-filter').flush({ query: '', statusIds: [] });
-    api.putListFilter({ query: 'x', statusIds: [1] }).subscribe();
+    http.expectOne('/api/list-filter').flush({
+      board: { query: '', statusIds: [] },
+      backlog: { query: '', statusIds: [] },
+    });
+    api
+      .putListFilter({
+        board: { query: 'x', statusIds: [1] },
+        backlog: { query: '', statusIds: [] },
+      })
+      .subscribe();
     const req = http.expectOne('/api/list-filter');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ query: 'x', statusIds: [1] });
-    req.flush({ query: 'x', statusIds: [1] });
+    expect(req.request.body).toEqual({
+      board: { query: 'x', statusIds: [1] },
+      backlog: { query: '', statusIds: [] },
+    });
+    req.flush(req.request.body);
+  });
+
+  it('PUTs AI credits with explicit limitTokens null for unlimited', () => {
+    api.putAICredits({ limitTokens: null }).subscribe();
+    const req = http.expectOne('/api/ai/credits');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ limitTokens: null });
+    expect(JSON.stringify(req.request.body)).toContain('"limitTokens":null');
+    req.flush({
+      limitTokens: null,
+      usedTokens: 0,
+      remainingTokens: null,
+      unlimited: true,
+      approximate: true,
+      period: 'cumulative',
+      configured: true,
+    });
   });
 });
 

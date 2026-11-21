@@ -1,4 +1,9 @@
-<div class="blocks-editor">
+<div
+  class="blocks-editor"
+  (keydown.escape)="closeInsertMenu()"
+  (dragover)="onDragOver($event)"
+  (drop)="onDrop($event)"
+>
   <div class="blocks-toolbar">
     <button
       type="button"
@@ -9,24 +14,136 @@
     >
       リンク
     </button>
+    @if (itemNumber() > 0 && attachmentField()) {
+      <button
+        type="button"
+        class="secondary blocks-link-btn"
+        [disabled]="disabled() || imageBusy()"
+        (mousedown)="$event.preventDefault()"
+        (click)="pickImage()"
+      >
+        画像
+      </button>
+      <input
+        #imageFile
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        hidden
+        (change)="onImageFileChange($event)"
+      />
+    }
   </div>
-  @for (block of blocks(); track trackBlock($index)) {
-    <textarea
-      #blockArea
-      class="block-input"
-      rows="1"
-      [value]="block"
-      [disabled]="disabled()"
-      [attr.aria-label]="'説明ブロック ' + ($index + 1)"
-      (focus)="onFocus($index)"
-      (blur)="onBlur($event)"
-      (input)="onInput($index, $event)"
-      (keydown)="onKeydown($index, $event)"
-      (compositionstart)="onComposition(true)"
-      (compositionend)="onComposition(false)"
-    ></textarea>
+  @for (gapIndex of gapIndexes(); track gapIndex) {
+    <div
+      class="block-gap"
+      role="button"
+      tabindex="-1"
+      [attr.aria-label]="gapAriaLabel(gapIndex)"
+      [attr.aria-disabled]="disabled() ? 'true' : null"
+      (mousedown)="onGapPointerDown($event)"
+      (click)="openInsertMenu(gapIndex, $event)"
+    ></div>
+    @if (insertMenuIndex() === gapIndex) {
+      <div class="block-insert-menu" role="menu" aria-label="ブロックを追加">
+        <button
+          type="button"
+          role="menuitem"
+          class="secondary"
+          (mousedown)="$event.preventDefault()"
+          (click)="insertTextAtMenu()"
+        >
+          テキスト
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="secondary"
+          (mousedown)="$event.preventDefault()"
+          (click)="insertLinkAtMenu()"
+        >
+          リンク
+        </button>
+      </div>
+    }
+    @if (gapIndex < blocks().length) {
+      <textarea
+        #blockArea
+        class="block-input"
+        rows="1"
+        [value]="blocks()[gapIndex]"
+        [disabled]="disabled()"
+        [attr.aria-label]="'説明ブロック ' + (gapIndex + 1)"
+        (focus)="onFocus(gapIndex)"
+        (blur)="onBlur($event)"
+        (input)="onInput(gapIndex, $event)"
+        (keydown)="onKeydown(gapIndex, $event)"
+        (compositionstart)="onComposition(true)"
+        (compositionend)="onComposition(false)"
+      ></textarea>
+    }
   }
   @if (lengthError()) {
     <p class="form-error" role="alert">{{ lengthError() }}</p>
   }
+  @if (imageError()) {
+    <p class="form-error" role="alert">{{ imageError() }}</p>
+  }
+  @if (itemNumber() > 0 && value()) {
+    <div class="blocks-preview" aria-label="説明のプレビュー">
+      <app-description-rich-text
+        [text]="value()"
+        [itemNumber]="itemNumber()"
+        [canDelete]="imagesEnabled()"
+        [draggableImages]="attachmentField() === 'description'"
+        (deleteImage)="requestDeleteImage($event)"
+      />
+    </div>
+  }
+  @if (attachments().length) {
+    <ul class="attachment-list" aria-label="添付一覧">
+      @for (a of attachments(); track a.id) {
+        <li>
+          <span>{{ a.originalName }} ({{ a.field }})</span>
+          @if (imagesEnabled()) {
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="imageBusy()"
+              (click)="requestDeleteImage(a.id)"
+            >
+              削除
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  }
 </div>
+
+@if (confirmDeleteId() != null) {
+  <dialog
+    open
+    class="modal-backdrop"
+    aria-labelledby="attachment-delete-title"
+    (cancel)="$event.preventDefault(); !imageBusy() && cancelDeleteImage()"
+  >
+    <form method="dialog" class="modal" (submit)="$event.preventDefault()">
+      <h2 id="attachment-delete-title">画像を削除しますか？</h2>
+      <p>本文からもこの画像の参照が取り除かれます。</p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" [disabled]="imageBusy()" (click)="cancelDeleteImage()">
+          キャンセル
+        </button>
+        <button
+          type="button"
+          class="danger"
+          [disabled]="imageBusy()"
+          (click)="confirmDeleteImage($event)"
+          (keydown)="confirmDeleteImage($event)"
+        >
+          削除
+        </button>
+      </div>
+    </form>
+  </dialog>
+}

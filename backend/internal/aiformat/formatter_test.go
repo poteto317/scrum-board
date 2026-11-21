@@ -95,7 +95,8 @@ func (f *fakeAnthropic) formatter() *Formatter {
 func format(f *Formatter, draft kanban.Draft) (kanban.RefinedItem, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return f.Format(ctx, draft)
+	item, _, _, err := f.Format(ctx, draft)
+	return item, err
 }
 
 func kindOf(t *testing.T, err error) (string, int) {
@@ -291,7 +292,7 @@ func TestFormatStopsWhenTheServerStalls(t *testing.T) {
 		f := newFake(t, handler)
 		ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 		start := time.Now()
-		_, err := f.formatter().Format(ctx, kanban.Draft{Title: secretDraft})
+		_, _, _, err := f.formatter().Format(ctx, kanban.Draft{Title: secretDraft})
 		cancel()
 		if err == nil || time.Since(start) > 3*time.Second {
 			t.Fatalf("%s: err=%v after %v", name, err, time.Since(start))
@@ -304,7 +305,7 @@ func TestFormatStopsWhenTheServerStalls(t *testing.T) {
 	f := newFake(t, stall)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := f.formatter().Format(ctx, kanban.Draft{Title: "x"})
+	_, _, _, err := f.formatter().Format(ctx, kanban.Draft{Title: "x"})
 	if err == nil {
 		t.Fatal("canceled context accepted")
 	}

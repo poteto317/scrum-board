@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { Backlog } from './backlog';
 import { Item } from './models';
+import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
 
 const POLL_MS = 5000;
@@ -24,6 +25,8 @@ function card(id: number, title: string, projectId: number): Item {
     relatedItems: [],
     assignee: '',
     closeReason: '',
+    solution: '',
+    favorite: false,
     dueAt: null,
     createdAt: '',
     updatedAt: '',
@@ -70,8 +73,8 @@ describe('Backlog project switch', () => {
             backlog,
             board,
             patchBoardSettings: vi.fn(() => patch.asObservable()),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
           },
         },
       ],
@@ -132,8 +135,8 @@ describe('Backlog project switch', () => {
             backlog,
             board,
             patchBoardSettings: vi.fn(() => patch.asObservable()),
-            listFilter: () => of({ query: '', statusIds: [] }),
-            putListFilter: (f: { query: string; statusIds: number[] }) => of(f),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
           },
         },
       ],
@@ -150,6 +153,158 @@ describe('Backlog project switch', () => {
     expect(session.error()).toContain('切替失敗');
     expect(backlog).toHaveBeenCalledTimes(1);
     expect(f.componentInstance.items().map((item) => item.title)).toEqual(['A', 'B']);
+    f.destroy();
+  });
+
+  it('hides previous-project cards while activeId has switched and reload is in flight', async () => {
+    const initialItems = [card(1, 'A', 1), card(2, 'B', 1)];
+    const heldBacklog = new Subject<{ items: Item[] }>();
+    const heldBoard = new Subject<{ columns: typeof columns; items: Item[] }>();
+    let phase: 'init' | 'held' = 'init';
+    const backlog = vi.fn(() => {
+      if (phase === 'init') return of({ items: initialItems });
+      return heldBacklog.asObservable();
+    });
+    const board = vi.fn(() => {
+      if (phase === 'init') return of({ columns, items: initialItems });
+      return heldBoard.asObservable();
+    });
+    const patch = new Subject<{ settings: { cardLayout: 'pack'; activeProjectId: number } }>();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog,
+            board,
+            patchBoardSettings: vi.fn(() => patch.asObservable()),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const session = TestBed.inject(ProjectSession);
+    session.activeId.set(1);
+    expect(f.componentInstance.filteredItems().map((c) => c.title)).toEqual(['A', 'B']);
+
+    phase = 'held';
+    session.switchTo(2).subscribe({ error: () => undefined });
+    patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });
+    patch.complete();
+    expect(session.activeId()).toBe(2);
+    expect(f.componentInstance.items().map((c) => c.projectId)).toEqual([1, 1]);
+    expect(f.componentInstance.activeItems()).toEqual([]);
+    expect(f.componentInstance.filteredItems()).toEqual([]);
+
+    heldBacklog.next({ items: [card(3, 'C', 2)] });
+    heldBacklog.complete();
+    heldBoard.next({ columns, items: [card(3, 'C', 2)] });
+    heldBoard.complete();
+    expect(f.componentInstance.filteredItems().map((c) => c.title)).toEqual(['C']);
+    f.destroy();
+  });
+
+  it('keeps previous-project cards hidden after post-switch reload fails', async () => {
+    const initialItems = [card(1, 'A', 1), card(2, 'B', 1)];
+    const heldBacklog = new Subject<{ items: Item[] }>();
+    const heldBoard = new Subject<{ columns: typeof columns; items: Item[] }>();
+    let phase: 'init' | 'held' = 'init';
+    const backlog = vi.fn(() => {
+      if (phase === 'init') return of({ items: initialItems });
+      return heldBacklog.asObservable();
+    });
+    const board = vi.fn(() => {
+      if (phase === 'init') return of({ columns, items: initialItems });
+      return heldBoard.asObservable();
+    });
+    const patch = new Subject<{ settings: { cardLayout: 'pack'; activeProjectId: number } }>();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog,
+            board,
+            patchBoardSettings: vi.fn(() => patch.asObservable()),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const session = TestBed.inject(ProjectSession);
+    session.activeId.set(1);
+    phase = 'held';
+    session.switchTo(2).subscribe({ error: () => undefined });
+    patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });
+    patch.complete();
+    heldBacklog.error({ error: { message: '再取得失敗' } });
+    heldBoard.error({ error: { message: '再取得失敗' } });
+    expect(session.activeId()).toBe(2);
+    expect(session.switching()).toBe(false);
+    expect(f.componentInstance.items().map((c) => c.projectId)).toEqual([1, 1]);
+    expect(f.componentInstance.activeItems()).toEqual([]);
+    expect(f.componentInstance.filteredItems()).toEqual([]);
+    f.destroy();
+  });
+
+  it('shows cached backlog items before post-switch forkJoin settles', async () => {
+    const heldBacklog = new Subject<{ items: Item[] }>();
+    const heldBoard = new Subject<{ columns: typeof columns; items: Item[] }>();
+    const initialItems = [card(1, 'A', 1)];
+    const cached = [card(3, 'C', 2), card(4, 'D', 2)];
+    let phase: 'init' | 'held' = 'init';
+    const backlog = vi.fn(() => {
+      if (phase === 'init') return of({ items: initialItems });
+      return heldBacklog.asObservable();
+    });
+    const board = vi.fn(() => {
+      if (phase === 'init') return of({ columns, items: initialItems });
+      return heldBoard.asObservable();
+    });
+    const patch = new Subject<{ settings: { cardLayout: 'pack'; activeProjectId: number } }>();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog,
+            board,
+            patchBoardSettings: vi.fn(() => patch.asObservable()),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const session = TestBed.inject(ProjectSession);
+    const cache = TestBed.inject(ProjectBoardCache);
+    session.activeId.set(1);
+    cache.putBacklog(2, cached);
+    phase = 'held';
+    session.switchTo(2).subscribe({ error: () => undefined });
+    patch.next({ settings: { cardLayout: 'pack', activeProjectId: 2 } });
+    patch.complete();
+    expect(f.componentInstance.activeItems().map((c) => c.title)).toEqual(['C', 'D']);
+    heldBacklog.error({ error: { message: '再取得失敗' } });
+    heldBoard.error({ error: { message: '再取得失敗' } });
+    expect(f.componentInstance.activeItems().map((c) => c.title)).toEqual(['C', 'D']);
     f.destroy();
   });
 });

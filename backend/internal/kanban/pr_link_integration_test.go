@@ -104,7 +104,7 @@ func TestMySQLPRLinks(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(created.PRURLs, []string{url, url2}) {
 		t.Fatalf("create: %+v %v", created, err)
 	}
-	if err = r.DeleteItem(ctx, created.ID); err != nil {
+	if err = r.HardDeleteItem(ctx, created.ID); err != nil {
 		t.Fatal(err)
 	}
 	var count int

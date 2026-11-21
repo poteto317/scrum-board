@@ -29,6 +29,8 @@ describe('normalizeBoardData', () => {
           relatedItems: [],
           assignee: '',
           closeReason: '',
+          solution: '',
+          favorite: false,
           dueAt: null,
           createdAt: '',
           updatedAt: '',
@@ -83,6 +85,8 @@ describe('normalizeOffsetY / normalizeItem', () => {
     expect(normalizeItem({ id: 1, offsetY: 200_000 }).offsetY).toBe(100_000);
     expect(normalizeItem({ id: 1 }).closeReason).toBe('');
     expect(normalizeItem({ id: 1, closeReason: 'x' }).closeReason).toBe('x');
+    expect(normalizeItem({ id: 1 }).solution).toBe('');
+    expect(normalizeItem({ id: 1, solution: 'done' }).solution).toBe('done');
   });
 
   it('defaults missing projectId to 0 and truncates numeric ids', () => {
@@ -98,5 +102,13 @@ describe('normalizeOffsetY / normalizeItem', () => {
     expect(normalizeItem({ id: 1, dueAt: '2026-11-17T08:30:00Z' }).dueAt).toBe(
       '2026-11-17T08:30:00Z',
     );
+  });
+
+  it('normalizes favorite with === true only (L-002)', () => {
+    expect(normalizeItem({ id: 1 }).favorite).toBe(false);
+    expect(normalizeItem({ id: 1, favorite: true }).favorite).toBe(true);
+    expect(normalizeItem({ id: 1, favorite: false }).favorite).toBe(false);
+    expect(normalizeItem({ id: 1, favorite: 'true' as never }).favorite).toBe(false);
+    expect(normalizeItem({ id: 1, favorite: 1 as never }).favorite).toBe(false);
   });
 });
