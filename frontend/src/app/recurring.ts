@@ -6,11 +6,12 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subscription, finalize } from 'rxjs';
 import { Api, RecurringRule } from './api';
 import { errorMessage } from './api-error';
+import { textLimit } from './form-validation';
 import { Modal } from './modal';
 import { Column } from './models';
 import { ProjectSession } from './project-session';
@@ -19,7 +20,7 @@ import { RecurringSession } from './recurring-session';
 
 @Component({
   selector: 'app-recurring',
-  imports: [RouterLink, FormsModule, ReactiveFormsModule, Modal],
+  imports: [RouterLink, ReactiveFormsModule, Modal],
   templateUrl: './recurring.html',
   styleUrl: './recurring.css',
 })
@@ -45,9 +46,9 @@ export class RecurringPage implements OnInit {
   private columnsSub?: Subscription;
 
   readonly form = new FormGroup({
-    name: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    title: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    description: new FormControl('', { nonNullable: true }),
+    name: new FormControl('', { nonNullable: true, validators: [textLimit(80, true)] }),
+    title: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
+    description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
     // Defaults match BE defaultRecurringTZ / create omit behavior.
     cron: new FormControl('0 9 * * 1', {
       nonNullable: true,
