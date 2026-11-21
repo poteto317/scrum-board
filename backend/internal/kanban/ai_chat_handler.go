@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 )
@@ -83,9 +84,9 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	msg, ok := NormalizeAIChatMessage(req.Message)
+	msg, ok := NormalizeAIChatMessage(req.Message, h.messageMax)
 	if !ok {
-		invalid(w, "メッセージは1〜4000文字で、制御文字を含めず入力してください。")
+		invalid(w, fmt.Sprintf("メッセージは1〜%d文字で、制御文字を含めず入力してください。", h.messageMax))
 		return
 	}
 	card, ok := h.aiChatParentItem(w, r)
@@ -99,8 +100,14 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	if h.rejectIfAICreditLimitReached(w, r, aiChatError) {
 		return
 	}
+	rateUser, rateAt, rateReserved, rateLimited := h.reserveAIRateLimit(r)
+	if rateLimited {
+		writeAIRateLimited(w, aiChatError)
+		return
+	}
 	release, acquired := h.acquireSlot()
 	if !acquired {
+		h.releaseAIRateLimit(rateUser, rateAt, rateReserved)
 		aiChatError(w, http.StatusTooManyRequests, "ai_busy", "AIが混み合っています。少し待って再試行してください。")
 		return
 	}
@@ -117,7 +124,7 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	system := buildAIChatSystem(card, comments)
-	turns := selectAIChatHistoryForModel(history, maxAIChatHistoryTurns)
+	turns := selectAIChatHistoryForModel(history, h.historyTurns)
 	turns = append(turns, ChatTurn{Role: AIRoleUser, Body: msg})
 
 	aiCtx, cancel, hasTime := aiContext(r.Context())
