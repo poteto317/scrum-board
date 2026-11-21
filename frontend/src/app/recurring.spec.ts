@@ -173,6 +173,24 @@ describe('Recurring page', () => {
     f.destroy();
   });
 
+  it('applies textLimit on name/title/description like board forms', () => {
+    const { f } = setup({ listRecurringRules: vi.fn(() => of({ rules: [] })) });
+    const form = f.componentInstance.form;
+    form.controls.name.setValue('x'.repeat(81));
+    expect(form.controls.name.invalid).toBe(true);
+    form.controls.title.setValue('y'.repeat(201));
+    expect(form.controls.title.invalid).toBe(true);
+    form.controls.description.setValue('z'.repeat(10001));
+    expect(form.controls.description.invalid).toBe(true);
+    form.controls.name.setValue('ok');
+    form.controls.title.setValue('ok');
+    form.controls.description.setValue('ok');
+    expect(form.controls.name.valid).toBe(true);
+    expect(form.controls.title.valid).toBe(true);
+    expect(form.controls.description.valid).toBe(true);
+    f.destroy();
+  });
+
   it('disables add when list failed (rules null)', () => {
     const { f } = setup({
       listRecurringRules: vi.fn(() => throwError(() => ({ status: 500 }))),
