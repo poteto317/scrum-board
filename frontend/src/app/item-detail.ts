@@ -290,9 +290,8 @@ export class ItemDetail implements OnInit {
     });
     effect(() => {
       const card = this.item();
-      // item が一瞬 null（reload 中）のときは clear しない（入口消失・再マウント防止）
-      if (!card) return;
-      if (this.canEdit()) {
+      const routeNum = this.routeNumber();
+      if (card && this.canEdit()) {
         this.aiChat.setDetail(
           { number: card.number, projectId: card.projectId, itemId: card.id },
           {
@@ -300,7 +299,20 @@ export class ItemDetail implements OnInit {
             onCommentApplied: () => this.commentsPanel()?.reload(),
           },
         );
-      } else if (this.aiChat.pageKind() === 'detail') {
+        return;
+      }
+      if (card && !this.canEdit()) {
+        if (this.aiChat.pageKind() === 'detail') this.aiChat.clear();
+        return;
+      }
+      // item が一瞬 null（同一番号の reload）は残す。ルート番号が変わったら旧 target を捨てる
+      const target = this.aiChat.routeTarget();
+      if (
+        this.aiChat.pageKind() === 'detail' &&
+        target &&
+        routeNum > 0 &&
+        target.number !== routeNum
+      ) {
         this.aiChat.clear();
       }
     });
