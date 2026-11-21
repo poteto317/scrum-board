@@ -74,7 +74,7 @@ func reply(status int, body string) func(http.ResponseWriter, *http.Request) {
 }
 
 func (f *fakeAnthropic) chatter() *Chatter {
-	return New(secretKey, "claude-haiku-5-5", option.WithBaseURL(f.srv.URL))
+	return New(secretKey, "claude-haiku-5-5", 0, option.WithBaseURL(f.srv.URL))
 }
 
 func chat(c *Chatter, system string, msgs []kanban.ChatTurn) (string, int64, int64, error) {
@@ -124,6 +124,20 @@ func TestChatSuccessIncludesSystemAndMessages(t *testing.T) {
 	messages := f.body["messages"].([]any)
 	if len(messages) != 1 || messages[0].(map[string]any)["role"] != "user" {
 		t.Fatalf("messages=%v", messages)
+	}
+	if int(f.body["max_tokens"].(float64)) != 4096 {
+		t.Fatalf("default max_tokens=%v", f.body["max_tokens"])
+	}
+}
+
+func TestChatCustomMaxTokens(t *testing.T) {
+	f := newFake(t, reply(200, messageJSON("end_turn", "hi")))
+	c := New(secretKey, "claude-haiku-5-5", 2048, option.WithBaseURL(f.srv.URL))
+	if _, _, _, err := chat(c, "sys", []kanban.ChatTurn{{Role: kanban.AIRoleUser, Body: "q"}}); err != nil {
+		t.Fatal(err)
+	}
+	if int(f.body["max_tokens"].(float64)) != 2048 {
+		t.Fatalf("max_tokens=%v", f.body["max_tokens"])
 	}
 }
 

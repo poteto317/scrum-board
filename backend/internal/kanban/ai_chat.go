@@ -86,12 +86,16 @@ func BuildAICreditsView(u AIUsage, configured bool) AICreditsView {
 }
 
 // NormalizeAIChatMessage trims; empty after trim is invalid. ok is false when empty, too long, or control chars.
-func NormalizeAIChatMessage(raw string) (value string, ok bool) {
+// maxLen <= 0 uses the hard-coded default (maxAIChatMessageLen).
+func NormalizeAIChatMessage(raw string, maxLen int) (value string, ok bool) {
+	if maxLen < 1 {
+		maxLen = maxAIChatMessageLen
+	}
 	value = strings.TrimSpace(raw)
 	if value == "" {
 		return "", false
 	}
-	if utf8.RuneCountInString(value) > maxAIChatMessageLen {
+	if utf8.RuneCountInString(value) > maxLen {
 		return "", false
 	}
 	for _, r := range value {
