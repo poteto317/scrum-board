@@ -120,7 +120,12 @@ export class SettingsPage implements OnInit {
   onUnlimitedChange(checked: boolean) {
     this.draftUnlimited.set(checked);
     this.clientError.set('');
-    if (checked) this.draftLimit.set('');
+    if (checked) {
+      this.draftLimit.set('');
+      return;
+    }
+    const c = this.credits();
+    this.draftLimit.set(c?.limitTokens == null ? '' : String(c.limitTokens));
   }
 
   onLimitInput(value: string) {
