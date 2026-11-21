@@ -76,6 +76,9 @@ func TestSessionMiddlewareExemptAndRequired(t *testing.T) {
 	if w := requestAnon(h, "POST", "/api/trash/purge", ""); w.Code != 200 {
 		t.Fatalf("purge=%d body=%s", w.Code, w.Body)
 	}
+	if w := requestAnon(h, "POST", "/api/recurring/run", ""); w.Code != 200 {
+		t.Fatalf("recurring run=%d body=%s", w.Code, w.Body)
+	}
 	if w := requestAnon(h, "GET", "/api/board", ""); w.Code != 401 {
 		t.Fatalf("board anon=%d", w.Code)
 	}
