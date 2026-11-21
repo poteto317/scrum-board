@@ -102,6 +102,16 @@ export type AIUsage = {
   configured: boolean;
 };
 
+export type AICredits = {
+  limitTokens: number | null;
+  usedTokens: number;
+  remainingTokens: number | null;
+  unlimited: boolean;
+  approximate: boolean;
+  period: string;
+  configured: boolean;
+};
+
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
@@ -250,6 +260,9 @@ export class Api {
   }
   getAIUsage() {
     return this.http.get<AIUsage>('/api/ai/usage');
+  }
+  getAICredits() {
+    return this.http.get<AICredits>('/api/ai/credits');
   }
   listAttachments(number: number, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
