@@ -23,7 +23,7 @@
 | `backend/internal/kanban/ai_rate_limit.go` (+test) | スライディング窓・Try／Release・no-op |
 | `backend/internal/kanban/ai_limits_env.go` (+test) | env パース（rate／message／turns／chat maxTokens） |
 | `backend/internal/kanban/ai_chat.go` / `ai_chat_context.go` | MessageMax／HistoryTurns の引数化 |
-| `backend/internal/kanban/handler.go` / `ai_chat_handler.go` / `refined_handler.go` | rejectIfAIRateLimited、slot 成功後 Record、limit 注入 |
+| `backend/internal/kanban/handler.go` / `ai_chat_handler.go` / `refined_handler.go` | reserveAIRateLimit（Try）、モデル前失敗で Release、limit 注入 |
 | `backend/internal/aichat/chatter.go` | `New` に maxTokens 引数（既定 4096） |
 | `backend/cmd/server/wiring.go` | env → limits → handler／chatter |
 | `docs/openapi.yaml` | 429 `ai_rate_limit` |
