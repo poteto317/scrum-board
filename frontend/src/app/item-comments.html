@@ -38,14 +38,14 @@
                   rows="3"
                   [ngModel]="editBody()"
                   (ngModelChange)="editBody.set($event)"
-                  [disabled]="savingId() === c.id || imageBusy()"
+                  [disabled]="savingId() === c.id"
                 ></textarea>
               </label>
               <div class="row-actions">
                 <button
                   type="button"
                   (click)="saveEdit(c)"
-                  [disabled]="savingId() === c.id || imageBusy()"
+                  [disabled]="savingId() === c.id"
                 >
                   保存
                 </button>
@@ -53,7 +53,7 @@
                   type="button"
                   class="secondary"
                   (click)="cancelEdit()"
-                  [disabled]="savingId() === c.id || imageBusy()"
+                  [disabled]="savingId() === c.id"
                 >
                   キャンセル
                 </button>
