@@ -201,6 +201,8 @@ export class ItemDetail implements OnInit {
     this.descriptionEditor.begin(sel);
   }
   onAttachmentDeleted(): void {
+    // Drop in-flight description PATCH so it cannot resurrect stripped markup (L-001).
+    this.autosave.dropInFlight();
     this.reload$.next();
   }
   confirmDescriptionLink(): void {
