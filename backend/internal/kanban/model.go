@@ -247,6 +247,7 @@ type Repository interface {
 	ListAttachmentObjectKeysByItemID(context.Context, int64) ([]string, error)
 	ListAttachmentObjectKeysByCommentID(context.Context, int64) ([]string, error)
 	ListAttachmentObjectKeysForExpiredTrash(ctx context.Context, projectID int64) ([]string, error)
+	AttachmentObjectKeyExists(ctx context.Context, objectKey string) (bool, error)
 	CountUsers(context.Context) (int64, error)
 	ListUsers(context.Context) ([]User, error)
 	GetUser(context.Context, int64) (User, error)

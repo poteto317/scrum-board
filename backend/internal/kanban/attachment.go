@@ -174,6 +174,22 @@ func (r MySQLRepository) CreateAttachment(
 	}
 	defer tx.Rollback()
 
+	// Serialize attachment inserts per item (count check vs concurrent POSTs).
+	var lockedItem int64
+	if err = tx.QueryRowContext(ctx, `SELECT id FROM items WHERE id=? FOR UPDATE`, itemID).Scan(&lockedItem); err != nil {
+		return Attachment{}, dbError(err)
+	}
+	if commentID != nil {
+		var commentItem int64
+		err = tx.QueryRowContext(ctx, `SELECT item_id FROM item_comments WHERE id=? FOR UPDATE`, *commentID).Scan(&commentItem)
+		if err != nil {
+			return Attachment{}, dbError(err)
+		}
+		if commentItem != itemID {
+			return Attachment{}, ErrAttachmentInvalid
+		}
+	}
+
 	var count int
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM item_attachments WHERE item_id=?`, itemID).Scan(&count); err != nil {
 		return Attachment{}, err
@@ -293,6 +309,15 @@ func (r MySQLRepository) ListAttachmentObjectKeysByItemID(ctx context.Context, i
 
 func (r MySQLRepository) ListAttachmentObjectKeysByCommentID(ctx context.Context, commentID int64) ([]string, error) {
 	return r.listAttachmentKeys(ctx, `SELECT object_key FROM item_attachments WHERE comment_id=?`, commentID)
+}
+
+func (r MySQLRepository) AttachmentObjectKeyExists(ctx context.Context, objectKey string) (bool, error) {
+	var n int
+	err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM item_attachments WHERE object_key=?`, objectKey).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 func (r MySQLRepository) ListAttachmentObjectKeysByItemIDs(ctx context.Context, itemIDs []int64) ([]string, error) {
