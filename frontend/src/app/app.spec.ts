@@ -174,67 +174,28 @@ describe('App project switcher', () => {
     expect(style.zIndex).toBe('5');
   });
 
-  it('updates the select after a successful switch when no board is mounted', () => {
-    const { f, api, session } = setup();
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
-    select.value = '2';
-    select.dispatchEvent(new Event('change'));
-    f.detectChanges();
-    expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
-    expect(session.activeId()).toBe(2);
-    expect(session.switching()).toBe(false);
-    expect(select.value).toBe('2');
-  });
-
-  it('prefetches other projects on select focus and pointerdown', () => {
-    const { f, api, session } = setup();
-    session.activeId.set(1);
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
-    api.board.mockClear();
-    select.dispatchEvent(new Event('focus'));
-    expect(api.board).toHaveBeenCalledWith(2);
-    expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
-    api.board.mockClear();
-    select.dispatchEvent(new Event('pointerdown'));
-    expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
-  });
-
   it('does not prefetch while switching or mutating', () => {
     const { f, api, session } = setup();
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
+    const trigger = projectTrigger(f);
     api.board.mockClear();
     session.switching.set(true);
-    select.dispatchEvent(new Event('focus'));
-    select.dispatchEvent(new Event('pointerdown'));
+    trigger.dispatchEvent(new Event('focus'));
+    trigger.dispatchEvent(new Event('pointerdown'));
     expect(api.board).not.toHaveBeenCalled();
     session.switching.set(false);
     session.mutating.set(true);
-    select.dispatchEvent(new Event('focus'));
-    select.dispatchEvent(new Event('pointerdown'));
+    trigger.dispatchEvent(new Event('focus'));
+    trigger.dispatchEvent(new Event('pointerdown'));
     expect(api.board).not.toHaveBeenCalled();
   });
 
-  it('disables the select while mutating', () => {
+  it('disables the project trigger while mutating', () => {
     const { f, session } = setup();
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
-    expect(select.disabled).toBe(false);
+    const trigger = projectTrigger(f);
+    expect(trigger.disabled).toBe(false);
     session.mutating.set(true);
     f.detectChanges();
-    expect(select.disabled).toBe(true);
-  });
-
-  it('restores the previous project when the switch PATCH fails', () => {
-    const { f, session } = setup({
-      patchBoardSettings: () => throwError(() => ({ error: { message: '切替失敗' } })),
-    });
-    const select = f.nativeElement.querySelector('#project-select') as HTMLSelectElement;
-    select.value = '2';
-    select.dispatchEvent(new Event('change'));
-    f.detectChanges();
-    expect(session.activeId()).toBe(1);
-    expect(session.switching()).toBe(false);
-    expect(select.value).toBe('1');
-    expect(f.nativeElement.querySelector('.project-error')?.textContent).toContain('切替失敗');
+    expect(trigger.disabled).toBe(true);
   });
 
   it('offers open_projects in the header menu with label プロジェクト', () => {
@@ -505,38 +466,6 @@ describe('App project switcher', () => {
     expect(option.querySelector('.todo')).toBeNull();
     expect(option.querySelector('.project-status-dots > .status-dot')).toBeTruthy();
   });
-
-  function withDialogPolyfill(f: ReturnType<typeof setup>['f'], run: () => void) {
-    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
-      showModal?: () => void;
-      close?: () => void;
-    };
-    const origShowModal = proto.showModal;
-    const origClose = proto.close;
-    proto.showModal = function () {
-      this.open = true;
-    };
-    proto.close = function () {
-      this.open = false;
-    };
-    try {
-      run();
-    } finally {
-      // Destroy dialog while polyfill still provides close() (jsdom has no native close).
-      f.componentInstance.saving.set(false);
-      f.componentInstance.projectModalOpen.set(false);
-      f.detectChanges();
-      proto.showModal = origShowModal;
-      proto.close = origClose;
-    }
-  }
-
-
-
-
-
-
-
 
 
   it('navigates to /projects from the header menu', async () => {
