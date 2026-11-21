@@ -1,6 +1,6 @@
 # 検証記録
 
-主要機能の確認内容の要約です。再現手順の正本は [README](../README.md) と [APIガイド](api.md) です。個人の作業メモやローカルボードのアイテム番号は含みません。
+主要機能の確認内容の要約です。アプリ手順の正本は [README](../README.md)、HTTP API 契約の正本は [OpenAPI](openapi.yaml) です（[短い API 案内](api.md) は非規範）。個人の作業メモやローカルボードのアイテム番号は含みません。
 
 ## 自動化
 
@@ -48,7 +48,7 @@
 ### AI で整えて Todo 起票
 
 - 偽 Anthropic サーバーでのリクエスト形・失敗分類・センチネル非漏洩の単体/統合確認
-- **実 Claude API への接続確認は未実施**（鍵設定後は `docs/api.md` の実機手順）
+- **実 Claude API への接続確認は未実施**（鍵設定後は `POST /api/items/refined` を実キーで1回呼び、契約は OpenAPI の同 path を参照）
 - `scripts/smoke.py` は課金のため新エンドポイントを呼ばない
 
 ### 文字サイズ拡大

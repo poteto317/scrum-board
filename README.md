@@ -15,7 +15,7 @@
 - ボードは5秒ごとに最新の状態へ自動で更新（アイテムや列のドラッグ中・保存中・レイアウト切替中・追加モーダル表示中は更新しません）
 - プロダクトバックログ（全ステータスの優先順位リスト。ドラッグ／キーボードで並び替え、バックログからも新規追加・常に Todo）
 - MySQLへの永続化
-- APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのアイテムを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[使い方](docs/api.md#aiで整えてアイテムを起票する)）
+- APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのアイテムを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[OpenAPI: refined](docs/openapi.yaml)）
 
 ## 最短で起動（Docker）
 
@@ -28,7 +28,7 @@ docker compose up -d --build
 
 **パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）はローカル Docker 専用の既定値です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。
 
-**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）が本線です。ボード／アイテムなど大半の API はログイン必須です（セッション不要は login/logout・`POST /api/trash/purge`・`POST /api/recurring/run`・`GET /api/public-config`・`GET /api/health` のみ）。nginx Basic は本番ゲートとして残ります。MCP・手動 curl・smoke の一般 API には Basic に加えて **セッション Cookie** が必要です。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
+**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）が本線です。大半の API はログイン必須で、セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番ゲートとして残ります。MCP・手動 curl・smoke の一般 API には Basic に加えて **セッション Cookie** が必要です。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
 
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board
@@ -163,35 +163,33 @@ Angularのstandalone components、Router、HttpClient、Reactive Forms、Signals
 
 ## API
 
-生成AI・CLIからは、公開タスク番号と列名で変更できる [ステータス変更APIの使い方](docs/api.md) を参照してください。
+HTTP API の**契約正本**は [OpenAPI（`docs/openapi.yaml`）](docs/openapi.yaml) です。AI／CLI 向けの短い入口は [docs/api.md](docs/api.md)（非規範）です。
 
-| Method | Path | 内容 |
+| Method | Path | 目的 |
 | --- | --- | --- |
-| GET | `/api/board` | `{columns: [...], items: [...]}` |
-| POST | `/api/columns` | `{name}`で列を追加 |
-| POST | `/api/items` | `{title, description, columnId, prUrls?, assignee?}`でアイテム追加 |
-| PUT | `/api/items/order` | `{columns:[{columnId, itemIds, offsetYs?}]}`でアイテムの列内並べ替え・列間移動（[詳細](docs/api.md#アイテムの並び替え列間移動)） |
-| PATCH | `/api/board/settings` | `{cardLayout?, mobileBoardColumnId?}`でボード設定を部分更新（[詳細](docs/api.md#ボード設定カード配置モバイル表示列)） |
-| POST | `/api/items/refined` | `{title?, description?}`の下書きをAIが整えてTodoに起票（要`ANTHROPIC_API_KEY`、料金あり。[詳細](docs/api.md#aiで整えてアイテムを起票する)） |
-| GET | `/api/items/{id}` | 内部IDによるアイテム詳細 |
-| GET | `/api/items/by-number/{number}/history` | 変更履歴（beforeで追加取得） |
-| GET | `/api/items/by-number/{number}` | タスク番号によるアイテム詳細 |
-| PATCH | `/api/items/by-number/{number}/status` | `{status}`（列名）でステータスだけ変更 |
-| PATCH | `/api/items/by-number/{number}/assignee` | `{assignee}`（対応者ラベル）だけ変更 |
-| PATCH | `/api/items/{id}` | `{title?, description?, columnId?, prUrls?, assignee?}`で部分更新 |
-| DELETE | `/api/items/{id}` | 削除（204） |
-| GET | `/api/command-templates` | `{templates:[...]}`（`position` 昇順。[詳細](docs/api.md#コマンドテンプレート)） |
-| POST | `/api/command-templates` | `{name, template}` で追加（201。最大50件。サーバーは文字列保存のみで実行しない） |
-| PATCH | `/api/command-templates/{id}` | `{name?, template?}` の部分更新 |
-| DELETE | `/api/command-templates/{id}` | 削除（204） |
-| GET/PUT | `/api/items/by-number/{n}/command-templates` | アイテムの表示セット（PUT は `{templateIds}` で置き換え） |
-| GET/PUT | `/api/command-template-defaults` | 新規アイテム作成時にコピーする初期 `templateIds` |
-| POST | `/api/command-templates/apply-to-all-items` | 全アイテムの表示セットを `{templateIds}` で置き換え（204） |
+| GET | `/api/board` | ボード取得 |
+| POST | `/api/columns` | 列追加 |
+| POST | `/api/items` | アイテム追加 |
+| PUT | `/api/items/order` | アイテム並び替え・列間移動 |
+| PATCH | `/api/board/settings` | ボード設定の部分更新 |
+| POST | `/api/items/refined` | AI 整形して Todo 起票 |
+| GET | `/api/items/{id}` | アイテム詳細（内部 ID） |
+| GET | `/api/items/by-number/{number}/history` | 変更履歴 |
+| GET | `/api/items/by-number/{number}` | アイテム詳細（公開番号） |
+| PATCH | `/api/items/by-number/{number}/status` | ステータス（列名）変更 |
+| PATCH | `/api/items/by-number/{number}/assignee` | 対応者変更 |
+| PATCH | `/api/items/{id}` | アイテム部分更新 |
+| DELETE | `/api/items/{id}` | 削除 |
+| GET | `/api/command-templates` | コマンドテンプレート一覧 |
+| POST | `/api/command-templates` | コマンドテンプレート追加 |
+| PATCH | `/api/command-templates/{id}` | コマンドテンプレート更新 |
+| DELETE | `/api/command-templates/{id}` | コマンドテンプレート削除 |
+| GET/PUT | `/api/items/by-number/{n}/command-templates` | アイテムの表示セット |
+| GET/PUT | `/api/command-template-defaults` | 新規アイテム初期テンプレート |
+| POST | `/api/command-templates/apply-to-all-items` | 全アイテム表示セット置換 |
 | GET | `/api/health` | 起動確認 |
 
-タイトルは1〜200文字、説明は10000文字以内。タイトル・列名の前後の空白は削除します。絵文字を含むUnicode文字数で検証します。空のPATCH、未知のプロパティ、不正なJSONも拒否します。エラー形式は`{"message":"..."}`。不正入力400、未存在404、重複列409、内部エラー500です。
-
-列名の重複はMySQLの`utf8mb4_0900_ai_ci`で判定するため、大文字小文字・アクセントの違いを区別しません。列内のアイテムは`position`・ID順で、`GET /api/board`もこの順です（応答に `settings.cardLayout` / `settings.mobileBoardColumnId` と各アイテムの `offsetY` も含みます）。ステータス移動（詳細画面や`PATCH .../status`）は移動先の列の末尾に入り、移動元の残りは詰め直されます（自由配置時の `offsetY` はサーバーが近似値を付与）。ドラッグ&ドロップは`PUT /api/items/order`で保存し、`items.position` / `offset_y` と `board_settings` はAPI起動時に冪等に用意されます。
+フィールド・ステータスコード・認証要否の詳細は OpenAPI を参照してください。
 
 ## 検証
 
@@ -270,7 +268,7 @@ docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump
 
 ### アイテムとGitHub PRの紐付け
 
-アイテム詳細のプロパティでGitHub PRのURLを追加・削除・並べ替え（ドラッグまたは上下ボタン）できます。1アイテムに複数URLを登録でき（件数上限なし）、削除で解除します。APIからは `prUrls` 配列の部分更新が可能です（[APIガイド](docs/api.md#github-prの紐付け)）。関連アイテムも同様に並べ替えできます。
+アイテム詳細のプロパティでGitHub PRのURLを追加・削除・並べ替え（ドラッグまたは上下ボタン）できます。1アイテムに複数URLを登録でき（件数上限なし）、削除で解除します。APIからは `prUrls` 配列の部分更新が可能です（[OpenAPI](docs/openapi.yaml)）。関連アイテムも同様に並べ替えできます。
 
 URLは起動時に `backend/internal/kanban/pr_link.go` が準備する補助表 `item_pr_links` に保存します（1アイテム複数行）。既存のアイテム・番号は変更しません。既存DBの更新では、APIを停止してバックアップを取り、新しいAPIとWebへ切り替えてください。起動時に旧スキーマ（1アイテム1行）から自動移行します。MySQLボリュームの削除や再初期化は不要です。古いAPIに戻してもURLデータは補助表に残りますが、古い画面では表示できません。
 
@@ -295,7 +293,7 @@ docker compose start api
 
 起動時の `backend/internal/kanban/history_migration.go` が補助表 `item_history` を準備し、履歴のない既存アイテムには「履歴機能導入時の状態」を一度だけ保存します。過去の初期値を推定するものではありません。過去記録の復元は `backend/cmd/import-history` と `history_import.go`、画面は `frontend/src/app/item-history.*` を参照してください。
 
-復元記録は「復元した記録」と注記・根拠PRで通常の変更と区別します。バックアップ間の差分は観測時刻であり、正確な操作時刻や途中の全変更を保証しません。作成日時しか分からない場合は初期本文を捏造しません。復元方法とJSON形式は[APIガイド](docs/api.md#過去履歴の取り込み)を参照してください。
+復元記録は「復元した記録」と注記・根拠PRで通常の変更と区別します。バックアップ間の差分は観測時刻であり、正確な操作時刻や途中の全変更を保証しません。作成日時しか分からない場合は初期本文を捏造しません。復元方法とJSON形式は `backend/cmd/import-history` および `history_import.go` を参照してください（HTTP API ではないため OpenAPI 外）。
 
 バックアップを戻すと履歴もその時点へ戻ります。上記の復元手順で補助表を削除する場合、更新後に記録した履歴も失われます。通常の更新でボリュームやテーブルを初期化する必要はありません。
 
