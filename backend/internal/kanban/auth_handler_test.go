@@ -143,6 +143,16 @@ func TestSessionMiddlewareBasicAuth(t *testing.T) {
 		t.Fatalf("cookie preferred=%d %s", both.Code, both.Body)
 	}
 
+	// invalid session cookie falls through to valid Basic
+	stale := httptest.NewRecorder()
+	rStale := httptest.NewRequest("GET", "/api/board", nil)
+	rStale.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "nonexistent-session"})
+	rStale.SetBasicAuth("admin", "test-password")
+	h.ServeHTTP(stale, rStale)
+	if stale.Code != 200 {
+		t.Fatalf("invalid cookie basic fallthrough=%d %s", stale.Code, stale.Body)
+	}
+
 	disabled := fresh()
 	disabled.users[0].Disabled = true
 	w := requestWithBasic(NewHandler(disabled), "GET", "/api/board", "", "admin", "test-password")
