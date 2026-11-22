@@ -27,8 +27,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: 連続失敗による一時ロック（試行回数が上限）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       security: []
-      description: セッション Cookie 不要（sessionExempt）。
+      description: セッション Cookie 不要（sessionExempt）。連続失敗が上限に達すると一時的に 429 を返す。ゲートウェイ（nginx limit_req）の 429 は本文形式がアプリ JSON と異なる場合がある。
       requestBody:
         required: true
         content:
@@ -2383,7 +2389,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/JsonValue'
         '400':
-          description: 不正な入力
+          description: 不正な入力（パスワード 8 文字未満を含む。応答 message は他の不正入力と同一文言）
           content:
             application/json:
               schema:
@@ -2408,7 +2414,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/JsonValue'
-      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+      description: ' requestBody は暫定 JsonValue。変更時に具体化する。パスワードは 8 文字以上（短い場合も 400 の一般メッセージ）。'
   /api/users/{id}:
     patch:
       summary: ユーザー更新
@@ -2421,7 +2427,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/JsonValue'
         '400':
-          description: 不正な入力
+          description: 不正な入力（パスワード変更時の 8 文字未満を含む。応答 message は他の不正入力と同一文言）
           content:
             application/json:
               schema:
