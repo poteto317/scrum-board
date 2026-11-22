@@ -38,7 +38,7 @@
     1. `postPNG(..., paddedPNG(attachmentMultipartMaxMemory+1), nil)` → 201
     2. field=`title`（不正）+ `paddedPNG(attachmentMultipartMaxMemory+1)` → 400
     3. **Parse 時 MaxBytesError 経路**（`header.Size` チェックではない）:
-       - ボディ全体が `attachmentMaxBytes+attachmentMultipartMaxMemory+64*1024+1` 以上になるよう、`paddedPNG` にそのサイズを渡して file part を組み立てる（>1 MiB かつ MaxBytesReader 上限超）
+       - ボディ全体が `attachmentMaxMultipartRequestBytes+1` 以上になるよう、`paddedPNG` にそのサイズを渡して file part を組み立てる（>1 MiB かつ MaxBytesReader 上限超）
        - 上限未満で 5 MiB 超のファイルだけだと `header.Size` 経路に落ちるので **使わない**
        - 期待: 400 かつ本文「画像は5MiB以下にしてください。」＋残骸なし
        - 注: 文言は Size 経路と同じだが、ペイロード設計で Parse 打ち切り経路に固定する
@@ -54,10 +54,11 @@
 - [x] **Step 1:** `createAttachment` で **`commentParentItem` 成功後**、既存の MaxBytesReader 行を含めて次のように置き換える（`ParseMultipartForm` 直後・`if err != nil` の前。パース失敗で部分構築された `MultipartForm` も掃除）:
 
 ```go
-r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxBytes+attachmentMultipartMaxMemory+64*1024)
+r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxMultipartRequestBytes)
 err := r.ParseMultipartForm(attachmentMultipartMaxMemory)
 if r.MultipartForm != nil {
-	defer func() { _ = r.MultipartForm.RemoveAll() }()
+	mf := r.MultipartForm
+	defer func() { _ = mf.RemoveAll() }()
 }
 if err != nil {
 	var maxBytes *http.MaxBytesError
@@ -69,6 +70,8 @@ if err != nil {
 	return
 }
 ```
+
+定数: `attachmentMultipartOverhead`（境界余白）と `attachmentMaxMultipartRequestBytes` を handler 側で定義し、テストも参照する。
 
 **defer 登録順:** `RemoveAll` の defer を先に登録し、その後の既存 `defer file.Close()` より前に置く（LIFO で Close → RemoveAll）。他のロジックは変えない。
 

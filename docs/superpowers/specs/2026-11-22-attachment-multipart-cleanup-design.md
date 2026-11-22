@@ -19,7 +19,7 @@
 - アップロード処理の終了後、当該リクエストが作った multipart 一時ファイルが残らない。対象経路:
   1. 正常アップロード（201）
   2. パース成功後のバリデーション失敗（例: 不正 `field` → 400）
-  3. multipart パース失敗: `http.MaxBytesReader` 上限（`attachmentMaxBytes + attachmentMultipartMaxMemory + 64*1024`）超のボディで `MaxBytesError` → 400。file part 本文は >1 MiB を含む
+  3. multipart パース失敗: `http.MaxBytesReader` 上限（`attachmentMaxMultipartRequestBytes` = max + memory + overhead）超のボディで `MaxBytesError` → 400。file part 本文は >1 MiB を含む
 - 業務エラー（`CreateAttachment` 失敗など）も同じ `defer` で掃除される。自動テストでの固定は必須としない（defer がパース直後に掛かっていれば足りる）。
 - 上記 1〜3 を自動テストで固定する（一時ディレクトリを差し替え、ハンドラ復帰後に残骸が無いこと）。**残骸を見るケースはいずれも** part 本文が `attachmentMultipartMaxMemory`（1 MiB）を超える multipart を POST する。
 - `RemoveAll` の失敗は主処理の成否や既存の HTTP エラーを置き換えない（L-575）。失敗注入テストは非目標。
@@ -47,10 +47,11 @@
 実装はこの形のみ:
 
 ```go
-r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxBytes+attachmentMultipartMaxMemory+64*1024)
+r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxMultipartRequestBytes)
 err := r.ParseMultipartForm(attachmentMultipartMaxMemory)
 if r.MultipartForm != nil {
-    defer func() { _ = r.MultipartForm.RemoveAll() }()
+    mf := r.MultipartForm
+    defer func() { _ = mf.RemoveAll() }()
 }
 if err != nil {
     var maxBytes *http.MaxBytesError
