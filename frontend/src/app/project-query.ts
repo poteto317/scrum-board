@@ -10,7 +10,8 @@ export type ProjectQueryParse =
 export type ProjectDeepLinkAction =
   | { kind: 'skip' }
   | { kind: 'error'; message: string }
-  | { kind: 'switch'; id: number };
+  /** Open the project in this browser only (no settings PATCH). */
+  | { kind: 'view'; id: number };
 
 /**
  * Parse the `project` query for board deep links.
@@ -60,7 +61,7 @@ export function resolveProjectDeepLinkAction(input: {
     return { kind: 'error', message: PROJECT_QUERY_NOT_FOUND };
   }
   if (input.activeId === parsed.id) return { kind: 'skip' };
-  return { kind: 'switch', id: parsed.id };
+  return { kind: 'view', id: parsed.id };
 }
 
 /** Merge `project` into query params (pure). */

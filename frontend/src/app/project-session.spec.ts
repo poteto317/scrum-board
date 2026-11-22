@@ -369,6 +369,37 @@ describe('ProjectSession', () => {
     expect(session.mutating()).toBe(false);
   });
 
+  it('viewFromDeepLink sets ephemeral view and notifies listeners', () => {
+    session.projects.set([main, next]);
+    session.activeId.set(1);
+    const seen: number[] = [];
+    session.onSwitched((id) => {
+      seen.push(id);
+      session.endSwitch();
+    });
+    session.viewFromDeepLink(2);
+    expect(session.activeId()).toBe(2);
+    expect(session.ephemeralActiveView()).toBe(true);
+    expect(seen).toEqual([2]);
+    expect(session.switching()).toBe(false);
+    session.syncActiveFromBoard(1, false);
+    expect(session.activeId()).toBe(2);
+  });
+
+  it('switchTo from ephemeral view with same id persists and clears ephemeral', () => {
+    session.projects.set([main, next]);
+    session.activeId.set(1);
+    session.viewFromDeepLink(2);
+    session.onSwitched(() => session.endSwitch());
+    let nextId: number | undefined;
+    session.switchTo(2).subscribe({ next: (id) => (nextId = id) });
+    http.expectOne('/api/board/settings').flush({
+      settings: { cardLayout: 'pack', activeProjectId: 2 },
+    });
+    expect(nextId).toBe(2);
+    expect(session.ephemeralActiveView()).toBe(false);
+  });
+
   it('clearSubjectState resets project workspace signals', () => {
     session.projects.set([main, next]);
     session.activeId.set(2);
