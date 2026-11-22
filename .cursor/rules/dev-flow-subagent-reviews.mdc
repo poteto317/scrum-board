@@ -1,0 +1,16 @@
+---
+description: Enforce Task/subagent for every dev-flow review round (no self-review-only logs)
+alwaysApply: true
+---
+
+# Dev-flow review rounds use Task
+
+For `/feature`, `/refactor-srp`, `/dev-flow-review`, `/dev-flow-pr-review`, and chained `/dev-flow` steps:
+
+1. Each round launches a **new Task/subagent** before recording results.
+2. Append only via `<LESSONS_DIR>/scripts/dev-flow/append-review-round.sh` with `--via subagent --task "…"`.
+3. Do not hand-edit `.claude/dev-flow/review-log.md` for rounds.
+4. Before `completed` includes the step, run `require-feature-reviews.sh` or `require-loop-reviews.sh <kind>`; failure means stop.
+5. Finish reports must list both rounds (kind / round / perspective / Task) matching `reviewEvidence`.
+
+Red flags: “small change”, “already wrote two rounds”, “self-review is fine on Cursor” — all still require Task when it is available.
