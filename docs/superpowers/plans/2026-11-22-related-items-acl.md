@@ -26,7 +26,7 @@
 | `backend/internal/kanban/handler.go` | create/update で peer ACL |
 | `backend/internal/kanban/status_handler.go` | `enrichItemForReply` |
 | `backend/internal/kanban/assignee_handler.go` | `enrichItemForReply` |
-| `backend/internal/kanban/item_acl_handler_test.go`（または専用 `related_acl_handler_test.go`） | 403・非漏洩・500 テスト |
+| `backend/internal/kanban/related_acl_fixture_test.go` / `related_peer_write_acl_test.go` / `related_peer_view_acl_test.go` | 403・非漏洩・500 テスト |
 | `docs/openapi.yaml` | Create/Update 403 説明 |
 
 ---
