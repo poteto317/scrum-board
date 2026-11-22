@@ -3,6 +3,7 @@ package kanban
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestCardCommandTemplatesHTTP(t *testing.T) {
@@ -216,6 +217,71 @@ func TestApplyEmptyClearsAllCardsAndDeleteRemovesLinks(t *testing.T) {
 	}
 	if len(defaults.TemplateIDs) != 0 {
 		t.Fatalf("defaults after delete: %+v", defaults.TemplateIDs)
+	}
+}
+
+func TestCommandTemplateDefaultsAndApplyAdminGuards(t *testing.T) {
+	repo := fresh()
+	h := NewHandler(repo)
+
+	w := request(h, "POST", "/api/command-templates", `{"name":"a","template":"a {{url}}"}`)
+	if w.Code != 201 {
+		t.Fatalf("seed tmpl: %d %s", w.Code, w.Body.String())
+	}
+	var tmpl CommandTemplate
+	if err := json.Unmarshal(w.Body.Bytes(), &tmpl); err != nil {
+		t.Fatal(err)
+	}
+	w = request(h, "POST", "/api/items", `{"title":"A","description":"","columnId":1}`)
+	if w.Code != 201 {
+		t.Fatalf("seed card: %d %s", w.Code, w.Body.String())
+	}
+	var card Item
+	if err := json.Unmarshal(w.Body.Bytes(), &card); err != nil {
+		t.Fatal(err)
+	}
+
+	member, err := repo.CreateUser(t.Context(), UserCreateInput{
+		LoginName: "mem-ct2", Password: "password1", DisplayName: "Mem", Role: RoleMember,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := repo.CreateSession(t.Context(), member.ID, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w = requestWithCookie(h, "PUT", "/api/command-template-defaults", `{"templateIds":[`+itoa(tmpl.ID)+`]}`, sess.ID)
+	assertAPIMessage(t, w.Code, w.Body.Bytes(), 403, msgForbidden)
+	w = request(h, "GET", "/api/command-template-defaults", "")
+	if w.Code != 200 {
+		t.Fatalf("get defaults: %d", w.Code)
+	}
+	var defaults struct {
+		TemplateIDs []int64 `json:"templateIds"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &defaults); err != nil {
+		t.Fatal(err)
+	}
+	if len(defaults.TemplateIDs) != 0 {
+		t.Fatalf("defaults changed: %+v", defaults.TemplateIDs)
+	}
+
+	w = requestWithCookie(h, "POST", "/api/command-templates/apply-to-all-items", `{"templateIds":[`+itoa(tmpl.ID)+`]}`, sess.ID)
+	assertAPIMessage(t, w.Code, w.Body.Bytes(), 403, msgForbidden)
+	w = request(h, "GET", "/api/items/by-number/"+itoa(card.Number)+"/command-templates", "")
+	if w.Code != 200 {
+		t.Fatalf("get card tmpl: %d", w.Code)
+	}
+	var linked struct {
+		Templates []CommandTemplate `json:"templates"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &linked); err != nil {
+		t.Fatal(err)
+	}
+	if len(linked.Templates) != 0 {
+		t.Fatalf("card templates changed: %+v", linked.Templates)
 	}
 }
 

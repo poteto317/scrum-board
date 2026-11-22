@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestCommandTemplatesCRUD(t *testing.T) {
@@ -164,6 +166,64 @@ func TestCommandTemplatesLimit(t *testing.T) {
 	w := request(h, "POST", "/api/command-templates", `{"name":"overflow","template":"x"}`)
 	if w.Code != 400 {
 		t.Fatalf("limit: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCommandTemplatesAdminGuards(t *testing.T) {
+	repo := fresh()
+	h := NewHandler(repo)
+
+	w := request(h, "POST", "/api/command-templates", `{"name":"safe","template":"echo {{url}}"}`)
+	if w.Code != 201 {
+		t.Fatalf("seed: %d %s", w.Code, w.Body.String())
+	}
+	var seeded CommandTemplate
+	if err := json.Unmarshal(w.Body.Bytes(), &seeded); err != nil {
+		t.Fatal(err)
+	}
+
+	member, err := repo.CreateUser(t.Context(), UserCreateInput{
+		LoginName: "mem-ct", Password: "password1", DisplayName: "Mem", Role: RoleMember,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := repo.CreateSession(t.Context(), member.ID, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w = requestWithCookie(h, "POST", "/api/command-templates", `{"name":"evil","template":"rm -rf /"}`, sess.ID)
+	assertAPIMessage(t, w.Code, w.Body.Bytes(), 403, msgForbidden)
+
+	w = request(h, "GET", "/api/command-templates", "")
+	if w.Code != 200 {
+		t.Fatalf("list after post: %d", w.Code)
+	}
+	var list struct {
+		Templates []CommandTemplate `json:"templates"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Templates) != 1 || list.Templates[0].Template != "echo {{url}}" {
+		t.Fatalf("catalog changed after member post: %+v", list.Templates)
+	}
+
+	w = requestWithCookie(h, "PATCH", "/api/command-templates/"+itoa(seeded.ID), `{"template":"curl evil"}`, sess.ID)
+	assertAPIMessage(t, w.Code, w.Body.Bytes(), 403, msgForbidden)
+	w = requestWithCookie(h, "DELETE", "/api/command-templates/"+itoa(seeded.ID), "", sess.ID)
+	assertAPIMessage(t, w.Code, w.Body.Bytes(), 403, msgForbidden)
+
+	w = request(h, "GET", "/api/command-templates", "")
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Templates) != 1 || list.Templates[0].Template != "echo {{url}}" {
+		t.Fatalf("catalog changed after member patch/delete: %+v", list.Templates)
+	}
+	if !strings.Contains(list.Templates[0].Name, "safe") {
+		t.Fatalf("name changed: %+v", list.Templates[0])
 	}
 }
 
