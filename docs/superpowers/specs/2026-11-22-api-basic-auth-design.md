@@ -17,7 +17,7 @@
 
 ## 目的と受け入れ条件
 
-1. 有効な `users` の login_name / password を `Authorization: Basic` で送ったリクエストは、Cookie 無しでも `CurrentUser` 付きでセッション必須の `/api/*` を処理できる（例: `GET /api/board` → 200）。
+1. 有効な `users` の login_name / password を `Authorization: Basic` で送ったリクエストは、**`Sec-Fetch-Site` ヘッダが無い**（非ブラウザ: curl・エージェント等）場合に限り、Cookie 無しでも `CurrentUser` 付きでセッション必須の `/api/*` を処理できる（例: `GET /api/board` → 200）。`Sec-Fetch-Site` があるブラウザリクエストでは Basic を無視する。
 2. 検証はログインと同じ: `GetUserByLoginName` → `Disabled` なら拒否 → `CheckPassword`。必須経路で Cookie も有効 Basic も無い／Basic が不正なときは既存どおり **401** と `msgLoginRequired`（平文パスワード・`err.Error()` を出さない。login の `msgLoginFailed` には寄せない）。
 3. 有効な `sb_session` Cookie がある場合は従来どおり Cookie のみで認証し、Basic ヘッダの有無・正誤は問わない。
 4. Basic 成功時に `CreateSession` / `Set-Cookie` を行わない。
@@ -32,7 +32,8 @@
 [Client] --(nginx Basic: AUTH_*)--> [nginx] --proxy--> [Go withSessionAuth]
                                                       |
                                                       +-- Cookie sb_session 有効 → CurrentUser
-                                                      +-- Cookie 無し + Basic 有効 → users 照合 → CurrentUser（セッション無し）
+                                                      +-- Cookie 無し + Sec-Fetch-Site 無 + Basic 有効 → users 照合 → CurrentUser（セッション無し）
+                                                      +-- Sec-Fetch-Site あり → Basic 無視（Cookie のみ）
                                                       +-- どちらも無し（必須経路）→ 401
 
 [Browser] は従来どおり POST /api/auth/login → Cookie
