@@ -57,8 +57,9 @@ def main() -> int:
             if key in OPTIONAL and "viewAccess=public" not in (op.get("description") or ""):
                 security_bad.append(f"{method} {path}: optional description missing viewAccess=public")
         else:
-            if sec != [{"cookieAuth": []}]:
-                security_bad.append(f"{method} {path}: expected cookieAuth, got {sec!r}")
+            required = [{"cookieAuth": []}, {"basicAuth": []}]
+            if sec != required:
+                security_bad.append(f"{method} {path}: expected cookieAuth OR basicAuth, got {sec!r}")
 
     # openapi paths/methods not in handler
     handler_set = {(m, p) for m, p in handler_routes()}
