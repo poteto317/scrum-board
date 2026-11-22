@@ -809,6 +809,16 @@ func requestWithCookie(h http.Handler, method, path, body, sessionID string) *ht
 	h.ServeHTTP(w, r)
 	return w
 }
+
+func requestWithBasic(h http.Handler, method, path, body, user, pass string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(method, path, strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.SetBasicAuth(user, pass)
+	h.ServeHTTP(w, r)
+	return w
+}
+
 func TestValidation(t *testing.T) {
 	cases := []struct {
 		name, method, path, body string

@@ -109,6 +109,60 @@ func TestDisableUserDeletesSessions(t *testing.T) {
 	}
 }
 
+func TestSessionMiddlewareBasicAuth(t *testing.T) {
+	h := NewHandler(fresh())
+
+	ok := requestWithBasic(h, "GET", "/api/board", "", "admin", "test-password")
+	if ok.Code != 200 {
+		t.Fatalf("basic board=%d %s", ok.Code, ok.Body)
+	}
+	if findSessionCookie(ok) != nil {
+		t.Fatal("basic auth must not Set-Cookie sb_session")
+	}
+	for _, c := range ok.Result().Cookies() {
+		if c.Name == SessionCookieName {
+			t.Fatal("unexpected session cookie")
+		}
+	}
+
+	bad := requestWithBasic(h, "GET", "/api/board", "", "admin", "wrong")
+	if bad.Code != 401 || !strings.Contains(bad.Body.String(), msgLoginRequired) {
+		t.Fatalf("bad basic=%d %s", bad.Code, bad.Body)
+	}
+	if strings.Contains(bad.Body.String(), "wrong") || strings.Contains(bad.Body.String(), "test-password") {
+		t.Fatal("failure leaked password")
+	}
+
+	// valid cookie wins even if Basic is wrong
+	both := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/board", nil)
+	r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
+	r.SetBasicAuth("admin", "wrong")
+	h.ServeHTTP(both, r)
+	if both.Code != 200 {
+		t.Fatalf("cookie preferred=%d %s", both.Code, both.Body)
+	}
+
+	disabled := fresh()
+	disabled.users[0].Disabled = true
+	w := requestWithBasic(NewHandler(disabled), "GET", "/api/board", "", "admin", "test-password")
+	if w.Code != 401 || !strings.Contains(w.Body.String(), msgLoginRequired) {
+		t.Fatalf("disabled basic=%d %s", w.Code, w.Body)
+	}
+
+	me := requestWithBasic(h, "GET", "/api/auth/me", "", "admin", "test-password")
+	if me.Code != 200 {
+		t.Fatalf("me basic=%d %s", me.Code, me.Body)
+	}
+	var pub UserPublic
+	if err := json.Unmarshal(me.Body.Bytes(), &pub); err != nil {
+		t.Fatal(err)
+	}
+	if pub.LoginName != "admin" {
+		t.Fatalf("me user %#v", pub)
+	}
+}
+
 func findSessionCookie(w *httptest.ResponseRecorder) *http.Cookie {
 	for _, c := range w.Result().Cookies() {
 		if c.Name == SessionCookieName {

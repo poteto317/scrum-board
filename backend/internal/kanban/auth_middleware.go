@@ -79,6 +79,18 @@ func sessionOptional(r *http.Request) bool {
 	return false
 }
 
+func (h handler) userFromBasicAuth(r *http.Request) (User, bool) {
+	userName, pass, ok := r.BasicAuth()
+	if !ok || strings.TrimSpace(userName) == "" || pass == "" {
+		return User{}, false
+	}
+	user, err := h.repo.GetUserByLoginName(r.Context(), strings.TrimSpace(userName))
+	if err != nil || user.Disabled || !CheckPassword(user.PasswordHash, pass) {
+		return User{}, false
+	}
+	return user, true
+}
+
 func (h handler) withSessionAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sessionExempt(r) {
@@ -86,24 +98,22 @@ func (h handler) withSessionAuth(next http.Handler) http.Handler {
 			return
 		}
 		c, err := r.Cookie(SessionCookieName)
-		if err != nil || c.Value == "" {
-			if sessionOptional(r) {
-				next.ServeHTTP(w, r)
+		if err == nil && c.Value != "" {
+			user, err := h.repo.UserBySessionID(r.Context(), c.Value, time.Now().UTC())
+			if err == nil {
+				next.ServeHTTP(w, r.WithContext(withUser(r.Context(), user)))
 				return
 			}
-			reply(w, 401, map[string]string{"message": msgLoginRequired})
+		}
+		if user, ok := h.userFromBasicAuth(r); ok {
+			next.ServeHTTP(w, r.WithContext(withUser(r.Context(), user)))
 			return
 		}
-		user, err := h.repo.UserBySessionID(r.Context(), c.Value, time.Now().UTC())
-		if err != nil {
-			if sessionOptional(r) {
-				next.ServeHTTP(w, r)
-				return
-			}
-			reply(w, 401, map[string]string{"message": msgLoginRequired})
+		if sessionOptional(r) {
+			next.ServeHTTP(w, r)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(withUser(r.Context(), user)))
+		reply(w, 401, map[string]string{"message": msgLoginRequired})
 	})
 }
 
