@@ -301,6 +301,9 @@ func (h handler) deleteRecurringRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) runRecurring(w http.ResponseWriter, r *http.Request) {
+	if !h.requireJobRunnerAuth(w, r) {
+		return
+	}
 	created, skipped, failed, err := h.repo.RunRecurring(r.Context())
 	if err != nil {
 		fail(w, err)

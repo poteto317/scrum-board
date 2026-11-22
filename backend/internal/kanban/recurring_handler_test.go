@@ -18,7 +18,7 @@ func TestRunRecurringAnonymousOK(t *testing.T) {
 	}
 	repo.nextRecurringID = 2
 	h := NewHandler(repo)
-	w := requestAnon(h, "POST", "/api/recurring/run", "")
+	w := requestScheduler(h, "POST", "/api/recurring/run", "{}")
 	if w.Code != 200 {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}
@@ -349,7 +349,7 @@ func TestRecurringRulesRequireAuth(t *testing.T) {
 			t.Fatalf("%s %s want 401, got %d %s", tc.method, tc.path, w.Code, w.Body)
 		}
 	}
-	if w := requestAnon(h, "POST", "/api/recurring/run", ""); w.Code != 200 {
+	if w := requestScheduler(h, "POST", "/api/recurring/run", "{}"); w.Code != 200 {
 		t.Fatalf("run must stay exempt: %d %s", w.Code, w.Body)
 	}
 }

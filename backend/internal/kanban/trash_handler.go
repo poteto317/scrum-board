@@ -101,6 +101,9 @@ func (h handler) hardDeleteTrash(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) purgeTrash(w http.ResponseWriter, r *http.Request) {
+	if !h.requireJobRunnerAuth(w, r) {
+		return
+	}
 	keys, keyErr := h.repo.ListAttachmentObjectKeysForExpiredTrash(r.Context(), 0)
 	if keyErr != nil {
 		slog.Error("list attachment keys before trash purge", "error", keyErr)
