@@ -28,7 +28,10 @@ case "$PUBLIC_ORIGIN" in
         ;;
 esac
 
-htpasswd -bc /etc/nginx/.htpasswd "$AUTH_USER" "$AUTH_PASSWORD"
+umask 077
+printf '%s\n' "$AUTH_PASSWORD" | htpasswd -i -B -C 10 -c /etc/nginx/.htpasswd "$AUTH_USER"
+chown root:nginx /etc/nginx/.htpasswd
+chmod 640 /etc/nginx/.htpasswd
 
 export LISTEN_ADDRESS=127.0.0.1:8081
 export PORT="${PORT:-8080}"
