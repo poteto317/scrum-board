@@ -13,6 +13,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { Api } from './api';
+import { AuthSession } from './auth-session';
 import {
   SCRUM_ATTACHMENT_MIME,
   attachmentDragBelongsToItem,
@@ -41,6 +42,18 @@ export function removeComment(list: ItemComment[], id: number): ItemComment[] {
 
 export function displayCommentAuthor(author: string): string {
   return author.trim() ? author : '（無名）';
+}
+
+/** Mirrors backend canModifyComment for UI affordances (authoritative check is server-side). */
+export function canModifyCommentForUser(
+  c: ItemComment,
+  user: { id: number; role: string } | null,
+  readOnly: boolean,
+): boolean {
+  if (readOnly || !user) return false;
+  if (user.role === 'admin') return true;
+  if (c.createdByUserId == null || c.createdByUserId <= 0) return false;
+  return c.createdByUserId === user.id;
 }
 
 /** DnD 参照挿入の純粋結果（I/O・signal 更新は呼び出し側）。 */
@@ -88,6 +101,7 @@ export class ItemComments implements OnChanges {
   /** 編集権限が無いとき投稿・編集・削除を止める。 */
   @Input() readOnly = false;
   private readonly api = inject(Api);
+  private readonly authSession = inject(AuthSession);
   private readonly destroyRef = inject(DestroyRef);
   private readonly draftImage = viewChild<ElementRef<HTMLInputElement>>('draftImage');
   private readonly editBodyArea = viewChild<ElementRef<HTMLTextAreaElement>>('editBodyArea');
@@ -104,9 +118,7 @@ export class ItemComments implements OnChanges {
   readonly savingId = signal<number | null>(null);
   readonly deletingId = signal<number | null>(null);
   readonly editingId = signal<number | null>(null);
-  readonly draftAuthor = signal('');
   readonly draftBody = signal('');
-  readonly editAuthor = signal('');
   readonly editBody = signal('');
   readonly actionError = signal('');
   readonly imageBusy = signal(false);
@@ -137,6 +149,10 @@ export class ItemComments implements OnChanges {
     return displayCommentAuthor(author);
   }
 
+  canModifyComment(c: ItemComment): boolean {
+    return canModifyCommentForUser(c, this.authSession.user(), this.readOnly);
+  }
+
   submit() {
     if (this.posting() || this.savingId() != null || this.deletingId() != null || this.number <= 0) {
       return;
@@ -146,18 +162,16 @@ export class ItemComments implements OnChanges {
       this.actionError.set('本文を入力してください。');
       return;
     }
-    const author = this.draftAuthor().trim();
     const generation = this.generation;
     const number = this.number;
     const projectId = this.scopedProjectId();
     this.posting.set(true);
     this.actionError.set('');
     this.mutationRequest?.unsubscribe();
-    this.mutationRequest = this.api.createComment(number, { author, body }, projectId).subscribe({
+    this.mutationRequest = this.api.createComment(number, { body }, projectId).subscribe({
       next: (created) => {
         if (!this.stillCurrent(generation, number, projectId)) return;
         this.comments.update((list) => appendComment(list, created));
-        this.draftAuthor.set('');
         this.draftBody.set('');
       },
       error: () => {
@@ -174,7 +188,6 @@ export class ItemComments implements OnChanges {
   startEdit(c: ItemComment) {
     if (this.savingId() != null || this.deletingId() != null) return;
     this.editingId.set(c.id);
-    this.editAuthor.set(c.author);
     this.editBody.set(c.body);
     this.actionError.set('');
   }
@@ -191,7 +204,6 @@ export class ItemComments implements OnChanges {
       this.actionError.set('本文を入力してください。');
       return;
     }
-    const author = this.editAuthor().trim();
     const generation = this.generation;
     const number = this.number;
     const projectId = this.scopedProjectId();
@@ -200,7 +212,7 @@ export class ItemComments implements OnChanges {
     this.actionError.set('');
     this.mutationRequest?.unsubscribe();
     this.mutationRequest = this.api
-      .updateComment(number, c.id, { author, body }, projectId)
+      .updateComment(number, c.id, { body }, projectId)
       .subscribe({
         next: (updated) => {
           if (!this.stillCurrent(generation, number, projectId)) return;

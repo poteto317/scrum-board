@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
+import { AuthSession } from './auth-session';
 import {
   SCRUM_ATTACHMENT_MIME,
   encodeAttachmentDragPayload,
@@ -11,6 +12,7 @@ import {
   COMMENT_BODY_MAX,
   ItemComments,
   appendComment,
+  canModifyCommentForUser,
   displayCommentAuthor,
   removeComment,
   replaceComment,
@@ -35,19 +37,29 @@ function mockDataTransfer(opts: {
   } as unknown as DataTransfer;
 }
 
+const adminUser = {
+  id: 1,
+  loginName: 'admin',
+  displayName: 'Admin',
+  role: 'admin' as const,
+  disabled: false,
+};
+
 const c1: ItemComment = {
   id: 1,
   itemId: 10,
-  author: '',
+  author: 'Admin',
   body: 'hello',
+  createdByUserId: 1,
   createdAt: '2026-11-18T00:00:00Z',
   updatedAt: '2026-11-18T00:00:00Z',
 };
 const c2: ItemComment = {
   id: 2,
   itemId: 10,
-  author: 'Alice',
+  author: 'Admin',
   body: 'world',
+  createdByUserId: 1,
   createdAt: '2026-11-18T01:00:00Z',
   updatedAt: '2026-11-18T01:00:00Z',
 };
@@ -67,6 +79,10 @@ function setup(
   TestBed.configureTestingModule({
     imports: [ItemComments],
     providers: [
+      {
+        provide: AuthSession,
+        useValue: { user: () => adminUser },
+      },
       {
         provide: Api,
         useValue: {
@@ -95,6 +111,13 @@ describe('ItemComments pure helpers', () => {
     expect(removeComment([c1, c2], 1)).toEqual([c2]);
     expect(displayCommentAuthor('')).toBe('（無名）');
     expect(displayCommentAuthor('Bob')).toBe('Bob');
+    const legacy: ItemComment = { ...c1, createdByUserId: undefined };
+    const owned: ItemComment = { ...c1, createdByUserId: 2 };
+    expect(canModifyCommentForUser(owned, { id: 2, role: 'member' }, false)).toBe(true);
+    expect(canModifyCommentForUser(owned, { id: 3, role: 'member' }, false)).toBe(false);
+    expect(canModifyCommentForUser(legacy, { id: 2, role: 'member' }, false)).toBe(false);
+    expect(canModifyCommentForUser(legacy, adminUser, false)).toBe(true);
+    expect(canModifyCommentForUser(owned, adminUser, true)).toBe(false);
   });
 
   it('resolveAttachmentRefInsert: noop / error / ok without I/O', () => {
@@ -200,7 +223,6 @@ describe('ItemComments', () => {
       createComment: create,
     });
     f.componentInstance.draftBody.set('world');
-    f.componentInstance.draftAuthor.set('Alice');
     f.componentInstance.submit();
     f.detectChanges();
     expect(f.componentInstance.comments()).toHaveLength(2);
