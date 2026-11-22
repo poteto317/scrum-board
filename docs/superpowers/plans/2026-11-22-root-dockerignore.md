@@ -80,7 +80,9 @@ Expected: `7`
    - いずれかの行が `!` で始まる
 5. 成功時: `ok: root .dockerignore` を stdout に出す。
 
-実装の骨格（macOS 既定 bash 3.2 互換。`mapfile` 不使用）:
+実装の骨格（参考。実装正本は `scripts/check-root-dockerignore.sh`。`REQUIRED_PATTERNS` / `check_file` / `--selftest` あり）:
+
+macOS 既定 bash 3.2 互換。`mapfile` 不使用。
 
 ```bash
 #!/usr/bin/env bash
