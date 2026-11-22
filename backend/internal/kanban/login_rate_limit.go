@@ -48,6 +48,7 @@ func (l *memoryLoginAttemptLimiter) Allow(loginKey, ip string, now time.Time) bo
 func (l *memoryLoginAttemptLimiter) RecordFailure(loginKey, ip string, now time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.pruneLocked(now)
 	l.bump(loginAttemptKey(loginKey), now)
 	l.bump(ipAttemptKey(ip), now)
 }

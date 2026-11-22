@@ -85,9 +85,12 @@ func TestLoginAttemptLimiterPrunesStaleFailures(t *testing.T) {
 		l.RecordFailure("ghost", "8.8.8.8", now)
 	}
 	later := now.Add(loginFailureTTL + time.Second)
-	// After TTL prune, prior failures must not count toward a new lock.
+	if !l.Allow("ghost", "8.8.8.8", later) {
+		t.Fatal("stale failures should not leave a lock")
+	}
+	// One new failure after prune must not immediately lock (need 5 fresh).
 	l.RecordFailure("ghost", "8.8.8.8", later)
 	if !l.Allow("ghost", "8.8.8.8", later) {
-		t.Fatal("stale failures should have been pruned before the new failure")
+		t.Fatal("single failure after prune should still allow")
 	}
 }
