@@ -394,8 +394,25 @@ func validateUserMutation(ctx context.Context, counter adminCounter, cur, next U
 	return nil
 }
 
-// SeedAdminFromEnv creates one admin from AUTH_USER/AUTH_PASSWORD when users is empty.
-// When users > 0, AUTH may be missing (seed is a no-op). When users == 0, both AUTH vars are required.
+// adminSeedCreds reads env for an empty-users admin seed. AUTH_USER is TrimSpace'd;
+// passwords are not trimmed. AUTH_PASSWORD is never returned as the admin password.
+func adminSeedCreds(getenv func(string) string) (login, adminPass string, err error) {
+	login = strings.TrimSpace(getenv("AUTH_USER"))
+	adminPass = getenv("ADMIN_INITIAL_PASSWORD")
+	if login == "" || adminPass == "" {
+		return "", "", fmt.Errorf("%w: AUTH_USER and ADMIN_INITIAL_PASSWORD are required when users is empty", ErrAuthSeed)
+	}
+	basicPass := getenv("AUTH_PASSWORD")
+	if basicPass != "" && adminPass == basicPass {
+		return "", "", fmt.Errorf("%w: ADMIN_INITIAL_PASSWORD must differ from AUTH_PASSWORD", ErrAuthSeed)
+	}
+	return login, adminPass, nil
+}
+
+// SeedAdminFromEnv creates one admin from AUTH_USER/ADMIN_INITIAL_PASSWORD when users is empty.
+// When users > 0, env may be missing (seed is a no-op). When users == 0, AUTH_USER and
+// ADMIN_INITIAL_PASSWORD are required. AUTH_PASSWORD is never used as the seed hash material;
+// if both passwords are non-empty and equal, seeding fails so Basic credentials cannot log in as admin.
 func (r MySQLRepository) SeedAdminFromEnv(ctx context.Context, getenv func(string) string) error {
 	n, err := r.CountUsers(ctx)
 	if err != nil {
@@ -404,12 +421,11 @@ func (r MySQLRepository) SeedAdminFromEnv(ctx context.Context, getenv func(strin
 	if n > 0 {
 		return nil
 	}
-	user := strings.TrimSpace(getenv("AUTH_USER"))
-	pass := getenv("AUTH_PASSWORD")
-	if user == "" || pass == "" {
-		return fmt.Errorf("%w: AUTH_USER and AUTH_PASSWORD are required when users is empty", ErrAuthSeed)
+	user, adminPass, err := adminSeedCreds(getenv)
+	if err != nil {
+		return err
 	}
-	hash, err := HashPassword(pass)
+	hash, err := HashPassword(adminPass)
 	if err != nil {
 		return fmt.Errorf("%w: password hash failed", ErrAuthSeed)
 	}
