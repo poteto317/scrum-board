@@ -34,7 +34,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       security: []
-      description: セッション Cookie 不要（sessionExempt）。連続失敗が上限に達すると一時的に 429 を返す。ゲートウェイ（nginx limit_req）の 429 は本文形式がアプリ JSON と異なる場合がある。
+      description: セッション Cookie 不要（sessionExempt）。`Content-Type: application/json` 必須。`Origin` ヘッダがある場合は PUBLIC_ORIGIN（未設定時はリクエストの origin）と一致すること。連続失敗が上限に達すると一時的に 429 を返す。ゲートウェイ（nginx limit_req）の 429 は本文形式がアプリ JSON と異なる場合がある。
       requestBody:
         required: true
         content:
@@ -2122,8 +2122,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonValue'
-      security: []
-      description: セッション Cookie 不要（sessionExempt）。
+        '403':
+          description: トークン・管理者セッションなし、または Origin 不一致
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type が application/json 以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - schedulerJobToken: []
+      - cookieAuth: []
+      description: セッション Cookie ミドルウェアは免除。`X-Scheduler-Token`（環境変数 SCHEDULER_JOB_TOKEN と一致）または管理者セッションが必要。`Content-Type: application/json` 必須。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
   /api/sprints:
     get:
       summary: スプリント一覧
@@ -2379,8 +2400,29 @@ paths:
                     type: integer
                 required:
                 - purged
-      security: []
-      description: セッション Cookie 不要（sessionExempt）。
+        '403':
+          description: トークン・管理者セッションなし、または Origin 不一致
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type が application/json 以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - schedulerJobToken: []
+      - cookieAuth: []
+      description: セッション Cookie ミドルウェアは免除。`X-Scheduler-Token` または管理者セッションが必要。`Content-Type: application/json` 必須。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
   /api/trash/{id}:
     delete:
       summary: ゴミ箱から完全削除
@@ -2521,6 +2563,11 @@ components:
       type: http
       scheme: basic
       description: users テーブルの login_name / password。Cookie が無いときミドルウェアが検証する（セッションは発行しない）。`Sec-Fetch-Site` ヘッダが無い非ブラウザ（curl・エージェント等）向け。ブラウザは Cookie セッションを使う。本番 nginx Basic（AUTH_*）とは別
+    schedulerJobToken:
+      type: apiKey
+      in: header
+      name: X-Scheduler-Token
+      description: Cloud Scheduler 向け共有トークン（サーバ環境変数 SCHEDULER_JOB_TOKEN と一致）
   schemas:
     Error:
       type: object

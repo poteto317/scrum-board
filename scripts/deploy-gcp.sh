@@ -25,6 +25,7 @@ IMAGE_NAME="${IMAGE_NAME:-app}"
 SECRET_ID_DB_PASSWORD="${SECRET_ID_DB_PASSWORD:-scrum-board-db-password}"
 SECRET_ID_AUTH_PASSWORD="${SECRET_ID_AUTH_PASSWORD:-scrum-board-auth-password}"
 SECRET_ID_ADMIN_INITIAL_PASSWORD="${SECRET_ID_ADMIN_INITIAL_PASSWORD:-scrum-board-admin-initial-password}"
+SECRET_ID_SCHEDULER_JOB_TOKEN="${SECRET_ID_SCHEDULER_JOB_TOKEN:-scrum-board-scheduler-job-token}"
 
 require GCP_PROJECT
 require GCP_REGION
@@ -39,6 +40,7 @@ require DB_NAME
 require AUTH_USER
 require AUTH_PASSWORD
 require ADMIN_INITIAL_PASSWORD
+require SCHEDULER_JOB_TOKEN
 
 # Always enforce (even when users already exist and Go seed is a no-op): a shared
 # Basic/admin secret in env is a footgun for the next empty-DB rebuild.
@@ -175,13 +177,15 @@ docker push "$IMAGE_URI"
 ensure_secret "$SECRET_ID_DB_PASSWORD" "$DB_PASSWORD"
 ensure_secret "$SECRET_ID_AUTH_PASSWORD" "$AUTH_PASSWORD"
 ensure_secret "$SECRET_ID_ADMIN_INITIAL_PASSWORD" "$ADMIN_INITIAL_PASSWORD"
+ensure_secret "$SECRET_ID_SCHEDULER_JOB_TOKEN" "$SCHEDULER_JOB_TOKEN"
 
 RUNTIME_SA="$(resolve_runtime_sa)"
 echo "==> Granting secretAccessor to runtime SA ${RUNTIME_SA}"
 for secret_id in \
   "$SECRET_ID_DB_PASSWORD" \
   "$SECRET_ID_AUTH_PASSWORD" \
-  "$SECRET_ID_ADMIN_INITIAL_PASSWORD"
+  "$SECRET_ID_ADMIN_INITIAL_PASSWORD" \
+  "$SECRET_ID_SCHEDULER_JOB_TOKEN"
 do
   gcloud secrets add-iam-policy-binding "$secret_id" \
     --project="$GCP_PROJECT" \
@@ -206,6 +210,7 @@ trap 'rm -f "$ENV_VARS_FILE" "$ENV_YAML_FILE"' EXIT
 SET_SECRETS="DB_PASSWORD=${SECRET_ID_DB_PASSWORD}:latest"
 SET_SECRETS+=",AUTH_PASSWORD=${SECRET_ID_AUTH_PASSWORD}:latest"
 SET_SECRETS+=",ADMIN_INITIAL_PASSWORD=${SECRET_ID_ADMIN_INITIAL_PASSWORD}:latest"
+SET_SECRETS+=",SCHEDULER_JOB_TOKEN=${SECRET_ID_SCHEDULER_JOB_TOKEN}:latest"
 
 echo "==> Deploying Cloud Run service ${SERVICE_NAME} (secrets via Secret Manager)"
 # gcloud forbids combining --env-vars-file with --remove-env-vars on one invoke;
@@ -285,6 +290,6 @@ echo "  EOF"
 echo "  curl -sS -u '${AUTH_USER}:***' -b /tmp/sb.ck '${SERVICE_URL}/api/board' | head"
 echo ""
 echo "Trash purge Scheduler (daily POST /api/trash/purge):"
-echo "  AUTH_USER=... AUTH_PASSWORD=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-trash-purge-scheduler.sh"
+echo "  SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-trash-purge-scheduler.sh"
 echo "Recurring run Scheduler (every 15m POST /api/recurring/run):"
-echo "  AUTH_USER=... AUTH_PASSWORD=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-recurring-run-scheduler.sh"
+echo "  SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-recurring-run-scheduler.sh"

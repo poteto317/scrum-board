@@ -17,9 +17,10 @@ type handler struct {
 	prTitleResolver *PRTitleResolver
 	blobs           BlobStorage
 	rateLimiter     AIRateLimiter
-	loginAttempts   LoginAttemptLimiter
-	messageMax      int
-	historyTurns    int
+	loginAttempts       LoginAttemptLimiter
+	messageMax          int
+	historyTurns        int
+	schedulerJobToken   string
 }
 
 // Option customizes NewHandler without changing the call sites that only need the repository.
@@ -84,15 +85,21 @@ func WithLoginAttemptLimiter(l LoginAttemptLimiter) Option {
 	}
 }
 
+// WithSchedulerJobToken sets the shared secret for Cloud Scheduler job POSTs (X-Scheduler-Token).
+func WithSchedulerJobToken(token string) Option {
+	return func(h *handler) { h.schedulerJobToken = token }
+}
+
 func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{
 		repo:          repo,
 		slots:         make(chan struct{}, maxConcurrentFormats),
 		blobs:         UnavailableBlobStorage{},
 		rateLimiter:   NewNoopAIRateLimiter(),
-		loginAttempts: NewMemoryLoginAttemptLimiter(),
-		messageMax:    maxAIChatMessageLen,
-		historyTurns:  maxAIChatHistoryTurns,
+		loginAttempts:       NewMemoryLoginAttemptLimiter(),
+		messageMax:          maxAIChatMessageLen,
+		historyTurns:        maxAIChatHistoryTurns,
+		schedulerJobToken:   HandlerTestSchedulerToken,
 		// prTitleResolver nil by default so unit tests do not hit GitHub; wire in production via WithPRTitleResolver.
 	}
 	for _, opt := range opts {

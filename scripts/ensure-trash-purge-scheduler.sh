@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Ensure a daily Cloud Scheduler job that POSTs /api/trash/purge with Basic auth.
+# Ensure a daily Cloud Scheduler job that POSTs /api/trash/purge with X-Scheduler-Token.
 #
 # Usage (after deploy; same env as deploy-gcp.sh):
-#   AUTH_USER=... AUTH_PASSWORD=... PUBLIC_ORIGIN=https://....run.app \
+#   SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=https://....run.app \
 #     ./scripts/ensure-trash-purge-scheduler.sh
 #
 # Optional overrides:
@@ -29,16 +29,18 @@ SCHEDULER_TZ="${SCHEDULER_TZ:-Asia/Tokyo}"
 
 require GCP_PROJECT
 require GCP_REGION
-require AUTH_USER
-require AUTH_PASSWORD
+require SCHEDULER_JOB_TOKEN
 require PUBLIC_ORIGIN
 
-# Strip trailing slash for a stable URI.
 ORIGIN="${PUBLIC_ORIGIN%/}"
+if [[ "$ORIGIN" != https://* ]]; then
+  echo "error: PUBLIC_ORIGIN must start with https:// (got: $ORIGIN)" >&2
+  exit 1
+fi
 URI="${ORIGIN}/api/trash/purge"
 
-# gcloud --headers expects KEY=VALUE (not curl's "Key: Value").
-AUTH_HEADER="Authorization=Basic $(printf '%s:%s' "$AUTH_USER" "$AUTH_PASSWORD" | base64 | tr -d '\n')"
+TOKEN_HEADER="X-Scheduler-Token=${SCHEDULER_JOB_TOKEN}"
+CT_HEADER="Content-Type=application/json"
 
 echo "==> Ensuring Cloud Scheduler job ${SCHEDULER_JOB_NAME}"
 echo "    URI: ${URI}"
@@ -54,7 +56,8 @@ if gcloud scheduler jobs describe "$SCHEDULER_JOB_NAME" \
     --time-zone="$SCHEDULER_TZ" \
     --uri="$URI" \
     --http-method=POST \
-    --headers="$AUTH_HEADER" \
+    --headers="$CT_HEADER" \
+    --headers="$TOKEN_HEADER" \
     --attempt-deadline=120s
   echo "Updated existing job ${SCHEDULER_JOB_NAME}"
 else
@@ -65,11 +68,12 @@ else
     --time-zone="$SCHEDULER_TZ" \
     --uri="$URI" \
     --http-method=POST \
-    --headers="$AUTH_HEADER" \
+    --headers="$CT_HEADER" \
+    --headers="$TOKEN_HEADER" \
     --attempt-deadline=120s
   echo "Created job ${SCHEDULER_JOB_NAME}"
 fi
 
 echo ""
-echo "Manual check (local or against PUBLIC_ORIGIN):"
-echo "  curl -sS -u \"\$AUTH_USER:\$AUTH_PASSWORD\" -X POST \"\${PUBLIC_ORIGIN%/}/api/trash/purge\""
+echo "Manual check (against PUBLIC_ORIGIN):"
+echo "  curl -sS -H \"Content-Type: application/json\" -H \"X-Scheduler-Token: \$SCHEDULER_JOB_TOKEN\" -X POST \"\${PUBLIC_ORIGIN%/}/api/trash/purge\" -d '{}'"

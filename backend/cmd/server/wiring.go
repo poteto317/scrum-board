@@ -55,6 +55,7 @@ func buildHandler(repo kanban.Repository, getenv func(string) string, opts ...op
 	}
 	handlerOpts = append(handlerOpts, kanban.WithAILimits(limits))
 	handlerOpts = append(handlerOpts, kanban.WithPublicOrigin(getenv("PUBLIC_ORIGIN")))
+	handlerOpts = append(handlerOpts, kanban.WithSchedulerJobToken(strings.TrimSpace(getenv("SCHEDULER_JOB_TOKEN"))))
 	handlerOpts = append(
 		handlerOpts,
 		kanban.WithPRTitleResolver(kanban.NewPRTitleResolver(nil, getenv("GITHUB_TOKEN"))),

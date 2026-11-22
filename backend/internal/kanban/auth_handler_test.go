@@ -123,11 +123,17 @@ func TestSessionMiddlewareExemptAndRequired(t *testing.T) {
 	if w := requestAnon(h, "GET", "/api/health", ""); w.Code != 200 {
 		t.Fatalf("health=%d", w.Code)
 	}
-	if w := requestAnon(h, "POST", "/api/trash/purge", ""); w.Code != 200 {
-		t.Fatalf("purge=%d body=%s", w.Code, w.Body)
+	if w := requestAnon(h, "POST", "/api/trash/purge", "{}"); w.Code != 403 {
+		t.Fatalf("purge anon without token=%d body=%s", w.Code, w.Body)
 	}
-	if w := requestAnon(h, "POST", "/api/recurring/run", ""); w.Code != 200 {
-		t.Fatalf("recurring run=%d body=%s", w.Code, w.Body)
+	if w := requestScheduler(h, "POST", "/api/trash/purge", "{}"); w.Code != 200 {
+		t.Fatalf("purge scheduler=%d body=%s", w.Code, w.Body)
+	}
+	if w := requestAnon(h, "POST", "/api/recurring/run", "{}"); w.Code != 403 {
+		t.Fatalf("recurring run anon=%d body=%s", w.Code, w.Body)
+	}
+	if w := requestScheduler(h, "POST", "/api/recurring/run", "{}"); w.Code != 200 {
+		t.Fatalf("recurring run scheduler=%d body=%s", w.Code, w.Body)
 	}
 	if w := requestAnon(h, "GET", "/api/board", ""); w.Code != 401 {
 		t.Fatalf("board anon=%d", w.Code)

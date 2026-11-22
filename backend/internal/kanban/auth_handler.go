@@ -8,6 +8,9 @@ import (
 )
 
 func (h handler) login(w http.ResponseWriter, r *http.Request) {
+	if !requireJSONContentType(w, r) || !h.requireAllowedOrigin(w, r) {
+		return
+	}
 	var in struct {
 		LoginName string `json:"loginName"`
 		Password  string `json:"password"`

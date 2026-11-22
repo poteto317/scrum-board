@@ -799,6 +799,15 @@ func requestAnon(h http.Handler, method, path, body string) *httptest.ResponseRe
 	return requestWithCookie(h, method, path, body, "")
 }
 
+func requestScheduler(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(method, path, strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set(SchedulerTokenHeader, HandlerTestSchedulerToken)
+	h.ServeHTTP(w, r)
+	return w
+}
+
 func requestWithCookie(h http.Handler, method, path, body, sessionID string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
