@@ -52,8 +52,8 @@ func TestAuthLoginLogoutMe(t *testing.T) {
 	disabled := fresh()
 	disabled.users[0].Disabled = true
 	w = requestAnon(NewHandler(disabled), "POST", "/api/auth/login", `{"loginName":"admin","password":"test-password"}`)
-	if w.Code != 401 {
-		t.Fatalf("disabled login=%d", w.Code)
+	if w.Code != 401 || !strings.Contains(w.Body.String(), msgLoginFailed) {
+		t.Fatalf("disabled login=%d %s", w.Code, w.Body)
 	}
 
 	out := requestWithCookie(h, "POST", "/api/auth/logout", "", cookie.Value)
@@ -355,6 +355,102 @@ func TestSessionOptionalBasicAuth(t *testing.T) {
 	h.ServeHTTP(skipSec, rSkipSec)
 	if skipSec.Code != 401 {
 		t.Fatalf("basic+Sec-Fetch restricted=%d %s", skipSec.Code, skipSec.Body)
+	}
+}
+
+func TestClientIP(t *testing.T) {
+	cases := []struct {
+		name   string
+		realIP string
+		xff    string
+		remote string
+		want   string
+	}{
+		{name: "real-ip wins", realIP: "10.0.0.5", xff: "1.1.1.1, 2.2.2.2", remote: "127.0.0.1:1234", want: "10.0.0.5"},
+		{name: "xff first hop", xff: "1.1.1.1, 2.2.2.2", remote: "127.0.0.1:1234", want: "1.1.1.1"},
+		{name: "remote host", remote: "192.0.2.1:9999", want: "192.0.2.1"},
+		{name: "remote bare", remote: "192.0.2.1", want: "192.0.2.1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "/", nil)
+			if tc.realIP != "" {
+				r.Header.Set("X-Real-IP", tc.realIP)
+			}
+			if tc.xff != "" {
+				r.Header.Set("X-Forwarded-For", tc.xff)
+			}
+			r.RemoteAddr = tc.remote
+			if got := clientIP(r); got != tc.want {
+				t.Fatalf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAuthLoginIPRateLimitBlocksOtherLogin(t *testing.T) {
+	h := NewHandler(fresh())
+	body := func(name string) string {
+		return `{"loginName":"` + name + `","password":"wrong-password"}`
+	}
+	for i := 0; i < loginFailureLimit; i++ {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(body("admin")))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-Real-IP", "203.0.113.9")
+		h.ServeHTTP(w, r)
+		if w.Code != 401 {
+			t.Fatalf("fail %d: %d", i+1, w.Code)
+		}
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(body("other")))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-Real-IP", "203.0.113.9")
+	h.ServeHTTP(w, r)
+	if w.Code != 429 {
+		t.Fatalf("same IP other login want 429 got %d %s", w.Code, w.Body)
+	}
+}
+
+func TestLoginPasswordHash(t *testing.T) {
+	u := User{PasswordHash: "real-hash", Disabled: false}
+	if got := loginPasswordHash(u, nil); got != "real-hash" {
+		t.Fatalf("enabled=%q", got)
+	}
+	u.Disabled = true
+	if got := loginPasswordHash(u, nil); got != loginDummyHash {
+		t.Fatal("disabled should use dummy")
+	}
+	if got := loginPasswordHash(User{}, ErrNotFound); got != loginDummyHash {
+		t.Fatal("missing should use dummy")
+	}
+}
+
+func TestAuthLoginUnknownUserMessage(t *testing.T) {
+	h := NewHandler(fresh())
+	w := requestAnon(h, "POST", "/api/auth/login", `{"loginName":"no-such-user","password":"anything1"}`)
+	if w.Code != 401 || !strings.Contains(w.Body.String(), msgLoginFailed) {
+		t.Fatalf("unknown=%d %s", w.Code, w.Body)
+	}
+}
+
+func TestAuthLoginRateLimited(t *testing.T) {
+	h := NewHandler(fresh())
+	body := `{"loginName":"admin","password":"wrong-password"}`
+	for i := 0; i < loginFailureLimit; i++ {
+		w := requestAnon(h, "POST", "/api/auth/login", body)
+		if w.Code != 401 {
+			t.Fatalf("fail %d: status=%d %s", i+1, w.Code, w.Body)
+		}
+	}
+	locked := requestAnon(h, "POST", "/api/auth/login", body)
+	if locked.Code != 429 || !strings.Contains(locked.Body.String(), msgLoginRateLimited) {
+		t.Fatalf("locked=%d %s", locked.Code, locked.Body)
+	}
+	ok := requestAnon(h, "POST", "/api/auth/login", `{"loginName":"admin","password":"test-password"}`)
+	if ok.Code != 429 {
+		t.Fatalf("correct password while locked should still 429, got %d", ok.Code)
 	}
 }
 

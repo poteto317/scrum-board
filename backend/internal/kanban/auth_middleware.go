@@ -141,16 +141,17 @@ func (h handler) withSessionAuth(next http.Handler) http.Handler {
 }
 
 const (
-	msgLoginRequired = "ログインが必要です。"
-	msgLoginFailed   = "ログインに失敗しました。"
-	msgForbidden     = "権限がありません。"
-	msgViewForbidden = "閲覧権限がありません。"
-	msgEditForbidden = "編集権限がありません。"
-	msgLastAdmin     = "最後の有効な管理者は無効化または降格できません。"
-	msgSelfDisable   = "自分自身を無効化できません。"
-	msgUserInvalid   = "入力内容を確認してください。"
-	msgLoginTaken    = "そのログイン名は既に使われています。"
-	msgACLInvalid    = "アクセス設定の内容を確認してください。"
+	msgLoginRequired    = "ログインが必要です。"
+	msgLoginFailed      = "ログインに失敗しました。"
+	msgLoginRateLimited = "試行回数が上限に達しました。しばらくしてから再度お試しください。"
+	msgForbidden        = "権限がありません。"
+	msgViewForbidden    = "閲覧権限がありません。"
+	msgEditForbidden    = "編集権限がありません。"
+	msgLastAdmin        = "最後の有効な管理者は無効化または降格できません。"
+	msgSelfDisable      = "自分自身を無効化できません。"
+	msgUserInvalid      = "入力内容を確認してください。"
+	msgLoginTaken       = "そのログイン名は既に使われています。"
+	msgACLInvalid       = "アクセス設定の内容を確認してください。"
 )
 
 func setSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, expires time.Time) {
