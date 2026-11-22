@@ -8,7 +8,10 @@ import (
 	"strings"
 )
 
-const attachmentMultipartMaxMemory = 1 << 20 // 1 MiB in memory; rest to temp
+const (
+	attachmentMultipartMaxMemory = 1 << 20 // 1 MiB in memory; rest to temp
+	attachmentMultipartSlack     = 64 * 1024
+)
 
 func (h handler) listAttachments(w http.ResponseWriter, r *http.Request) {
 	card, ok := h.commentParentItem(w, r, false)
@@ -31,8 +34,13 @@ func (h handler) createAttachment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxBytes+attachmentMultipartMaxMemory+64*1024)
-	if err := r.ParseMultipartForm(attachmentMultipartMaxMemory); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxBytes+attachmentMultipartMaxMemory+attachmentMultipartSlack)
+	err := r.ParseMultipartForm(attachmentMultipartMaxMemory)
+	if r.MultipartForm != nil {
+		mf := r.MultipartForm
+		defer func() { _ = mf.RemoveAll() }()
+	}
+	if err != nil {
 		var maxBytes *http.MaxBytesError
 		if errors.As(err, &maxBytes) {
 			invalid(w, "画像は5MiB以下にしてください。")
