@@ -483,6 +483,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: 関連先アイテムの編集権限が無い場合
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
       requestBody:
@@ -1491,6 +1497,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: アイテム自体または関連先アイテムの編集権限が無い場合
           content:
             application/json:
               schema:
