@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -19,19 +20,48 @@ func (h handler) login(w http.ResponseWriter, r *http.Request) {
 		reply(w, 401, map[string]string{"message": msgLoginFailed})
 		return
 	}
+	loginKey := strings.ToLower(loginName)
+	ip := clientIP(r)
+	now := time.Now().UTC()
+	if !h.loginAttempts.Allow(loginKey, ip, now) {
+		reply(w, 429, map[string]string{"message": msgLoginRateLimited})
+		return
+	}
 	user, err := h.repo.GetUserByLoginName(r.Context(), loginName)
-	if err != nil || user.Disabled || !CheckPassword(user.PasswordHash, in.Password) {
+	okUser := err == nil && !user.Disabled
+	// Always compare (dummy hash when missing/disabled) before branching — do not short-circuit.
+	match := CheckPassword(loginPasswordHash(user, err), in.Password)
+	if !okUser || !match {
+		h.loginAttempts.RecordFailure(loginKey, ip, now)
 		reply(w, 401, map[string]string{"message": msgLoginFailed})
 		return
 	}
-	now := time.Now().UTC()
 	sess, err := h.repo.CreateSession(r.Context(), user.ID, now)
 	if err != nil {
 		fail(w, err)
 		return
 	}
+	h.loginAttempts.RecordSuccess(loginKey, ip)
 	setSessionCookie(w, r, sess.ID, sess.ExpiresAt)
 	reply(w, 200, user.Public())
+}
+
+func clientIP(r *http.Request) string {
+	// Prefer X-Real-IP from our nginx (set from $remote_addr), not client-supplied XFF.
+	if rip := strings.TrimSpace(r.Header.Get("X-Real-IP")); rip != "" {
+		return rip
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 func (h handler) logout(w http.ResponseWriter, r *http.Request) {

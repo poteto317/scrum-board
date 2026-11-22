@@ -17,6 +17,7 @@ type handler struct {
 	prTitleResolver *PRTitleResolver
 	blobs           BlobStorage
 	rateLimiter     AIRateLimiter
+	loginAttempts   LoginAttemptLimiter
 	messageMax      int
 	historyTurns    int
 }
@@ -74,14 +75,24 @@ func WithAIRateLimiter(l AIRateLimiter) Option {
 	}
 }
 
+// WithLoginAttemptLimiter injects a custom login failure limiter (tests). Nil keeps the current limiter.
+func WithLoginAttemptLimiter(l LoginAttemptLimiter) Option {
+	return func(h *handler) {
+		if l != nil {
+			h.loginAttempts = l
+		}
+	}
+}
+
 func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{
-		repo:         repo,
-		slots:        make(chan struct{}, maxConcurrentFormats),
-		blobs:        UnavailableBlobStorage{},
-		rateLimiter:  NewNoopAIRateLimiter(),
-		messageMax:   maxAIChatMessageLen,
-		historyTurns: maxAIChatHistoryTurns,
+		repo:          repo,
+		slots:         make(chan struct{}, maxConcurrentFormats),
+		blobs:         UnavailableBlobStorage{},
+		rateLimiter:   NewNoopAIRateLimiter(),
+		loginAttempts: NewMemoryLoginAttemptLimiter(),
+		messageMax:    maxAIChatMessageLen,
+		historyTurns:  maxAIChatHistoryTurns,
 		// prTitleResolver nil by default so unit tests do not hit GitHub; wire in production via WithPRTitleResolver.
 	}
 	for _, opt := range opts {
