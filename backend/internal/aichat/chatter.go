@@ -55,14 +55,15 @@ func (c *Chatter) Chat(ctx context.Context, system string, messages []kanban.Cha
 	if message == nil {
 		return "", 0, 0, &Failure{Kind: kindInvalidOutput}
 	}
+	inTok, outTok := message.Usage.InputTokens, message.Usage.OutputTokens
 	switch message.StopReason {
 	case anthropic.StopReasonEndTurn:
 	case anthropic.StopReasonRefusal:
-		return "", 0, 0, &Failure{Kind: kindRefusal}
+		return "", inTok, outTok, &Failure{Kind: kindRefusal}
 	case anthropic.StopReasonMaxTokens:
-		return "", 0, 0, &Failure{Kind: kindTruncated}
+		return "", inTok, outTok, &Failure{Kind: kindTruncated}
 	default:
-		return "", 0, 0, &Failure{Kind: kindInvalidOutput}
+		return "", inTok, outTok, &Failure{Kind: kindInvalidOutput}
 	}
 	var text strings.Builder
 	for _, block := range message.Content {
@@ -72,7 +73,7 @@ func (c *Chatter) Chat(ctx context.Context, system string, messages []kanban.Cha
 	}
 	out := strings.TrimSpace(text.String())
 	if out == "" {
-		return "", 0, 0, &Failure{Kind: kindInvalidOutput}
+		return "", inTok, outTok, &Failure{Kind: kindInvalidOutput}
 	}
-	return out, message.Usage.InputTokens, message.Usage.OutputTokens, nil
+	return out, inTok, outTok, nil
 }
