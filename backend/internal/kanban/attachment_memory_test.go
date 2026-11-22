@@ -13,6 +13,18 @@ type memoryAttachment struct {
 	objectKey string
 }
 
+func sumProjectAttachmentBytes(m *memoryRepo, projectID int64) int64 {
+	var sum int64
+	for _, a := range m.attachments {
+		card, ok := m.cards[a.ItemID]
+		if !ok || !m.living(card) || m.cardProjectID(card) != projectID {
+			continue
+		}
+		sum += a.ByteSize
+	}
+	return sum
+}
+
 func (m *memoryRepo) ensureAttachments() {
 	if m.attachments == nil {
 		m.attachments = map[int64]memoryAttachment{}
@@ -75,8 +87,13 @@ func (m *memoryRepo) CreateAttachment(
 	if count >= attachmentMaxCount {
 		return Attachment{}, ErrAttachmentLimit
 	}
-	if _, ok := m.cards[itemID]; !ok {
+	card, ok := m.cards[itemID]
+	if !ok {
 		return Attachment{}, ErrNotFound
+	}
+	projectID := m.cardProjectID(card)
+	if sumProjectAttachmentBytes(m, projectID)+int64(len(data)) > attachmentMaxProjectBytes {
+		return Attachment{}, ErrAttachmentQuota
 	}
 	if commentID != nil {
 		c, ok := m.comments[*commentID]

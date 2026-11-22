@@ -36,6 +36,10 @@ func (h handler) createAttachment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	h.withAttachmentSlot(w, r, func() { h.createAttachmentBody(w, r, card) })
+}
+
+func (h handler) createAttachmentBody(w http.ResponseWriter, r *http.Request, card Item) {
 	r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxMultipartRequestBytes)
 	err := r.ParseMultipartForm(attachmentMultipartMaxMemory)
 	if r.MultipartForm != nil {
@@ -96,9 +100,7 @@ func (h handler) createAttachment(w http.ResponseWriter, r *http.Request) {
 		id := u.ID
 		userID = &id
 	}
-	created, err := h.repo.CreateAttachment(
-		r.Context(), h.blobs, card.ID, field, commentID, header.Filename, contentType, header.Size, file, userID,
-	)
+	created, err := h.repo.CreateAttachment(r.Context(), h.blobs, card.ID, field, commentID, header.Filename, contentType, header.Size, file, userID)
 	if err != nil {
 		failAttachment(w, err)
 		return
@@ -115,7 +117,13 @@ func (h handler) getAttachmentContent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rc, contentType, err := h.repo.OpenAttachmentContent(r.Context(), h.blobs, card.ID, attachmentID)
+	h.withAttachmentSlot(w, r, func() {
+		h.serveAttachmentContent(w, r, card.ID, attachmentID)
+	})
+}
+
+func (h handler) serveAttachmentContent(w http.ResponseWriter, r *http.Request, itemID, attachmentID int64) {
+	rc, contentType, err := h.repo.OpenAttachmentContent(r.Context(), h.blobs, itemID, attachmentID)
 	if err != nil {
 		failAttachment(w, err)
 		return
@@ -176,6 +184,8 @@ func failAttachment(w http.ResponseWriter, err error) {
 		reply(w, http.StatusNotFound, map[string]string{"message": "添付が見つかりません。"})
 	case errors.Is(err, ErrAttachmentLimit):
 		invalid(w, "添付はアイテムあたり20枚までです。")
+	case errors.Is(err, ErrAttachmentQuota):
+		invalid(w, "このプロジェクトの添付容量の上限に達しています。")
 	case errors.Is(err, ErrAttachmentInvalid):
 		invalid(w, "画像の形式またはサイズを確認してください。")
 	case errors.Is(err, ErrBlobStorageUnavailable):

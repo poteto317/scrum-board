@@ -17,14 +17,19 @@ import (
 )
 
 const (
-	attachmentMaxBytes = 5 << 20 // 5 MiB
-	attachmentMaxCount = 20
-	attachmentMaxName  = 200
+	attachmentMaxBytes        = 5 << 20 // 5 MiB
+	attachmentMaxCount        = 20
+	attachmentMaxName         = 200
+	attachmentMaxConcurrent = 4
 )
+
+// attachmentMaxProjectBytes is the total stored bytes allowed per project (tests may adjust).
+var attachmentMaxProjectBytes int64 = 100 << 20 // 100 MiB
 
 var (
 	ErrAttachmentLimit   = errors.New("attachment limit")
 	ErrAttachmentInvalid = errors.New("attachment invalid")
+	ErrAttachmentQuota   = errors.New("attachment project quota")
 )
 
 // Attachment is the JSON meta for an uploaded image.
@@ -175,9 +180,20 @@ func (r MySQLRepository) CreateAttachment(
 	defer tx.Rollback()
 
 	// Serialize attachment inserts per item (count check vs concurrent POSTs).
-	var lockedItem int64
-	if err = tx.QueryRowContext(ctx, `SELECT id FROM items WHERE id=? FOR UPDATE`, itemID).Scan(&lockedItem); err != nil {
+	var lockedItem, projectID int64
+	if err = tx.QueryRowContext(ctx, `SELECT id, project_id FROM items WHERE id=? AND deleted_at IS NULL FOR UPDATE`, itemID).Scan(&lockedItem, &projectID); err != nil {
 		return Attachment{}, dbError(err)
+	}
+	var projectBytes int64
+	if err = tx.QueryRowContext(ctx, `
+SELECT COALESCE(SUM(a.byte_size), 0)
+  FROM item_attachments a
+  INNER JOIN items i ON i.id = a.item_id
+ WHERE i.project_id = ? AND i.deleted_at IS NULL`, projectID).Scan(&projectBytes); err != nil {
+		return Attachment{}, err
+	}
+	if projectBytes+size > attachmentMaxProjectBytes {
+		return Attachment{}, ErrAttachmentQuota
 	}
 	if commentID != nil {
 		var commentItem int64

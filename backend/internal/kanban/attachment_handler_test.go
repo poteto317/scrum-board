@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func pngBytes() []byte {
@@ -462,4 +463,87 @@ func TestCreateAttachmentRemovesMultipartTempFiles(t *testing.T) {
 		}
 		assertNoLeak(t, before)
 	})
+}
+
+func TestAttachmentProjectQuota(t *testing.T) {
+	oldMax := attachmentMaxProjectBytes
+	attachmentMaxProjectBytes = 100
+	t.Cleanup(func() { attachmentMaxProjectBytes = oldMax })
+
+	h, repo, _ := attachmentHandler(t)
+	card, err := repo.CreateItem(t.Context(), ItemInput{Title: "q", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := postPNG(t, h, card.Number, "description", "a.png", paddedPNG(80), nil)
+	if w.Code != 201 {
+		t.Fatalf("first=%d %s", w.Code, w.Body)
+	}
+	over := postPNG(t, h, card.Number, "description", "b.png", paddedPNG(30), nil)
+	if over.Code != 400 || !strings.Contains(over.Body.String(), "上限") {
+		t.Fatalf("quota=%d %s", over.Code, over.Body)
+	}
+}
+
+func TestAttachmentConcurrentSlotsBusy(t *testing.T) {
+	h, repo, blobs := attachmentHandler(t)
+	h = NewHandler(repo, WithBlobStorage(blobs), WithAttachmentConcurrency(1))
+	card, err := repo.CreateItem(t.Context(), ItemInput{Title: "slot", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := postPNG(t, h, card.Number, "description", "a.png", pngBytes(), nil)
+	if w.Code != 201 {
+		t.Fatalf("upload=%d", w.Code)
+	}
+	var att Attachment
+	if err := json.Unmarshal(w.Body.Bytes(), &att); err != nil {
+		t.Fatal(err)
+	}
+	block := make(chan struct{})
+	slow := &slowBlobStorage{inner: blobs, block: block}
+	hSlow := NewHandler(repo, WithBlobStorage(slow), WithAttachmentConcurrency(1))
+
+	done := make(chan int)
+	go func() {
+		req := httptest.NewRequest("GET", "/api/items/by-number/"+strconv.FormatInt(card.Number, 10)+"/attachments/"+strconv.FormatInt(att.ID, 10)+"/content", nil)
+		req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
+		rec := httptest.NewRecorder()
+		hSlow.ServeHTTP(rec, req)
+		done <- rec.Code
+	}()
+	time.Sleep(30 * time.Millisecond)
+	req2 := httptest.NewRequest("GET", "/api/items/by-number/"+strconv.FormatInt(card.Number, 10)+"/attachments/"+strconv.FormatInt(att.ID, 10)+"/content", nil)
+	req2.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
+	rec2 := httptest.NewRecorder()
+	hSlow.ServeHTTP(rec2, req2)
+	if rec2.Code != 503 {
+		t.Fatalf("second concurrent=%d want 503", rec2.Code)
+	}
+	close(block)
+	if code := <-done; code != 200 {
+		t.Fatalf("first=%d", code)
+	}
+}
+
+type slowBlobStorage struct {
+	inner BlobStorage
+	block <-chan struct{}
+}
+
+func (s *slowBlobStorage) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
+	return s.inner.Put(ctx, key, r, size, contentType)
+}
+
+func (s *slowBlobStorage) Delete(ctx context.Context, key string) error {
+	return s.inner.Delete(ctx, key)
+}
+
+func (s *slowBlobStorage) Get(ctx context.Context, key string) (io.ReadCloser, string, error) {
+	select {
+	case <-s.block:
+	case <-ctx.Done():
+		return nil, "", ctx.Err()
+	}
+	return s.inner.Get(ctx, key)
 }

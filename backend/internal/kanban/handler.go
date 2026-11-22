@@ -21,6 +21,7 @@ type handler struct {
 	messageMax          int
 	historyTurns        int
 	schedulerJobToken   string
+	attachmentSlots     chan struct{}
 }
 
 // Option customizes NewHandler without changing the call sites that only need the repository.
@@ -90,6 +91,16 @@ func WithSchedulerJobToken(token string) Option {
 	return func(h *handler) { h.schedulerJobToken = token }
 }
 
+// WithAttachmentConcurrency caps concurrent attachment upload/content handlers (tests). n < 1 uses attachmentMaxConcurrent.
+func WithAttachmentConcurrency(n int) Option {
+	return func(h *handler) {
+		if n < 1 {
+			n = attachmentMaxConcurrent
+		}
+		h.attachmentSlots = make(chan struct{}, n)
+	}
+}
+
 func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{
 		repo:          repo,
@@ -99,7 +110,8 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 		loginAttempts:       NewMemoryLoginAttemptLimiter(),
 		messageMax:          maxAIChatMessageLen,
 		historyTurns:        maxAIChatHistoryTurns,
-		schedulerJobToken:   HandlerTestSchedulerToken,
+		schedulerJobToken: HandlerTestSchedulerToken,
+		attachmentSlots:   make(chan struct{}, attachmentMaxConcurrent),
 		// prTitleResolver nil by default so unit tests do not hit GitHub; wire in production via WithPRTitleResolver.
 	}
 	for _, opt := range opts {
