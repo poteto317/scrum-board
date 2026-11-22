@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -22,4 +23,20 @@ func relatedACLFixture(t *testing.T) (m *memoryRepo, open, secret, allowed Item,
 	sess = Session{ID: "mem-related-acl", UserID: 2, ExpiresAt: time.Now().UTC().Add(time.Hour)}
 	m.sessions[sess.ID] = sess
 	return m, open, secret, allowed, sess
+}
+
+type relatedGetByNumberFailRepo struct {
+	*memoryRepo
+	fail error
+}
+
+func (r relatedGetByNumberFailRepo) GetItemByNumber(ctx context.Context, number, projectID int64) (Item, error) {
+	if r.fail != nil {
+		item, err := r.memoryRepo.GetItemByNumber(ctx, number, projectID)
+		if err == nil {
+			return Item{}, r.fail
+		}
+		return item, err
+	}
+	return r.memoryRepo.GetItemByNumber(ctx, number, projectID)
 }

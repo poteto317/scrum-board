@@ -1,7 +1,6 @@
 package kanban
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -10,7 +9,7 @@ import (
 )
 
 func TestBoardOmitsRestrictedRelatedTitle(t *testing.T) {
-	m, open, secret, _, sess := relatedACLFixture(t)
+	m, open, secret, allowed, sess := relatedACLFixture(t)
 	open.RelatedItems = []RelatedItem{{Kind: relatedKindItem, Number: secret.Number, ProjectID: 1, Title: secret.Title}}
 	m.cards[open.ID] = open
 	h := NewHandler(m)
@@ -49,6 +48,16 @@ func TestBoardOmitsRestrictedRelatedTitle(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), secretPeerTitle) {
 		t.Fatalf("settings leaked related title: %s", w.Body)
+	}
+
+	orderBody := `{"columns":[{"columnId":1,"itemIds":[` +
+		strconv.FormatInt(open.ID, 10) + `,` + strconv.FormatInt(allowed.ID, 10) + `]}]}`
+	w = requestWithCookie(h, "PUT", "/api/items/order", orderBody, sess.ID)
+	if w.Code != 200 {
+		t.Fatalf("reorder: %d %s", w.Code, w.Body)
+	}
+	if strings.Contains(w.Body.String(), secretPeerTitle) {
+		t.Fatalf("reorder leaked related title: %s", w.Body)
 	}
 }
 
@@ -100,22 +109,6 @@ func TestFilterBoardItemsRelatedACLFailureReturns500(t *testing.T) {
 			t.Fatalf("%s leaked title on fail: %s", tc.name, w.Body)
 		}
 	}
-}
-
-type relatedGetByNumberFailRepo struct {
-	*memoryRepo
-	fail error
-}
-
-func (r relatedGetByNumberFailRepo) GetItemByNumber(ctx context.Context, number, projectID int64) (Item, error) {
-	if r.fail != nil {
-		item, err := r.memoryRepo.GetItemByNumber(ctx, number, projectID)
-		if err == nil {
-			return Item{}, r.fail
-		}
-		return item, err
-	}
-	return r.memoryRepo.GetItemByNumber(ctx, number, projectID)
 }
 
 func TestBoardRelatedPeerGetFailureReturns500(t *testing.T) {
