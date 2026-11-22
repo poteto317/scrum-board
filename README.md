@@ -32,7 +32,7 @@ docker compose up -d --build
 
 **パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）、および初期 admin（`AUTH_USER` / `ADMIN_INITIAL_PASSWORD`、既定 `admin` / `local_dev_admin`）はローカル Docker 専用です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。空の DB では API 起動時に admin をシードします（`ADMIN_INITIAL_PASSWORD` は 8 文字以上。`AUTH_PASSWORD` を使う場合は必ず別値）。
 
-**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。空の DB ではログイン名がシード時の `AUTH_USER`（既定 `admin`）、初期パスワードが `ADMIN_INITIAL_PASSWORD` です（アプリ内で変更したあとは users 行のパスワードが正）。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic（`Sec-Fetch-Site` ヘッダ無しの非ブラウザ: curl・エージェント等）のどちらかで通ります。ブラウザは Basic を無視し Cookie セッションのみです。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番の **UI** ゲートとして残ります（`/api/` はアプリセッション／アプリ Basic のみ。スマホの XHR が Basic を付けないため）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
+**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。空の DB ではログイン名がシード時の `AUTH_USER`（既定 `admin`）、初期パスワードが `ADMIN_INITIAL_PASSWORD` です（アプリ内で変更したあとは users 行のパスワードが正）。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic のどちらかで通ります（ブラウザの XHR も Basic を送れば users 照合します。nginx edge Basic がアプリパスワードと異なる場合は通りません）。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番の **UI** ゲートとして残ります（`/api/` はアプリセッション／アプリ Basic のみ。スマホの XHR が Basic を付けないため）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
 
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board

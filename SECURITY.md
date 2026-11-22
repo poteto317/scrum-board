@@ -18,7 +18,7 @@ The HTTP API is **not** open. Behavior depends on the layer:
 | Layer | Role |
 | --- | --- |
 | App Cookie session (`sb_session`) | Primary browser path after `POST /api/auth/login` |
-| App HTTP Basic | Non-browser clients (no `Sec-Fetch-Site`); credentials must match a row in `users` |
+| App HTTP Basic | Credentials must match a row in `users` (browsers included; edge Basic that differs from the app password still fails) |
 | Roles | `admin` / `member` (and related checks in handlers) |
 | Item ACL | Per-item view/edit access where configured |
 | Production nginx Basic (`AUTH_USER` / `AUTH_PASSWORD`) | Edge gate on the **UI** (`location /`) in the Cloud Run image; `/api/` is app session / app Basic only (mobile browsers often omit `Authorization` on XHR). **Not** the same secret as the app admin password |
