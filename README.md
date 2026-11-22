@@ -398,29 +398,47 @@ gcloud sql users create scrum \
 
 リポジトリルートで `scripts/deploy-gcp.sh` を使います。必須環境変数が欠けると **即終了** します（値の一覧は `.env.example` のコメント参照）。
 
+**秘密の正本は Secret Manager です。** `export` した `DB_PASSWORD` / `AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD` はスクリプトが SM に載せる一時入力であり、Cloud Run の平文環境変数には残りません（`--set-secrets` + 平文の `--remove-env-vars`）。3 パスワードは **再デプロイでも毎回 require**（シード後もキーを残し、値はローテ可）。
+
 ```sh
 export GCP_PROJECT=daily-routine-app-8a832
 export GCP_REGION=asia-northeast1
 export CLOUDSQL_INSTANCE="${GCP_PROJECT}:${GCP_REGION}:scrumboard-mysql"
 export DB_USER=scrum
-export DB_PASSWORD='STRONG_DB_PASSWORD'
+export DB_PASSWORD='STRONG_DB_PASSWORD'   # → SM scrum-board-db-password
 export DB_NAME=scrumboard
 export AUTH_USER=kanban
-export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # nginx Basic（共有）。Secret Manager 推奨
-export ADMIN_INITIAL_PASSWORD='STRONG_ADMIN_INITIAL_PASSWORD'  # 初期 admin ログイン用。AUTH_PASSWORD と別値必須
+export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # nginx Basic。→ SM scrum-board-auth-password
+export ADMIN_INITIAL_PASSWORD='STRONG_ADMIN_INITIAL_PASSWORD'  # 初期 admin。AUTH と別値必須 → SM scrum-board-admin-initial-password
+# 任意: SM リソース名の上書き
+# export SECRET_ID_DB_PASSWORD=...
+# export SECRET_ID_AUTH_PASSWORD=...
+# export SECRET_ID_ADMIN_INITIAL_PASSWORD=...
 # 省略可: 未設定ならスクリプトが https://example.com で起動し、デプロイ後に実 URL へ自動更新する
 # export PUBLIC_ORIGIN='https://scrum-board-xxxxx.asia-northeast1.run.app'
+
+# 初回のみ（スクリプトも幂等に enable する）
+gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 
 ./scripts/deploy-gcp.sh
 ```
 
-スクリプトは `deploy/Dockerfile` をビルドし、`${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/app:latest` へ push したうえで Cloud Run にデプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
+スクリプトは `secretmanager.googleapis.com` を有効化し、上記 3 秘密を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
 
 **`PUBLIC_ORIGIN`:** entrypoint は `http://` / `https://` 必須（`placeholder.invalid` は拒否）。未指定時は一時値 `https://example.com` で起動し、`deploy-gcp.sh` がデプロイ後にサービス URL へ自動更新します。リンクコピーと `rewrite-origins` の置換先はこの値と一致させます。
 
-`AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD` / `DB_PASSWORD` は **Secret Manager** に置き、`--set-secrets` でマウントする運用を推奨します（リポジトリや Git 履歴に載せない）。`AUTH_PASSWORD` と `ADMIN_INITIAL_PASSWORD` は **別シークレット・別の値** にしてください（同一値だと空 DB 起動時にシードが失敗します）。`.env` に本番秘密を書かないでください。
+`.env` に本番秘密を書かないでください。移行後は Basic / DB / 初期 admin の値をローテすることを推奨します（DB ユーザー変更は Cloud SQL 側とセット）。不要な旧リビジョンは削除すると、過去メタデータに残った平文 env の露出面を減らせます。
 
-任意: `ANTHROPIC_API_KEY` を Cloud Run の環境変数に設定すると、本番でも AI 起票 API が有効になります（未設定なら 503 のまま）。
+検証（最新リビジョンに平文が無いこと）:
+
+```sh
+gcloud run services describe scrum-board \
+  --region="$GCP_REGION" --project="$GCP_PROJECT" \
+  --format='yaml(spec.template.spec.containers[0].env)'
+# DB_PASSWORD / AUTH_PASSWORD / ADMIN_INITIAL_PASSWORD に value: 平文が無く、secret 参照であること
+```
+
+任意: `ANTHROPIC_API_KEY` を Cloud Run の環境変数に設定すると、本番でも AI 起票 API が有効になります（未設定なら 503 のまま。本手順の SM 化対象外）。
 
 ### 4. 動作確認
 
@@ -429,10 +447,12 @@ export ADMIN_INITIAL_PASSWORD='STRONG_ADMIN_INITIAL_PASSWORD'  # 初期 admin �
 curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" "$SERVICE_URL/api/board" | head
 
 # nginx Basic + アプリログイン Cookie（初期シード時は ADMIN_INITIAL_PASSWORD。変更後は admin の現在のパスワード）
+# パスワードは argv に出さず stdin で渡す
 curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -c /tmp/sb.ck -b /tmp/sb.ck \
   -H 'Content-Type: application/json' \
-  -d "{\"loginName\":\"$AUTH_USER\",\"password\":\"$ADMIN_INITIAL_PASSWORD\"}" \
-  "$SERVICE_URL/api/auth/login"
+  --data-binary @- "$SERVICE_URL/api/auth/login" <<EOF
+{"loginName":"$AUTH_USER","password":"$ADMIN_INITIAL_PASSWORD"}
+EOF
 curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -b /tmp/sb.ck "$SERVICE_URL/api/board" | head
 
 # ヘルスチェックは認証なしで 200（nginx の /health。Cloud Run は /healthz を予約するため使わない）
