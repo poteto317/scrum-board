@@ -141,6 +141,31 @@ func TestChatCustomMaxTokens(t *testing.T) {
 	}
 }
 
+func TestChatStopReasonsReturnUsage(t *testing.T) {
+	cases := []struct {
+		name, stop, kind string
+		text             string
+	}{
+		{"max_tokens", "max_tokens", "truncated", "partial"},
+		{"refusal", "refusal", "refusal", "nope"},
+		{"empty_end_turn", "end_turn", "invalid_output", "   "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFake(t, reply(200, messageJSON(tc.stop, tc.text)))
+			_, inTok, outTok, err := chat(f.chatter(), "sys", []kanban.ChatTurn{{Role: kanban.AIRoleUser, Body: "q"}})
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			kind, _ := kindOf(t, err)
+			if kind != tc.kind || inTok != 11 || outTok != 22 {
+				t.Fatalf("kind=%s in=%d out=%d", kind, inTok, outTok)
+			}
+			assertNoLeak(t, tc.name, err)
+		})
+	}
+}
+
 func TestChatClassifiesRateLimit(t *testing.T) {
 	f := newFake(t, reply(429, errorJSON("rate_limit_error")))
 	_, _, _, err := chat(f.chatter(), "sys", []kanban.ChatTurn{{Role: kanban.AIRoleUser, Body: secretMsg}})
