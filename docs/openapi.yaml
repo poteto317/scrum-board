@@ -2431,7 +2431,7 @@ components:
     basicAuth:
       type: http
       scheme: basic
-      description: users テーブルの login_name / password。Cookie が無いときミドルウェアが検証する（セッションは発行しない）。本番 nginx Basic（AUTH_*）とは別層。
+      description: users テーブルの login_name / password。Cookie が無いときミドルウェアが検証する（セッションは発行しない）。`Sec-Fetch-Site` ヘッダが無い非ブラウザ（curl・エージェント等）向け。ブラウザは Cookie セッションを使う。本番 nginx Basic（AUTH_*）とは別
   schemas:
     Error:
       type: object

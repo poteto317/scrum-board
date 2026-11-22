@@ -8,7 +8,7 @@
 
 ## 非規範の curl 例
 
-ローカル（`http://127.0.0.1:4200`）。本番では nginx の Basic が前段に掛かることがあります（アプリの Cookie セッションとは別）。次の例は **ログイン後の `sb_session` Cookie が必要**です（`-b` に Cookie を渡すか、ブラウザ相当の Cookie ジャーを使う）。
+ローカル（`http://127.0.0.1:4200`）。本番では nginx の Basic が前段に掛かることがあります（アプリの Cookie セッションとは別）。CLI では **`-u login:password`（アプリの users）** またはログイン後の `sb_session` Cookie（`-b`）でも認証できます。ブラウザは Cookie のみ。
 
 ステータス変更:
 
