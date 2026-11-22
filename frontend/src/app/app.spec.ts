@@ -116,6 +116,35 @@ describe('App project switcher', () => {
     vi.restoreAllMocks();
   });
 
+  const statusColumns: Column[] = [
+    { id: 1, name: 'Todo', position: 0 },
+    { id: 2, name: 'Doing', position: 1 },
+    { id: 9, name: 'Review', position: 2 },
+  ];
+
+  function cacheItem(id: number, projectId: number, columnId: number): Item {
+    return {
+      id,
+      number: id,
+      projectId,
+      columnId,
+      title: `t${id}`,
+      description: '',
+      position: 0,
+      backlogPosition: 0,
+      offsetY: 0,
+      prUrls: [],
+      relatedItems: [],
+      assignee: '',
+      closeReason: '',
+      solution: '',
+      favorite: false,
+      dueAt: null,
+      createdAt: '',
+      updatedAt: '',
+    };
+  }
+
   function setup(extra: Record<string, unknown> = {}, routerRoutes: Routes = []) {
     return setupApp(extra, routerRoutes);
   }
@@ -238,9 +267,14 @@ describe('App project switcher', () => {
     expect(router.url).toBe('/');
   });
 
-  it('prefetches other projects on select focus and pointerdown', () => {
+  it('refreshes other projects on select focus and pointerdown even when warm', () => {
     const { f, api, session } = setup();
     session.activeId.set(1);
+    TestBed.inject(ProjectBoardCache).putBoard(
+      2,
+      [cacheItem(10, 2, 2)],
+      statusColumns,
+    );
     const trigger = projectTrigger(f);
     api.board.mockClear();
     trigger.dispatchEvent(new Event('focus'));
@@ -248,11 +282,31 @@ describe('App project switcher', () => {
     expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
     api.board.mockClear();
     trigger.dispatchEvent(new Event('pointerdown'));
-    // warm after first prefetch — no new unscoped board() calls
+    expect(api.board).toHaveBeenCalledWith(2);
+  });
+
+  it('refreshes other projects when the project menu opens via click', () => {
+    const { f, api, session } = setup();
+    session.activeId.set(1);
+    api.board.mockClear();
+    openProjectMenu(f);
+    expect(api.board).toHaveBeenCalledWith(2);
     expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
   });
 
-  it('does not prefetch while switching', () => {
+  it('refreshes other projects when the menu opens via Enter without pointerdown', () => {
+    const { f, api, session } = setup();
+    session.activeId.set(1);
+    const trigger = projectTrigger(f);
+    api.board.mockClear();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#project-select-list')).toBeTruthy();
+    expect(api.board).toHaveBeenCalledWith(2);
+    expect(api.board.mock.calls.every((c: unknown[]) => c[0] === 2)).toBe(true);
+  });
+
+  it('does not refresh while switching', () => {
     const { f, api, session } = setup();
     session.switching.set(true);
     const trigger = projectTrigger(f);
@@ -391,35 +445,6 @@ describe('App project switcher', () => {
     ).toBe('メイン');
   });
 
-  const statusColumns: Column[] = [
-    { id: 1, name: 'Todo', position: 0 },
-    { id: 2, name: 'Doing', position: 1 },
-    { id: 9, name: 'Review', position: 2 },
-  ];
-
-  function cacheItem(id: number, projectId: number, columnId: number): Item {
-    return {
-      id,
-      number: id,
-      projectId,
-      columnId,
-      title: `t${id}`,
-      description: '',
-      position: 0,
-      backlogPosition: 0,
-      offsetY: 0,
-      prUrls: [],
-      relatedItems: [],
-      assignee: '',
-      closeReason: '',
-      solution: '',
-      favorite: false,
-      dueAt: null,
-      createdAt: '',
-      updatedAt: '',
-    };
-  }
-
   it('shows Doing and Review status dots from the board cache (L-060)', () => {
     const { f } = setup();
     const cache = TestBed.inject(ProjectBoardCache);
@@ -451,6 +476,53 @@ describe('App project switcher', () => {
     f.detectChanges();
     expect(option.getAttribute('aria-label')).toBe('次, Doing');
     expect(option.querySelector('.doing .status-dot')).toBeTruthy();
+  });
+
+  it('updates open-menu status dots when refreshOthers lands newer board data', () => {
+    const { f, api, session } = setup();
+    session.activeId.set(1);
+    TestBed.inject(ProjectBoardCache).putBoard(
+      2,
+      [cacheItem(10, 2, 2)],
+      statusColumns,
+    );
+    const held = new Subject<unknown>();
+    api.board.mockImplementation(() => held.asObservable() as ReturnType<typeof api.board>);
+    api.board.mockClear();
+    openProjectMenu(f);
+    const option = f.nativeElement.querySelector('#project-option-2') as HTMLElement;
+    expect(option.getAttribute('aria-label')).toBe('次, Doing');
+    expect(option.querySelector('.doing .status-dot')).toBeTruthy();
+    expect(api.board).toHaveBeenCalledWith(2);
+    held.next({
+      items: [cacheItem(11, 2, 9)],
+      columns: statusColumns,
+      settings: { cardLayout: 'pack', activeProjectId: 1 },
+    });
+    held.complete();
+    f.detectChanges();
+    expect(option.getAttribute('aria-label')).toBe('次, Review');
+    expect(option.querySelector('.review .status-dot')).toBeTruthy();
+  });
+
+  it('soft-prefetches backlog for other projects on backlog route', async () => {
+    const backlog = vi.fn(() => of({ items: [] }));
+    const { f, api, session } = setup(
+      { backlog },
+      [
+        { path: '', component: SpecStubPage },
+        { path: 'backlog', component: SpecStubPage },
+      ],
+    );
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/backlog');
+    f.detectChanges();
+    session.activeId.set(1);
+    api.board.mockClear();
+    backlog.mockClear();
+    projectTrigger(f).dispatchEvent(new Event('focus'));
+    expect(api.board).toHaveBeenCalledWith(2);
+    expect(backlog).toHaveBeenCalledWith(2);
   });
 
   it('shows Todo fallback without .todo wrapper class', () => {

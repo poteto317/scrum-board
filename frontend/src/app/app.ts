@@ -79,7 +79,7 @@ export class App implements OnInit {
     projectsForSelectDisplay(this.projectSession.projects(), this.projectSession.activeId()),
   );
 
-  /** Depends on cache.revision so open listbox refreshes when prefetch lands. */
+  /** Depends on cache.revision so open listbox refreshes when put/refresh lands. */
   readonly projectStatusById = computed(() => {
     this.projectBoardCache.revision();
     const map = new Map<number, StatusKind[]>();
@@ -261,6 +261,7 @@ export class App implements OnInit {
     const list = this.displayProjects();
     this.highlightedProjectId.set(this.projectSession.activeId() ?? list[0]?.id ?? null);
     this.projectMenuOpen.set(true);
+    this.onProjectSelectWarmup();
     queueMicrotask(() => this.applyProjectListMaxHeight());
   }
 
@@ -297,19 +298,32 @@ export class App implements OnInit {
     }
   }
 
-  /** Prefetch other projects' board (and backlog on that route) into memory cache. */
-  onProjectSelectPrefetch() {
+  /** Listbox open path: force-refresh status boards; soft-prefetch backlog on that route. */
+  onProjectSelectWarmup() {
     if (this.projectSession.switching() || this.projectSession.mutating()) return;
     const activeId = this.projectSession.activeId();
     if (activeId == null || activeId <= 0) return;
-    const path = this.router.url.split('?')[0];
-    const includeBacklog = path.startsWith('/backlog');
-    this.projectBoardCache.prefetchOthers(
+    this.refreshProjectStatusBoards();
+    this.softPrefetchOtherBacklogs(activeId);
+  }
+
+  private refreshProjectStatusBoards() {
+    if (this.projectSession.switching() || this.projectSession.mutating()) return;
+    const activeId = this.projectSession.activeId();
+    if (activeId == null || activeId <= 0) return;
+    this.projectBoardCache.refreshOthers(
       this.api,
       activeId,
       this.projectSession.projects().map((p) => p.id),
-      includeBacklog,
     );
+  }
+
+  private softPrefetchOtherBacklogs(activeId: number) {
+    if (!this.router.url.split('?')[0].startsWith('/backlog')) return;
+    for (const id of this.projectSession.projects().map((p) => p.id)) {
+      if (id === activeId) continue;
+      this.projectBoardCache.prefetchBacklog(this.api, id);
+    }
   }
 
   private applyProjectDeepLink() {
