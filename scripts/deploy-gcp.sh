@@ -36,6 +36,8 @@ require AUTH_USER
 require AUTH_PASSWORD
 require ADMIN_INITIAL_PASSWORD
 
+# Always enforce (even when users already exist and Go seed is a no-op): a shared
+# Basic/admin secret in env is a footgun for the next empty-DB rebuild.
 if [[ "$ADMIN_INITIAL_PASSWORD" == "$AUTH_PASSWORD" ]]; then
   echo "error: ADMIN_INITIAL_PASSWORD must differ from AUTH_PASSWORD" >&2
   exit 1
