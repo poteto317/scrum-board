@@ -576,8 +576,10 @@ paths:
         schema:
           type: integer
       security: []
-      description: セッション Cookie は任意（sessionOptional）。Cookie が無く非 public のアイテムは 401。`viewAccess=public`
-        なら未ログインでも閲覧可。Cookie がある場合は ACL に従い 403 もありうる。ハンドラが強制する。
+      description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
+        `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
+        Cookie が無く非 public のアイテムは 401。`viewAccess=public` なら未ログインでも閲覧可。Cookie がある場合は
+        ACL に従い 403 もありうる。ハンドラが強制する。
   /api/items/by-number/{number}/assignee:
     patch:
       summary: 対応者変更
@@ -658,8 +660,10 @@ paths:
         schema:
           type: integer
       security: []
-      description: セッション Cookie は任意（sessionOptional）。Cookie が無く非 public のアイテムは 401。`viewAccess=public`
-        なら未ログインでも閲覧可。Cookie がある場合は ACL に従い 403 もありうる。ハンドラが強制する。
+      description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
+        `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
+        Cookie が無く非 public のアイテムは 401。`viewAccess=public` なら未ログインでも閲覧可。Cookie がある場合は
+        ACL に従い 403 もありうる。ハンドラが強制する。
     post:
       summary: 添付アップロード
       operationId: post_api_items_by_number_number_attachments
@@ -793,8 +797,10 @@ paths:
         schema:
           type: integer
       security: []
-      description: セッション Cookie は任意（sessionOptional）。Cookie が無く非 public のアイテムは 401。`viewAccess=public`
-        なら未ログインでも閲覧可。Cookie がある場合は ACL に従い 403 もありうる。ハンドラが強制する。
+      description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
+        `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
+        Cookie が無く非 public のアイテムは 401。`viewAccess=public` なら未ログインでも閲覧可。Cookie がある場合は
+        ACL に従い 403 もありうる。ハンドラが強制する。
   /api/items/by-number/{number}/command-templates:
     get:
       summary: アイテムの表示セット
@@ -1514,8 +1520,10 @@ paths:
         schema:
           type: integer
       security: []
-      description: セッション Cookie は任意（sessionOptional）。Cookie が無く非 public のアイテムは 401。`viewAccess=public`
-        なら未ログインでも閲覧可。Cookie がある場合は ACL に従い 403 もありうる。ハンドラが強制する。
+      description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
+        `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
+        Cookie が無く非 public のアイテムは 401。`viewAccess=public` なら未ログインでも閲覧可。Cookie がある場合は
+        ACL に従い 403 もありうる。ハンドラが強制する。
     patch:
       summary: アイテム部分更新
       operationId: patch_api_items_id
