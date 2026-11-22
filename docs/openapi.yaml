@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Scrum Board API
   version: 0.1.0
-  description: 'スクラムかんばん HTTP API の契約正本。アプリ認証は Cookie `sb_session` または HTTP Basic（users テーブルの login_name / password）のどちらか。本番
+  description: 'スクラムかんばん HTTP API の契約正本。アプリ認証は Cookie `sb_session` または HTTP Basic（users テーブルの login_name / password、`Sec-Fetch-Site` ヘッダ無しの非ブラウザ向け）のどちらか。本番
     nginx の HTTP Basic はゲートウェイ層であり、operation の security には含めない。受け付けない入力は黙って別解釈へ落とさず 4xx 等で拒否する。v0.1.0:
     全 HTTP ルートの paths・認証（exempt/optional/必須）・主要 operation の request/response を載せる。未具体化の応答は JsonValue。当該 API
     を変更するときは update-api-doc スキルに従い JsonValue を具体 schema に置き換える。'
