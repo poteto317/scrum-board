@@ -33,14 +33,14 @@ htpasswd -bc /etc/nginx/.htpasswd "$AUTH_USER" "$AUTH_PASSWORD"
 export LISTEN_ADDRESS=127.0.0.1:8081
 export PORT="${PORT:-8080}"
 
-/server &
+su -s /bin/sh app -c 'exec /server' &
 api_pid=$!
 
 # Migrations (e.g. per-project numbering ALTER/renumber) can take well over a few seconds.
 # Match server migration budget (~2m) so the probe does not kill a healthy still-migrating API.
 i=0
 while [ "$i" -lt 120 ]; do
-    if wget -q -O /dev/null http://127.0.0.1:8081/api/public-config 2>/dev/null; then
+    if curl -sf -o /dev/null http://127.0.0.1:8081/api/public-config 2>/dev/null; then
         break
     fi
     if ! kill -0 "$api_pid" 2>/dev/null; then
@@ -52,7 +52,7 @@ while [ "$i" -lt 120 ]; do
     sleep 1
 done
 
-if ! wget -q -O /dev/null http://127.0.0.1:8081/api/public-config 2>/dev/null; then
+if ! curl -sf -o /dev/null http://127.0.0.1:8081/api/public-config 2>/dev/null; then
     echo "error: API did not become ready on /api/public-config" >&2
     kill "$api_pid" 2>/dev/null || true
     wait "$api_pid" 2>/dev/null || true
