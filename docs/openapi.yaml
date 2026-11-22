@@ -128,7 +128,7 @@ paths:
       operationId: patch_api_board_settings
       responses:
         '200':
-          description: 成功
+          description: 成功。応答に items がある場合（free→pack など）は、呼び出し元が閲覧可能なアイテムのみを含む
           content:
             application/json:
               schema:
