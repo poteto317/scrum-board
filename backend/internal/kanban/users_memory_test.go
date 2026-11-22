@@ -169,6 +169,9 @@ func (m *memoryRepo) UserBySessionID(_ context.Context, sessionID string, now ti
 }
 
 func (m *memoryRepo) ListACLEntriesForItems(_ context.Context, itemIDs []int64) (map[int64]ItemACL, error) {
+	if m.aclListFail != nil {
+		return nil, m.aclListFail
+	}
 	out := make(map[int64]ItemACL, len(itemIDs))
 	if m.aclEntries == nil {
 		return out, nil

@@ -23,6 +23,7 @@ type memoryRepo struct {
 	defaultTemplateIDs []int64
 	settings           BoardSettings
 	settingsFail       error
+	aclListFail        error
 	listFilter         *WorkspaceListFilters
 	headerMenu         *WorkspaceHeaderMenu
 	projects           []Project
