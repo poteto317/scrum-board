@@ -20,7 +20,7 @@ COPY deploy/nginx.conf /etc/nginx/templates/default.conf.template
 COPY deploy/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh && rm -f /etc/nginx/conf.d/default.conf
 COPY --from=api-build /server /server
-RUN chown app:app /server
+RUN chown root:app /server && chmod 550 /server
 COPY --from=fe-build /app/dist/frontend/browser /usr/share/nginx/html
 EXPOSE 8080
 ENTRYPOINT ["/entrypoint.sh"]
