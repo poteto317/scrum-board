@@ -31,7 +31,7 @@ description: >-
 3. **認証（`auth_middleware.go`）**  
    - `sessionExempt` → `security: []`（login／logout／health／public-config／trash purge／recurring run）  
    - `sessionOptional`（一部 item GET・添付）→ `security: []` ＋ description に未ログイン 401 と `viewAccess=public` の分岐  
-   - それ以外 → `cookieAuth`（Cookie 名 `sb_session`）  
+   - それ以外 → `cookieAuth` OR `basicAuth`（Cookie 名 `sb_session`；Basic は非ブラウザ向け）  
    - 本番 nginx Basic はゲートウェイ層。operation の `security` に載せない（`info`／`servers` の説明のみ）
    - `scripts/check-openapi-routes.py` の `EXEMPT`／`OPTIONAL` を middleware と食い違わないよう同じ変更で更新する
 
