@@ -453,8 +453,7 @@ func TestCreateAttachmentRemovesMultipartTempFiles(t *testing.T) {
 
 	t.Run("maxBytes400", func(t *testing.T) {
 		before := countFiles(t, tmpdir)
-		limit := attachmentMaxBytes + attachmentMultipartMaxMemory + attachmentMultipartSlack
-		rec := postPNG(t, h, card.Number, "description", "huge.png", paddedPNG(int(limit)+1), nil)
+		rec := postPNG(t, h, card.Number, "description", "huge.png", paddedPNG(int(attachmentMaxMultipartRequestBytes)+1), nil)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}

@@ -10,7 +10,9 @@ import (
 
 const (
 	attachmentMultipartMaxMemory = 1 << 20 // 1 MiB in memory; rest to temp
-	attachmentMultipartSlack     = 64 * 1024
+	// Overhead for multipart boundaries / headers beyond the file payload.
+	attachmentMultipartOverhead = 64 * 1024
+	attachmentMaxMultipartRequestBytes = attachmentMaxBytes + attachmentMultipartMaxMemory + attachmentMultipartOverhead
 )
 
 func (h handler) listAttachments(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +36,7 @@ func (h handler) createAttachment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxBytes+attachmentMultipartMaxMemory+attachmentMultipartSlack)
+	r.Body = http.MaxBytesReader(w, r.Body, attachmentMaxMultipartRequestBytes)
 	err := r.ParseMultipartForm(attachmentMultipartMaxMemory)
 	if r.MultipartForm != nil {
 		mf := r.MultipartForm
