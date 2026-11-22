@@ -22,7 +22,7 @@ npm run build
 | 変数 | 必須 | 説明 |
 |------|------|------|
 | `SCRUM_BOARD_BASE_URL` | 任意 | ボード API のベース URL。未設定時は `http://127.0.0.1:4200`。末尾スラッシュは除去される |
-| `SCRUM_BOARD_AUTH_USER` | 任意 | Basic Auth ユーザー。`SCRUM_BOARD_AUTH_PASSWORD` と両方あるときだけ `Authorization` を送る |
+| `SCRUM_BOARD_AUTH_USER` | 任意 | Basic Auth ユーザー。`SCRUM_BOARD_AUTH_PASSWORD` と両方あるときだけ `Authorization` を送る（その場合は `https:` またはループバックの `http:` 必須。下の「平文 HTTP の制約」参照） |
 | `SCRUM_BOARD_AUTH_PASSWORD` | 任意 | Basic Auth パスワード。片方だけだと認証ヘッダは送らない |
 
 ローカル受け入れは認証なしで足ります。本番 nginx 向けにだけ上記を設定してください。
