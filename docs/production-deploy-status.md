@@ -11,9 +11,9 @@
 | Cloud SQL | `scrumboard-mysql`（MySQL 8.4、`db-f1-micro`、`--edition=enterprise`） |
 | 接続名 | `daily-routine-app-8a832:asia-northeast1:scrumboard-mysql` |
 | Cloud Run サービス | `scrum-board` |
-| 公開 URL | https://scrum-board-jkcejsb6ka-an.a.run.app |
+| 公開 URL | `https://<your-cloud-run-url>`（実 URL・認証情報はリポジトリ外の Cloud Run 環境変数等で管理する） |
 | Artifact Registry | `asia-northeast1-docker.pkg.dev/daily-routine-app-8a832/scrum-board/app:latest` |
-| Basic Auth ユーザー | `kanban`（パスワードは Cloud Run 環境変数のみ。Git・本ファイルには記載しない） |
+| Basic Auth ユーザー | `<basic-user>`（パスワードは Cloud Run 環境変数 `AUTH_PASSWORD` のみ。Git・本ファイルには記載しない） |
 
 ### スモーク（試行時）
 
