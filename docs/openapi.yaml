@@ -910,7 +910,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JsonValue'
+                type: object
+                required:
+                - comments
+                properties:
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ItemComment'
+                additionalProperties: false
       parameters:
       - name: number
         in: path
@@ -923,13 +931,14 @@ paths:
     post:
       summary: コメント作成
       operationId: post_api_items_by_number_number_comments
+      description: 編集可・ログイン必須。投稿者名はセッション利用者からサーバが設定する（`author` は受け付けない）。
       responses:
         '201':
           description: 作成成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JsonValue'
+                $ref: '#/components/schemas/ItemComment'
         '400':
           description: 不正な入力
           content:
@@ -952,11 +961,19 @@ paths:
       - cookieAuth: []
       - basicAuth: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JsonValue'
-      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+              type: object
+              required:
+              - body
+              additionalProperties: false
+              properties:
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
   /api/items/by-number/{number}/ai-chat:
     get:
       summary: アイテム AI チャット履歴
@@ -1265,13 +1282,14 @@ paths:
     patch:
       summary: コメント更新
       operationId: patch_api_items_by_number_number_comments_id
+      description: 編集可・ログイン必須。本人または admin のみ。`body` のみ受け付ける。
       responses:
         '200':
           description: 成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JsonValue'
+                $ref: '#/components/schemas/ItemComment'
         '400':
           description: 不正な入力
           content:
@@ -1280,6 +1298,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 本人以外（admin を除く）
           content:
             application/json:
               schema:
@@ -1299,17 +1323,32 @@ paths:
       - cookieAuth: []
       - basicAuth: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JsonValue'
-      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+              type: object
+              required:
+              - body
+              additionalProperties: false
+              properties:
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
     delete:
       summary: コメント削除
       operationId: delete_api_items_by_number_number_comments_id
+      description: 編集可・ログイン必須。本人または admin のみ。
       responses:
         '204':
           description: 削除成功（本文なし）
+        '403':
+          description: 本人以外（admin を除く）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: 対象なし
           content:
@@ -2558,6 +2597,35 @@ components:
       additionalProperties: false
     JsonValue:
       description: 当該エンドポイントの JSON 応答。フィールド詳細は必要に応じて本スキーマを具体化する。
+    ItemComment:
+      type: object
+      required:
+      - id
+      - itemId
+      - author
+      - body
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        author:
+          type: string
+          description: 作成時の表示名スナップショット
+        body:
+          type: string
+        createdByUserId:
+          type: integer
+          description: 作成者 users.id。移行前の行は省略または null
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
     Item:
       type: object
       description: アイテム JSON の主要フィールド。ACL 詳細は PATCH /acl を参照。
