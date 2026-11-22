@@ -10,14 +10,17 @@ type BoardSnapshot = { items: Item[]; columns: Column[] };
 const MAX_IN_FLIGHT = 2;
 
 /**
- * In-memory snapshots per project for faster project switches.
+ * In-memory snapshots per project for faster project switches and listbox status dots.
  * Board entries are `{ items, columns }` (warm when columns.length >= 1).
- * Prefetch must not touch boardLoadGeneration / display state.
+ * Soft prefetch uses put*IfAbsent (skip when warm); refreshOthers force-fetches via
+ * boardWriteGen so late responses cannot clobber a fresher putBoard.
+ * Prefetch/refresh must not touch boardLoadGeneration / display state.
  */
 @Injectable({ providedIn: 'root' })
 export class ProjectBoardCache {
   private readonly boardSnapshots = new Map<number, BoardSnapshot>();
   private readonly backlogItems = new Map<number, Item[]>();
+  private readonly boardWriteGen = new Map<number, number>();
   private readonly inFlight = new Set<string>();
   private running = 0;
   private readonly queue: Array<() => void> = [];
@@ -51,8 +54,7 @@ export class ProjectBoardCache {
   putBoardIfAbsent(projectId: number, items: Item[], columns: Column[]): void {
     if (!this.isValidBoardPut(projectId, columns)) return;
     if (this.isBoardWarm(projectId)) return;
-    this.boardSnapshots.set(projectId, cloneSnapshot(items, columns));
-    this.bumpRevision();
+    this.writeBoardSnapshot(projectId, items, columns);
   }
 
   putBacklogIfAbsent(projectId: number, next: Item[]): void {
@@ -61,8 +63,8 @@ export class ProjectBoardCache {
 
   putBoard(projectId: number, items: Item[], columns: Column[]): void {
     if (!this.isValidBoardPut(projectId, columns)) return;
-    this.boardSnapshots.set(projectId, cloneSnapshot(items, columns));
-    this.bumpRevision();
+    this.bumpBoardWriteGen(projectId);
+    this.writeBoardSnapshot(projectId, items, columns);
   }
 
   putBacklog(projectId: number, next: Item[]): void {
@@ -88,6 +90,47 @@ export class ProjectBoardCache {
       this.prefetchBoard(api, id);
       if (includeBacklog) this.prefetchBacklog(api, id);
     }
+  }
+
+  /**
+   * Force-refresh board snapshots for listbox status dots (even when warm).
+   * Does not touch backlog. Skips activeId (active board is already live).
+   */
+  refreshOthers(api: Api, activeId: number, projectIds: number[]): void {
+    for (const id of projectIds) {
+      if (!Number.isFinite(id) || id <= 0 || id === activeId) continue;
+      this.enqueueBoardRefresh(api, id);
+    }
+  }
+
+  private enqueueBoardRefresh(api: Api, projectId: number): void {
+    if (!Number.isFinite(projectId) || projectId <= 0) return;
+    const key = `board:${projectId}`;
+    if (this.inFlight.has(key)) return;
+    this.inFlight.add(key);
+    const gen = this.bumpBoardWriteGen(projectId);
+    const run = () => {
+      this.running++;
+      api
+        .board(projectId)
+        .pipe(
+          finalize(() => {
+            this.inFlight.delete(key);
+            this.running = Math.max(0, this.running - 1);
+            this.pump();
+          }),
+        )
+        .subscribe({
+          next: (res) => {
+            if ((this.boardWriteGen.get(projectId) ?? 0) !== gen) return;
+            const { items, columns } = extractBoard(res);
+            this.writeBoardSnapshot(projectId, items, columns);
+          },
+          error: () => undefined,
+        });
+    };
+    this.queue.push(run);
+    this.pump();
   }
 
   private enqueue(api: Api, projectId: number, kind: PrefetchKind): void {
@@ -146,6 +189,18 @@ export class ProjectBoardCache {
 
   private isValidBoardPut(projectId: number, columns: Column[]): boolean {
     return Number.isFinite(projectId) && projectId > 0 && columns.length >= 1;
+  }
+
+  private writeBoardSnapshot(projectId: number, items: Item[], columns: Column[]): void {
+    if (!this.isValidBoardPut(projectId, columns)) return;
+    this.boardSnapshots.set(projectId, cloneSnapshot(items, columns));
+    this.bumpRevision();
+  }
+
+  private bumpBoardWriteGen(projectId: number): number {
+    const next = (this.boardWriteGen.get(projectId) ?? 0) + 1;
+    this.boardWriteGen.set(projectId, next);
+    return next;
   }
 
   private bumpRevision(): void {
