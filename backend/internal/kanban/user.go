@@ -106,6 +106,26 @@ func CheckPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
+// loginDummyHash is compared when the login name is missing or disabled so timing
+// does not reveal account existence (same bcrypt cost as a wrong password).
+var loginDummyHash string
+
+func init() {
+	h, err := bcrypt.GenerateFromPassword([]byte("login-timing-dummy-v1"), BcryptCost)
+	if err != nil {
+		panic("login dummy hash: " + err.Error())
+	}
+	loginDummyHash = string(h)
+}
+
+// loginPasswordHash picks the bcrypt hash for a login attempt.
+func loginPasswordHash(user User, lookupErr error) string {
+	if lookupErr == nil && !user.Disabled {
+		return user.PasswordHash
+	}
+	return loginDummyHash
+}
+
 func newSessionID() (string, error) {
 	var b [32]byte
 	if _, err := rand.Read(b[:]); err != nil {
