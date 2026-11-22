@@ -112,6 +112,27 @@ run_selftest() {
   } > "$slash"
   expect_fail "$slash" "leading-slash pattern"
 
+  local whole="$tmpdir/whole"
+  {
+    cat "$good"
+    echo '*'
+  } > "$whole"
+  expect_fail "$whole" "whole-context glob"
+
+  local fe="$tmpdir/frontend"
+  {
+    cat "$good"
+    echo 'frontend'
+  } > "$fe"
+  expect_fail "$fe" "frontend tree drop"
+
+  local nginx="$tmpdir/nginx"
+  {
+    cat "$good"
+    echo 'deploy/nginx.conf'
+  } > "$nginx"
+  expect_fail "$nginx" "deploy/nginx.conf drop"
+
   local neg="$tmpdir/neg"
   {
     cat "$good"
