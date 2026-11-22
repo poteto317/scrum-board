@@ -106,6 +106,7 @@ export interface ItemComment {
   itemId: number;
   author: string;
   body: string;
+  createdByUserId?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +117,10 @@ export function normalizeComment(raw: Partial<ItemComment> | null | undefined): 
     id: typeof raw?.id === 'number' ? raw.id : 0,
     itemId: typeof raw?.itemId === 'number' ? raw.itemId : 0,
     author: typeof raw?.author === 'string' ? raw.author : '',
+    createdByUserId:
+      typeof raw?.createdByUserId === 'number' && raw.createdByUserId > 0
+        ? raw.createdByUserId
+        : undefined,
     body: typeof raw?.body === 'string' ? raw.body : '',
     createdAt: typeof raw?.createdAt === 'string' ? raw.createdAt : '',
     updatedAt: typeof raw?.updatedAt === 'string' ? raw.updatedAt : '',

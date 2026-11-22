@@ -16,16 +16,6 @@
       @for (c of comments(); track c.id) {
         <li class="comment-row">
           @if (editingId() === c.id) {
-            <label class="field">
-              <span>表示名</span>
-              <input
-                type="text"
-                [ngModel]="editAuthor()"
-                (ngModelChange)="editAuthor.set($event)"
-                [disabled]="savingId() === c.id"
-                maxlength="60"
-              />
-            </label>
             <div
               class="comment-edit"
               (dragover)="onCommentDragOver($event)"
@@ -71,7 +61,7 @@
               [canDelete]="!readOnly"
               (deleteImage)="deleteAttachment($event)"
             />
-            @if (!readOnly) {
+            @if (canModifyComment(c)) {
               <div class="row-actions">
                 <button
                   type="button"
@@ -103,17 +93,6 @@
         (dragover)="onCommentDragOver($event)"
         (drop)="onDraftDrop($event)"
       >
-        <label class="field">
-          <span>表示名（任意）</span>
-          <input
-            type="text"
-            [ngModel]="draftAuthor()"
-            (ngModelChange)="draftAuthor.set($event)"
-            name="draftAuthor"
-            [disabled]="posting() || imageBusy()"
-            maxlength="60"
-          />
-        </label>
         <label class="field">
           <span>本文</span>
           <textarea

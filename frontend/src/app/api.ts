@@ -204,7 +204,7 @@ export class Api {
   }
   createComment(
     number: number,
-    input: { author?: string; body: string },
+    input: { body: string },
     projectId?: number,
   ) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
@@ -215,13 +215,11 @@ export class Api {
   updateComment(
     number: number,
     id: number,
-    patch: { author?: string; body?: string },
+    patch: { body: string },
     projectId?: number,
   ) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
-    const body: Record<string, string> = {};
-    if (patch.author !== undefined) body['author'] = patch.author;
-    if (patch.body !== undefined) body['body'] = patch.body;
+    const body = { body: patch.body };
     return this.http
       .patch<ItemComment>(
         `/api/items/by-number/${number}/comments/${id}`,
