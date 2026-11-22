@@ -32,7 +32,7 @@ docker compose up -d --build
 
 **パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）はローカル Docker 専用の既定値です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。
 
-**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic のどちらかで通ります。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番ゲートとして残ります（アプリ Basic とは別層）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
+**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic（`Sec-Fetch-Site` ヘッダ無しの非ブラウザ: curl・エージェント等）のどちらかで通ります。ブラウザは Basic を無視し Cookie セッションのみです。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番ゲートとして残ります（アプリ Basic とは別層）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
 
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board
