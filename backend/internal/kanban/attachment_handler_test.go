@@ -171,7 +171,7 @@ func TestAttachmentUploadListContentDelete(t *testing.T) {
 	card.Description = "前 " + BuildAttachmentMarkup(card.Number, att.ID, "pic") + " 後"
 	card.Solution = "sol " + BuildAttachmentMarkup(card.Number, att.ID, "pic")
 	repo.cards[card.ID] = card
-	cmt, err := repo.CreateComment(t.Context(), card.ID, "a", "cmt "+BuildAttachmentMarkup(card.Number, att.ID, "pic"))
+	cmt, err := repo.CreateComment(t.Context(), card.ID, "a", "cmt "+BuildAttachmentMarkup(card.Number, att.ID, "pic"), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestAttachmentRejectsForeignCommentID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmt, err := repo.CreateComment(t.Context(), b.ID, "x", "body")
+	cmt, err := repo.CreateComment(t.Context(), b.ID, "x", "body", 1)
 	if err != nil {
 		t.Fatal(err)
 	}

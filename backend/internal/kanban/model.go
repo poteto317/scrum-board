@@ -240,8 +240,9 @@ type Repository interface {
 	GetHeaderMenu(context.Context) (WorkspaceHeaderMenu, error)
 	PutHeaderMenu(context.Context, WorkspaceHeaderMenu) (WorkspaceHeaderMenu, error)
 	ListComments(context.Context, int64) ([]Comment, error)
-	CreateComment(context.Context, int64, string, string) (Comment, error)
-	UpdateComment(context.Context, int64, int64, *string, *string) (Comment, error)
+	GetComment(context.Context, int64, int64) (Comment, error)
+	CreateComment(context.Context, int64, string, string, int64) (Comment, error)
+	UpdateComment(context.Context, int64, int64, *string) (Comment, error)
 	DeleteComment(context.Context, int64, int64) error
 	ListAIMessages(context.Context, int64) ([]AIMessage, error)
 	AppendAITurn(ctx context.Context, itemID int64, userBody, assistantBody string, inTok, outTok int64) error

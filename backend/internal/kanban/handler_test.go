@@ -1215,7 +1215,15 @@ func (m *memoryRepo) ListComments(_ context.Context, itemID int64) ([]Comment, e
 	return out, nil
 }
 
-func (m *memoryRepo) CreateComment(_ context.Context, itemID int64, author, body string) (Comment, error) {
+func (m *memoryRepo) GetComment(_ context.Context, itemID, commentID int64) (Comment, error) {
+	c, ok := m.comments[commentID]
+	if !ok || c.ItemID != itemID {
+		return Comment{}, ErrNotFound
+	}
+	return c, nil
+}
+
+func (m *memoryRepo) CreateComment(_ context.Context, itemID int64, author, body string, createdByUserID int64) (Comment, error) {
 	c0, ok := m.cards[itemID]
 	if !ok || !m.living(c0) {
 		return Comment{}, ErrNotFound
@@ -1223,18 +1231,16 @@ func (m *memoryRepo) CreateComment(_ context.Context, itemID int64, author, body
 	now := time.Now().UTC()
 	id := m.nextCommentID
 	m.nextCommentID++
-	c := Comment{ID: id, ItemID: itemID, Author: author, Body: body, CreatedAt: now, UpdatedAt: now}
+	uid := createdByUserID
+	c := Comment{ID: id, ItemID: itemID, Author: author, Body: body, CreatedByUserID: &uid, CreatedAt: now, UpdatedAt: now}
 	m.comments[id] = c
 	return c, nil
 }
 
-func (m *memoryRepo) UpdateComment(_ context.Context, itemID, commentID int64, author, body *string) (Comment, error) {
+func (m *memoryRepo) UpdateComment(_ context.Context, itemID, commentID int64, body *string) (Comment, error) {
 	c, ok := m.comments[commentID]
 	if !ok || c.ItemID != itemID {
 		return Comment{}, ErrNotFound
-	}
-	if author != nil {
-		c.Author = *author
 	}
 	if body != nil {
 		c.Body = *body

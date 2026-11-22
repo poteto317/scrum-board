@@ -144,7 +144,7 @@ func TestAIChatValidation(t *testing.T) {
 func TestAIChatPOSTSuccessUsageAndNoMutate(t *testing.T) {
 	repo := fresh()
 	card, _ := repo.CreateItem(context.Background(), ItemInput{ColumnID: 1, Title: "重要タイトル", Description: "元の説明"})
-	_, _ = repo.CreateComment(context.Background(), card.ID, "bob", "既存コメント")
+	_, _ = repo.CreateComment(context.Background(), card.ID, "bob", "既存コメント", 1)
 	chatter := &fakeChatter{fn: func(context.Context, string, []ChatTurn) (string, int64, int64, error) {
 		return "アシスタント応答", 10, 20, nil
 	}}

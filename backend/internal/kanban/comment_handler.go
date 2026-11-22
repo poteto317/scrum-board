@@ -25,7 +25,7 @@ func (h handler) createComment(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &raw) {
 		return
 	}
-	if errMsg := commentUnknownFields(raw); errMsg != "" {
+	if errMsg := commentCreateUnknownFields(raw); errMsg != "" {
 		invalid(w, errMsg)
 		return
 	}
@@ -34,16 +34,21 @@ func (h handler) createComment(w http.ResponseWriter, r *http.Request) {
 		invalid(w, errMsg)
 		return
 	}
-	author, ok, errMsg := parseOptionalCommentAuthor(raw, true)
-	if !ok {
-		invalid(w, errMsg)
-		return
-	}
 	card, ok := h.commentParentItem(w, r, true)
 	if !ok {
 		return
 	}
-	created, err := h.repo.CreateComment(r.Context(), card.ID, author, body)
+	user, ok := CurrentUser(r.Context())
+	if !ok {
+		reply(w, 401, map[string]string{"message": msgLoginRequired})
+		return
+	}
+	author, ok := commentAuthorFromUser(user)
+	if !ok {
+		invalid(w, "表示名は60文字以内で、制御文字を含めず入力してください。")
+		return
+	}
+	created, err := h.repo.CreateComment(r.Context(), card.ID, author, body, user.ID)
 	if err != nil {
 		fail(w, err)
 		return
@@ -60,39 +65,28 @@ func (h handler) updateComment(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &raw) {
 		return
 	}
-	if errMsg := commentUnknownFields(raw); errMsg != "" {
+	if errMsg := commentPatchUnknownFields(raw); errMsg != "" {
 		invalid(w, errMsg)
 		return
 	}
-	_, hasAuthor := raw["author"]
 	_, hasBody := raw["body"]
-	if !hasAuthor && !hasBody {
-		invalid(w, "author または body を指定してください。")
+	if !hasBody {
+		invalid(w, "body を指定してください。")
 		return
 	}
-	var author *string
-	var body *string
-	if hasAuthor {
-		a, ok, errMsg := parseOptionalCommentAuthor(raw, false)
-		if !ok {
-			invalid(w, errMsg)
-			return
-		}
-		author = &a
-	}
-	if hasBody {
-		b, ok, errMsg := parseRequiredCommentBody(raw)
-		if !ok {
-			invalid(w, errMsg)
-			return
-		}
-		body = &b
+	body, ok, errMsg := parseRequiredCommentBody(raw)
+	if !ok {
+		invalid(w, errMsg)
+		return
 	}
 	card, ok := h.commentParentItem(w, r, true)
 	if !ok {
 		return
 	}
-	updated, err := h.repo.UpdateComment(r.Context(), card.ID, commentID, author, body)
+	if _, ok := h.requireCommentModifyACL(w, r, card, commentID); !ok {
+		return
+	}
+	updated, err := h.repo.UpdateComment(r.Context(), card.ID, commentID, &body)
 	if err != nil {
 		fail(w, err)
 		return
@@ -107,6 +101,9 @@ func (h handler) deleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 	card, ok := h.commentParentItem(w, r, true)
 	if !ok {
+		return
+	}
+	if _, ok := h.requireCommentModifyACL(w, r, card, commentID); !ok {
 		return
 	}
 	keys, keyErr := h.repo.ListAttachmentObjectKeysByCommentID(r.Context(), commentID)
@@ -148,6 +145,25 @@ func (h handler) commentParentItem(w http.ResponseWriter, r *http.Request, needE
 	return card, true
 }
 
+// requireCommentModifyACL checks login and comment ownership after the parent item passed edit ACL.
+func (h handler) requireCommentModifyACL(w http.ResponseWriter, r *http.Request, card Item, commentID int64) (User, bool) {
+	user, ok := CurrentUser(r.Context())
+	if !ok {
+		reply(w, 401, map[string]string{"message": msgLoginRequired})
+		return User{}, false
+	}
+	cur, err := h.repo.GetComment(r.Context(), card.ID, commentID)
+	if err != nil {
+		fail(w, err)
+		return User{}, false
+	}
+	if !canModifyComment(user, cur) {
+		reply(w, 403, map[string]string{"message": msgForbidden})
+		return User{}, false
+	}
+	return user, true
+}
+
 func commentPathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	commentID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || commentID <= 0 {
@@ -157,37 +173,22 @@ func commentPathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return commentID, true
 }
 
-func commentUnknownFields(raw map[string]json.RawMessage) string {
+func commentCreateUnknownFields(raw map[string]json.RawMessage) string {
 	for key := range raw {
-		if key != "author" && key != "body" {
+		if key != "body" {
 			return "不明なフィールドがあります。"
 		}
 	}
 	return ""
 }
 
-// parseOptionalCommentAuthor: allowMissing=true treats absent key as "".
-func parseOptionalCommentAuthor(raw map[string]json.RawMessage, allowMissing bool) (string, bool, string) {
-	authorRaw, hasAuthor := raw["author"]
-	if !hasAuthor {
-		if allowMissing {
-			return "", true, ""
+func commentPatchUnknownFields(raw map[string]json.RawMessage) string {
+	for key := range raw {
+		if key != "body" {
+			return "不明なフィールドがあります。"
 		}
-		return "", false, "表示名は60文字以内で、制御文字を含めず入力してください。"
 	}
-	msg := "表示名は60文字以内で、制御文字を含めず入力してください。"
-	if string(authorRaw) == "null" {
-		return "", false, msg
-	}
-	var authorStr string
-	if err := json.Unmarshal(authorRaw, &authorStr); err != nil {
-		return "", false, msg
-	}
-	author, ok := NormalizeCommentAuthor(authorStr)
-	if !ok {
-		return "", false, msg
-	}
-	return author, true, ""
+	return ""
 }
 
 func parseRequiredCommentBody(raw map[string]json.RawMessage) (string, bool, string) {
