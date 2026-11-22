@@ -19,6 +19,9 @@ const (
 
 	BcryptCost = 10
 
+	// MinPasswordLength is enforced on create and password change (not on login).
+	MinPasswordLength = 8
+
 	SessionCookieName = "sb_session"
 	SessionTTL        = 14 * 24 * time.Hour
 
@@ -195,6 +198,9 @@ func (r MySQLRepository) UpdateUser(ctx context.Context, id int64, patch UserPat
 		if *patch.Password == "" {
 			return User{}, ErrInvalidUserInput
 		}
+		if err := validatePasswordLength(*patch.Password); err != nil {
+			return User{}, err
+		}
 		hash, err := HashPassword(*patch.Password)
 		if err != nil {
 			return User{}, err
@@ -356,11 +362,21 @@ func isDuplicateKey(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "Duplicate")
 }
 
+func validatePasswordLength(password string) error {
+	if len([]rune(password)) < MinPasswordLength {
+		return ErrInvalidUserInput
+	}
+	return nil
+}
+
 func validateUserCreate(in UserCreateInput, role string) error {
 	login := strings.TrimSpace(in.LoginName)
 	display := strings.TrimSpace(in.DisplayName)
 	if login == "" || display == "" || in.Password == "" {
 		return ErrInvalidUserInput
+	}
+	if err := validatePasswordLength(in.Password); err != nil {
+		return err
 	}
 	if len([]rune(login)) > 80 || len([]rune(display)) > 80 {
 		return ErrInvalidUserInput
@@ -424,6 +440,9 @@ func (r MySQLRepository) SeedAdminFromEnv(ctx context.Context, getenv func(strin
 	user, adminPass, err := adminSeedCreds(getenv)
 	if err != nil {
 		return err
+	}
+	if err := validatePasswordLength(adminPass); err != nil {
+		return fmt.Errorf("%w: ADMIN_INITIAL_PASSWORD must be at least %d characters", ErrAuthSeed, MinPasswordLength)
 	}
 	hash, err := HashPassword(adminPass)
 	if err != nil {
