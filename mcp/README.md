@@ -27,6 +27,9 @@ npm run build
 
 ローカル受け入れは認証なしで足ります。本番 nginx 向けにだけ上記を設定してください。
 
+**平文 HTTP の制約:** ユーザーとパスワードの両方を設定するとき、`SCRUM_BOARD_BASE_URL` は **`https:`** か、**ループバックの `http:`**（`localhost` / `127.0.0.1` / `::1`）に限ります。それ以外の `http:` では起動時に `insecure_auth_transport` で止まり、資格情報を送りません。  
+`SCRUM_BOARD_AUTH_*` は nginx のゲートウェイ Basic（デプロイの `AUTH_USER` / `AUTH_PASSWORD`）向けであり、アプリの admin ログイン用パスワードとは別です。
+
 ## Claude Code / Codex 設定例
 
 `<repo>` をこのリポジトリの絶対パスに置き換えてください。

@@ -29,4 +29,27 @@ describe('loadConfig', () => {
     process.env.SCRUM_BOARD_BASE_URL = 'file:///etc/passwd';
     expect(() => loadConfig()).toThrow('invalid_base_url');
   });
+
+  it('rejects Basic auth over http to non-loopback hosts', () => {
+    process.env.SCRUM_BOARD_BASE_URL = 'http://evil.example/board';
+    process.env.SCRUM_BOARD_AUTH_USER = 'u';
+    process.env.SCRUM_BOARD_AUTH_PASSWORD = 'p';
+    expect(() => loadConfig()).toThrow('insecure_auth_transport');
+  });
+
+  it('allows Basic auth over http to loopback hosts', () => {
+    process.env.SCRUM_BOARD_AUTH_USER = 'u';
+    process.env.SCRUM_BOARD_AUTH_PASSWORD = 'p';
+    for (const host of ['127.0.0.1', 'localhost', '[::1]']) {
+      process.env.SCRUM_BOARD_BASE_URL = `http://${host}:4200`;
+      expect(loadConfig().authHeader).toContain('Basic ');
+    }
+  });
+
+  it('allows Basic auth over https to remote hosts', () => {
+    process.env.SCRUM_BOARD_BASE_URL = 'https://scrum-board.example.run.app';
+    process.env.SCRUM_BOARD_AUTH_USER = 'u';
+    process.env.SCRUM_BOARD_AUTH_PASSWORD = 'p';
+    expect(loadConfig().authHeader).toContain('Basic ');
+  });
 });
