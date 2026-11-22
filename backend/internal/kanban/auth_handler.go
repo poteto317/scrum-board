@@ -36,12 +36,14 @@ func (h handler) login(w http.ResponseWriter, r *http.Request) {
 		reply(w, 401, map[string]string{"message": msgLoginFailed})
 		return
 	}
+	// Clear login-key failures once credentials are accepted (before session I/O),
+	// so a transient CreateSession failure does not push a valid user toward 429.
+	h.loginAttempts.RecordSuccess(loginKey, ip)
 	sess, err := h.repo.CreateSession(r.Context(), user.ID, now)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	h.loginAttempts.RecordSuccess(loginKey, ip)
 	setSessionCookie(w, r, sess.ID, sess.ExpiresAt)
 	reply(w, 200, user.Public())
 }

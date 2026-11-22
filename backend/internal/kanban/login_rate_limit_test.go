@@ -36,20 +36,25 @@ func TestLoginAttemptLimiterThresholdAndRelock(t *testing.T) {
 	}
 }
 
-func TestLoginAttemptLimiterSuccessClears(t *testing.T) {
+func TestLoginAttemptLimiterSuccessClearsLoginNotIP(t *testing.T) {
 	l := NewMemoryLoginAttemptLimiter()
 	now := time.Now().UTC()
 	for i := 0; i < 3; i++ {
 		l.RecordFailure("a", "9.9.9.9", now)
 	}
 	l.RecordSuccess("a", "9.9.9.9")
-	for i := 0; i < loginFailureLimit; i++ {
-		if !l.Allow("a", "9.9.9.9", now) {
-			t.Fatalf("after success, attempt %d should allow", i+1)
-		}
-		if i < loginFailureLimit-1 {
-			l.RecordFailure("a", "9.9.9.9", now)
-		}
+	// login key cleared: can fail again without immediate lock from prior login counts
+	for i := 0; i < 2; i++ {
+		l.RecordFailure("a", "10.0.0.1", now)
+	}
+	if !l.Allow("a", "10.0.0.1", now) {
+		t.Fatal("login key should have been cleared by success")
+	}
+	// IP key retained: 3 prior failures on 9.9.9.9 still count toward lock
+	l.RecordFailure("b", "9.9.9.9", now)
+	l.RecordFailure("b", "9.9.9.9", now)
+	if l.Allow("c", "9.9.9.9", now) {
+		t.Fatal("IP failures should not clear on another user's success")
 	}
 }
 
@@ -60,7 +65,6 @@ func TestLoginAttemptLimiterIndependentKeys(t *testing.T) {
 		l.RecordFailure("alice", "10.0.0.1", now)
 	}
 	if l.Allow("alice", "10.0.0.2", now) {
-		// login key still locked even with other IP
 		t.Fatal("login key lock should block other IPs for same login")
 	}
 	if !l.Allow("bob", "10.0.0.2", now) {
@@ -71,5 +75,22 @@ func TestLoginAttemptLimiterIndependentKeys(t *testing.T) {
 	}
 	if l.Allow("dave", "10.0.0.1", now) {
 		t.Fatal("ip lock should block other logins from same IP")
+	}
+}
+
+func TestLoginAttemptLimiterPrunesStaleFailures(t *testing.T) {
+	l := NewMemoryLoginAttemptLimiter().(*memoryLoginAttemptLimiter)
+	now := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
+	l.RecordFailure("ghost", "8.8.8.8", now)
+	if len(l.byKey) == 0 {
+		t.Fatal("expected entries after failure")
+	}
+	later := now.Add(loginFailureTTL + time.Second)
+	l.Allow("other", "1.1.1.1", later) // triggers prune
+	if _, ok := l.byKey[loginAttemptKey("ghost")]; ok {
+		t.Fatal("stale login failure should be pruned")
+	}
+	if _, ok := l.byKey[ipAttemptKey("8.8.8.8")]; ok {
+		t.Fatal("stale ip failure should be pruned")
 	}
 }

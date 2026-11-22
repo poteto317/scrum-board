@@ -8,22 +8,25 @@ import (
 const (
 	loginFailureLimit = 5
 	loginLockDuration = 15 * time.Minute
+	loginFailureTTL   = 15 * time.Minute
 )
 
 // LoginAttemptLimiter tracks consecutive failed logins per login key and client IP.
 type LoginAttemptLimiter interface {
 	Allow(loginKey, ip string, now time.Time) bool
 	RecordFailure(loginKey, ip string, now time.Time)
+	// RecordSuccess clears the login-key counter only (IP counters stay for NAT shared exits).
 	RecordSuccess(loginKey, ip string)
 }
 
 type loginAttemptEntry struct {
 	failures    int
 	lockedUntil time.Time
+	lastFailure time.Time
 }
 
 type memoryLoginAttemptLimiter struct {
-	mu   sync.Mutex
+	mu    sync.Mutex
 	byKey map[string]*loginAttemptEntry
 }
 
@@ -53,7 +56,7 @@ func (l *memoryLoginAttemptLimiter) RecordSuccess(loginKey, ip string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.byKey, loginAttemptKey(loginKey))
-	delete(l.byKey, ipAttemptKey(ip))
+	_ = ip // IP failure counters are not cleared on success (shared NAT).
 }
 
 func (l *memoryLoginAttemptLimiter) isLocked(key string, now time.Time) bool {
@@ -71,6 +74,7 @@ func (l *memoryLoginAttemptLimiter) bump(key string, now time.Time) {
 		return
 	}
 	e.failures++
+	e.lastFailure = now
 	if e.failures >= loginFailureLimit {
 		e.lockedUntil = now.Add(loginLockDuration)
 		e.failures = 0
@@ -79,7 +83,14 @@ func (l *memoryLoginAttemptLimiter) bump(key string, now time.Time) {
 
 func (l *memoryLoginAttemptLimiter) pruneLocked(now time.Time) {
 	for k, e := range l.byKey {
-		if e.failures == 0 && !e.lockedUntil.After(now) {
+		if e.lockedUntil.After(now) {
+			continue
+		}
+		if e.failures == 0 {
+			delete(l.byKey, k)
+			continue
+		}
+		if !e.lastFailure.IsZero() && now.Sub(e.lastFailure) >= loginFailureTTL {
 			delete(l.byKey, k)
 		}
 	}
