@@ -168,6 +168,38 @@ func TestUpdateBoardSettingsFiltersRestrictedItems(t *testing.T) {
 	}
 }
 
+func TestUpdateBoardSettingsIncludesRestrictedForAllowedMember(t *testing.T) {
+	m := fresh()
+	hash, _ := HashPassword("x")
+	m.users = append(m.users, User{ID: 2, LoginName: "mem", DisplayName: "mem", PasswordHash: hash, Role: RoleMember})
+	secret, _ := m.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: "allowed-secret", Description: "d"})
+	secret.ViewAccess = ViewAccessRestricted
+	secret.EditAccess = EditAccessRestricted
+	m.cards[secret.ID] = secret
+	m.aclEntries = map[int64]ItemACL{secret.ID: {ViewUserIDs: []int64{2}}}
+	m.settings.CardLayout = CardLayoutFree
+	sess := Session{ID: "mem-allowed-sess", UserID: 2, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	m.sessions[sess.ID] = sess
+	h := NewHandler(m)
+
+	w := requestWithCookie(h, "PATCH", "/api/board/settings", `{"cardLayout":"pack"}`, sess.ID)
+	if w.Code != 200 {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body)
+	}
+	var out struct {
+		Items []Item `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range out.Items {
+		if it.ID == secret.ID {
+			return
+		}
+	}
+	t.Fatal("view-allowed member must still see restricted item after free→pack")
+}
+
 func TestUpdateBoardSettingsFilterFailureDoesNotLeakItems(t *testing.T) {
 	const secretTitle = "secret-title-for-acl-fail-87"
 	m := fresh()
