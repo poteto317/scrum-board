@@ -25,9 +25,23 @@ export class ProjectBoardCache {
   private running = 0;
   private readonly queue: Array<() => void> = [];
   private readonly revisionSignal = signal(0);
+  /** Bumps on clear(); in-flight handlers must match or drop writes (L-037). */
+  private epoch = 0;
 
   /** Bumps on successful board put so listbox dots can refresh while open. */
   readonly revision = this.revisionSignal.asReadonly();
+
+  /** Drop all snapshots and cancel queued prefetch; stale HTTP must not repopulate. */
+  clear(): void {
+    this.epoch++;
+    this.boardSnapshots.clear();
+    this.backlogItems.clear();
+    this.boardWriteGen.clear();
+    this.inFlight.clear();
+    this.queue.length = 0;
+    this.running = 0;
+    this.bumpRevision();
+  }
 
   getBoard(projectId: number): Item[] | undefined {
     return cloneList(this.getWarmBoard(projectId)?.items);
@@ -110,6 +124,7 @@ export class ProjectBoardCache {
     this.inFlight.add(key);
     const gen = this.bumpBoardWriteGen(projectId);
     const run = () => {
+      const epoch = this.epoch;
       this.running++;
       api
         .board(projectId)
@@ -122,6 +137,7 @@ export class ProjectBoardCache {
         )
         .subscribe({
           next: (res) => {
+            if (epoch !== this.epoch) return;
             if ((this.boardWriteGen.get(projectId) ?? 0) !== gen) return;
             const { items, columns } = extractBoard(res);
             this.writeBoardSnapshot(projectId, items, columns);
@@ -144,6 +160,7 @@ export class ProjectBoardCache {
     if (this.inFlight.has(key)) return;
     this.inFlight.add(key);
     const run = () => {
+      const epoch = this.epoch;
       this.running++;
       const req = kind === 'board' ? api.board(projectId) : api.backlog(projectId);
       req
@@ -156,6 +173,7 @@ export class ProjectBoardCache {
         )
         .subscribe({
           next: (res) => {
+            if (epoch !== this.epoch) return;
             if (kind === 'board') {
               const { items, columns } = extractBoard(res);
               this.putBoardIfAbsent(projectId, items, columns);

@@ -57,6 +57,17 @@ export class ProjectSession {
   private switchListeners = 0;
   private loadGeneration = 0;
 
+  /** Reset workspace project state when the authenticated subject changes. */
+  clearSubjectState(): void {
+    this.loadGeneration++;
+    this.projects.set([]);
+    this.activeId.set(null);
+    this.bootstrapped.set(false);
+    this.switching.set(false);
+    this.mutating.set(false);
+    this.error.set('');
+  }
+
   /**
    * Adopt active project from a board GET.
    * `clearIfMissing`: ProjectSession.load だけ true（欠落時に null）。board/backlog 適用では false（poll 欠落で消さない）。
