@@ -907,6 +907,16 @@ describe('ItemDetail copy command menu and management', () => {
   const create = (
     overrides: Record<string, unknown> = {},
     templates: { id: number; name: string; template: string; position: number }[] = [template],
+    auth: {
+      user: ReturnType<typeof signal>;
+      status: ReturnType<typeof signal>;
+      loadError: ReturnType<typeof signal>;
+      ensureMe: () => unknown;
+      isAdmin: () => boolean;
+      clearSubject: () => unknown;
+      login: () => unknown;
+      logout: () => unknown;
+    } = authStub,
   ) => {
     const params = new BehaviorSubject(new Map([['number', '3']]));
     const api = {
@@ -937,7 +947,7 @@ describe('ItemDetail copy command menu and management', () => {
       imports: [ItemDetail],
       providers: [
         { provide: Api, useValue: api },
-        { provide: AuthSession, useValue: authStub },
+        { provide: AuthSession, useValue: auth },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
@@ -968,7 +978,7 @@ describe('ItemDetail copy command menu and management', () => {
   const openDialog = (f: { nativeElement: HTMLElement; detectChanges(): void }) => {
     const manage = f.nativeElement.querySelector('.manage-commands') as HTMLButtonElement | null;
     expect(manage).not.toBeNull();
-    expect(manage!.textContent).toContain('コマンドを管理');
+    expect(manage!.textContent).toMatch(/コマンドを管理|コマンド一覧/);
     manage!.click();
     f.detectChanges();
     const dialog = f.nativeElement.querySelector(
@@ -1158,6 +1168,35 @@ describe('ItemDetail copy command menu and management', () => {
     expect(dialog.querySelector('#command-template')).not.toBeNull();
     expect(dialog.querySelector('form button[type="submit"]')).not.toBeNull();
     expect(dialog.textContent).toContain('{{url}} はこのアイテムのリンクに置き換わります。');
+  });
+
+  it('hides catalog mutate controls for members while showing name and body', () => {
+    const member = {
+      id: 2,
+      loginName: 'mem',
+      displayName: 'Mem',
+      role: 'member' as const,
+      disabled: false,
+    };
+    const memberAuth = {
+      ...authStub,
+      user: signal(member),
+      ensureMe: () => of(member),
+      isAdmin: () => false,
+      login: () => of(member),
+    };
+    const { f } = create({}, [template], memberAuth);
+    const dialog = openDialog(f);
+    expect(dialog.textContent).toContain(template.name);
+    expect(dialog.querySelector('.command-template-body')?.textContent).toContain(template.template);
+    expect(dialog.querySelector('.command-template-bulk')).toBeNull();
+    expect(dialog.querySelector('#command-name')).toBeNull();
+    expect(dialog.querySelector('.command-create-form')).toBeNull();
+    expect(buttonByText(dialog, '編集')).toBeUndefined();
+    expect(buttonByText(dialog, '削除')).toBeUndefined();
+    expect(buttonByText(dialog, '全アイテムに適用')).toBeUndefined();
+    expect(buttonByText(dialog, '新規の初期にする')).toBeUndefined();
+    expect(buttonByText(dialog, '追加')).toBeUndefined();
   });
 
   it('adds a template, refreshes the list, and reports success', () => {
