@@ -141,6 +141,7 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	}
 	keepRate = true // model call starts; reservation counts even if Chat fails
 	replyText, inTok, outTok, err := h.chatter.Chat(aiCtx, system, turns)
+	h.applyAIUsageAfterCall(r.Context(), err, inTok, outTok, AIChatEstimateInput(system, turns))
 	if err != nil {
 		logChatFailure(err)
 		aiChatFailed(w)
@@ -150,10 +151,6 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 		slog.Error("ai chat storage failed", "stage", "append")
 		aiChatError(w, http.StatusInternalServerError, "server_error", "処理に失敗しました。時間をおいて再試行してください。")
 		return
-	}
-	// Usage is best-effort after append: failing here must not 500 (would invite retry-duplicate turns).
-	if err := h.repo.AddAIUsage(r.Context(), 1, inTok, outTok); err != nil {
-		slog.Error("ai chat usage add failed", "stage", "usage")
 	}
 	list, err := h.repo.ListAIMessages(r.Context(), card.ID)
 	if err != nil {

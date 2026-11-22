@@ -338,6 +338,58 @@ func TestRefinedItemKeepsADescriptionEmptyWhenTheDraftHadNone(t *testing.T) {
 	}
 }
 
+type statusFailure struct {
+	kind   string
+	status int
+}
+
+func (f statusFailure) Error() string       { return "status fail:" + f.kind }
+func (f statusFailure) FailureKind() string { return f.kind }
+func (f statusFailure) UpstreamStatus() int { return f.status }
+
+func TestRefinedTruncatedAddsUsageAndBlocksAtLimit(t *testing.T) {
+	repo := fresh()
+	lim := int64(35)
+	if err := repo.SetAICreditLimit(context.Background(), &lim); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, int64, int64, error) {
+		return RefinedItem{}, 10, 25, statusFailure{kind: "truncated", status: 0}
+	}}
+	h := newRefined(repo, f)
+	w := postJSON(h, `{"title":"下書きタイトルです"}`)
+	if w.Code != 502 {
+		t.Fatalf("truncated: %d %s", w.Code, w.Body.String())
+	}
+	u, err := repo.GetAIUsage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.RequestCount != 1 || u.InputTokens != 10 || u.OutputTokens != 25 {
+		t.Fatalf("usage=%+v", u)
+	}
+	w = postJSON(h, `{"title":"もう一度下書きタイトル"}`)
+	if w.Code != 429 || decodeError(t, w).Code != "ai_credit_limit" {
+		t.Fatalf("want credit limit, got %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRefinedTimeoutEstimatesUsage(t *testing.T) {
+	repo := fresh()
+	f := &fakeFormatter{fn: func(context.Context, Draft) (RefinedItem, int64, int64, error) {
+		return RefinedItem{}, 0, 0, statusFailure{kind: "timeout", status: 0}
+	}}
+	before, _ := repo.GetAIUsage(context.Background())
+	w := postJSON(newRefined(repo, f), `{"title":"下書きタイトルです"}`)
+	if w.Code != 502 {
+		t.Fatalf("timeout: %d", w.Code)
+	}
+	after, _ := repo.GetAIUsage(context.Background())
+	if after.RequestCount != before.RequestCount+1 || after.InputTokens <= before.InputTokens {
+		t.Fatalf("before=%+v after=%+v", before, after)
+	}
+}
+
 func TestRefinedItemAIFailuresNeverCreateACardOrLeak(t *testing.T) {
 	logs := captureLogs(t)
 	for name, err := range map[string]error{

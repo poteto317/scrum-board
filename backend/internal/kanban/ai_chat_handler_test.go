@@ -265,3 +265,110 @@ func TestBuildAIChatSystemIncludesTitle(t *testing.T) {
 		t.Fatalf("system=%s", sys)
 	}
 }
+
+type chatFail struct {
+	kind   string
+	status int
+}
+
+func (f chatFail) Error() string       { return "chat fail:" + f.kind }
+func (f chatFail) FailureKind() string { return f.kind }
+func (f chatFail) UpstreamStatus() int { return f.status }
+
+type appendFailRepo struct {
+	*memoryRepo
+}
+
+func (a *appendFailRepo) AppendAITurn(context.Context, int64, string, string, int64, int64) error {
+	return errors.New("append failed")
+}
+
+func TestAIChatTruncatedAddsUsageAndBlocksAtLimit(t *testing.T) {
+	repo := fresh()
+	card, err := repo.CreateItem(context.Background(), ItemInput{ColumnID: 1, Title: "題", Description: "説"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lim := int64(40)
+	if err := repo.SetAICreditLimit(context.Background(), &lim); err != nil {
+		t.Fatal(err)
+	}
+	chatter := &fakeChatter{fn: func(context.Context, string, []ChatTurn) (string, int64, int64, error) {
+		return "", 15, 25, chatFail{kind: "truncated", status: 0}
+	}}
+	h := NewHandler(repo, WithAIChat(chatter))
+	w := request(h, "POST", aiChatPath(card.Number), `{"message":"長い返事をください"}`)
+	if w.Code != 502 {
+		t.Fatalf("truncated: %d %s", w.Code, w.Body.String())
+	}
+	u, err := repo.GetAIUsage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.RequestCount != 1 || u.InputTokens != 15 || u.OutputTokens != 25 {
+		t.Fatalf("usage=%+v", u)
+	}
+	w = request(h, "POST", aiChatPath(card.Number), `{"message":"もう一度"}`)
+	if w.Code != 429 || decodeError(t, w).Code != "ai_credit_limit" {
+		t.Fatalf("want credit limit, got %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAIChatTimeoutEstimatesUsage(t *testing.T) {
+	repo := fresh()
+	card, _ := repo.CreateItem(context.Background(), ItemInput{ColumnID: 1, Title: "題", Description: "説"})
+	chatter := &fakeChatter{fn: func(context.Context, string, []ChatTurn) (string, int64, int64, error) {
+		return "", 0, 0, chatFail{kind: "timeout", status: 0}
+	}}
+	h := NewHandler(repo, WithAIChat(chatter))
+	before, _ := repo.GetAIUsage(context.Background())
+	w := request(h, "POST", aiChatPath(card.Number), `{"message":"質問です"}`)
+	if w.Code != 502 {
+		t.Fatalf("timeout: %d", w.Code)
+	}
+	after, _ := repo.GetAIUsage(context.Background())
+	if after.RequestCount != before.RequestCount+1 || after.InputTokens <= before.InputTokens {
+		t.Fatalf("before=%+v after=%+v", before, after)
+	}
+	if after.OutputTokens != before.OutputTokens {
+		t.Fatalf("estimate out should stay 0: %+v", after)
+	}
+}
+
+func TestAIChatEmptyMessageDoesNotAddUsage(t *testing.T) {
+	repo := fresh()
+	card, _ := repo.CreateItem(context.Background(), ItemInput{ColumnID: 1, Title: "題", Description: "説"})
+	chatter := &fakeChatter{fn: func(context.Context, string, []ChatTurn) (string, int64, int64, error) {
+		t.Fatal("chatter must not run")
+		return "", 0, 0, nil
+	}}
+	h := NewHandler(repo, WithAIChat(chatter))
+	before, _ := repo.GetAIUsage(context.Background())
+	w := request(h, "POST", aiChatPath(card.Number), `{"message":"   "}`)
+	if w.Code != 400 {
+		t.Fatalf("empty: %d %s", w.Code, w.Body.String())
+	}
+	after, _ := repo.GetAIUsage(context.Background())
+	if after != before {
+		t.Fatalf("usage changed: before=%+v after=%+v", before, after)
+	}
+}
+
+func TestAIChatAppendFailureStillAddsUsage(t *testing.T) {
+	base := fresh()
+	card, _ := base.CreateItem(context.Background(), ItemInput{ColumnID: 1, Title: "題", Description: "説"})
+	repo := &appendFailRepo{memoryRepo: base}
+	chatter := &fakeChatter{fn: func(context.Context, string, []ChatTurn) (string, int64, int64, error) {
+		return "ok", 7, 8, nil
+	}}
+	h := NewHandler(repo, WithAIChat(chatter))
+	before, _ := repo.GetAIUsage(context.Background())
+	w := request(h, "POST", aiChatPath(card.Number), `{"message":"質問"}`)
+	if w.Code != 500 {
+		t.Fatalf("append fail: %d %s", w.Code, w.Body.String())
+	}
+	after, _ := repo.GetAIUsage(context.Background())
+	if after.RequestCount != before.RequestCount+1 || after.InputTokens != before.InputTokens+7 || after.OutputTokens != before.OutputTokens+8 {
+		t.Fatalf("before=%+v after=%+v", before, after)
+	}
+}
