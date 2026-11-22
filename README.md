@@ -425,7 +425,7 @@ gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 
 スクリプトは `secretmanager.googleapis.com` を有効化し、上記 3 秘密を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
 
-**イメージタグとハードニング:** `deploy/Dockerfile` のベースイメージは digest 固定、API プロセスはコンテナ内の非 root ユーザーで起動します。`deploy-gcp.sh` は **クリーンな git 作業ツリー** 上で `git rev-parse HEAD` を Artifact Registry のタグにし、Cloud Run デプロイもその **SHA タグ** を参照します（`:latest` は併記 push のみ）。デプロイ／nginx 設定を直す前後で `./scripts/check-deploy-image-hardening.sh` と `./scripts/check-nginx-tls-headers.sh` を実行してください（`secret-scan` workflow の `deploy-guards` job でも同じ2本を実行）。ロールバックは過去のコミット SHA タグを `--image` に指定して再デプロイします。
+**イメージタグとハードニング:** `deploy/Dockerfile` のベースイメージは digest 固定、API プロセスはコンテナ内の非 root ユーザーで起動します。`deploy-gcp.sh` は **クリーンな git 作業ツリー** 上で `git rev-parse HEAD` を Artifact Registry のタグにし、Cloud Run デプロイもその **SHA タグ** を参照します（`:latest` は併記 push のみ）。デプロイ／nginx／ルート `.dockerignore` を直す前後で `./scripts/check-deploy-image-hardening.sh`・`./scripts/check-nginx-tls-headers.sh`・`./scripts/check-root-dockerignore.sh`（任意で `--selftest`）を実行してください（`secret-scan` workflow の `deploy-guards` job でも同じ3本＋selftest を実行）。ロールバックは過去のコミット SHA タグを `--image` に指定して再デプロイします。
 
 **`PUBLIC_ORIGIN`:** entrypoint は `http://` / `https://` 必須（`placeholder.invalid` は拒否）。未指定時は一時値 `https://example.com` で起動し、`deploy-gcp.sh` がデプロイ後にサービス URL へ自動更新します。リンクコピーと `rewrite-origins` の置換先はこの値と一致させます。
 
