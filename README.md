@@ -406,7 +406,8 @@ export DB_USER=scrum
 export DB_PASSWORD='STRONG_DB_PASSWORD'
 export DB_NAME=scrumboard
 export AUTH_USER=kanban
-export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # Secret Manager 推奨
+export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # nginx Basic（共有）。Secret Manager 推奨
+export ADMIN_INITIAL_PASSWORD='STRONG_ADMIN_INITIAL_PASSWORD'  # 初期 admin ログイン用。AUTH_PASSWORD と別値必須
 # 省略可: 未設定ならスクリプトが https://example.com で起動し、デプロイ後に実 URL へ自動更新する
 # export PUBLIC_ORIGIN='https://scrum-board-xxxxx.asia-northeast1.run.app'
 
@@ -417,20 +418,20 @@ export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # Secret Manager 推奨
 
 **`PUBLIC_ORIGIN`:** entrypoint は `http://` / `https://` 必須（`placeholder.invalid` は拒否）。未指定時は一時値 `https://example.com` で起動し、`deploy-gcp.sh` がデプロイ後にサービス URL へ自動更新します。リンクコピーと `rewrite-origins` の置換先はこの値と一致させます。
 
-`AUTH_PASSWORD` / `DB_PASSWORD` は **Secret Manager** に置き、`--set-secrets` でマウントする運用を推奨します（リポジトリや Git 履歴に載せない）。`.env` に本番秘密を書かないでください。
+`AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD` / `DB_PASSWORD` は **Secret Manager** に置き、`--set-secrets` でマウントする運用を推奨します（リポジトリや Git 履歴に載せない）。`AUTH_PASSWORD` と `ADMIN_INITIAL_PASSWORD` は **別シークレット・別の値** にしてください（同一値だと空 DB 起動時にシードが失敗します）。`.env` に本番秘密を書かないでください。
 
 任意: `ANTHROPIC_API_KEY` を Cloud Run の環境変数に設定すると、本番でも AI 起票 API が有効になります（未設定なら 503 のまま）。
 
 ### 4. 動作確認
 
 ```sh
-# アプリ Basic（users）のみでも可（本番は手前に nginx Basic もある）
+# nginx Basic（AUTH_*）のみ。アプリ Cookie が無いので 401（期待どおり）
 curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" "$SERVICE_URL/api/board" | head
 
-# Basic Auth + アプリログイン Cookie（ブラウザ本線と同様）
+# nginx Basic + アプリログイン Cookie（初期シード時は ADMIN_INITIAL_PASSWORD。変更後は admin の現在のパスワード）
 curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -c /tmp/sb.ck -b /tmp/sb.ck \
   -H 'Content-Type: application/json' \
-  -d "{\"loginName\":\"$AUTH_USER\",\"password\":\"$AUTH_PASSWORD\"}" \
+  -d "{\"loginName\":\"$AUTH_USER\",\"password\":\"$ADMIN_INITIAL_PASSWORD\"}" \
   "$SERVICE_URL/api/auth/login"
 curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -b /tmp/sb.ck "$SERVICE_URL/api/board" | head
 
@@ -438,7 +439,9 @@ curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -b /tmp/sb.ck "$SERVICE_URL/api/board" |
 curl -sS -o /dev/null -w '%{http_code}\n' "$SERVICE_URL/health"
 ```
 
-スマホのブラウザーでも同じ URL を開き、Basic Auth を通過してボードが表示されることを確認します（`*.run.app` の URL をブックマーク）。
+`ADMIN_INITIAL_PASSWORD` は users が空の初回シードに使われます。`deploy-gcp.sh` は再デプロイでも同変数を require するため、キーは残し値をローテし、Secret Manager / IAM で閲覧を制限してください（アプリ側でパスワード変更後はシード値と一致しなくてよい）。
+
+スマホのブラウザーでも同じ URL を開き、nginx Basic のあとアプリにログインしてボードが表示されることを確認します（`*.run.app` の URL をブックマーク）。
 
 ### 5. 停止・削除（コスト管理）
 
