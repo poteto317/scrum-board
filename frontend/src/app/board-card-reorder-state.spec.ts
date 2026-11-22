@@ -5,7 +5,8 @@ import { describe, it, expect, onTestFinished, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
 import { ITEM_AUTO_SCROLL_INTERVAL_MS } from './item-order';
-import { BoardData, Item } from './models';
+import { normalizeBoardData, normalizeItem, NormalizedBoardData } from './board-data';
+import { Item } from './models';
 
 function mockPageScroller() {
   const page = { scrollTop: 0, scrollHeight: 5000 };
@@ -20,7 +21,7 @@ function mockPageScroller() {
 }
 
 function card(id: number, columnId: number, position: number, title: string): Item {
-  return {
+  return normalizeItem({
     id,
     projectId: 1,
     number: id,
@@ -39,18 +40,18 @@ function card(id: number, columnId: number, position: number, title: string): It
     dueAt: null,
     createdAt: '',
     updatedAt: '',
-  };
+  });
 }
 
-function initialBoard(): BoardData {
-  return {
+function initialBoard(): NormalizedBoardData {
+  return normalizeBoardData({
     columns: [
       { id: 1, name: 'Todo', position: 0 },
       { id: 2, name: 'Doing', position: 1 },
     ],
     items: [card(1, 1, 0, 'A'), card(2, 1, 1, 'B'), card(3, 2, 0, 'C')],
     settings: { cardLayout: 'pack', activeProjectId: 1 },
-  };
+  });
 }
 
 async function setup(reorderItems: ReturnType<typeof vi.fn>) {

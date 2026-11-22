@@ -111,4 +111,14 @@ describe('normalizeOffsetY / normalizeItem', () => {
     expect(normalizeItem({ id: 1, favorite: 'true' as never }).favorite).toBe(false);
     expect(normalizeItem({ id: 1, favorite: 1 as never }).favorite).toBe(false);
   });
+
+  it('defaults ACL fields when omitted (board fixture parity)', () => {
+    const item = normalizeItem({ id: 1 });
+    expect(item.viewAccess).toBe('open');
+    expect(item.editAccess).toBe('open');
+    expect(item.canEdit).toBeUndefined();
+    expect(item.canManage).toBeUndefined();
+    expect(item.acl).toBeUndefined();
+    expect(item.createdByUserId).toBeNull();
+  });
 });
