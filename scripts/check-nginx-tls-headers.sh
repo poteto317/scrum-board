@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fail if deploy/nginx.conf loses X-Forwarded-Proto passthrough or HSTS (item #94).
+# Fail if deploy/nginx.conf loses X-Forwarded-Proto passthrough, HSTS (#94), or CSP (#102).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$ROOT/deploy/nginx.conf"
@@ -7,6 +7,9 @@ CONF="$ROOT/deploy/nginx.conf"
 grep -q 'map \$http_x_forwarded_proto \$forwarded_proto' "$CONF"
 grep -q 'proxy_set_header X-Forwarded-Proto \$forwarded_proto' "$CONF"
 grep -q 'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;' "$CONF"
+grep -q 'server_tokens off;' "$CONF"
+grep -q "frame-ancestors 'none'" "$CONF"
+grep -q 'add_header Content-Security-Policy' "$CONF"
 if grep -q 'proxy_set_header X-Forwarded-Proto \$scheme' "$CONF"; then
   echo "error: proxy_set_header X-Forwarded-Proto \$scheme must not appear (use \$forwarded_proto)" >&2
   exit 1
@@ -18,4 +21,6 @@ PORT=8080 envsubst '${PORT}' < "$CONF" > "$tmp"
 grep -q 'map \$http_x_forwarded_proto \$forwarded_proto' "$tmp"
 grep -q 'proxy_set_header X-Forwarded-Proto \$forwarded_proto' "$tmp"
 grep -q 'Strict-Transport-Security' "$tmp"
-echo "ok: nginx Forwarded-Proto passthrough + HSTS"
+grep -q 'server_tokens off' "$tmp"
+grep -q 'Content-Security-Policy' "$tmp"
+echo "ok: nginx Forwarded-Proto passthrough + HSTS + CSP"
