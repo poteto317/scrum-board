@@ -54,7 +54,10 @@ fi
 # Do not use https://placeholder.invalid — entrypoint rejects that host.
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://example.com}"
 
-IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/${IMAGE_NAME}:latest"
+IMAGE_REPO="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/${IMAGE_NAME}"
+IMAGE_TAG="$(git -C "$ROOT" rev-parse HEAD)"
+IMAGE_URI="${IMAGE_REPO}:${IMAGE_TAG}"
+IMAGE_URI_LATEST="${IMAGE_REPO}:latest"
 
 # Create secret if missing; always add a new version from VALUE. Never print VALUE.
 ensure_secret() {
@@ -166,14 +169,15 @@ fi
 echo "==> Configuring docker auth for ${GCP_REGION}-docker.pkg.dev"
 gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
 
-echo "==> Building image from deploy/Dockerfile (linux/amd64 for Cloud Run)"
-docker build --platform linux/amd64 -f deploy/Dockerfile -t "$IMAGE_URI" .
+echo "==> Building image from deploy/Dockerfile (linux/amd64 for Cloud Run) tag=${IMAGE_TAG}"
+docker build --platform linux/amd64 -f deploy/Dockerfile -t "$IMAGE_URI" -t "$IMAGE_URI_LATEST" .
 
-echo "==> Pushing ${IMAGE_URI}"
+echo "==> Pushing ${IMAGE_URI} and :latest"
 docker push "$IMAGE_URI"
+docker push "$IMAGE_URI_LATEST"
 
 # Publish secret versions only after the image is ready to deploy (avoid advancing
-# :latest while build/push can still fail).
+# secret versions while build/push can still fail).
 ensure_secret "$SECRET_ID_DB_PASSWORD" "$DB_PASSWORD"
 ensure_secret "$SECRET_ID_AUTH_PASSWORD" "$AUTH_PASSWORD"
 ensure_secret "$SECRET_ID_ADMIN_INITIAL_PASSWORD" "$ADMIN_INITIAL_PASSWORD"
