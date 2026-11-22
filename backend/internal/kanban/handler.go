@@ -412,6 +412,12 @@ func (h handler) getItemByNumber(w http.ResponseWriter, r *http.Request) {
 	reply(w, 200, card)
 }
 func (h handler) batchPRTitles(w http.ResponseWriter, r *http.Request) {
+	user, ok := CurrentUser(r.Context())
+	if !ok {
+		reply(w, http.StatusUnauthorized, map[string]string{"message": msgLoginRequired})
+		return
+	}
+	userPtr := &user
 	var in struct {
 		URLs []string `json:"urls"`
 	}
@@ -426,6 +432,15 @@ func (h handler) batchPRTitles(w http.ResponseWriter, r *http.Request) {
 	for _, raw := range in.URLs {
 		url := strings.TrimSpace(raw)
 		if url == "" || !validPRURL(url) {
+			continue
+		}
+		allowed, err := h.repo.UserCanResolvePRURL(r.Context(), userPtr, url)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		if !allowed {
+			titles[url] = FallbackPRTitle(url)
 			continue
 		}
 		titles[url] = ResolvePRTitleLabel(r.Context(), h.prTitleResolver, url)

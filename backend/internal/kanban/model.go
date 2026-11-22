@@ -207,6 +207,8 @@ type Repository interface {
 	History(context.Context, int64, int64, int64) (HistoryPage, error)
 	GetItem(context.Context, int64) (Item, error)
 	GetItemByNumber(context.Context, int64, int64) (Item, error)
+	// UserCanResolvePRURL is true when prURL is stored on an item (pr link or history evidence) the user may view.
+	UserCanResolvePRURL(context.Context, *User, string) (bool, error)
 	GetDeletedItem(context.Context, int64, int64) (Item, error)
 	GetColumnByName(context.Context, string) (Column, error)
 	CreateItem(context.Context, ItemInput) (Item, error)

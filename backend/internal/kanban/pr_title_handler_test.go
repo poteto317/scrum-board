@@ -79,6 +79,7 @@ func TestBatchPRTitles(t *testing.T) {
 		return &http.Response{StatusCode: 404, Body: io.NopCloser(strings.NewReader("{}"))}, nil
 	})
 	h := NewHandler(repo, WithPRTitleResolver(NewPRTitleResolver(rt)))
+	request(h, "POST", "/api/items", `{"title":"x","columnId":1,"prUrls":["`+u1+`","`+u2+`"]}`)
 	body := `{"urls":["` + u1 + `","` + u2 + `","not-a-url","https://evil.example/x"]}`
 	w := request(h, "POST", "/api/pr-titles", body)
 	if w.Code != 200 {
@@ -108,6 +109,7 @@ func TestBatchPRTitlesErrorJSONNoSecrets(t *testing.T) {
 		return nil, http.ErrHandlerTimeout
 	}))))
 	url := "https://github.com/o/r/pull/1"
+	request(h, "POST", "/api/items", `{"title":"x","columnId":1,"prUrls":["`+url+`"]}`)
 	w := request(h, "POST", "/api/pr-titles", `{"urls":["`+url+`"]}`)
 	if w.Code != 200 {
 		t.Fatalf("status %d %s", w.Code, w.Body)
@@ -155,6 +157,43 @@ func TestGetItemByNumberEnrichesPRTitles(t *testing.T) {
 	}
 	if len(item.PRTitles) != 1 || item.PRTitles[0] != "By number" {
 		t.Fatalf("prTitles %#v", item.PRTitles)
+	}
+}
+
+func TestBatchPRTitlesUnlinkedURLNoGitHub(t *testing.T) {
+	repo := fresh()
+	uLinked := "https://github.com/a/b/pull/1"
+	uOrphan := "https://github.com/secret/private/pull/99"
+	var trips int
+	rt := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		trips++
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader(`{"title":"Leaked"}`)),
+		}, nil
+	})
+	h := NewHandler(repo, WithPRTitleResolver(NewPRTitleResolver(rt)))
+	request(h, "POST", "/api/items", `{"title":"x","columnId":1,"prUrls":["`+uLinked+`"]}`)
+	w := request(h, "POST", "/api/pr-titles", `{"urls":["`+uOrphan+`","`+uLinked+`"]}`)
+	if w.Code != 200 {
+		t.Fatalf("POST %d %s", w.Code, w.Body)
+	}
+	var out struct {
+		Titles map[string]string `json:"titles"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Titles[uOrphan] != "secret/private#99" || out.Titles[uOrphan] == "Leaked" {
+		if out.Titles[uOrphan] == "Leaked" {
+			t.Fatal("orphan URL must not call GitHub")
+		}
+	}
+	if out.Titles[uLinked] != "Leaked" {
+		t.Fatalf("linked titles %#v", out.Titles)
+	}
+	if trips != 1 {
+		t.Fatalf("github trips=%d want 1", trips)
 	}
 }
 

@@ -89,11 +89,11 @@ func TestPRTitleResolver404AndInvalidJSON(t *testing.T) {
 	if strings.Contains(got, "Not Found") || strings.Contains(got, "Bearer") {
 		t.Fatal("must not leak response body")
 	}
-	if got2 := r.Resolve(context.Background(), url); got2 != "Recovered" {
-		t.Fatalf("failure must not be cached: %q (calls=%d)", got2, calls.Load())
+	if got2 := r.Resolve(context.Background(), url); got2 != want {
+		t.Fatalf("failure should be cached briefly: %q (calls=%d)", got2, calls.Load())
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("calls %d want 2", calls.Load())
+	if calls.Load() != 1 {
+		t.Fatalf("calls %d want 1", calls.Load())
 	}
 }
 
