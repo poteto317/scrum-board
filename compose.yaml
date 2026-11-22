@@ -1,5 +1,7 @@
-# ローカル学習用。DBパスワード既定値（scrum_dev / root_dev_only）は開発専用で、
-# 共有・公開ホストでは必ず変更すること。ポートは 127.0.0.1 のみ。APIに認証はない。
+# ローカル学習用。DBパスワード既定値（scrum_dev / root_dev_only）と初期 admin は開発専用で、
+# 共有・公開ホストでは必ず変更すること。ポートは 127.0.0.1 のみ。
+# 空の users では AUTH_USER + ADMIN_INITIAL_PASSWORD が必須（アプリ Cookie / アプリ Basic）。
+# AUTH_PASSWORD（nginx Basic）は本番用。ローカル Compose では未設定でよい（設定するなら ADMIN_INITIAL_PASSWORD と別値）。
 name: scrum-board
 services:
   db:
@@ -28,6 +30,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-scrum_dev}
       DB_NAME: scrumboard
       LISTEN_ADDRESS: 0.0.0.0:8080
+      AUTH_USER: ${AUTH_USER:-admin}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-local_dev_admin}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
     ports:
