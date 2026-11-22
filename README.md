@@ -425,6 +425,8 @@ gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 
 スクリプトは `secretmanager.googleapis.com` を有効化し、上記 3 秘密を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
 
+**イメージタグとハードニング:** `deploy/Dockerfile` のベースイメージは digest 固定、API プロセスはコンテナ内の非 root ユーザーで起動します。`deploy-gcp.sh` は **クリーンな git 作業ツリー** 上で `git rev-parse HEAD` を Artifact Registry のタグにし、Cloud Run デプロイもその **SHA タグ** を参照します（`:latest` は併記 push のみ）。デプロイ手順や Dockerfile を直す前後で `./scripts/check-deploy-image-hardening.sh` を実行してください。ロールバックは過去のコミット SHA タグを `--image` に指定して再デプロイします。
+
 **`PUBLIC_ORIGIN`:** entrypoint は `http://` / `https://` 必須（`placeholder.invalid` は拒否）。未指定時は一時値 `https://example.com` で起動し、`deploy-gcp.sh` がデプロイ後にサービス URL へ自動更新します。リンクコピーと `rewrite-origins` の置換先はこの値と一致させます。
 
 `.env` に本番秘密を書かないでください。移行後は Basic / DB / 初期 admin の値をローテすることを推奨します（DB ユーザー変更は Cloud SQL 側とセット）。不要な旧リビジョンは削除すると、過去メタデータに残った平文 env の露出面を減らせます。

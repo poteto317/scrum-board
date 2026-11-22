@@ -4,7 +4,7 @@
 
 | 事項 | 採用 |
 |------|------|
-| API プロセス | `app` ユーザーで起動（`su`）。nginx/htpasswd は entrypoint 冒頭のみ root |
+| API プロセス | `app` ユーザーで起動（`su`）。`/server` は `root:app` + `chmod 550`。nginx/htpasswd は entrypoint 冒頭のみ root |
 | ベースイメージ | `node` / `golang` / `nginx` を **digest 固定** |
 | デプロイタグ | `git rev-parse HEAD` を Artifact Registry に pushし、**Cloud Run は SHA タグを参照**（`:latest` も併記 push 可） |
 | HTTP 起動確認 | `wget` をやめ `curl -sf`（1 パッケージに統一） |
