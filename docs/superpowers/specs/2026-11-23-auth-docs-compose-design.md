@@ -15,7 +15,7 @@
 
 | 事項 | 選択 |
 |------|------|
-| Compose 既定 | `AUTH_USER=admin`、`ADMIN_INITIAL_PASSWORD=local_dev_admin`（≥8 文字）、`AUTH_PASSWORD` は Compose では未設定（ローカルに nginx Basic 無し） |
+| Compose 既定 | `AUTH_USER=admin`、`ADMIN_INITIAL_PASSWORD=local_dev_admin`（≥8 文字）。`AUTH_PASSWORD` はキーを `${AUTH_PASSWORD:-}` で渡してよいが既定は空（ローカルに nginx Basic 無し。値を入れるなら admin と別値） |
 | SECURITY.md 言語 | 英語を維持しつつ内容を現行実装に合わせる |
 | スコープ外 | 認証実装の変更、公開免除 API 一覧の完全列挙（OpenAPI へ誘導） |
 
