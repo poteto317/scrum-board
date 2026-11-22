@@ -32,7 +32,8 @@ func (h handler) changeStatusByNumber(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if _, ok := h.requireEdit(w, r, card); !ok {
+	userPtr, ok := h.requireEdit(w, r, card)
+	if !ok {
 		return
 	}
 	column, err := h.repo.GetColumnByName(r.Context(), input.Status)
@@ -42,6 +43,10 @@ func (h handler) changeStatusByNumber(w http.ResponseWriter, r *http.Request) {
 	}
 	updated, err := h.repo.UpdateItem(r.Context(), card.ID, ItemPatch{ColumnID: &column.ID})
 	if err != nil {
+		fail(w, err)
+		return
+	}
+	if err := h.enrichItemForReply(r.Context(), &updated, userPtr); err != nil {
 		fail(w, err)
 		return
 	}

@@ -50,8 +50,11 @@ func (h handler) filterRelatedItemsForViewer(ctx context.Context, item *Item, us
 		}
 		peer, err := h.repo.GetItemByNumber(ctx, rel.Number, rel.ProjectID)
 		if err != nil {
-			// Missing peer: omit rather than leak ids.
-			continue
+			if errors.Is(err, ErrNotFound) {
+				// Missing peer: omit rather than leak ids.
+				continue
+			}
+			return err
 		}
 		st, err := h.loadItemACLState(ctx, peer)
 		if err != nil {
@@ -150,7 +153,22 @@ func (h handler) filterBoardItems(ctx context.Context, items []Item, user *User)
 		}
 		attachACLState(items, entries)
 	}
-	return filterVisibleItems(items, user), nil
+	visible := filterVisibleItems(items, user)
+	if err := h.filterRelatedItemsForViewerBatch(ctx, visible, user); err != nil {
+		return nil, err
+	}
+	return visible, nil
+}
+
+// filterRelatedItemsForViewerBatch applies filterRelatedItemsForViewer to each item.
+// On error the caller must discard items (partial in-place updates are not returned).
+func (h handler) filterRelatedItemsForViewerBatch(ctx context.Context, items []Item, user *User) error {
+	for i := range items {
+		if err := h.filterRelatedItemsForViewer(ctx, &items[i], user); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // requireEditOnRelatedPeerDiff rejects the request when any added or removed
