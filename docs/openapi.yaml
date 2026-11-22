@@ -735,11 +735,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '503':
-          description: ストレージ未設定
+          description: ストレージ未設定、または同時実行上限
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+      description: 1 ファイル最大 5 MiB・アイテム 20 枚・プロジェクト合計 100 MiB。同時アップロード／配信はサーバ側で 4 並列まで。
       parameters:
       - name: number
         in: path
