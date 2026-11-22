@@ -16,6 +16,29 @@ REQUIRED_PATTERNS=(
   .claude
 )
 
+# Leading-slash mirrors of REQUIRED_PATTERNS are derived in check_file.
+# Extra forbidden paths (whole-context globs and deploy/Dockerfile COPY inputs).
+FORBIDDEN_EXTRA=(
+  '*'
+  '**'
+  '**/*'
+  frontend
+  'frontend/'
+  'frontend/*'
+  backend
+  'backend/'
+  'backend/*'
+  deploy
+  'deploy/'
+  'deploy/*'
+  frontend/package.json
+  frontend/package-lock.json
+  backend/go.mod
+  backend/go.sum
+  deploy/nginx.conf
+  deploy/entrypoint.sh
+)
+
 fail() {
   echo "check-root-dockerignore: $1" >&2
   exit 1
@@ -62,15 +85,15 @@ check_file() {
     [[ "$found" -eq 1 ]] || fail "missing required pattern: $req"
   done
 
-  # Forbidden: leading-slash variants of required names, whole-context globs,
-  # and paths that would break deploy/Dockerfile COPY (frontend|backend|deploy).
-  for bad in \
-    /node_modules /dist /.angular '/.env*' /backups /.git /.claude \
-    '*' '**' '**/*' \
-    frontend 'frontend/' 'frontend/*' backend 'backend/' 'backend/*' deploy 'deploy/' 'deploy/*' \
-    frontend/package.json frontend/package-lock.json backend/go.mod backend/go.sum \
-    deploy/nginx.conf deploy/entrypoint.sh
-  do
+  # Forbidden: leading-slash mirrors of REQUIRED_PATTERNS, plus FORBIDDEN_EXTRA
+  # (globs / paths that would break deploy/Dockerfile COPY).
+  local forbidden=()
+  for req in "${REQUIRED_PATTERNS[@]}"; do
+    forbidden+=("/$req")
+  done
+  forbidden+=("${FORBIDDEN_EXTRA[@]}")
+
+  for bad in "${forbidden[@]}"; do
     for line in "${lines[@]}"; do
       [[ "$line" == "$bad" ]] && fail "forbidden pattern: $bad"
     done
