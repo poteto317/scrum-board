@@ -1,11 +1,11 @@
 import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { normalizeBoardData } from './board-data';
+import { normalizeBoardData, normalizeItem } from './board-data';
 import { LayoutSwitchDeps, switchFreeToPack, switchPackToFree } from './board-layout-switch';
 import { Item } from './models';
 
 function card(id: number, columnId: number, position: number, offsetY = 0): Item {
-  return {
+  return normalizeItem({
     id,
     projectId: 1,
     number: id,
@@ -24,7 +24,7 @@ function card(id: number, columnId: number, position: number, offsetY = 0): Item
     dueAt: null,
     createdAt: '',
     updatedAt: '',
-  };
+  });
 }
 
 function board(layout: 'pack' | 'free', items: Item[]) {
