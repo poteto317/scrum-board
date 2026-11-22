@@ -37,6 +37,13 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow('insecure_auth_transport');
   });
 
+  it('allows http to non-loopback hosts when Basic is unset', () => {
+    process.env.SCRUM_BOARD_BASE_URL = 'http://evil.example/board';
+    const cfg = loadConfig();
+    expect(cfg.baseUrl).toBe('http://evil.example/board');
+    expect(cfg.authHeader).toBeNull();
+  });
+
   it('allows Basic auth over http to loopback hosts', () => {
     process.env.SCRUM_BOARD_AUTH_USER = 'u';
     process.env.SCRUM_BOARD_AUTH_PASSWORD = 'p';
