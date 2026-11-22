@@ -32,7 +32,7 @@ docker compose up -d --build
 
 **パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）はローカル Docker 専用の既定値です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。
 
-**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）が本線です。大半の API はログイン必須で、セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番ゲートとして残ります。MCP・手動 curl・smoke の一般 API には Basic に加えて **セッション Cookie** が必要です。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
+**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic のどちらかで通ります。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番ゲートとして残ります（アプリ Basic とは別層）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
 
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board
@@ -424,7 +424,10 @@ export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # Secret Manager 推奨
 ### 4. 動作確認
 
 ```sh
-# Basic Auth + アプリログイン Cookie が必要（未ログインは 401）
+# アプリ Basic（users）のみでも可（本番は手前に nginx Basic もある）
+curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" "$SERVICE_URL/api/board" | head
+
+# Basic Auth + アプリログイン Cookie（ブラウザ本線と同様）
 curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -c /tmp/sb.ck -b /tmp/sb.ck \
   -H 'Content-Type: application/json' \
   -d "{\"loginName\":\"$AUTH_USER\",\"password\":\"$AUTH_PASSWORD\"}" \

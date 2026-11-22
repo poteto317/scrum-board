@@ -2,9 +2,10 @@ openapi: 3.1.0
 info:
   title: Scrum Board API
   version: 0.1.0
-  description: 'スクラムかんばん HTTP API の契約正本。本番 nginx の HTTP Basic はゲートウェイ層であり、operation の security には含めない。受け付けない入力は黙って別解釈へ落とさず
-    4xx 等で拒否する。v0.1.0: 全 HTTP ルートの paths・認証（exempt/optional/必須）・主要 operation の request/response を載せる。未具体化の応答は
-    JsonValue。当該 API を変更するときは update-api-doc スキルに従い JsonValue を具体 schema に置き換える。'
+  description: 'スクラムかんばん HTTP API の契約正本。アプリ認証は Cookie `sb_session` または HTTP Basic（users テーブルの login_name / password）のどちらか。本番
+    nginx の HTTP Basic はゲートウェイ層であり、operation の security には含めない。受け付けない入力は黙って別解釈へ落とさず 4xx 等で拒否する。v0.1.0:
+    全 HTTP ルートの paths・認証（exempt/optional/必須）・主要 operation の request/response を載せる。未具体化の応答は JsonValue。当該 API
+    を変更するときは update-api-doc スキルに従い JsonValue を具体 schema に置き換える。'
 servers:
 - url: http://127.0.0.1:4200
   description: ローカル（compose / フロント nginx 経由）。本番 Basic はゲートウェイ層。
@@ -65,6 +66,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/backlog:
     get:
       summary: バックログ
@@ -78,6 +80,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/backlog/order:
     put:
       summary: バックログ並び替え
@@ -103,6 +106,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -122,6 +126,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/board/settings:
     patch:
       summary: ボード設定の部分更新
@@ -147,6 +152,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         required: true
         content:
@@ -194,6 +200,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -225,6 +232,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -244,6 +252,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
     put:
       summary: 新規アイテム初期テンプレート置換
       operationId: put_api_command_template_defaults
@@ -268,6 +277,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -287,6 +297,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
     post:
       summary: コマンドテンプレート作成
       operationId: post_api_command_templates
@@ -311,6 +322,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -338,6 +350,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -375,6 +388,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -401,6 +415,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/header-menu:
     get:
       summary: ヘッダーメニュー取得
@@ -414,6 +429,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
     put:
       summary: ヘッダーメニュー保存
       operationId: put_api_header_menu
@@ -438,6 +454,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -491,6 +508,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         required: true
         content:
@@ -591,6 +609,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         required: true
         content:
@@ -683,6 +702,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         required: true
         content:
@@ -730,6 +750,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/items/by-number/{number}/attachments/{id}/content:
     get:
       summary: 添付バイト取得
@@ -793,6 +814,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
     put:
       summary: アイテムの表示セット置換
       operationId: put_api_items_by_number_number_command_templates
@@ -823,6 +845,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -848,6 +871,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
     post:
       summary: コメント作成
       operationId: post_api_items_by_number_number_comments
@@ -878,6 +902,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -938,6 +963,7 @@ paths:
         description: プロジェクト ID（省略時はアクティブ）
       security:
       - cookieAuth: []
+      - basicAuth: []
     post:
       summary: アイテム AI チャット送信
       operationId: post_api_items_by_number_number_ai_chat
@@ -1028,6 +1054,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         required: true
         content:
@@ -1074,6 +1101,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/ai/usage:
     get:
       summary: AI 利用状況（ワークスペース累計）
@@ -1109,6 +1137,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/ai/credits:
     get:
       summary: AI 利用上限と残量（アプリ内トークン予算）
@@ -1129,6 +1158,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
     put:
       summary: AI 利用上限の設定／解除（admin）
       operationId: put_api_ai_credits
@@ -1182,6 +1212,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/items/by-number/{number}/comments/{id}:
     patch:
       summary: コメント更新
@@ -1218,6 +1249,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1249,6 +1281,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/items/by-number/{number}/history:
     get:
       summary: 変更履歴
@@ -1268,6 +1301,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/items/by-number/{number}/status:
     patch:
       summary: ステータス（列名）変更
@@ -1311,6 +1345,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         required: true
         content:
@@ -1350,6 +1385,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         required: true
         content:
@@ -1430,6 +1466,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1515,6 +1552,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1565,6 +1603,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/items/{id}/acl:
     patch:
       summary: ACL 更新
@@ -1608,6 +1647,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1645,6 +1685,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/list-filter:
     get:
       summary: 一覧フィルタ取得
@@ -1658,6 +1699,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
     put:
       summary: 一覧フィルタ保存
       operationId: put_api_list_filter
@@ -1682,6 +1724,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1713,6 +1756,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1750,6 +1794,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1769,6 +1814,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
     post:
       summary: プロジェクト作成
       operationId: post_api_projects
@@ -1793,6 +1839,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1830,6 +1877,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1856,6 +1904,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/public-config:
     get:
       summary: 公開設定（ログイン不要）
@@ -1882,6 +1931,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
     post:
       summary: 繰り返しルール作成
       operationId: post_api_recurring_rules
@@ -1906,6 +1956,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1943,6 +1994,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -1969,6 +2021,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/recurring/run:
     post:
       summary: 繰り返し起票実行（セッション免除）
@@ -1995,6 +2048,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
     post:
       summary: スプリント作成
       operationId: post_api_sprints
@@ -2019,6 +2073,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -2044,6 +2099,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
     patch:
       summary: スプリント更新
       operationId: patch_api_sprints_id
@@ -2074,6 +2130,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -2100,6 +2157,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/sprints/{id}/activate:
     post:
       summary: スプリントを Active に
@@ -2131,6 +2189,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/sprints/{id}/complete:
     post:
       summary: スプリント完了
@@ -2162,6 +2221,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/sprints/{id}/items:
     put:
       summary: スプリントメンバー置換
@@ -2193,6 +2253,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -2212,6 +2273,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/trash/purge:
     post:
       summary: ゴミ箱一括 purge（セッション免除）
@@ -2251,6 +2313,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
   /api/users:
     get:
       summary: ユーザー一覧
@@ -2264,6 +2327,7 @@ paths:
                 $ref: '#/components/schemas/JsonValue'
       security:
       - cookieAuth: []
+      - basicAuth: []
     post:
       summary: ユーザー作成
       operationId: post_api_users
@@ -2294,6 +2358,7 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -2349,6 +2414,7 @@ paths:
           type: integer
       security:
       - cookieAuth: []
+      - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -2362,6 +2428,10 @@ components:
       in: cookie
       name: sb_session
       description: アプリのセッション Cookie（SessionCookieName）。
+    basicAuth:
+      type: http
+      scheme: basic
+      description: users テーブルの login_name / password。Cookie が無いときミドルウェアが検証する（セッションは発行しない）。本番 nginx Basic（AUTH_*）とは別層。
   schemas:
     Error:
       type: object
