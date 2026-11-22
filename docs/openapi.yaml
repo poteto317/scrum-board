@@ -1824,6 +1824,7 @@ paths:
     post:
       summary: PR タイトル一括取得
       operationId: post_api_pr_titles
+      description: ログイン必須。GitHub API は、呼び出し元が閲覧できるアイテムの `prUrls` または履歴 `evidenceUrl` に登録済みの URL に限り利用する。未登録 URL は `owner/repo#n` 形式のフォールバックのみ。
       responses:
         '200':
           description: 成功
