@@ -66,6 +66,55 @@ func TestAuthLoginLogoutMe(t *testing.T) {
 	}
 }
 
+func TestSessionCookieSecureFollowsForwardedProto(t *testing.T) {
+	h := NewHandler(fresh())
+	loginWithProto := func(proto string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(`{"loginName":"admin","password":"test-password"}`))
+		r.Header.Set("Content-Type", "application/json")
+		if proto != "" {
+			r.Header.Set("X-Forwarded-Proto", proto)
+		}
+		h.ServeHTTP(w, r)
+		return w
+	}
+
+	t.Run("https login and logout set Secure", func(t *testing.T) {
+		loginHTTPS := loginWithProto("https")
+		if loginHTTPS.Code != 200 {
+			t.Fatalf("login status=%d body=%s", loginHTTPS.Code, loginHTTPS.Body)
+		}
+		secureCookie := findSessionCookie(loginHTTPS)
+		if secureCookie == nil || !secureCookie.Secure {
+			t.Fatalf("login cookie Secure want true: %#v", secureCookie)
+		}
+		logoutHTTPS := httptest.NewRecorder()
+		rLogout := httptest.NewRequest("POST", "/api/auth/logout", nil)
+		rLogout.Header.Set("Content-Type", "application/json")
+		rLogout.Header.Set("X-Forwarded-Proto", "https")
+		rLogout.AddCookie(&http.Cookie{Name: SessionCookieName, Value: secureCookie.Value})
+		h.ServeHTTP(logoutHTTPS, rLogout)
+		if logoutHTTPS.Code != 204 {
+			t.Fatalf("logout status=%d", logoutHTTPS.Code)
+		}
+		cleared := findSessionCookie(logoutHTTPS)
+		if cleared == nil || !cleared.Secure {
+			t.Fatalf("logout clear cookie Secure want true: %#v", cleared)
+		}
+	})
+
+	t.Run("http forwarded proto leaves Secure unset", func(t *testing.T) {
+		w := loginWithProto("http")
+		if w.Code != 200 {
+			t.Fatalf("login status=%d", w.Code)
+		}
+		c := findSessionCookie(w)
+		if c == nil || c.Secure {
+			t.Fatalf("Secure want false: %#v", c)
+		}
+	})
+}
+
 func TestSessionMiddlewareExemptAndRequired(t *testing.T) {
 	h := NewHandler(fresh())
 	if w := requestAnon(h, "GET", "/api/public-config", ""); w.Code != 200 {
