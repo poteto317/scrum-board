@@ -37,7 +37,7 @@
 - [x] **Step 3:** 必要なら `gcloud services enable secretmanager.googleapis.com`（幂等）。`ensure_secret(id, value)` — 無ければ `gcloud secrets create "$id" --replication-policy=automatic`。常に `printf %s "$value" | gcloud secrets versions add "$id" --data-file=-`（read しない）。失敗時も値を出さない。
 - [x] **Step 4:** 3 秘密に対し ensure_secret。ランタイム SA を resolve し各 secret に `secretAccessor`（幂等）。
 - [x] **Step 5:** env-vars-file から 3 パスワード行を削除。
-- [x] **Step 6:** `gcloud run deploy` に `--set-secrets=...`（`--env-vars-file` と併記）。続けて `gcloud run services update --remove-env-vars=DB_PASSWORD,AUTH_PASSWORD,ADMIN_INITIAL_PASSWORD`（同一 invoke 不可のため分離）。
+- [x] **Step 6:** `gcloud run deploy` に `--set-secrets=...`（`--env-vars-file` と併記）。平文 `value:` が残っているときだけ `services update --remove-env-vars=...`（secret 参照を消さない。同一 invoke 不可のため分離）。
 - [x] **Step 7:** `bash -n scripts/deploy-gcp.sh`。env-vars-file 生成ブロックに 3 パスワード yaml 行が無いことを `rg` で確認。
 
 ---

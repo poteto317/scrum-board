@@ -75,35 +75,67 @@ ensure_secret() {
 # Resolve Cloud Run runtime SA. Prefer the service's configured SA; if the service
 # exists but describe fails for a non-404 reason, abort (do not grant Compute default).
 resolve_runtime_sa() {
-  local sa status
+  local sa status err
   status=0
+  err="$(mktemp)"
   sa="$(gcloud run services describe "$SERVICE_NAME" \
     --region="$GCP_REGION" \
     --project="$GCP_PROJECT" \
-    --format='value(spec.template.spec.serviceAccountName)' 2>/tmp/sb-run-describe.err)" || status=$?
+    --format='value(spec.template.spec.serviceAccountName)' 2>"$err")" || status=$?
   if [[ "$status" -eq 0 ]]; then
     if [[ -n "$sa" ]]; then
       printf '%s' "$sa"
-      rm -f /tmp/sb-run-describe.err
+      rm -f "$err"
       return
     fi
     local project_number
     project_number="$(gcloud projects describe "$GCP_PROJECT" --format='value(projectNumber)')"
-    rm -f /tmp/sb-run-describe.err
+    rm -f "$err"
     printf '%s' "${project_number}-compute@developer.gserviceaccount.com"
     return
   fi
-  if grep -qiE 'NOT_FOUND|NotFound|was not found' /tmp/sb-run-describe.err 2>/dev/null; then
-    rm -f /tmp/sb-run-describe.err
+  if grep -qiE 'NOT_FOUND|NotFound|was not found' "$err" 2>/dev/null; then
+    rm -f "$err"
     local project_number
     project_number="$(gcloud projects describe "$GCP_PROJECT" --format='value(projectNumber)')"
     printf '%s' "${project_number}-compute@developer.gserviceaccount.com"
     return
   fi
   echo "error: failed to describe Cloud Run service ${SERVICE_NAME} (not treating as missing)" >&2
-  cat /tmp/sb-run-describe.err >&2 || true
-  rm -f /tmp/sb-run-describe.err
+  cat "$err" >&2 || true
+  rm -f "$err"
   exit 1
+}
+
+# Classify password env entries in a Cloud Run env yaml file.
+# Prints: ok | plaintext | missing
+# Reads yaml from file path argv[1] (never via environment — may contain secrets).
+classify_password_env_yaml() {
+  local yaml_file="$1"
+  python3 - "$yaml_file" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+keys = ("DB_PASSWORD", "AUTH_PASSWORD", "ADMIN_INITIAL_PASSWORD")
+blocks = re.split(r"\n\s*- name: ", text)
+found = {k: None for k in keys}  # None | "secret" | "plain"
+for b in blocks:
+    name = b.split("\n", 1)[0].strip()
+    if name not in keys:
+        continue
+    if "secretKeyRef" in b or "valueFrom:" in b:
+        found[name] = "secret"
+    elif re.search(r"(?m)^\s*value:", b):
+        found[name] = "plain"
+    else:
+        found[name] = "plain"  # unknown shape: treat as bad
+if any(v is None for v in found.values()):
+    print("missing")
+elif any(v == "plain" for v in found.values()):
+    print("plaintext")
+else:
+    print("ok")
+PY
 }
 
 yaml_env_value() {
@@ -161,7 +193,8 @@ done
 DB_SOCKET="/cloudsql/${CLOUDSQL_INSTANCE}"
 
 ENV_VARS_FILE="$(mktemp)"
-trap 'rm -f "$ENV_VARS_FILE"' EXIT
+ENV_YAML_FILE="$(mktemp)"
+trap 'rm -f "$ENV_VARS_FILE" "$ENV_YAML_FILE"' EXIT
 {
   echo "DB_USER: $(yaml_env_value "$DB_USER")"
   echo "DB_NAME: $(yaml_env_value "$DB_NAME")"
@@ -195,44 +228,31 @@ gcloud run deploy "$SERVICE_NAME" \
   --timeout=300 \
   --startup-probe=tcpSocket.port=8080,periodSeconds=5,failureThreshold=48,timeoutSeconds=3
 
-ENV_YAML="$(gcloud run services describe "$SERVICE_NAME" \
+gcloud run services describe "$SERVICE_NAME" \
   --region="$GCP_REGION" \
   --project="$GCP_PROJECT" \
-  --format='yaml(spec.template.spec.containers[0].env)')"
-if printf '%s\n' "$ENV_YAML" | grep -qE 'name: (DB_PASSWORD|AUTH_PASSWORD|ADMIN_INITIAL_PASSWORD)' \
-  && printf '%s\n' "$ENV_YAML" | grep -B2 -E 'name: (DB_PASSWORD|AUTH_PASSWORD|ADMIN_INITIAL_PASSWORD)' | grep -q 'value:'; then
-  echo "==> Removing leftover plaintext password env vars"
-  gcloud run services update "$SERVICE_NAME" \
-    --region="$GCP_REGION" \
-    --project="$GCP_PROJECT" \
-    --remove-env-vars=DB_PASSWORD,AUTH_PASSWORD,ADMIN_INITIAL_PASSWORD \
-    --quiet
-  ENV_YAML="$(gcloud run services describe "$SERVICE_NAME" \
-    --region="$GCP_REGION" \
-    --project="$GCP_PROJECT" \
-    --format='yaml(spec.template.spec.containers[0].env)')"
-fi
-
-# Assert latest revision: password keys must be secret refs, never plaintext value:
-ENV_YAML="$ENV_YAML" python3 - <<'PY'
-import os, re, sys
-text = os.environ.get("ENV_YAML", "")
-keys = ("DB_PASSWORD", "AUTH_PASSWORD", "ADMIN_INITIAL_PASSWORD")
-for key in keys:
-    if key not in text:
-        sys.exit(f"error: missing env key {key} after deploy")
-blocks = re.split(r"\n\s*- name: ", text)
-for b in blocks:
-    name = b.split("\n", 1)[0].strip()
-    if name not in keys:
-        continue
-    if re.search(r"(?m)^\s*value:", b) and "valueFrom:" not in b:
-        sys.exit(f"error: {name} still has plaintext value after deploy")
-    if "secretKeyRef" not in b:
-        sys.exit(f"error: {name} is not a secretKeyRef after deploy")
-print("secret env assert ok", file=sys.stderr)
-PY
-
+  --format='yaml(spec.template.spec.containers[0].env)' >"$ENV_YAML_FILE"
+case "$(classify_password_env_yaml "$ENV_YAML_FILE")" in
+  plaintext)
+    echo "==> Removing leftover plaintext password env vars"
+    gcloud run services update "$SERVICE_NAME" \
+      --region="$GCP_REGION" \
+      --project="$GCP_PROJECT" \
+      --remove-env-vars=DB_PASSWORD,AUTH_PASSWORD,ADMIN_INITIAL_PASSWORD \
+      --quiet
+    gcloud run services describe "$SERVICE_NAME" \
+      --region="$GCP_REGION" \
+      --project="$GCP_PROJECT" \
+      --format='yaml(spec.template.spec.containers[0].env)' >"$ENV_YAML_FILE"
+    ;;
+esac
+case "$(classify_password_env_yaml "$ENV_YAML_FILE")" in
+  ok) echo "==> secret env assert ok" ;;
+  *)
+    echo "error: password env keys are missing or still plaintext after deploy" >&2
+    exit 1
+    ;;
+esac
 
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
   --region="$GCP_REGION" \
@@ -255,7 +275,7 @@ echo "Secrets: ${SECRET_ID_DB_PASSWORD}, ${SECRET_ID_AUTH_PASSWORD}, ${SECRET_ID
 echo ""
 echo "Smoke:"
 echo "  curl -sS -o /dev/null -w '%{http_code}\\n' '${SERVICE_URL}/health'   # expect 200"
-echo "  # Basic only (AUTH_*) → often app 401 when admin password differs; may be 200 if still equal"
+echo "  # Basic only (AUTH_*) → app 401 when admin password differs from AUTH (L-1001)"
 echo "  curl -sS -u '${AUTH_USER}:***' '${SERVICE_URL}/api/board' | head"
 echo "  # Basic + login Cookie (stdin JSON; use ADMIN_INITIAL_PASSWORD or current admin password)"
 echo "  curl -sS -u '${AUTH_USER}:***' -c /tmp/sb.ck -b /tmp/sb.ck -H 'Content-Type: application/json' \\"

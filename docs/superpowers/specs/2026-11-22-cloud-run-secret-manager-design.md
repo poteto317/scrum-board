@@ -63,9 +63,11 @@ SM リソース名:
      ...既存の非秘密フラグ... \
      --env-vars-file="$ENV_VARS_FILE" \
      --set-secrets="DB_PASSWORD=${SECRET_ID_DB_PASSWORD}:latest,AUTH_PASSWORD=${SECRET_ID_AUTH_PASSWORD}:latest,ADMIN_INITIAL_PASSWORD=${SECRET_ID_ADMIN_INITIAL_PASSWORD}:latest"
+   # only if describe shows plaintext value: for password keys (not secretKeyRef)
    gcloud run services update "$SERVICE_NAME" \
      --remove-env-vars=DB_PASSWORD,AUTH_PASSWORD,ADMIN_INITIAL_PASSWORD
    ```
+   `--remove-env-vars` は平文が残るときだけ。secret 参照を消さない。
 6. 先頭コメントとエコー案内を SM 前提に更新。秘密値は `***` のみ。
 
 ### README / `.env.example`
