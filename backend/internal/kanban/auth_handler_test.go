@@ -171,6 +171,26 @@ func TestSessionMiddlewareBasicAuth(t *testing.T) {
 	if pub.LoginName != "admin" {
 		t.Fatalf("me user %#v", pub)
 	}
+
+	// browser-like: nginx/proxy Basic is resent but must not become app login
+	browserBasic := httptest.NewRecorder()
+	rBrowser := httptest.NewRequest("GET", "/api/board", nil)
+	rBrowser.Header.Set("Sec-Fetch-Site", "same-origin")
+	rBrowser.SetBasicAuth("admin", "test-password")
+	h.ServeHTTP(browserBasic, rBrowser)
+	if browserBasic.Code != 401 || !strings.Contains(browserBasic.Body.String(), msgLoginRequired) {
+		t.Fatalf("basic with Sec-Fetch-Site=%d %s", browserBasic.Code, browserBasic.Body)
+	}
+
+	// valid cookie still wins with Sec-Fetch-Site (browser session)
+	browserCookie := httptest.NewRecorder()
+	rCookie := httptest.NewRequest("GET", "/api/board", nil)
+	rCookie.Header.Set("Sec-Fetch-Site", "same-origin")
+	rCookie.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
+	h.ServeHTTP(browserCookie, rCookie)
+	if browserCookie.Code != 200 {
+		t.Fatalf("cookie with Sec-Fetch-Site=%d %s", browserCookie.Code, browserCookie.Body)
+	}
 }
 
 func findSessionCookie(w *httptest.ResponseRecorder) *http.Cookie {
