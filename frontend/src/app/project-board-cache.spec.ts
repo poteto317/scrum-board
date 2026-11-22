@@ -169,4 +169,109 @@ describe('ProjectBoardCache', () => {
     held.complete();
     expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([5]);
   });
+
+  it('refreshOthers fetches warm boards and updates the snapshot', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    const board = vi.fn(() => of({ items: [item(9, 2, 2)], columns: cols }));
+    cache.refreshOthers({ board } as unknown as Api, 1, [1, 2]);
+    expect(board).toHaveBeenCalledTimes(1);
+    expect(board).toHaveBeenCalledWith(2);
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([9]);
+  });
+
+  it('refreshOthers skips active and non-positive ids', () => {
+    const cache = new ProjectBoardCache();
+    const board = vi.fn(() => of({ items: [item(1, 3)], columns: cols }));
+    cache.refreshOthers({ board } as unknown as Api, 1, [1, 0, -2, Number.NaN, 3]);
+    expect(board).toHaveBeenCalledTimes(1);
+    expect(board).toHaveBeenCalledWith(3);
+  });
+
+  it('keeps the warm snapshot while refresh is in flight', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    const held = new Subject<{ items: Item[]; columns: Column[] }>();
+    const board = vi.fn(() => held.asObservable());
+    cache.refreshOthers({ board } as unknown as Api, 1, [2]);
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([1]);
+    held.next({ items: [item(9, 2)], columns: cols });
+    held.complete();
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([9]);
+  });
+
+  it('does not let a late refresh overwrite a fresher put', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    const held = new Subject<{ items: Item[]; columns: Column[] }>();
+    const board = vi.fn(() => held.asObservable());
+    cache.refreshOthers({ board } as unknown as Api, 1, [2]);
+    cache.putBoard(2, [item(5, 2)], cols);
+    held.next({ items: [item(9, 2)], columns: cols });
+    held.complete();
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([5]);
+  });
+
+  it('keeps the warm snapshot when refresh fails', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    const board = vi.fn(() => throwError(() => new Error('fail')));
+    cache.refreshOthers({ board } as unknown as Api, 1, [2]);
+    expect(board).toHaveBeenCalledWith(2);
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([1]);
+  });
+
+  it('dedupes refreshOthers while the same board key is in flight', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    const held = new Subject<{ items: Item[]; columns: Column[] }>();
+    const board = vi.fn(() => held.asObservable());
+    const api = { board } as unknown as Api;
+    cache.refreshOthers(api, 1, [2]);
+    cache.refreshOthers(api, 1, [2]);
+    expect(board).toHaveBeenCalledTimes(1);
+    held.next({ items: [item(9, 2)], columns: cols });
+    held.complete();
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([9]);
+  });
+
+  it('allows refreshOthers again after a failed refresh releases in-flight', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    const board = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => new Error('fail')))
+      .mockReturnValueOnce(of({ items: [item(9, 2)], columns: cols }));
+    const api = { board } as unknown as Api;
+    cache.refreshOthers(api, 1, [2]);
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([1]);
+    cache.refreshOthers(api, 1, [2]);
+    expect(board).toHaveBeenCalledTimes(2);
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([9]);
+  });
+
+  it('skips refreshOthers while soft prefetchBoard is in flight for the same id', () => {
+    const cache = new ProjectBoardCache();
+    const held = new Subject<{ items: Item[]; columns: Column[] }>();
+    const board = vi.fn(() => held.asObservable());
+    const api = { board } as unknown as Api;
+    cache.prefetchBoard(api, 2);
+    expect(board).toHaveBeenCalledTimes(1);
+    cache.refreshOthers(api, 1, [2]);
+    expect(board).toHaveBeenCalledTimes(1);
+    held.next({ items: [item(1, 2)], columns: cols });
+    held.complete();
+    cache.refreshOthers(api, 1, [2]);
+    expect(board).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the warm snapshot when refresh returns empty columns', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    const before = cache.revision();
+    const board = vi.fn(() => of({ items: [item(9, 2)], columns: [] }));
+    cache.refreshOthers({ board } as unknown as Api, 1, [2]);
+    expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([1]);
+    expect(cache.revision()).toBe(before);
+  });
 });
