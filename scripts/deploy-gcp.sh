@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build deploy/Dockerfile, push to Artifact Registry, deploy Cloud Run (+ optional Cloud SQL).
-# Secrets (AUTH_PASSWORD, DB_PASSWORD) must come from the environment or Secret Manager — never commit them.
+# Secrets (AUTH_PASSWORD, ADMIN_INITIAL_PASSWORD, DB_PASSWORD) must come from the environment or Secret Manager — never commit them.
 # Production should mount secrets from Secret Manager; env-vars-file below only avoids comma-delimited
 # --set-env-vars parsing issues for trial/passwords that contain commas or equals signs.
 set -euo pipefail
@@ -34,6 +34,12 @@ require DB_PASSWORD
 require DB_NAME
 require AUTH_USER
 require AUTH_PASSWORD
+require ADMIN_INITIAL_PASSWORD
+
+if [[ "$ADMIN_INITIAL_PASSWORD" == "$AUTH_PASSWORD" ]]; then
+  echo "error: ADMIN_INITIAL_PASSWORD must differ from AUTH_PASSWORD" >&2
+  exit 1
+fi
 
 # PUBLIC_ORIGIN: required by entrypoint (must be http(s)://). If unset, bootstrap with
 # https://example.com then overwrite with the real SERVICE_URL after deploy (below).
@@ -81,6 +87,7 @@ trap 'rm -f "$ENV_VARS_FILE"' EXIT
   echo "PUBLIC_ORIGIN: $(yaml_env_value "$PUBLIC_ORIGIN")"
   echo "AUTH_USER: $(yaml_env_value "$AUTH_USER")"
   echo "AUTH_PASSWORD: $(yaml_env_value "$AUTH_PASSWORD")"
+  echo "ADMIN_INITIAL_PASSWORD: $(yaml_env_value "$ADMIN_INITIAL_PASSWORD")"
 } >"$ENV_VARS_FILE"
 
 echo "==> Deploying Cloud Run service ${SERVICE_NAME}"
