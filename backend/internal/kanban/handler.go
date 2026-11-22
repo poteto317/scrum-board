@@ -303,7 +303,12 @@ func (h handler) updateBoardSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	out := map[string]any{"settings": settings}
 	if items != nil {
-		out["items"] = items
+		filtered, ferr := h.filterBoardItems(r.Context(), items, requestUserPtr(r))
+		if ferr != nil {
+			fail(w, ferr)
+			return
+		}
+		out["items"] = filtered
 	}
 	reply(w, 200, out)
 }

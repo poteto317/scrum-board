@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUpdateBoardSettingsHandler(t *testing.T) {
@@ -121,5 +122,76 @@ func TestBoardIncludesSettings(t *testing.T) {
 	}
 	if settings["mobileBoardColumnId"] != float64(1) {
 		t.Fatalf("mobileBoardColumnId=%v", settings["mobileBoardColumnId"])
+	}
+}
+
+func TestUpdateBoardSettingsFiltersRestrictedItems(t *testing.T) {
+	const secretDesc = "restricted-secret-description-87"
+	m := fresh()
+	hash, _ := HashPassword("x")
+	m.users = append(m.users, User{ID: 2, LoginName: "mem", DisplayName: "mem", PasswordHash: hash, Role: RoleMember})
+	open, _ := m.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: "open", Description: "visible"})
+	secret, _ := m.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: "secret", Description: secretDesc})
+	secret.ViewAccess = ViewAccessRestricted
+	secret.EditAccess = EditAccessRestricted
+	m.cards[secret.ID] = secret
+	m.aclEntries = map[int64]ItemACL{secret.ID: {ViewUserIDs: []int64{1}}}
+	m.settings.CardLayout = CardLayoutFree
+	sess := Session{ID: "mem-settings-sess", UserID: 2, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	m.sessions[sess.ID] = sess
+	h := NewHandler(m)
+
+	w := requestWithCookie(h, "PATCH", "/api/board/settings", `{"cardLayout":"pack"}`, sess.ID)
+	if w.Code != 200 {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body)
+	}
+	if strings.Contains(w.Body.String(), secretDesc) {
+		t.Fatalf("leaked restricted description: %s", w.Body)
+	}
+	var out struct {
+		Items []Item `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	seenOpen := false
+	for _, it := range out.Items {
+		if it.ID == secret.ID {
+			t.Fatal("restricted item leaked to settings PATCH items")
+		}
+		if it.ID == open.ID {
+			seenOpen = true
+		}
+	}
+	if !seenOpen {
+		t.Fatal("open item missing from filtered items")
+	}
+}
+
+func TestUpdateBoardSettingsFilterFailureDoesNotLeakItems(t *testing.T) {
+	const secretTitle = "secret-title-for-acl-fail-87"
+	m := fresh()
+	secret, _ := m.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: secretTitle, Description: "d"})
+	secret.ViewAccess = ViewAccessRestricted
+	secret.EditAccess = EditAccessRestricted
+	m.cards[secret.ID] = secret
+	m.aclEntries = map[int64]ItemACL{secret.ID: {ViewUserIDs: []int64{1}}}
+	m.settings.CardLayout = CardLayoutFree
+	m.aclListFail = errors.New("acl-list-boom")
+	h := NewHandler(m)
+
+	w := request(h, "PATCH", "/api/board/settings", `{"cardLayout":"pack"}`)
+	if w.Code != 500 {
+		t.Fatalf("status=%d want 500 body=%s", w.Code, w.Body)
+	}
+	if strings.Contains(w.Body.String(), secretTitle) {
+		t.Fatalf("leaked title on filter failure: %s", w.Body)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := raw["items"]; ok {
+		t.Fatalf("must not include items on filter failure: %s", w.Body)
 	}
 }
