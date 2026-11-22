@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sort"
 )
@@ -150,6 +151,36 @@ func (h handler) filterBoardItems(ctx context.Context, items []Item, user *User)
 		attachACLState(items, entries)
 	}
 	return filterVisibleItems(items, user), nil
+}
+
+// requireEditOnRelatedPeerDiff rejects the request when any added or removed
+// item-kind peer is not editable. Always uses msgEditForbidden (not requireEdit).
+func (h handler) requireEditOnRelatedPeerDiff(w http.ResponseWriter, r *http.Request, before, after []RelatedItem) bool {
+	userPtr := requestUserPtr(r)
+	if userPtr == nil {
+		reply(w, 401, map[string]string{"message": msgLoginRequired})
+		return false
+	}
+	for _, rel := range relatedItemPeersDiff(before, after) {
+		peer, err := h.repo.GetItemByNumber(r.Context(), rel.Number, rel.ProjectID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			fail(w, err)
+			return false
+		}
+		st, err := h.loadItemACLState(r.Context(), peer)
+		if err != nil {
+			fail(w, err)
+			return false
+		}
+		if !CanEdit(st, userPtr) {
+			reply(w, 403, map[string]string{"message": msgEditForbidden})
+			return false
+		}
+	}
+	return true
 }
 
 type itemACLPatch struct {

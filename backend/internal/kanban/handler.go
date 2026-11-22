@@ -526,6 +526,9 @@ func (h handler) createItem(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "ソリューションは10000文字以内で入力してください。")
 		return
 	}
+	if !h.requireEditOnRelatedPeerDiff(w, r, nil, in.RelatedItems) {
+		return
+	}
 	if u, ok := CurrentUser(r.Context()); ok {
 		id := u.ID
 		in.CreatedByUserID = &id
@@ -595,6 +598,9 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		value, valid := normalizeRelatedItems(raw)
 		if !valid {
 			invalid(w, "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。")
+			return
+		}
+		if !h.requireEditOnRelatedPeerDiff(w, r, existing.RelatedItems, value) {
 			return
 		}
 		p.RelatedItems = &value
