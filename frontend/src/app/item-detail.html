@@ -116,7 +116,7 @@
             }
           </div>
           <button type="button" class="manage-commands" (click)="openCommandManager()">
-            コマンドを管理
+            {{ canAdministerCommandTemplates() ? 'コマンドを管理' : 'コマンド一覧' }}
           </button>
           </div>
         </div>
@@ -425,7 +425,13 @@
                   </label>
                 </li>
               } @empty {
-                <li class="field-note">カタログが空です。「コマンドを管理」から追加できます。</li>
+                <li class="field-note">
+                  カタログが空です。@if (canAdministerCommandTemplates()) {
+                    「コマンドを管理」から追加できます。
+                  } @else {
+                    管理者に追加を依頼してください。
+                  }
+                </li>
               }
             </ul>
             <div class="form-actions">
@@ -839,7 +845,9 @@
   >
     <section class="modal" (click)="$event.stopPropagation()">
       <header class="modal-header">
-        <h2 id="command-templates-title">コマンドを管理</h2>
+        <h2 id="command-templates-title">
+          {{ canAdministerCommandTemplates() ? 'コマンドを管理' : 'コマンド一覧' }}
+        </h2>
         <button
           type="button"
           class="icon-button"
@@ -857,7 +865,7 @@
       <ul class="command-template-list">
         @for (command of commands.templates(); track command.id) {
           <li class="command-template-row">
-            @if (commands.editingId() === command.id) {
+            @if (canAdministerCommandTemplates() && commands.editingId() === command.id) {
               <form
                 class="command-edit-form"
                 [formGroup]="commands.editForm"
@@ -886,69 +894,77 @@
                 </div>
               </form>
             } @else {
-              <label class="command-template-bulk">
-                <input
-                  type="checkbox"
-                  [checked]="commands.isBulkSelected(command.id)"
-                  [disabled]="commands.saving()"
-                  (change)="commands.toggleBulk(command.id, $any($event.target).checked)"
-                />
+              @if (canAdministerCommandTemplates()) {
+                <label class="command-template-bulk">
+                  <input
+                    type="checkbox"
+                    [checked]="commands.isBulkSelected(command.id)"
+                    [disabled]="commands.saving()"
+                    (change)="commands.toggleBulk(command.id, $any($event.target).checked)"
+                  />
+                  <span class="command-template-name">{{ command.name }}</span>
+                </label>
+              } @else {
                 <span class="command-template-name">{{ command.name }}</span>
-              </label>
+              }
               <span class="command-template-body">{{ command.template }}</span>
-              <div class="command-template-actions">
-                <button
-                  type="button"
-                  (click)="commands.startEdit(command)"
-                  [disabled]="commands.saving()"
-                >
-                  編集
-                </button>
-                <button
-                  type="button"
-                  (click)="deleteCatalogCommand(command.id)"
-                  [disabled]="commands.saving()"
-                >
-                  削除
-                </button>
-              </div>
+              @if (canAdministerCommandTemplates()) {
+                <div class="command-template-actions">
+                  <button
+                    type="button"
+                    (click)="commands.startEdit(command)"
+                    [disabled]="commands.saving()"
+                  >
+                    編集
+                  </button>
+                  <button
+                    type="button"
+                    (click)="deleteCatalogCommand(command.id)"
+                    [disabled]="commands.saving()"
+                  >
+                    削除
+                  </button>
+                </div>
+              }
             }
           </li>
         }
       </ul>
-      <div class="form-actions command-bulk-actions">
-        <button
-          type="button"
-          class="secondary"
-          [disabled]="commands.saving()"
-          (click)="applyCommandsToAllItems()"
-        >
-          全アイテムに適用
-        </button>
-        <button
-          type="button"
-          class="secondary"
-          [disabled]="commands.saving()"
-          (click)="setCommandDefaults()"
-        >
-          新規の初期にする
-        </button>
-      </div>
-      <form
-        class="command-create-form"
-        [formGroup]="commands.createForm"
-        (ngSubmit)="commands.create()"
-      >
-        <label for="command-name">名前</label>
-        <input id="command-name" formControlName="name" autocomplete="off" />
-        <label for="command-template">本文</label>
-        <input id="command-template" formControlName="template" autocomplete="off" />
-        <div class="form-actions">
-          <button class="primary" type="submit" [disabled]="commands.saving()">
-            {{ commands.saving() ? '保存中…' : '追加' }}
+      @if (canAdministerCommandTemplates()) {
+        <div class="form-actions command-bulk-actions">
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="commands.saving()"
+            (click)="applyCommandsToAllItems()"
+          >
+            全アイテムに適用
+          </button>
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="commands.saving()"
+            (click)="setCommandDefaults()"
+          >
+            新規の初期にする
           </button>
         </div>
-      </form>
+        <form
+          class="command-create-form"
+          [formGroup]="commands.createForm"
+          (ngSubmit)="commands.create()"
+        >
+          <label for="command-name">名前</label>
+          <input id="command-name" formControlName="name" autocomplete="off" />
+          <label for="command-template">本文</label>
+          <input id="command-template" formControlName="template" autocomplete="off" />
+          <div class="form-actions">
+            <button class="primary" type="submit" [disabled]="commands.saving()">
+              {{ commands.saving() ? '保存中…' : '追加' }}
+            </button>
+          </div>
+        </form>
+      }
     </section>
   </dialog>
 }

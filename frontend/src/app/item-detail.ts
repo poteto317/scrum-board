@@ -161,6 +161,10 @@ export class ItemDetail implements OnInit {
   readonly authReady = computed(() => this.auth.status() !== 'unknown');
   /** L-463: /me 未確定 or 編集不可ならサイド操作も止める。 */
   readonly editLocked = computed(() => !this.authReady() || !this.canEdit());
+  /** Admin-only: catalog CRUD, defaults, and apply-all. */
+  readonly canAdministerCommandTemplates = computed(
+    () => this.authReady() && this.auth.isAdmin(),
+  );
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
   readonly deleting = signal(false);
@@ -760,6 +764,7 @@ export class ItemDetail implements OnInit {
   }
 
   applyCommandsToAllItems() {
+    if (!this.canAdministerCommandTemplates()) return;
     this.commands.applyToAllItems(undefined, () => {
       const card = this.item();
       if (card) this.itemCommands.load(card.number);
@@ -767,10 +772,12 @@ export class ItemDetail implements OnInit {
   }
 
   setCommandDefaults() {
+    if (!this.canAdministerCommandTemplates()) return;
     this.commands.setAsDefaults();
   }
 
   deleteCatalogCommand(id: number) {
+    if (!this.canAdministerCommandTemplates()) return;
     this.commands.delete(id, () => {
       const card = this.item();
       if (card) this.itemCommands.load(card.number);
