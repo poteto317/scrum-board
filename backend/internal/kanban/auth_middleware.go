@@ -79,7 +79,17 @@ func sessionOptional(r *http.Request) bool {
 	return false
 }
 
+// basicAuthEligible is true when the client is not a modern browser fetch
+// (curl, agents, scripts). Browsers send Sec-Fetch-Site on navigations and
+// fetches; honoring Basic there would treat nginx edge credentials as app login.
+func basicAuthEligible(r *http.Request) bool {
+	return r.Header.Get("Sec-Fetch-Site") == ""
+}
+
 func (h handler) userFromBasicAuth(r *http.Request) (User, bool) {
+	if !basicAuthEligible(r) {
+		return User{}, false
+	}
 	userName, pass, ok := r.BasicAuth()
 	if !ok || strings.TrimSpace(userName) == "" || pass == "" {
 		return User{}, false
