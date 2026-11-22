@@ -98,6 +98,9 @@ func (m *memoryRepo) UpdateUser(ctx context.Context, id int64, patch UserPatch, 
 		if *patch.Password == "" {
 			return User{}, ErrInvalidUserInput
 		}
+		if err := validatePasswordLength(*patch.Password); err != nil {
+			return User{}, err
+		}
 		hash, err := HashPassword(*patch.Password)
 		if err != nil {
 			return User{}, err

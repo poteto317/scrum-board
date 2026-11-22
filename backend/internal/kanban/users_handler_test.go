@@ -39,7 +39,7 @@ func TestUsersAPIListCreatePatch(t *testing.T) {
 		t.Fatalf("bob=%#v", bob)
 	}
 
-	w = request(h, "POST", "/api/users", `{"loginName":"bob","password":"x","displayName":"X"}`)
+	w = request(h, "POST", "/api/users", `{"loginName":"bob","password":"secret-dup","displayName":"X"}`)
 	if w.Code != 409 {
 		t.Fatalf("dup=%d", w.Code)
 	}
@@ -47,10 +47,26 @@ func TestUsersAPIListCreatePatch(t *testing.T) {
 	if w.Code != 400 {
 		t.Fatalf("missing=%d", w.Code)
 	}
+	w = request(h, "POST", "/api/users", `{"loginName":"short","password":"1234567","displayName":"S"}`)
+	if w.Code != 400 {
+		t.Fatalf("create short password=%d %s", w.Code, w.Body)
+	}
+	w = request(h, "POST", "/api/users", `{"loginName":"ok8","password":"12345678","displayName":"Ok"}`)
+	if w.Code != 201 {
+		t.Fatalf("create 8-char password=%d %s", w.Code, w.Body)
+	}
 
 	w = request(h, "PATCH", "/api/users/"+strconv.FormatInt(bob.ID, 10), `{"displayName":"Bobby","role":"admin"}`)
 	if w.Code != 200 {
 		t.Fatalf("patch=%d %s", w.Code, w.Body)
+	}
+	w = request(h, "PATCH", "/api/users/"+strconv.FormatInt(bob.ID, 10), `{"password":"1234567"}`)
+	if w.Code != 400 {
+		t.Fatalf("patch short password=%d %s", w.Code, w.Body)
+	}
+	w = request(h, "PATCH", "/api/users/"+strconv.FormatInt(bob.ID, 10), `{"password":"12345678"}`)
+	if w.Code != 200 {
+		t.Fatalf("patch 8-char password=%d %s", w.Code, w.Body)
 	}
 }
 

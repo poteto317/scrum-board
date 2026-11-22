@@ -167,6 +167,28 @@ func TestSeedAdminFromEnvRejectsSameAsAUTHPassword(t *testing.T) {
 	}
 }
 
+func TestSeedAdminFromEnvRejectsShortPassword(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	r := MySQLRepository{DB: db}
+	dropUsersTables(t, db)
+	if err := r.InitializeUsers(ctx); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{
+		"AUTH_USER":              "seedadmin",
+		"AUTH_PASSWORD":          "basic-only-long",
+		"ADMIN_INITIAL_PASSWORD": "1234567",
+	}
+	err := r.SeedAdminFromEnv(ctx, func(k string) string { return env[k] })
+	if err == nil || !errors.Is(err, ErrAuthSeed) {
+		t.Fatalf("want ErrAuthSeed for short password, got %v", err)
+	}
+	if strings.Contains(err.Error(), "1234567") {
+		t.Fatalf("error leaked password: %v", err)
+	}
+}
+
 func TestSeedAdminFromEnvWhitespaceOnlyPasswordSeeds(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	ctx := context.Background()
@@ -176,10 +198,11 @@ func TestSeedAdminFromEnvWhitespaceOnlyPasswordSeeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ws := "        " // 8 spaces (MinPasswordLength); not trimmed
 	env := map[string]string{
 		"AUTH_USER":              "seedadmin",
 		"AUTH_PASSWORD":          "", // avoid same-value reject
-		"ADMIN_INITIAL_PASSWORD": "   ",
+		"ADMIN_INITIAL_PASSWORD": ws,
 	}
 	if err := r.SeedAdminFromEnv(ctx, func(k string) string { return env[k] }); err != nil {
 		t.Fatalf("whitespace-only admin password should seed: %v", err)
@@ -188,7 +211,7 @@ func TestSeedAdminFromEnvWhitespaceOnlyPasswordSeeds(t *testing.T) {
 	if err := db.QueryRow(`SELECT password_hash FROM users LIMIT 1`).Scan(&hash); err != nil {
 		t.Fatal(err)
 	}
-	if bcrypt.CompareHashAndPassword([]byte(hash), []byte("   ")) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(ws)) != nil {
 		t.Fatal("hash must match untrimmed whitespace password")
 	}
 }
@@ -204,8 +227,8 @@ func TestSeedAdminFromEnvTrailingSpaceDiffersFromAUTHPassword(t *testing.T) {
 
 	env := map[string]string{
 		"AUTH_USER":              "seedadmin",
-		"AUTH_PASSWORD":          "secret",
-		"ADMIN_INITIAL_PASSWORD": "secret ",
+		"AUTH_PASSWORD":          "secret12",
+		"ADMIN_INITIAL_PASSWORD": "secret12 ",
 	}
 	if err := r.SeedAdminFromEnv(ctx, func(k string) string { return env[k] }); err != nil {
 		t.Fatalf("trailing-space difference should allow seed: %v", err)
@@ -214,10 +237,10 @@ func TestSeedAdminFromEnvTrailingSpaceDiffersFromAUTHPassword(t *testing.T) {
 	if err := db.QueryRow(`SELECT password_hash FROM users LIMIT 1`).Scan(&hash); err != nil {
 		t.Fatal(err)
 	}
-	if bcrypt.CompareHashAndPassword([]byte(hash), []byte("secret ")) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte("secret12 ")) != nil {
 		t.Fatal("hash must match ADMIN_INITIAL_PASSWORD including trailing space")
 	}
-	if bcrypt.CompareHashAndPassword([]byte(hash), []byte("secret")) == nil {
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte("secret12")) == nil {
 		t.Fatal("hash must not match AUTH_PASSWORD without trailing space")
 	}
 }
