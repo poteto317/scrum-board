@@ -72,10 +72,10 @@ type LoginAttemptLimiter interface {
 - キー: `login:` + normalizedLogin（trim+ToLower）、`ip:` + ip
 - 各キー: `{ failures int, lockedUntil time.Time }`
 - `Allow`: どちらかの `lockedUntil > now` なら false
-- `RecordFailure`: 失敗数+1。≥5 なら `lockedUntil = now + 15m` かつ `failures = 0`
-- `RecordSuccess`: 両キーをマップから削除
+- `RecordFailure`: 失敗数+1。`lastFailure` を更新。≥5 なら `lockedUntil = now + 15m` かつ `failures = 0`
+- `RecordSuccess`: **login キーのみ**マップから削除（IP キーは残す。NAT 共有出口で別ユーザー成功が総当たり耐性を消さないため）
 - 排他: `sync.Mutex`
-- メモリ肥大防止: 操作時に期限切れロックかつ failures=0 のエントリを削除する簡単な掃除を入れてよい
+- メモリ肥大防止: 操作時に、(1) ロック期限切れかつ failures=0、(2) 非ロックで `lastFailure` から 15 分経過、のエントリを削除
 
 `handler` に `loginAttempts LoginAttemptLimiter` を持たせる。`NewHandler` でデフォルト実装をセット（テストでは差し替え可能なら Option、またはパッケージ内デフォルトで単体テストはリミッタ自体を直接検証）。
 
