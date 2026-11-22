@@ -228,13 +228,13 @@ func TestSessionMiddlewareBasicAuth(t *testing.T) {
 		t.Fatalf("me user %#v", pub)
 	}
 
-	// browser-like: nginx/proxy Basic is resent but must not become app login
+	// browser-like: valid users Basic is accepted even with Sec-Fetch-Site (mobile Safari)
 	browserBasic := httptest.NewRecorder()
 	rBrowser := httptest.NewRequest("GET", "/api/board", nil)
 	rBrowser.Header.Set("Sec-Fetch-Site", "same-origin")
 	rBrowser.SetBasicAuth("admin", "test-password")
 	h.ServeHTTP(browserBasic, rBrowser)
-	if browserBasic.Code != 401 || !strings.Contains(browserBasic.Body.String(), msgLoginRequired) {
+	if browserBasic.Code != 200 {
 		t.Fatalf("basic with Sec-Fetch-Site=%d %s", browserBasic.Code, browserBasic.Body)
 	}
 
@@ -255,7 +255,7 @@ func TestSessionMiddlewareBasicAuth(t *testing.T) {
 			rBasic.Header.Set("Sec-Fetch-Site", site)
 			rBasic.SetBasicAuth("admin", "test-password")
 			h.ServeHTTP(basic, rBasic)
-			if basic.Code != 401 || !strings.Contains(basic.Body.String(), msgLoginRequired) {
+			if basic.Code != 200 {
 				t.Fatalf("basic with Sec-Fetch-Site %q=%d %s", site, basic.Code, basic.Body)
 			}
 			cookie := httptest.NewRecorder()
@@ -346,12 +346,12 @@ func TestSessionOptionalBasicAuth(t *testing.T) {
 	if skip.Code != 200 {
 		t.Fatalf("basic+Sec-Fetch public=%d %s", skip.Code, skip.Body)
 	}
-	var anonPub Item
-	if err := json.Unmarshal(skip.Body.Bytes(), &anonPub); err != nil {
+	var asAdmin Item
+	if err := json.Unmarshal(skip.Body.Bytes(), &asAdmin); err != nil {
 		t.Fatal(err)
 	}
-	if anonPub.ViewerCanEdit || anonPub.ViewerCanManage {
-		t.Fatal("Sec-Fetch basic must not attach CurrentUser on sessionOptional")
+	if !asAdmin.ViewerCanEdit {
+		t.Fatal("Sec-Fetch basic must attach CurrentUser when password matches users")
 	}
 
 	skipSec := httptest.NewRecorder()
@@ -359,7 +359,7 @@ func TestSessionOptionalBasicAuth(t *testing.T) {
 	rSkipSec.Header.Set("Sec-Fetch-Site", "cross-site")
 	rSkipSec.SetBasicAuth("admin", "test-password")
 	h.ServeHTTP(skipSec, rSkipSec)
-	if skipSec.Code != 401 {
+	if skipSec.Code != 200 {
 		t.Fatalf("basic+Sec-Fetch restricted=%d %s", skipSec.Code, skipSec.Body)
 	}
 }
