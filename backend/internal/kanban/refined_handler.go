@@ -120,6 +120,7 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 	}
 	keepRate = true // model call starts; reservation counts even if Format fails
 	refined, inTok, outTok, err := h.formatter.Format(aiCtx, draft)
+	h.applyAIUsageAfterCall(r.Context(), err, inTok, outTok, RefinedEstimateInput(draft))
 	if err != nil {
 		logFormatFailure(err)
 		aiFailed(w)
@@ -140,10 +141,6 @@ func (h handler) createRefinedItem(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		storageFailed(w, "create")
 		return
-	}
-	// Usage is best-effort after create: failing here must not 500 (would invite retry-duplicate cards).
-	if err := h.repo.AddAIUsage(r.Context(), 1, inTok, outTok); err != nil {
-		slog.Error("refined usage add failed", "stage", "usage")
 	}
 	reply(w, http.StatusCreated, card)
 }
