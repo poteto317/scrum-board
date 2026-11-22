@@ -101,6 +101,19 @@ func (h handler) userFromBasicAuth(r *http.Request) (User, bool) {
 	return user, true
 }
 
+func requireAdmin(w http.ResponseWriter, r *http.Request) (User, bool) {
+	actor, ok := CurrentUser(r.Context())
+	if !ok {
+		reply(w, 401, map[string]string{"message": msgLoginRequired})
+		return User{}, false
+	}
+	if actor.Role != RoleAdmin {
+		reply(w, 403, map[string]string{"message": msgForbidden})
+		return User{}, false
+	}
+	return actor, true
+}
+
 func (h handler) withSessionAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sessionExempt(r) {

@@ -71,6 +71,9 @@ func (h handler) listCommandTemplateDefaults(w http.ResponseWriter, r *http.Requ
 }
 
 func (h handler) replaceCommandTemplateDefaults(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
 	ids, ok := decodeTemplateIDs(w, r)
 	if !ok {
 		return
@@ -84,13 +87,12 @@ func (h handler) replaceCommandTemplateDefaults(w http.ResponseWriter, r *http.R
 }
 
 func (h handler) applyCommandTemplatesToAllItems(w http.ResponseWriter, r *http.Request) {
-	ids, ok := decodeTemplateIDs(w, r)
+	user, ok := requireAdmin(w, r)
 	if !ok {
 		return
 	}
-	user, okUser := CurrentUser(r.Context())
-	if !okUser {
-		reply(w, 401, map[string]string{"message": msgLoginRequired})
+	ids, ok := decodeTemplateIDs(w, r)
+	if !ok {
 		return
 	}
 	items, err := h.repo.ListLivingItems(r.Context())

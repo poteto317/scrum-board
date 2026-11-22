@@ -17,6 +17,9 @@ func (h handler) listCommandTemplates(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) createCommandTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
 	var in CommandTemplateInput
 	if !decode(w, r, &in) {
 		return
@@ -41,6 +44,9 @@ func (h handler) createCommandTemplate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) updateCommandTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
 	n, ok := commandTemplateID(w, r)
 	if !ok {
 		return
@@ -82,6 +88,9 @@ func (h handler) updateCommandTemplate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) deleteCommandTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
 	n, ok := commandTemplateID(w, r)
 	if !ok {
 		return
