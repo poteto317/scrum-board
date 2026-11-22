@@ -26,8 +26,8 @@
           aria-haspopup="listbox"
           [attr.aria-expanded]="projectMenuOpen() ? 'true' : 'false'"
           aria-controls="project-select-list"
-          (focus)="onProjectSelectPrefetch()"
-          (pointerdown)="onProjectSelectPrefetch()"
+          (focus)="onProjectSelectWarmup()"
+          (pointerdown)="onProjectSelectWarmup()"
           (click)="onProjectTriggerClick($event)"
           (keydown)="onProjectTriggerKeydown($event)"
         >
