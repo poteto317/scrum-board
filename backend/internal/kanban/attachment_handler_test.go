@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,6 +30,34 @@ func pngBytes() []byte {
 		0xe7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
 		0x44, 0xae, 0x42, 0x60, 0x82,
 	}
+}
+
+func paddedPNG(minBytes int) []byte {
+	base := pngBytes()
+	if len(base) >= minBytes {
+		return base
+	}
+	out := make([]byte, minBytes)
+	copy(out, base)
+	return out
+}
+
+func countFiles(t *testing.T, dir string) int {
+	t.Helper()
+	n := 0
+	err := filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type().IsRegular() {
+			n++
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("countFiles(%s): %v", dir, err)
+	}
+	return n
 }
 
 func attachmentHandler(t *testing.T) (http.Handler, *memoryRepo, *MemoryBlobStorage) {
@@ -377,4 +408,59 @@ func (f *failPutStorage) Get(ctx context.Context, key string) (io.ReadCloser, st
 }
 func (f *failPutStorage) Delete(ctx context.Context, key string) error {
 	return f.inner.Delete(ctx, key)
+}
+
+func TestCreateAttachmentRemovesMultipartTempFiles(t *testing.T) {
+	tmpdir := t.TempDir()
+	t.Setenv("TMPDIR", tmpdir)
+
+	h, repo, _ := attachmentHandler(t)
+	card, err := repo.CreateItem(t.Context(), ItemInput{Title: "tmp-cleanup", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertNoLeak := func(t *testing.T, before int) {
+		t.Helper()
+		after := countFiles(t, tmpdir)
+		if after != before {
+			entries, _ := os.ReadDir(tmpdir)
+			names := make([]string, 0, len(entries))
+			for _, e := range entries {
+				names = append(names, e.Name())
+			}
+			t.Fatalf("multipart temp leak: before=%d after=%d entries=%v", before, after, names)
+		}
+	}
+
+	t.Run("success201", func(t *testing.T) {
+		before := countFiles(t, tmpdir)
+		rec := postPNG(t, h, card.Number, "description", "big.png", paddedPNG(attachmentMultipartMaxMemory+1), nil)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		assertNoLeak(t, before)
+	})
+
+	t.Run("badField400", func(t *testing.T) {
+		before := countFiles(t, tmpdir)
+		rec := postPNG(t, h, card.Number, "title", "big.png", paddedPNG(attachmentMultipartMaxMemory+1), nil)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		assertNoLeak(t, before)
+	})
+
+	t.Run("maxBytes400", func(t *testing.T) {
+		before := countFiles(t, tmpdir)
+		limit := attachmentMaxBytes + attachmentMultipartMaxMemory + attachmentMultipartSlack
+		rec := postPNG(t, h, card.Number, "description", "huge.png", paddedPNG(int(limit)+1), nil)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "画像は5MiB以下にしてください。") {
+			t.Fatalf("want MaxBytes message, got %s", rec.Body.String())
+		}
+		assertNoLeak(t, before)
+	})
 }
