@@ -30,8 +30,12 @@ export class Login {
 
   submit() {
     if (this.submitting()) return;
+    // iOS Safari autofill often fills the DOM without Angular input events,
+    // leaving FormControls empty → invalid submit returns with no network call.
+    this.syncAutofillFromDom();
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.error.set('ログイン名とパスワードを入力してください。');
       return;
     }
     this.submitting.set(true);
@@ -50,5 +54,17 @@ export class Login {
         this.submitting.set(false);
       },
     });
+  }
+
+  /** Pull native input values when password managers skip control updates. */
+  private syncAutofillFromDom() {
+    const nameEl = document.getElementById('login-name') as HTMLInputElement | null;
+    const passEl = document.getElementById('login-password') as HTMLInputElement | null;
+    if (nameEl && nameEl.value !== this.form.controls.loginName.value) {
+      this.form.controls.loginName.setValue(nameEl.value);
+    }
+    if (passEl && passEl.value !== this.form.controls.password.value) {
+      this.form.controls.password.setValue(passEl.value);
+    }
   }
 }
