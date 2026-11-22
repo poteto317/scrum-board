@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -126,6 +127,20 @@ func TestRelatedPeerAddAllowedForMember(t *testing.T) {
 	got, _ := m.GetItem(t.Context(), open.ID)
 	if len(got.RelatedItems) != 1 || got.RelatedItems[0].Number != allowed.Number {
 		t.Fatalf("related not saved: %+v", got.RelatedItems)
+	}
+}
+
+func TestRelatedPeerAddGetFailureReturns500(t *testing.T) {
+	m, open, secret, _, sess := relatedACLFixture(t)
+	h := NewHandler(relatedGetByNumberFailRepo{memoryRepo: m, fail: errors.New("get-by-number-boom")})
+	body := `{"relatedItems":[{"kind":"item","number":` + strconv.FormatInt(secret.Number, 10) + `,"projectId":1}]}`
+	w := requestWithCookie(h, "PATCH", "/api/items/"+strconv.FormatInt(open.ID, 10), body, sess.ID)
+	if w.Code != 500 {
+		t.Fatalf("add get fail: %d %s", w.Code, w.Body)
+	}
+	got, _ := m.GetItem(t.Context(), open.ID)
+	if len(got.RelatedItems) != 0 {
+		t.Fatalf("related updated on get fail: %+v", got.RelatedItems)
 	}
 }
 
