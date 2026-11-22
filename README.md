@@ -30,9 +30,9 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-**パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）はローカル Docker 専用の既定値です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。
+**パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）、および初期 admin（`AUTH_USER` / `ADMIN_INITIAL_PASSWORD`、既定 `admin` / `local_dev_admin`）はローカル Docker 専用です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。空の DB では API 起動時に admin をシードします（`ADMIN_INITIAL_PASSWORD` は 8 文字以上。`AUTH_PASSWORD` を使う場合は必ず別値）。
 
-**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic（`Sec-Fetch-Site` ヘッダ無しの非ブラウザ: curl・エージェント等）のどちらかで通ります。ブラウザは Basic を無視し Cookie セッションのみです。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番ゲートとして残ります（アプリ Basic とは別層）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
+**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。空の DB ではログイン名がシード時の `AUTH_USER`（既定 `admin`）、初期パスワードが `ADMIN_INITIAL_PASSWORD` です（アプリ内で変更したあとは users 行のパスワードが正）。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic（`Sec-Fetch-Site` ヘッダ無しの非ブラウザ: curl・エージェント等）のどちらかで通ります。ブラウザは Basic を無視し Cookie セッションのみです。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番ゲートとして残ります（アプリ Basic とは別層）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
 
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board
@@ -224,14 +224,14 @@ docker compose -p scrumboard-smoke down -v
 
 ## 今後の拡張とMVPの範囲
 
-今回はローカル学習用・単一ボード・認証なしの構成です。公開用の認証、権限管理、複数ボード、スプリント、担当者、期限、リアルタイム共同編集は含みません。各サービスはホストのループバックアドレスにだけ公開します。
+今回はローカル学習用・単一ボードの構成です。アプリにはセッションログインとロール／ACL があります（詳細は最短起動節と `SECURITY.md`）。複数テナント、リアルタイム共同編集などは含みません。各サービスはホストのループバックアドレスにだけ公開します。
 
 アイテム数に業務上の上限は設けていません。一覧は一括取得なので、大規模データに進む段階でページングや仮想スクロールを追加できます。同時編集は最後の保存が優先です。
 
 拡張の例:
 
 - ボードIDとスプリントIDを追加
-- 更新競合の検出と認証を追加
+- 更新競合の検出とより細かい認可を追加
 - DBマイグレーションツールを導入
 
 依存監査ではAngular CLI配下の開発ツールにmoderateの指摘が残っています（glob/minimatch系）。互換性のないCLIへの強制ダウングレードは行っていません。配信用コンテナにはNode.js/CLIを含めず、ビルド済み静的ファイルだけを配置します。
@@ -347,7 +347,7 @@ go run ./cmd/rewrite-origins
 
 ## 本番デプロイ（GCP: Cloud Run + Cloud SQL）
 
-個人利用向けに **Basic Auth 付き** でスマホから開く構成です。ローカル Compose の既定（`127.0.0.1`・認証なし・`PUBLIC_ORIGIN` 不要）は変えません。本番専用の同居イメージは `deploy/Dockerfile`（nginx + Go API）です。
+個人利用向けに **nginx Basic Auth 付き** でスマホから開く構成です。ローカル Compose の既定（`127.0.0.1`・アプリ認証あり・nginx Basic なし・`PUBLIC_ORIGIN` 不要）は変えません。本番専用の同居イメージは `deploy/Dockerfile`（nginx + Go API）です。
 
 ### 前提
 
