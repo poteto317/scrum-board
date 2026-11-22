@@ -237,7 +237,12 @@ export class App implements OnInit {
   onProjectOptionSelect(id: number) {
     if (!Number.isFinite(id) || id <= 0) return;
     this.closeProjectMenu(true);
-    if (id === this.projectSession.activeId()) return;
+    if (
+      id === this.projectSession.activeId() &&
+      !this.projectSession.ephemeralActiveView()
+    ) {
+      return;
+    }
     this.projectSession.switchTo(id).subscribe({
       next: (resolved) => this.syncProjectQueryToUrl(resolved),
       error: () => {
@@ -341,11 +346,7 @@ export class App implements OnInit {
       this.projectSession.error.set(action.message);
       return;
     }
-    this.projectSession.switchTo(action.id).subscribe({
-      error: () => {
-        /* existing switchTo error surface; do not replace with PROJECT_QUERY_NOT_FOUND */
-      },
-    });
+    this.projectSession.viewFromDeepLink(action.id);
   }
 
   private syncProjectQueryToUrl(id: number) {

@@ -799,10 +799,11 @@ describe('App project URL deep link', () => {
     vi.restoreAllMocks();
   });
 
-  it('switches to the project from /?project= when active differs', async () => {
+  it('views the project from /?project= without patching shared settings', async () => {
     const { api, session } = await setupAppAtUrl('/?project=2');
-    expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
     expect(session.activeId()).toBe(2);
+    expect(session.ephemeralActiveView()).toBe(true);
   });
 
   it('does not switch when URL project matches activeId', async () => {
@@ -886,7 +887,9 @@ describe('App project URL deep link', () => {
     await router.navigateByUrl('/?project=2');
     f.detectChanges();
     await f.whenStable();
-    expect(api.patchBoardSettings).toHaveBeenCalledWith({ activeProjectId: 2 });
+    expect(api.patchBoardSettings).not.toHaveBeenCalled();
+    expect(TestBed.inject(ProjectSession).activeId()).toBe(2);
+    expect(TestBed.inject(ProjectSession).ephemeralActiveView()).toBe(true);
   });
 
   it('applies deep link only once after bootstrap', async () => {
@@ -920,9 +923,9 @@ describe('App project URL deep link', () => {
     const f = TestBed.createComponent(App);
     f.detectChanges();
     const session = TestBed.inject(ProjectSession);
-    const switchSpy = vi.spyOn(session, 'switchTo');
+    const viewSpy = vi.spyOn(session, 'viewFromDeepLink');
     expect(session.bootstrapped()).toBe(false);
-    expect(switchSpy).not.toHaveBeenCalled();
+    expect(viewSpy).not.toHaveBeenCalled();
     pendingProjects.next({ projects });
     pendingBoard.next({
       columns: [],
@@ -932,11 +935,11 @@ describe('App project URL deep link', () => {
     pendingProjects.complete();
     pendingBoard.complete();
     f.detectChanges();
-    expect(switchSpy).toHaveBeenCalledTimes(1);
-    expect(switchSpy).toHaveBeenCalledWith(2);
+    expect(viewSpy).toHaveBeenCalledTimes(1);
+    expect(viewSpy).toHaveBeenCalledWith(2);
     session.bootstrapped.set(false);
     session.bootstrapped.set(true);
     f.detectChanges();
-    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(viewSpy).toHaveBeenCalledTimes(1);
   });
 });

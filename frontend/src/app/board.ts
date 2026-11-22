@@ -403,7 +403,8 @@ export class Board implements OnInit {
    */
   private pollBoard() {
     const requestedFor = this.data();
-    return this.api.board().pipe(
+    const projectId = this.boardProjectIdForFetch();
+    return this.api.board(projectId).pipe(
       map((raw) => applyBoardMobileSettings(raw)),
       filter(() => this.data() === requestedFor),
     );
@@ -649,7 +650,7 @@ export class Board implements OnInit {
     }
     this.projectSwitchSub?.unsubscribe();
     this.projectSwitchSub = this.api
-      .board()
+      .board(this.boardProjectIdForFetch())
       .pipe(
         finalize(() => {
           if (generation !== this.boardLoadGeneration) return;
@@ -683,6 +684,13 @@ export class Board implements OnInit {
     if (activeId != null && activeId > 0) {
       this.projectBoardCache.putBoard(activeId, board.items, board.columns);
     }
+  }
+
+  /** When viewing via deep link, poll/reload must target the viewed project. */
+  private boardProjectIdForFetch(): number | undefined {
+    if (!this.projectSession.ephemeralActiveView()) return undefined;
+    const id = this.projectSession.activeId();
+    return id != null && id > 0 ? id : undefined;
   }
 
   onMobileColumnChange(rawId: string): Promise<void> | void {

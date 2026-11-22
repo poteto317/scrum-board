@@ -82,10 +82,10 @@ describe('resolveProjectDeepLinkAction', () => {
     ).toEqual({ kind: 'skip' });
   });
 
-  it('requests switch when board + known different id', () => {
+  it('requests view when board + known different id', () => {
     expect(
       resolveProjectDeepLinkAction({ ...base, path: '/', projectValues: ['2'] }),
-    ).toEqual({ kind: 'switch', id: 2 });
+    ).toEqual({ kind: 'view', id: 2 });
     expect(isBoardPath('')).toBe(true);
   });
 });

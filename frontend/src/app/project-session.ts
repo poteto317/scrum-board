@@ -52,6 +52,11 @@ export class ProjectSession {
    */
   readonly mutating = signal(false);
   readonly error = signal('');
+  /**
+   * True while `activeId` was set from a board URL deep link without PATCH.
+   * Poll / board GET must use `activeId`; syncActiveFromBoard must not rewind.
+   */
+  readonly ephemeralActiveView = signal(false);
 
   private readonly switched$ = new Subject<number>();
   private switchListeners = 0;
@@ -66,6 +71,7 @@ export class ProjectSession {
     this.switching.set(false);
     this.mutating.set(false);
     this.error.set('');
+    this.ephemeralActiveView.set(false);
   }
 
   /**
@@ -76,6 +82,7 @@ export class ProjectSession {
    * GET 成功＝常に active 反映、ではない。
    */
   syncActiveFromBoard(activeProjectId: unknown, clearIfMissing = false): void {
+    if (this.ephemeralActiveView()) return;
     // While switchTo is in flight, a late board GET (initial load / poll) must not
     // rewind activeId to the previous project (L-860 / deep-link race).
     if (this.switching()) return;
@@ -262,6 +269,24 @@ export class ProjectSession {
   }
 
   /**
+   * Show a project from `/?project=` without persisting shared activeProjectId.
+   * Notifies board/backlog to reload for `id` when listeners exist.
+   */
+  viewFromDeepLink(id: number): void {
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (this.switching() || this.mutating()) return;
+    this.ephemeralActiveView.set(true);
+    this.switching.set(true);
+    this.error.set('');
+    this.activeId.set(id);
+    if (this.switchListeners === 0) {
+      this.switching.set(false);
+      return;
+    }
+    this.switched$.next(id);
+  }
+
+  /**
    * PATCH activeProjectId and update `activeId` only. Does **not** set
    * `switching` or notify board/backlog (item-detail move alignment).
    */
@@ -281,10 +306,18 @@ export class ProjectSession {
    * `endSwitch()`, unless no view is listening.
    */
   switchTo(id: number): Observable<number> {
-    if (!Number.isFinite(id) || id <= 0 || this.switching() || id === this.activeId()) {
+    const persistingSameEphemeral =
+      this.ephemeralActiveView() && id === this.activeId();
+    if (
+      !Number.isFinite(id) ||
+      id <= 0 ||
+      this.switching() ||
+      (id === this.activeId() && !persistingSameEphemeral)
+    ) {
       return EMPTY;
     }
     const previous = this.activeId();
+    this.ephemeralActiveView.set(false);
     // L-842: busy before the optimistic select update.
     this.switching.set(true);
     this.activeId.set(id);
