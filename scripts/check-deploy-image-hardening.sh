@@ -33,6 +33,12 @@ fi
 assert_grep 'adduser -S app' "$DF" 'non-root app user'
 assert_grep 'chown root:app /server && chmod 550 /server' "$DF" 'server binary permissions'
 assert_grep "su -s /bin/sh app -c 'exec /server'" "$EP" 'non-root API start'
+if grep -qE 'htpasswd[[:space:]].*-[[:alnum:]]*b' "$EP"; then
+  fail "entrypoint must not use htpasswd batch mode (-b); use -i and stdin"
+fi
+assert_grep 'htpasswd -i' "$EP" 'htpasswd stdin mode'
+assert_grep 'htpasswd -i -B' "$EP" 'htpasswd bcrypt'
+assert_grep 'chmod 640 /etc/nginx/.htpasswd' "$EP" 'htpasswd file permissions' fixed
 assert_grep 'curl -sf' "$EP" 'curl readiness probe'
 assert_grep 'status --porcelain' "$DEPLOY" 'clean working tree before deploy'
 assert_grep 'IMAGE_TAG="\$\(git -C "\$ROOT" rev-parse HEAD\)"' "$DEPLOY" 'git SHA image tag'
