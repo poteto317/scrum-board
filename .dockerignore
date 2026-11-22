@@ -1,0 +1,17 @@
+# Production build context for deploy/Dockerfile (repo root).
+# Patterns without a leading slash match in any subdirectory.
+
+# --- required (#104) ---
+node_modules
+dist
+.angular
+.env*
+backups
+.git
+.claude
+
+# --- optional extras (not checked as required) ---
+.superpowers
+.worktrees
+.DS_Store
+backend/server
