@@ -54,6 +54,11 @@ fi
 # Do not use https://placeholder.invalid — entrypoint rejects that host.
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://example.com}"
 
+if [ -n "$(git -C "$ROOT" status --porcelain)" ]; then
+  echo "error: git working tree must be clean (IMAGE_TAG is git rev-parse HEAD)" >&2
+  exit 1
+fi
+
 IMAGE_REPO="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}/${IMAGE_NAME}"
 IMAGE_TAG="$(git -C "$ROOT" rev-parse HEAD)"
 IMAGE_URI="${IMAGE_REPO}:${IMAGE_TAG}"
