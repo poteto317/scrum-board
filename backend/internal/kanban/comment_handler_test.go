@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"unicode/utf8"
+	"time"
 )
 
 func TestCommentCRUDAPI(t *testing.T) {
@@ -46,25 +46,31 @@ func TestCommentCRUDAPI(t *testing.T) {
 	if err := json.Unmarshal(omitAuthor.Body.Bytes(), &first); err != nil {
 		t.Fatal(err)
 	}
-	if first.Author != "" || first.Body != "first" || first.ItemID != card.ID {
+	if first.Author != "admin" || first.Body != "first" || first.ItemID != card.ID {
 		t.Fatalf("first: %+v", first)
 	}
+	if first.CreatedByUserID == nil || *first.CreatedByUserID != 1 {
+		t.Fatalf("createdBy: %+v", first.CreatedByUserID)
+	}
 
-	blankAuthor := request(h, "POST", base, `{"author":"  ","body":"second"}`)
-	if blankAuthor.Code != 201 {
-		t.Fatalf("blank author: %d %s", blankAuthor.Code, blankAuthor.Body.String())
+	if w := request(h, "POST", base, `{"author":"Alice","body":"second"}`); w.Code != 400 {
+		t.Fatalf("spoof author: %d", w.Code)
+	}
+	secondPost := request(h, "POST", base, `{"body":"second"}`)
+	if secondPost.Code != 201 {
+		t.Fatalf("second: %d %s", secondPost.Code, secondPost.Body.String())
 	}
 	var second Comment
-	if err := json.Unmarshal(blankAuthor.Body.Bytes(), &second); err != nil {
+	if err := json.Unmarshal(secondPost.Body.Bytes(), &second); err != nil {
 		t.Fatal(err)
 	}
-	if second.Author != "" {
-		t.Fatalf("blank author want \"\", got %q", second.Author)
+	if second.Author != "admin" {
+		t.Fatalf("second author: %q", second.Author)
 	}
 
-	named := request(h, "POST", base, `{"author":"Alice","body":"third"}`)
-	if named.Code != 201 {
-		t.Fatalf("named: %d %s", named.Code, named.Body.String())
+	thirdPost := request(h, "POST", base, `{"body":"third"}`)
+	if thirdPost.Code != 201 {
+		t.Fatalf("third: %d", thirdPost.Code)
 	}
 
 	listed := request(h, "GET", base, "")
@@ -81,16 +87,8 @@ func TestCommentCRUDAPI(t *testing.T) {
 		t.Fatalf("order: %+v", list.Comments)
 	}
 
-	longAuthor := strings.Repeat("あ", 61)
-	if utf8.RuneCountInString(longAuthor) != 61 {
-		t.Fatal("fixture")
-	}
-	if w := request(h, "POST", base, `{"author":"`+longAuthor+`","body":"x"}`); w.Code != 400 {
-		t.Fatalf("long author: %d", w.Code)
-	}
-	controlAuthor, _ := json.Marshal(map[string]string{"author": "a\nb", "body": "x"})
-	if w := request(h, "POST", base, string(controlAuthor)); w.Code != 400 {
-		t.Fatalf("control author: %d", w.Code)
+	if w := request(h, "POST", base, `{"author":"Alice","body":"x"}`); w.Code != 400 {
+		t.Fatalf("author field rejected: %d", w.Code)
 	}
 	if w := request(h, "POST", base, `{"body":""}`); w.Code != 400 {
 		t.Fatalf("empty body: %d", w.Code)
@@ -115,8 +113,8 @@ func TestCommentCRUDAPI(t *testing.T) {
 	if w := request(h, "PATCH", path, `{"body":null}`); w.Code != 400 {
 		t.Fatalf("null body: %d", w.Code)
 	}
-	if w := request(h, "PATCH", path, `{"author":null}`); w.Code != 400 {
-		t.Fatalf("null author: %d", w.Code)
+	if w := request(h, "PATCH", path, `{"author":"Bob"}`); w.Code != 400 {
+		t.Fatalf("author patch rejected: %d", w.Code)
 	}
 	if w := request(h, "PATCH", path, `{"body":""}`); w.Code != 400 {
 		t.Fatalf("empty body patch: %d", w.Code)
@@ -130,30 +128,8 @@ func TestCommentCRUDAPI(t *testing.T) {
 	if err := json.Unmarshal(bodyOnly.Body.Bytes(), &edited); err != nil {
 		t.Fatal(err)
 	}
-	if edited.Body != "first-edited" || edited.Author != "" {
+	if edited.Body != "first-edited" || edited.Author != "admin" {
 		t.Fatalf("body only result: %+v", edited)
-	}
-
-	authorOnly := request(h, "PATCH", path, `{"author":"Bob"}`)
-	if authorOnly.Code != 200 {
-		t.Fatalf("author only: %d %s", authorOnly.Code, authorOnly.Body.String())
-	}
-	if err := json.Unmarshal(authorOnly.Body.Bytes(), &edited); err != nil {
-		t.Fatal(err)
-	}
-	if edited.Author != "Bob" || edited.Body != "first-edited" {
-		t.Fatalf("author only result: %+v", edited)
-	}
-
-	clearAuthor := request(h, "PATCH", path, `{"author":"  "}`)
-	if clearAuthor.Code != 200 {
-		t.Fatalf("clear author: %d", clearAuthor.Code)
-	}
-	if err := json.Unmarshal(clearAuthor.Body.Bytes(), &edited); err != nil {
-		t.Fatal(err)
-	}
-	if edited.Author != "" {
-		t.Fatalf("clear author: %q", edited.Author)
 	}
 
 	other := request(h, "POST", "/api/items", `{"title":"o","description":"d","columnId":1}`)
@@ -192,6 +168,58 @@ func TestCommentCRUDAPI(t *testing.T) {
 	}
 	if w := request(h, "GET", base, ""); w.Code != 404 {
 		t.Fatalf("comments after item delete: %d", w.Code)
+	}
+}
+
+func TestCommentOwnershipDeniesOtherUser(t *testing.T) {
+	repo := fresh()
+	h := NewHandler(repo)
+	card, _ := repo.CreateItem(t.Context(), ItemInput{ColumnID: 1, Title: "c", Description: "d"})
+	base := "/api/items/by-number/" + strconv.FormatInt(card.Number, 10) + "/comments"
+
+	member, err := repo.CreateUser(t.Context(), UserCreateInput{
+		LoginName: "bob", DisplayName: "Bob", Password: "member-pass", Role: RoleMember,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	repo.sessions["bob-session"] = Session{ID: "bob-session", UserID: member.ID, ExpiresAt: now.Add(time.Hour), CreatedAt: now}
+
+	adminPost := request(h, "POST", base, `{"body":"from-admin"}`)
+	if adminPost.Code != 201 {
+		t.Fatalf("admin post: %d", adminPost.Code)
+	}
+	var c Comment
+	if err := json.Unmarshal(adminPost.Body.Bytes(), &c); err != nil {
+		t.Fatal(err)
+	}
+	path := base + "/" + strconv.FormatInt(c.ID, 10)
+
+	if w := requestWithCookie(h, "PATCH", path, `{"body":"hacked"}`, "bob-session"); w.Code != 403 {
+		t.Fatalf("member patch other: %d %s", w.Code, w.Body.String())
+	}
+	if w := requestWithCookie(h, "DELETE", path, "", "bob-session"); w.Code != 403 {
+		t.Fatalf("member delete other: %d", w.Code)
+	}
+
+	bobPost := requestWithCookie(h, "POST", base, `{"body":"from-bob"}`, "bob-session")
+	if bobPost.Code != 201 {
+		t.Fatalf("bob post: %d %s", bobPost.Code, bobPost.Body.String())
+	}
+	var bobComment Comment
+	if err := json.Unmarshal(bobPost.Body.Bytes(), &bobComment); err != nil {
+		t.Fatal(err)
+	}
+	if bobComment.Author != "Bob" {
+		t.Fatalf("bob author snapshot: %q", bobComment.Author)
+	}
+	bobPath := base + "/" + strconv.FormatInt(bobComment.ID, 10)
+	if w := requestWithCookie(h, "PATCH", bobPath, `{"body":"bob-edited"}`, "bob-session"); w.Code != 200 {
+		t.Fatalf("bob self patch: %d", w.Code)
+	}
+	if w := request(h, "PATCH", bobPath, `{"body":"admin-over"}`); w.Code != 200 {
+		t.Fatalf("admin patch any comment: %d %s", w.Code, w.Body.String())
 	}
 }
 
