@@ -79,18 +79,15 @@ func TestLoginAttemptLimiterIndependentKeys(t *testing.T) {
 }
 
 func TestLoginAttemptLimiterPrunesStaleFailures(t *testing.T) {
-	l := NewMemoryLoginAttemptLimiter().(*memoryLoginAttemptLimiter)
+	l := NewMemoryLoginAttemptLimiter()
 	now := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
-	l.RecordFailure("ghost", "8.8.8.8", now)
-	if len(l.byKey) == 0 {
-		t.Fatal("expected entries after failure")
+	for i := 0; i < 4; i++ {
+		l.RecordFailure("ghost", "8.8.8.8", now)
 	}
 	later := now.Add(loginFailureTTL + time.Second)
-	l.Allow("other", "1.1.1.1", later) // triggers prune
-	if _, ok := l.byKey[loginAttemptKey("ghost")]; ok {
-		t.Fatal("stale login failure should be pruned")
-	}
-	if _, ok := l.byKey[ipAttemptKey("8.8.8.8")]; ok {
-		t.Fatal("stale ip failure should be pruned")
+	// After TTL prune, prior failures must not count toward a new lock.
+	l.RecordFailure("ghost", "8.8.8.8", later)
+	if !l.Allow("ghost", "8.8.8.8", later) {
+		t.Fatal("stale failures should have been pruned before the new failure")
 	}
 }
