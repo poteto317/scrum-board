@@ -931,6 +931,31 @@ func (m *memoryRepo) GetItemByNumber(_ context.Context, number, projectID int64)
 	return Item{}, ErrNotFound
 }
 
+func (m *memoryRepo) UserCanResolvePRURL(_ context.Context, user *User, prURL string) (bool, error) {
+	if user == nil || user.Disabled || !validPRURL(prURL) {
+		return false, nil
+	}
+	for _, card := range m.cards {
+		if !m.living(card) {
+			continue
+		}
+		linked := false
+		for _, u := range card.PRURLs {
+			if u == prURL {
+				linked = true
+				break
+			}
+		}
+		if !linked {
+			continue
+		}
+		if CanView(aclStateFromItem(card), user) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (m *memoryRepo) GetDeletedItem(_ context.Context, id, projectID int64) (Item, error) {
 	c, ok := m.cards[id]
 	if !ok || m.living(c) || m.cardProjectID(c) != projectID {

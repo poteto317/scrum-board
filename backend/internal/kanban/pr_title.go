@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	prTitleAPITimeout    = 2 * time.Second
-	prTitleCacheTTL      = 10 * time.Minute
-	prTitleMaxConcurrent = 8
+	prTitleAPITimeout      = 2 * time.Second
+	prTitleCacheTTL        = 10 * time.Minute
+	prTitleCacheTTLFailure = time.Minute
+	prTitleCacheMaxEntries = 512
+	prTitleMaxConcurrent   = 8
 	prTitleUserAgent     = "scrum-board-kanban"
 	githubPullAPIBase    = "https://api.github.com/repos/"
 	// Shared cap: POST /api/pr-titles body size and attachPRTitles enrichment.
@@ -111,12 +113,33 @@ func (r *PRTitleResolver) Resolve(ctx context.Context, prURL string) string {
 	r.mu.Unlock()
 
 	label, cachedOK := r.fetch(ctx, prURL, fallback)
+	ttl := prTitleCacheTTLFailure
 	if cachedOK {
-		r.mu.Lock()
-		r.cache[prURL] = cacheTitleEntry{label: label, expiry: now.Add(prTitleCacheTTL)}
-		r.mu.Unlock()
+		ttl = prTitleCacheTTL
 	}
+	r.putCache(prURL, label, ttl, now)
 	return label
+}
+
+func (r *PRTitleResolver) putCache(prURL, label string, ttl time.Duration, now time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.evictExpiredLocked(now)
+	for len(r.cache) >= prTitleCacheMaxEntries {
+		for k := range r.cache {
+			delete(r.cache, k)
+			break
+		}
+	}
+	r.cache[prURL] = cacheTitleEntry{label: label, expiry: now.Add(ttl)}
+}
+
+func (r *PRTitleResolver) evictExpiredLocked(now time.Time) {
+	for k, e := range r.cache {
+		if !now.Before(e.expiry) {
+			delete(r.cache, k)
+		}
+	}
 }
 
 // fetch returns (label, cacheOK). cacheOK is true only for a successful GitHub title.
