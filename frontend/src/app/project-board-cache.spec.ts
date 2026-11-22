@@ -274,4 +274,25 @@ describe('ProjectBoardCache', () => {
     expect(cache.getBoard(2)?.map((i) => i.id)).toEqual([1]);
     expect(cache.revision()).toBe(before);
   });
+
+  it('clear drops board and backlog snapshots', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    cache.putBacklog(2, [item(2, 2)]);
+    cache.clear();
+    expect(cache.getBoard(2)).toBeUndefined();
+    expect(cache.getBacklog(2)).toBeUndefined();
+  });
+
+  it('clear prevents a late prefetch response from repopulating', () => {
+    const cache = new ProjectBoardCache();
+    const held = new Subject<{ items: Item[]; columns: Column[] }>();
+    const board = vi.fn(() => held.asObservable());
+    const api = { board } as unknown as Api;
+    cache.prefetchBoard(api, 2);
+    cache.clear();
+    held.next({ items: [item(9, 2)], columns: cols });
+    held.complete();
+    expect(cache.getBoard(2)).toBeUndefined();
+  });
 });

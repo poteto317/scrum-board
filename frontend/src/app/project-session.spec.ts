@@ -368,4 +368,20 @@ describe('ProjectSession', () => {
     expect(nextCount).toBe(0);
     expect(session.mutating()).toBe(false);
   });
+
+  it('clearSubjectState resets project workspace signals', () => {
+    session.projects.set([main, next]);
+    session.activeId.set(2);
+    session.bootstrapped.set(true);
+    session.switching.set(true);
+    session.mutating.set(true);
+    session.error.set('x');
+    session.clearSubjectState();
+    expect(session.projects()).toEqual([]);
+    expect(session.activeId()).toBeNull();
+    expect(session.bootstrapped()).toBe(false);
+    expect(session.switching()).toBe(false);
+    expect(session.mutating()).toBe(false);
+    expect(session.error()).toBe('');
+  });
 });
