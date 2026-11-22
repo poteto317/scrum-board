@@ -275,6 +275,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
       - basicAuth: []
@@ -320,6 +326,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
       - basicAuth: []
@@ -344,6 +356,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
           content:
             application/json:
               schema:
@@ -380,6 +398,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       parameters:
       - name: id
         in: path
@@ -401,6 +425,18 @@ paths:
       responses:
         '204':
           description: 削除成功（本文なし）
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: 対象なし
           content:
