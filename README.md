@@ -32,7 +32,7 @@ docker compose up -d --build
 
 **パスワードについて:** `.env.example` の `DB_PASSWORD`（初期値 `scrum_dev`）と `MYSQL_ROOT_PASSWORD`（初期値 `root_dev_only`）、および初期 admin（`AUTH_USER` / `ADMIN_INITIAL_PASSWORD`、既定 `admin` / `local_dev_admin`）はローカル Docker 専用です。共有サーバーやインターネットへ出す環境では必ず別の強いパスワードへ変更し、開発用の値をそのまま使わないでください。空の DB では API 起動時に admin をシードします（`ADMIN_INITIAL_PASSWORD` は 8 文字以上。`AUTH_PASSWORD` を使う場合は必ず別値）。
 
-**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。空の DB ではログイン名がシード時の `AUTH_USER`（既定 `admin`）、初期パスワードが `ADMIN_INITIAL_PASSWORD` です（アプリ内で変更したあとは users 行のパスワードが正）。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic（`Sec-Fetch-Site` ヘッダ無しの非ブラウザ: curl・エージェント等）のどちらかで通ります。ブラウザは Basic を無視し Cookie セッションのみです。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番ゲートとして残ります（アプリ Basic とは別層）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
+**認証について:** アプリは Cookie セッションログイン（`POST /api/auth/login`）がブラウザ本線です。空の DB ではログイン名がシード時の `AUTH_USER`（既定 `admin`）、初期パスワードが `ADMIN_INITIAL_PASSWORD` です（アプリ内で変更したあとは users 行のパスワードが正）。一般 API は Cookie `sb_session` **または** users テーブルに対応する HTTP Basic（`Sec-Fetch-Site` ヘッダ無しの非ブラウザ: curl・エージェント等）のどちらかで通ります。ブラウザは Basic を無視し Cookie セッションのみです。セッション免除／任意の一覧と各 operation の要否は [OpenAPI](docs/openapi.yaml)（実装は `auth_middleware.go`）を正とします。nginx Basic は本番の **UI** ゲートとして残ります（`/api/` はアプリセッション／アプリ Basic のみ。スマホの XHR が Basic を付けないため）。Composeは各ポートを `127.0.0.1` にだけ公開します。公開ネットワークやクラウドへそのままデプロイしないでください。
 
 - アプリ: http://localhost:4200
 - Go API: http://localhost:8080/api/board
@@ -445,17 +445,18 @@ gcloud run services describe scrum-board \
 ### 4. 動作確認
 
 ```sh
-# nginx Basic（AUTH_*）のみ。アプリ Cookie が無いので 401（期待どおり）
-curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" "$SERVICE_URL/api/board" | head
+# UI は nginx Basic 必須（AUTH_*）。API はアプリ認証のみ（Cookie または users のアプリ Basic）
+curl -sS -o /dev/null -w '%{http_code}\n' "$SERVICE_URL/"   # 401（nginx）
+curl -sS -o /dev/null -w '%{http_code}\n' "$SERVICE_URL/api/board"  # 401（アプリ JSON）
 
-# nginx Basic + アプリログイン Cookie（初期シード時は ADMIN_INITIAL_PASSWORD。変更後は admin の現在のパスワード）
-# パスワードは argv に出さず stdin で渡す
-curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -c /tmp/sb.ck -b /tmp/sb.ck \
+# アプリログイン Cookie（初期シード時は ADMIN_INITIAL_PASSWORD。変更後は admin の現在のパスワード）
+# パスワードは argv に出さず stdin で渡す。UI 用 Basic は API には不要。
+curl -sS -c /tmp/sb.ck -b /tmp/sb.ck \
   -H 'Content-Type: application/json' \
   --data-binary @- "$SERVICE_URL/api/auth/login" <<EOF
 {"loginName":"$AUTH_USER","password":"$ADMIN_INITIAL_PASSWORD"}
 EOF
-curl -sS -u "$AUTH_USER:$AUTH_PASSWORD" -b /tmp/sb.ck "$SERVICE_URL/api/board" | head
+curl -sS -b /tmp/sb.ck "$SERVICE_URL/api/board" | head
 
 # ヘルスチェックは認証なしで 200（nginx の /health。Cloud Run は /healthz を予約するため使わない）
 curl -sS -o /dev/null -w '%{http_code}\n' "$SERVICE_URL/health"
@@ -463,7 +464,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' "$SERVICE_URL/health"
 
 `ADMIN_INITIAL_PASSWORD` は users が空の初回シードに使われます。`deploy-gcp.sh` は再デプロイでも同変数を require するため、キーは残し値をローテし、Secret Manager / IAM で閲覧を制限してください（アプリ側でパスワード変更後はシード値と一致しなくてよい）。
 
-スマホのブラウザーでも同じ URL を開き、nginx Basic のあとアプリにログインしてボードが表示されることを確認します（`*.run.app` の URL をブックマーク）。
+スマホのブラウザーでも同じ URL を開き、nginx Basic（UI）のあとアプリにログインしてボードが表示されることを確認します。API は Cookie のみで通ること（Basic を XHR に付けない Safari 等）も見る（`*.run.app` の URL をブックマーク）。
 
 ### 5. 停止・削除（コスト管理）
 

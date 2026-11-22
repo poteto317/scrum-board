@@ -21,7 +21,7 @@ The HTTP API is **not** open. Behavior depends on the layer:
 | App HTTP Basic | Non-browser clients (no `Sec-Fetch-Site`); credentials must match a row in `users` |
 | Roles | `admin` / `member` (and related checks in handlers) |
 | Item ACL | Per-item view/edit access where configured |
-| Production nginx Basic (`AUTH_USER` / `AUTH_PASSWORD`) | Edge gate on the Cloud Run image; **not** the same secret as the app admin password |
+| Production nginx Basic (`AUTH_USER` / `AUTH_PASSWORD`) | Edge gate on the **UI** (`location /`) in the Cloud Run image; `/api/` is app session / app Basic only (mobile browsers often omit `Authorization` on XHR). **Not** the same secret as the app admin password |
 
 `AUTH_USER` is also the login name for the empty-DB admin seed (Compose and Cloud Run). When `users` is empty, `AUTH_USER` and `ADMIN_INITIAL_PASSWORD` are required; when users already exist, seed is a no-op and those env vars may be omitted. **`ADMIN_INITIAL_PASSWORD` must differ from `AUTH_PASSWORD` when both are set** so shared edge Basic cannot log in as admin (L-1001).
 
