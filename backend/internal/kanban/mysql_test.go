@@ -2,10 +2,11 @@ package kanban
 
 import (
 	"database/sql"
-	"github.com/go-sql-driver/mysql"
 	"os"
 	"testing"
-	"time"
+
+	"github.com/go-sql-driver/mysql"
+	"scrumboard/internal/mysqlconfig"
 )
 
 // Only explicitly named disposable databases may be reset by this suite.
@@ -28,9 +29,8 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal("unexpected disposable database suffix")
 	}
 	cfg.DBName += suffix
-	cfg.ParseTime = true
+	mysqlconfig.ApplyStandardDriverFlags(cfg)
 	cfg.MultiStatements = true
-	cfg.Loc = time.UTC
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		t.Fatal(err)

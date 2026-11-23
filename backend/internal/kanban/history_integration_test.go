@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"scrumboard/internal/mysqlconfig"
 )
 
 func TestMySQLHistory(t *testing.T) {
@@ -288,7 +289,7 @@ func TestMySQLImportWorksWithInterpolatedParams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.ParseTime, cfg.Loc, cfg.InterpolateParams = true, time.UTC, true
+	mysqlconfig.ApplyStandardDriverFlags(cfg)
 	plain, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		t.Fatal(err)
