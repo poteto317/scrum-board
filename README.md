@@ -27,6 +27,7 @@ Docker Desktopを起動してから、このディレクトリで実行してく
 
 ```sh
 cp .env.example .env
+chmod 600 .env   # 手元の .env は所有者のみ読める権限を推奨
 docker compose up -d --build
 ```
 
@@ -262,6 +263,7 @@ KANBAN_TEST_DSN='scrum:scrum_dev@tcp(127.0.0.1:3308)/scrumboard_numbering_test?p
 既存DBの更新前バックアップ例（SQLファイルはGit除外の `backups/` に保存）:
 
 ```sh
+umask 077
 mkdir -p backups
 docker compose stop api
 docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --default-character-set=utf8mb4 -uroot --single-transaction --databases "$MYSQL_DATABASE"' > "backups/scrumboard-$(date +%Y%m%d-%H%M%S).sql"
@@ -311,6 +313,7 @@ docker compose start api
 API を止めてから、既存 README のバックアップ例と同様に `mysqldump` します（`/docker-entrypoint-initdb.d` の再実行は不要です）。
 
 ```sh
+umask 077
 mkdir -p backups
 docker compose stop api
 docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --default-character-set=utf8mb4 -uroot --single-transaction --databases "$MYSQL_DATABASE"' > "backups/scrumboard-cloud-$(date +%Y%m%d-%H%M%S).sql"
@@ -352,7 +355,7 @@ go run ./cmd/rewrite-origins
 ### 前提
 
 - [Google Cloud SDK（`gcloud`）](https://cloud.google.com/sdk/docs/install) が入り、`gcloud auth login` 済み
-- 課金が有効な GCP プロジェクト（例: `daily-routine-app-8a832`。`GCP_PROJECT` で上書き可）
+- 課金が有効な GCP プロジェクト（`GCP_PROJECT` に自分のプロジェクト ID を必ず指定。スクリプトに本番既定は無い）
 - ローカルに Docker（イメージのビルド・push 用）
 
 ### 1. API の有効化
@@ -360,7 +363,7 @@ go run ./cmd/rewrite-origins
 プロジェクトで次を有効にします（初回のみ数分かかることがあります）。
 
 ```sh
-export GCP_PROJECT=daily-routine-app-8a832   # 任意のプロジェクトへ変更可
+export GCP_PROJECT=YOUR_GCP_PROJECT_ID   # 必須。自分のプロジェクト ID に置き換える
 gcloud services enable \
   run.googleapis.com \
   sqladmin.googleapis.com \
@@ -396,12 +399,12 @@ gcloud sql users create scrum \
 
 ### 3. Artifact Registry とイメージのビルド・デプロイ
 
-リポジトリルートで `scripts/deploy-gcp.sh` を使います。必須環境変数が欠けると **即終了** します（値の一覧は `.env.example` のコメント参照）。
+リポジトリルートで `scripts/deploy-gcp.sh` を使います。必須環境変数（少なくとも `GCP_PROJECT`・`CLOUDSQL_INSTANCE`・DB/AUTH/ADMIN/SCHEDULER 系）が欠けると **即終了** します。`.env.example` の GCP 行は例示のみで、スクリプトの本番既定ではありません。
 
 **秘密の正本は Secret Manager です。** `export` した `DB_PASSWORD` / `AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD` はスクリプトが SM に載せる一時入力であり、Cloud Run の平文環境変数には残りません（`--set-secrets` + 平文の `--remove-env-vars`）。3 パスワードは **再デプロイでも毎回 require**（シード後もキーを残し、値はローテ可）。
 
 ```sh
-export GCP_PROJECT=daily-routine-app-8a832
+export GCP_PROJECT=YOUR_GCP_PROJECT_ID   # 必須。自分のプロジェクト ID に置き換える
 export GCP_REGION=asia-northeast1
 export CLOUDSQL_INSTANCE="${GCP_PROJECT}:${GCP_REGION}:scrumboard-mysql"
 export DB_USER=scrum
@@ -425,7 +428,7 @@ gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 
 スクリプトは `secretmanager.googleapis.com` を有効化し、上記 3 秘密を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
 
-**イメージタグとハードニング:** `deploy/Dockerfile` のベースイメージは digest 固定、API プロセスはコンテナ内の非 root ユーザーで起動します。`deploy-gcp.sh` は **クリーンな git 作業ツリー** 上で `git rev-parse HEAD` を Artifact Registry のタグにし、Cloud Run デプロイもその **SHA タグ** を参照します（`:latest` は併記 push のみ）。デプロイ／nginx／ルート `.dockerignore`／Actions ピン を直す前後で `./scripts/check-deploy-image-hardening.sh`・`./scripts/check-nginx-tls-headers.sh`・`./scripts/check-root-dockerignore.sh`・`./scripts/check-workflow-action-pins.sh` を実行してください（`secret-scan` workflow の `deploy-guards` job でも同じ4本＋dockerignore/action-pins の `--selftest` を実行）。ロールバックは過去のコミット SHA タグを `--image` に指定して再デプロイします。
+**イメージタグとハードニング:** `deploy/Dockerfile` のベースイメージは digest 固定、API プロセスはコンテナ内の非 root ユーザーで起動します。`deploy-gcp.sh` は **クリーンな git 作業ツリー** 上で `git rev-parse HEAD` を Artifact Registry のタグにし、Cloud Run デプロイもその **SHA タグ** を参照します（`:latest` は併記 push のみ）。デプロイ／nginx／ルート `.dockerignore`／Actions ピン／stylesheet onload／GCP_PROJECT フォールバック を直す前後で `./scripts/check-deploy-image-hardening.sh`・`./scripts/check-nginx-tls-headers.sh`・`./scripts/check-root-dockerignore.sh`・`./scripts/check-workflow-action-pins.sh`・`./scripts/check-no-deferred-stylesheet-onload.sh`・`./scripts/check-no-gcp-project-fallback.sh` を実行してください（`secret-scan` workflow の `deploy-guards` job でも同セット＋該当 `--selftest` を実行）。ロールバックは過去のコミット SHA タグを `--image` に指定して再デプロイします。
 
 **`PUBLIC_ORIGIN`:** entrypoint は `http://` / `https://` 必須（`placeholder.invalid` は拒否）。未指定時は一時値 `https://example.com` で起動し、`deploy-gcp.sh` がデプロイ後にサービス URL へ自動更新します。リンクコピーと `rewrite-origins` の置換先はこの値と一致させます。
 
