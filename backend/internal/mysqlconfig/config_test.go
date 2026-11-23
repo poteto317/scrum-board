@@ -3,7 +3,23 @@ package mysqlconfig
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/go-sql-driver/mysql"
 )
+
+func assertStandardDriverFlags(t *testing.T, cfg *mysql.Config) {
+	t.Helper()
+	if !cfg.ParseTime || cfg.Loc != time.UTC || !cfg.InterpolateParams {
+		t.Fatalf("standard flags: ParseTime=%v Loc=%v InterpolateParams=%v", cfg.ParseTime, cfg.Loc, cfg.InterpolateParams)
+	}
+}
+
+func TestApplyStandardDriverFlags(t *testing.T) {
+	cfg := mysql.NewConfig()
+	ApplyStandardDriverFlags(cfg)
+	assertStandardDriverFlags(t, cfg)
+}
 
 func TestFromDBEnv_TCPDefaults(t *testing.T) {
 	cfg := FromDBEnv(func(string) string { return "" })
@@ -16,6 +32,7 @@ func TestFromDBEnv_TCPDefaults(t *testing.T) {
 	if cfg.User != "scrum" || cfg.Passwd != "scrum_dev" || cfg.DBName != "scrumboard" {
 		t.Fatalf("unexpected credentials/db: user=%q passwd=%q db=%q", cfg.User, cfg.Passwd, cfg.DBName)
 	}
+	assertStandardDriverFlags(t, cfg)
 	dsn := cfg.FormatDSN()
 	if !strings.Contains(dsn, "tcp(127.0.0.1:3307)") {
 		t.Fatalf("DSN %q should use tcp address", dsn)
@@ -36,6 +53,7 @@ func TestFromDBEnv_TCPFromEnv(t *testing.T) {
 	if cfg.User != "app" || cfg.Passwd != "secret" || cfg.DBName != "prod" {
 		t.Fatalf("unexpected overrides")
 	}
+	assertStandardDriverFlags(t, cfg)
 }
 
 func TestFromDBEnv_UnixSocket(t *testing.T) {
@@ -48,6 +66,7 @@ func TestFromDBEnv_UnixSocket(t *testing.T) {
 	if cfg.Addr != socket {
 		t.Fatalf("Addr = %q, want %q", cfg.Addr, socket)
 	}
+	assertStandardDriverFlags(t, cfg)
 	dsn := cfg.FormatDSN()
 	if !strings.Contains(dsn, "unix("+socket+")") {
 		t.Fatalf("DSN %q should use unix socket", dsn)
@@ -82,7 +101,7 @@ func TestFromDBEnv_EmptySocketUsesTCP(t *testing.T) {
 func TestForCLI_ImportDSN(t *testing.T) {
 	cfg, err := ForCLI(func(k string) string {
 		if k == "KANBAN_IMPORT_DSN" {
-			return "user:pass@tcp(127.0.0.1:3307)/scrumboard?parseTime=true"
+			return "user:pass@tcp(127.0.0.1:3307)/scrumboard?parseTime=true&interpolateParams=false"
 		}
 		return ""
 	})
@@ -91,6 +110,15 @@ func TestForCLI_ImportDSN(t *testing.T) {
 	}
 	if cfg.DBName != "scrumboard" || cfg.Addr != "127.0.0.1:3307" {
 		t.Fatalf("unexpected cfg: db=%q addr=%q", cfg.DBName, cfg.Addr)
+	}
+	assertStandardDriverFlags(t, cfg)
+}
+
+func TestForServer_AppliesStandardFlags(t *testing.T) {
+	cfg := ForServer(func(string) string { return "" })
+	assertStandardDriverFlags(t, cfg)
+	if cfg.Timeout == 0 {
+		t.Fatal("ForServer should set dial timeout")
 	}
 }
 
@@ -122,4 +150,5 @@ func TestForCLI_DBEnvUnix(t *testing.T) {
 	if cfg.Net != "unix" || cfg.Addr != "/cloudsql/proj:asia:db" || cfg.User != "app" {
 		t.Fatalf("unix cfg: net=%q addr=%q user=%q", cfg.Net, cfg.Addr, cfg.User)
 	}
+	assertStandardDriverFlags(t, cfg)
 }
