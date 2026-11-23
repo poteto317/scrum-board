@@ -37,6 +37,7 @@ func formatYMD(y int, m time.Month, d int) string {
 
 // materializeRecurringFire loads rule TZ, expands title/description for `at`, then validates.
 // Shared by MySQL and memory RunRecurring paths so expand+validate stay one responsibility.
+// LoadLocation may run again after shouldFire; kept here so callers need not pass loc.
 func materializeRecurringFire(rule RecurringRule, at time.Time) (title, description string, err error) {
 	loc, err := time.LoadLocation(strings.TrimSpace(rule.Timezone))
 	if err != nil {
@@ -45,7 +46,7 @@ func materializeRecurringFire(rule RecurringRule, at time.Time) (title, descript
 	title = expandRecurringText(rule.Title, at, loc)
 	description = expandRecurringText(rule.Description, at, loc)
 	if !validTitle(title) || !validDescription(description) {
-		return "", "", ErrRecurring
+		return "", "", fmt.Errorf("%w: expanded title/description", ErrRecurring)
 	}
 	return title, description, nil
 }

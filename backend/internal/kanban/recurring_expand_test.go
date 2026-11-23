@@ -55,7 +55,7 @@ func TestMaterializeRecurringFireRejectsOverlongTitle(t *testing.T) {
 	tpl := strings.Repeat("あ", 195) + "{{date}}"
 	rule := RecurringRule{Title: tpl, Description: "", Timezone: "UTC"}
 	_, _, err := materializeRecurringFire(rule, at)
-	if err != ErrRecurring {
+	if !errors.Is(err, ErrRecurring) {
 		t.Fatalf("want ErrRecurring got %v", err)
 	}
 }
