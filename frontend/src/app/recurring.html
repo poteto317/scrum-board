@@ -122,12 +122,24 @@
           <input id="recurring-name" [formControl]="form.controls.name" />
           <label for="recurring-title">起票タイトル</label>
           <input id="recurring-title" [formControl]="form.controls.title" />
+          <p class="field-hint recurring-date-hint">
+            日付プレースホルダ（起票時にルール TZ で展開）:
+            <code>{{ '{{weekStart}}' }}</code>（その週の日曜）・
+            <code>{{ '{{date}}' }}</code>（起票日）。例:
+            <code>週次レビュー {{ '{{weekStart}}' }}</code>
+          </p>
           <label for="recurring-description">起票説明</label>
           <textarea
             id="recurring-description"
             rows="3"
             [formControl]="form.controls.description"
           ></textarea>
+          <p class="field-hint recurring-date-hint">
+            説明でも
+            <code>{{ '{{weekStart}}' }}</code>・
+            <code>{{ '{{date}}' }}</code>
+            が使えます（run 時のみ・ルール TZ。未知の <code>{{ '{{...}}' }}</code> はそのまま残ります）。
+          </p>
           <label for="recurring-cron">cron（5フィールド）</label>
           <input
             id="recurring-cron"

@@ -173,6 +173,22 @@ describe('Recurring page', () => {
     f.destroy();
   });
 
+  it('shows weekStart and date placeholders in create editor hints', () => {
+    const { f } = setup({ listRecurringRules: vi.fn(() => of({ rules: [] })) });
+    const addBtn = [...f.nativeElement.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('ルールを追加'),
+    ) as HTMLButtonElement;
+    addBtn.click();
+    f.detectChanges();
+    const hints = [...f.nativeElement.querySelectorAll('.recurring-date-hint')]
+      .map((el) => el.textContent ?? '')
+      .join('\n');
+    expect(hints).toContain('{{weekStart}}');
+    expect(hints).toContain('{{date}}');
+    expect(hints.split('{{weekStart}}').length).toBeGreaterThan(2);
+    f.destroy();
+  });
+
   it('applies textLimit on name/title/description like board forms', () => {
     const { f } = setup({ listRecurringRules: vi.fn(() => of({ rules: [] })) });
     const form = f.componentInstance.form;
