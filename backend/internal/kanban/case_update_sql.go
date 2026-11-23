@@ -2,6 +2,20 @@ package kanban
 
 import "fmt"
 
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	b := make([]byte, 0, n*2-1)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = append(b, '?')
+	}
+	return string(b)
+}
+
 // buildIntCaseColumnUpdateSQL builds
 // UPDATE items SET <column>=CASE id WHEN ? THEN ? … END, updated_at=updated_at WHERE id IN (…)
 // ids and values must be the same length (one assign per id).
