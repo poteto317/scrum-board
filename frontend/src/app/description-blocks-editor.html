@@ -130,13 +130,13 @@
     <form method="dialog" class="modal" (submit)="$event.preventDefault()">
       <h2 id="attachment-delete-title">画像を削除しますか？</h2>
       <p>本文からもこの画像の参照が取り除かれます。</p>
-      <div class="modal-actions">
+      <div class="form-actions">
         <button type="button" class="secondary" [disabled]="imageBusy()" (click)="cancelDeleteImage()">
           キャンセル
         </button>
         <button
           type="button"
-          class="danger"
+          class="danger-button"
           [disabled]="imageBusy()"
           (click)="confirmDeleteImage($event)"
           (keydown)="confirmDeleteImage($event)"
