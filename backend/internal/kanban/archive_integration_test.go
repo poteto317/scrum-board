@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -70,6 +71,15 @@ func TestMySQLArchiveDoneItemsIsIdempotentAndRestoreResetsDoneTime(t *testing.T)
 	archivedItems, err := repo.ListArchivedItems(ctx, old.ProjectID)
 	if err != nil || len(archivedItems) != 1 || archivedItems[0].ID != old.ID {
 		t.Fatalf("ListArchivedItems() = %+v, %v; want only item %d", archivedItems, err, old.ID)
+	}
+	for _, id := range []int64{staleDoneAt.ID, unknownDoneAt.ID, young.ID} {
+		got, getErr := repo.GetItem(ctx, id)
+		if getErr != nil {
+			t.Fatalf("GetItem(%d): %v", id, getErr)
+		}
+		if got.ArchivedAt != nil {
+			t.Fatalf("item %d should not be archived (stale history / unknown / young)", id)
+		}
 	}
 	if archivedItems[0].DoneAt == nil || !archivedItems[0].DoneAt.Equal(oldDoneAt) || archivedItems[0].ArchivedAt == nil {
 		t.Fatalf("archived timestamps = doneAt %v, archivedAt %v", archivedItems[0].DoneAt, archivedItems[0].ArchivedAt)
@@ -172,4 +182,35 @@ func TestMySQLInitializeArchiveBackfillsFromDoneTransitionAndUpdatedAt(t *testin
 	if !persisted.UTC().Equal(fallbackAt) {
 		t.Fatalf("rerun changed done_at to %v; want %v", persisted.UTC(), fallbackAt)
 	}
+}
+
+func TestMySQLArchiveDoneItemsBatchesOver100(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	repo := MySQLRepository{DB: db}
+	cutoff := time.Now().UTC().Add(-archiveAfterDone - time.Minute)
+	const n = archiveBatchSize + 1
+	ids := make([]int64, 0, n)
+	for i := 0; i < n; i++ {
+		item, err := repo.CreateItem(ctx, ItemInput{ColumnID: 3, Title: "batch-" + strconv.Itoa(i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.ExecContext(ctx, "UPDATE items SET done_at=? WHERE id=?", cutoff, item.ID); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, item.ID)
+	}
+	archived, err := repo.ArchiveDoneItems(ctx)
+	if err != nil || archived != n {
+		t.Fatalf("ArchiveDoneItems() = %d, %v; want %d", archived, err, n)
+	}
+	listed, err := repo.ListArchivedItems(ctx, 1)
+	if err != nil || len(listed) != n {
+		t.Fatalf("ListArchivedItems len=%d err=%v; want %d", len(listed), err, n)
+	}
+	if archived, err = repo.ArchiveDoneItems(ctx); err != nil || archived != 0 {
+		t.Fatalf("second ArchiveDoneItems() = %d, %v; want 0", archived, err)
+	}
+	_ = ids
 }
