@@ -80,13 +80,31 @@ paths:
     get:
       summary: バックログ
       operationId: get_api_backlog
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+        description: 前回応答の ETag。一致すれば 304
       responses:
         '200':
           description: 成功
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: フィルタ後ボディの強い ETag
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonValue'
+        '304':
+          description: 未変更（本文なし）。認証要否は 200 と同じ
+          headers:
+            ETag:
+              schema:
+                type: string
       security:
       - cookieAuth: []
       - basicAuth: []
@@ -126,13 +144,31 @@ paths:
     get:
       summary: ボード（列＋アイテム）
       operationId: get_api_board
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+        description: 前回応答の ETag。一致すれば 304
       responses:
         '200':
           description: 成功
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: フィルタ後ボディの強い ETag
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JsonValue'
+        '304':
+          description: 未変更（本文なし）。認証要否は 200 と同じ
+          headers:
+            ETag:
+              schema:
+                type: string
       security:
       - cookieAuth: []
       - basicAuth: []
