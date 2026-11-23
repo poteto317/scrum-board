@@ -181,8 +181,13 @@ export class DescriptionBlocksEditor {
   }
 
   onKeydown(index: number, event: KeyboardEvent): void {
+    if (
+      (event.key === 'Enter' || event.key === 'Backspace') &&
+      (this.composing || event.isComposing || event.keyCode === 229)
+    ) {
+      return;
+    }
     if (event.key === 'Enter') {
-      if (event.isComposing || event.keyCode === 229) return;
       event.preventDefault();
       const el = event.target as HTMLTextAreaElement;
       const caret = el.selectionStart ?? 0;

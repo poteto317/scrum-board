@@ -139,6 +139,56 @@ describe('ItemSolution', () => {
     fixture.destroy();
   });
 
+  it('saves the final solution after IME trailing-block deletion without duplication', async () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, solution: 'a\nb' }));
+    const fixture = create();
+    await Promise.resolve();
+    fixture.detectChanges();
+    let blocks = [
+      ...fixture.nativeElement.querySelectorAll('textarea.block-input'),
+    ] as HTMLTextAreaElement[];
+    const trailing = blocks[1]!;
+    trailing.dispatchEvent(new Event('compositionstart', { bubbles: true }));
+    trailing.value = '';
+    trailing.dispatchEvent(new Event('input', { bubbles: true }));
+    trailing.setSelectionRange(0, 0);
+    const composingBackspace = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      bubbles: true,
+      cancelable: true,
+    });
+    trailing.dispatchEvent(composingBackspace);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(composingBackspace.defaultPrevented).toBe(false);
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    trailing.dispatchEvent(new Event('compositionend', { bubbles: true }));
+    fixture.detectChanges();
+    blocks = [...fixture.nativeElement.querySelectorAll('textarea.block-input')];
+    const committed = blocks[1]!;
+    committed.dispatchEvent(new Event('input', { bubbles: true }));
+    committed.setSelectionRange(0, 0);
+    committed.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+    );
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith(18, { solution: 'a' });
+    expect(fixture.componentInstance.control.value).toBe('a');
+    fixture.destroy();
+
+    api.itemByNumber.mockReturnValue(of({ ...card, solution: 'a' }));
+    const reloaded = create();
+    await Promise.resolve();
+    reloaded.detectChanges();
+    const reloadedBlocks = [
+      ...reloaded.nativeElement.querySelectorAll('textarea.block-input'),
+    ] as HTMLTextAreaElement[];
+    expect(reloadedBlocks.map((area) => area.value)).toEqual(['a']);
+  });
+
   it('keeps draft and shows error when save fails', async () => {
     api.updateItem.mockReturnValueOnce(throwError(() => new Error('fail')));
     const fixture = create();

@@ -315,6 +315,61 @@ describe('ItemDetail autosave', () => {
       expect(api.updateItem).toHaveBeenCalledWith(18, patch);
     },
   );
+  it('saves the final description after IME trailing-block deletion without duplication', async () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, description: 'a\nb' }));
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    let blocks = [
+      ...f.nativeElement.querySelectorAll('textarea.block-input'),
+    ] as HTMLTextAreaElement[];
+    const trailing = blocks[1]!;
+    trailing.dispatchEvent(new Event('compositionstart', { bubbles: true }));
+    trailing.value = '';
+    trailing.dispatchEvent(new Event('input', { bubbles: true }));
+    trailing.setSelectionRange(0, 0);
+    const composingBackspace = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      bubbles: true,
+      cancelable: true,
+    });
+    trailing.dispatchEvent(composingBackspace);
+    vi.advanceTimersByTime(2500);
+    expect(composingBackspace.defaultPrevented).toBe(false);
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    trailing.dispatchEvent(new Event('compositionend', { bubbles: true }));
+    f.detectChanges();
+    blocks = [...f.nativeElement.querySelectorAll('textarea.block-input')];
+    const committed = blocks[1]!;
+    committed.dispatchEvent(new Event('input', { bubbles: true }));
+    committed.setSelectionRange(0, 0);
+    committed.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+    );
+    f.detectChanges();
+    vi.advanceTimersByTime(600);
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith(18, { description: 'a' });
+    expect(f.componentInstance.form.controls.description.value).toBe('a');
+    expect(
+      [...f.nativeElement.querySelectorAll('textarea.block-input')].map(
+        (area) => (area as HTMLTextAreaElement).value,
+      ),
+    ).toEqual(['a']);
+    f.destroy();
+
+    api.itemByNumber.mockReturnValue(of({ ...card, description: 'a' }));
+    const reloaded = create();
+    await Promise.resolve();
+    reloaded.detectChanges();
+    expect(
+      [...reloaded.nativeElement.querySelectorAll('textarea.block-input')].map(
+        (area) => (area as HTMLTextAreaElement).value,
+      ),
+    ).toEqual(['a']);
+  });
   it.each(['title', 'description'] as const)('saves %s immediately on blur', (field) => {
     const [selector, value, patch] = typed[field];
     const f = create();

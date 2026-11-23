@@ -139,6 +139,109 @@ describe('DescriptionBlocksEditor', () => {
     expect(areas(f).length).toBe(1);
   });
 
+  it('does not split on Enter while the editor is composing', () => {
+    const { f, host, editor } = mount('a\nb');
+    const second = areas(f)[1]!;
+    second.dispatchEvent(new Event('compositionstart', { bubbles: true }));
+    second.setSelectionRange(0, 0);
+    const event = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    });
+    second.dispatchEvent(event);
+    f.detectChanges();
+    expect(event.defaultPrevented).toBe(false);
+    expect(editor.blocks()).toEqual(['a', 'b']);
+    expect(host.texts).toEqual([]);
+  });
+
+  it('keeps IME deletion intact until compositionend, then deletes the trailing block', () => {
+    const { f, host, editor } = mount('a\nb');
+    const second = areas(f)[1]!;
+    second.dispatchEvent(new Event('compositionstart', { bubbles: true }));
+    second.value = '';
+    second.dispatchEvent(new Event('input', { bubbles: true }));
+    second.setSelectionRange(0, 0);
+
+    const composingBackspace = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      bubbles: true,
+      cancelable: true,
+    });
+    second.dispatchEvent(composingBackspace);
+    f.detectChanges();
+    expect(composingBackspace.defaultPrevented).toBe(false);
+    expect(editor.blocks()).toEqual(['a', 'b']);
+    expect(host.texts).toEqual([]);
+
+    second.dispatchEvent(new Event('compositionend', { bubbles: true }));
+    f.detectChanges();
+    expect(editor.blocks()).toEqual(['a', '']);
+    expect(host.texts.at(-1)).toBe('a\n');
+
+    const committed = areas(f)[1]!;
+    committed.dispatchEvent(new Event('input', { bubbles: true }));
+    f.detectChanges();
+    expect(host.texts.at(-1)).toBe('a\n');
+
+    committed.setSelectionRange(0, 0);
+    committed.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+    );
+    f.detectChanges();
+    expect(editor.blocks()).toEqual(['a']);
+    expect(host.texts.at(-1)).toBe('a');
+
+    const reloaded = mount(host.texts.at(-1));
+    expect(reloaded.editor.blocks()).toEqual(['a']);
+    expect([...areas(reloaded.f)].map((area) => area.value)).toEqual(['a']);
+  });
+
+  it.each([
+    ['isComposing', { isComposing: true }],
+    ['keyCode 229', {}],
+  ])('does not merge on Backspace during IME %s', (_label, init) => {
+    const { f, host, editor } = mount('a\n');
+    const trailing = areas(f)[1]!;
+    trailing.setSelectionRange(0, 0);
+    const event = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    } as KeyboardEventInit);
+    if (_label === 'keyCode 229') {
+      Object.defineProperty(event, 'keyCode', { get: () => 229 });
+    }
+    trailing.dispatchEvent(event);
+    f.detectChanges();
+    expect(event.defaultPrevented).toBe(false);
+    expect(editor.blocks()).toEqual(['a', '']);
+    expect(host.texts).toEqual([]);
+  });
+
+  it('deletes consecutive trailing empty blocks one at a time', () => {
+    const { f, host, editor } = mount('a\n\n');
+    let trailing = areas(f)[2]!;
+    trailing.setSelectionRange(0, 0);
+    trailing.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+    );
+    f.detectChanges();
+    expect(editor.blocks()).toEqual(['a', '']);
+    expect(host.texts.at(-1)).toBe('a\n');
+
+    trailing = areas(f)[1]!;
+    trailing.setSelectionRange(0, 0);
+    trailing.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+    );
+    f.detectChanges();
+    expect(editor.blocks()).toEqual(['a']);
+    expect(host.texts.at(-1)).toBe('a');
+  });
+
   it('merges with previous on Backspace at start', () => {
     const { f, host } = mount('ab\ncd');
     f.detectChanges();
