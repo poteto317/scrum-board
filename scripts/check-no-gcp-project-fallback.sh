@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 TARGETS=(
   "$ROOT/scripts/deploy-gcp.sh"
+  "$ROOT/scripts/ensure-archive-scheduler.sh"
   "$ROOT/scripts/ensure-trash-purge-scheduler.sh"
   "$ROOT/scripts/ensure-recurring-run-scheduler.sh"
 )

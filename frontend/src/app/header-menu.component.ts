@@ -169,6 +169,11 @@ export class HeaderMenu implements OnInit {
           void this.router.navigate(['/trash']);
         });
         break;
+      case 'open_archive':
+        this.runAction(id, () => {
+          void this.router.navigate(['/archive']);
+        });
+        break;
       case 'open_users':
         this.runAction(id, () => {
           void this.router.navigate(['/users']);
@@ -204,6 +209,7 @@ export class HeaderMenu implements OnInit {
     if (
       id === 'open_projects' ||
       id === 'open_trash' ||
+      id === 'open_archive' ||
       id === 'open_users' ||
       id === 'open_recurring' ||
       id === 'open_settings'

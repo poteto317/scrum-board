@@ -17,10 +17,14 @@
       <h1>ソリューション</h1>
       <p class="solution-title">{{ item()!.title }}</p>
       <p class="field-note">実装の整理を書くページです。詳細の説明とは別です。</p>
+      @if (isArchived()) {
+        <p class="form-error" role="status">アーカイブ済みのため、閲覧のみです。</p>
+      }
     </header>
     <section class="solution-editor" aria-label="ソリューション本文">
       <app-description-blocks-editor
         [value]="control.value"
+        [disabled]="isArchived()"
         [lengthErrorMessage]="solutionLengthError"
         [itemNumber]="item()?.number ?? 0"
         [projectId]="item()?.projectId"

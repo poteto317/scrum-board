@@ -135,11 +135,41 @@ func TestSessionMiddlewareExemptAndRequired(t *testing.T) {
 	if w := requestScheduler(h, "POST", "/api/recurring/run", "{}"); w.Code != 200 {
 		t.Fatalf("recurring run scheduler=%d body=%s", w.Code, w.Body)
 	}
+	if w := requestAnon(h, "POST", "/api/archive/auto-archive", "{}"); w.Code != 403 {
+		t.Fatalf("archive auto-run anon=%d body=%s", w.Code, w.Body)
+	}
+	if w := requestScheduler(h, "POST", "/api/archive/auto-archive", "{}"); w.Code != 503 {
+		t.Fatalf("archive auto-run scheduler should pass auth and reach unavailable repository: %d body=%s", w.Code, w.Body)
+	}
+	if w := requestWithCookie(h, "POST", "/api/archive/auto-archive", "{}", HandlerTestSessionID); w.Code != 503 {
+		t.Fatalf("archive auto-run admin should pass auth and reach unavailable repository: %d body=%s", w.Code, w.Body)
+	}
 	if w := requestAnon(h, "GET", "/api/board", ""); w.Code != 401 {
 		t.Fatalf("board anon=%d", w.Code)
 	}
 	if w := request(h, "GET", "/api/board", ""); w.Code != 200 {
 		t.Fatalf("board auth=%d body=%s", w.Code, w.Body)
+	}
+}
+
+func TestArchiveAutoArchiveRejectsInvalidContentTypeAndOrigin(t *testing.T) {
+	h := NewHandler(fresh(), WithPublicOrigin("https://board.example"))
+	request := func(contentType, origin string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/api/archive/auto-archive", strings.NewReader("{}"))
+		r.Header.Set("Content-Type", contentType)
+		r.Header.Set(SchedulerTokenHeader, HandlerTestSchedulerToken)
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := request("text/plain", ""); w.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("archive auto-run with wrong Content-Type=%d body=%s", w.Code, w.Body)
+	}
+	if w := request("application/json", "https://attacker.example"); w.Code != http.StatusForbidden {
+		t.Fatalf("archive auto-run with wrong Origin=%d body=%s", w.Code, w.Body)
 	}
 }
 

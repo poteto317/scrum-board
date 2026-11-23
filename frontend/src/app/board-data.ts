@@ -47,6 +47,8 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
     closeReason: raw.closeReason ?? '',
     favorite: raw.favorite === true,
     dueAt: raw.dueAt ? raw.dueAt : null,
+    doneAt: raw.doneAt ?? null,
+    archivedAt: raw.archivedAt ?? null,
     viewAccess:
       raw.viewAccess === 'public' || raw.viewAccess === 'restricted' ? raw.viewAccess : 'open',
     editAccess: raw.editAccess === 'restricted' ? 'restricted' : 'open',

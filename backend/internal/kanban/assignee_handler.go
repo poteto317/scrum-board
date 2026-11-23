@@ -33,7 +33,7 @@ func (h handler) changeAssigneeByNumber(w http.ResponseWriter, r *http.Request) 
 		fail(w, err)
 		return
 	}
-	userPtr, ok := h.requireEdit(w, r, card)
+	userPtr, ok := h.requireActiveEdit(w, r, card)
 	if !ok {
 		return
 	}

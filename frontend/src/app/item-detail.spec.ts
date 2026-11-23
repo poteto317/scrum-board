@@ -75,6 +75,7 @@ describe('ItemDetail autosave', () => {
     listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
+    restoreArchivedItem: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
     deleteItem: ReturnType<typeof vi.fn>;
     listCommandTemplates: ReturnType<typeof vi.fn>;
@@ -126,6 +127,7 @@ describe('ItemDetail autosave', () => {
         }),
       ),
       itemByNumber: vi.fn(() => of(card)),
+      restoreArchivedItem: vi.fn(() => of({ ...card, archivedAt: null })),
       updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
       deleteItem: vi.fn(() => of(undefined)),
       listCommandTemplates: vi.fn(() => of({ templates: [] })), listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
@@ -163,6 +165,22 @@ describe('ItemDetail autosave', () => {
     await Promise.resolve();
     f.detectChanges();
     expect(f.nativeElement.querySelector('app-item-ai-chat')).toBeNull();
+  });
+  it('keeps archived details read-only and offers restore to editors', async () => {
+    api.itemByNumber.mockReturnValue(
+      of({ ...card, archivedAt: '2026-11-12T12:00:00.000Z', canEdit: true }),
+    );
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+
+    expect(f.componentInstance.isArchived()).toBe(true);
+    expect(f.componentInstance.canEdit()).toBe(false);
+    expect(f.componentInstance.canRestoreArchive()).toBe(true);
+    expect(f.nativeElement.textContent).toContain('詳細は閲覧のみです');
+    expect((f.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement).disabled).toBe(true);
+    expect(f.nativeElement.textContent).toContain('Doneへ戻す');
+    f.destroy();
   });
   it('clears AiChatContext when route number changes while item is null', async () => {
     const f = create();

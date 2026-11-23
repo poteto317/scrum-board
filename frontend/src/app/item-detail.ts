@@ -150,13 +150,18 @@ export class ItemDetail implements OnInit {
   readonly viewAccessLabel = viewAccessLabel;
   readonly item = this.autosave.item;
   readonly form = this.autosave.form;
+  readonly isArchived = computed(() => this.item()?.archivedAt != null);
   readonly canEdit = computed(() => {
     const card = this.item();
-    return !!card && canEditItem(card, this.auth.user());
+    return !!card && !card.archivedAt && canEditItem(card, this.auth.user());
   });
   readonly canManage = computed(() => {
     const card = this.item();
-    return !!card && canManageItem(card, this.auth.user());
+    return !!card && !card.archivedAt && canManageItem(card, this.auth.user());
+  });
+  readonly canRestoreArchive = computed(() => {
+    const card = this.item();
+    return !!card?.archivedAt && canEditItem(card, this.auth.user());
   });
   readonly authReady = computed(() => this.auth.status() !== 'unknown');
   /** L-463: /me 未確定 or 編集不可ならサイド操作も止める。 */
@@ -168,6 +173,8 @@ export class ItemDetail implements OnInit {
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
   readonly deleting = signal(false);
+  readonly archiveRestoreBusy = signal(false);
+  readonly archiveRestoreError = signal('');
   readonly projectSaving = signal(false);
   readonly projectMoveError = signal('');
   readonly error = signal('');
@@ -353,7 +360,7 @@ export class ItemDetail implements OnInit {
       goToSolution: () => this.navigateToSolution(),
       toggleFavorite: () => this.favorite.toggle(),
       favoriteLabel: () => favoriteMenuLabel(this.item()?.favorite),
-      favoriteDisabled: () => this.favorite.saving() || !this.item(),
+      favoriteDisabled: () => this.favorite.saving() || this.editLocked(),
     });
     this.destroyRef.onDestroy(() => this.itemMenuActions.unregister());
     this.usersSession.load();
@@ -459,6 +466,22 @@ export class ItemDetail implements OnInit {
   }
   load() {
     this.reload$.next();
+  }
+
+  restoreFromArchive() {
+    const card = this.item();
+    if (!card?.archivedAt || this.archiveRestoreBusy() || !this.canRestoreArchive()) return;
+    this.archiveRestoreBusy.set(true);
+    this.archiveRestoreError.set('');
+    this.api
+      .restoreArchivedItem(card.id, card.projectId)
+      .pipe(finalize(() => this.archiveRestoreBusy.set(false)))
+      .subscribe({
+        next: () => {
+          if (this.item()?.id === card.id) this.load();
+        },
+        error: (error) => this.archiveRestoreError.set(errorMessage(error)),
+      });
   }
 
   private loadCardForRoute(number: number, projectId: number) {

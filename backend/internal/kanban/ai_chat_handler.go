@@ -25,7 +25,7 @@ func logChatFailure(err error) {
 	slog.Error("ai chat failed", "kind", kind, "upstream_status", status)
 }
 
-func (h handler) aiChatParentItem(w http.ResponseWriter, r *http.Request) (Item, bool) {
+func (h handler) aiChatParentItem(w http.ResponseWriter, r *http.Request, needEdit bool) (Item, bool) {
 	number, ok := taskNumber(w, r)
 	if !ok {
 		return Item{}, false
@@ -40,14 +40,18 @@ func (h handler) aiChatParentItem(w http.ResponseWriter, r *http.Request) (Item,
 		fail(w, err)
 		return Item{}, false
 	}
-	if _, ok := h.requireEdit(w, r, card); !ok {
+	if needEdit {
+		if _, ok := h.requireActiveEdit(w, r, card); !ok {
+			return Item{}, false
+		}
+	} else if _, _, ok := h.requireView(w, r, card); !ok {
 		return Item{}, false
 	}
 	return card, true
 }
 
 func (h handler) listAIChat(w http.ResponseWriter, r *http.Request) {
-	card, ok := h.aiChatParentItem(w, r)
+	card, ok := h.aiChatParentItem(w, r, false)
 	if !ok {
 		return
 	}
@@ -60,7 +64,7 @@ func (h handler) listAIChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) clearAIChat(w http.ResponseWriter, r *http.Request) {
-	card, ok := h.aiChatParentItem(w, r)
+	card, ok := h.aiChatParentItem(w, r, true)
 	if !ok {
 		return
 	}
@@ -89,7 +93,7 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 		invalid(w, fmt.Sprintf("メッセージは1〜%d文字で、制御文字を含めず入力してください。", h.messageMax))
 		return
 	}
-	card, ok := h.aiChatParentItem(w, r)
+	card, ok := h.aiChatParentItem(w, r, true)
 	if !ok {
 		return
 	}

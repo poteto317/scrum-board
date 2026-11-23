@@ -1,6 +1,7 @@
 import { formatItemNumber } from './item-number';
 import {
   Component,
+  computed,
   DestroyRef,
   HostListener,
   inject,
@@ -73,6 +74,7 @@ export class ItemSolution implements OnInit {
   readonly saveError = signal('');
   readonly saving = signal(false);
   readonly item = signal<Item | null>(null);
+  readonly isArchived = computed(() => this.item()?.archivedAt != null);
   readonly routeNumber = signal(0);
   readonly control = new FormControl('', {
     nonNullable: true,
@@ -105,7 +107,7 @@ export class ItemSolution implements OnInit {
       goToSolution: () => false,
       toggleFavorite: () => this.favorite.toggle(),
       favoriteLabel: () => favoriteMenuLabel(this.item()?.favorite),
-      favoriteDisabled: () => this.favorite.saving() || !this.item(),
+      favoriteDisabled: () => this.favorite.saving() || !this.item() || this.isArchived(),
     });
     this.destroyRef.onDestroy(() => this.itemMenuActions.unregister());
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
@@ -127,6 +129,7 @@ export class ItemSolution implements OnInit {
           this.baseline = '';
           this.item.set(null);
           this.control.setValue('', { emitEvent: false });
+          this.control.enable({ emitEvent: false });
           const num = Number(params.get('number'));
           const queryProjectId = Number(query.get('project'));
           const projectId =
@@ -149,6 +152,12 @@ export class ItemSolution implements OnInit {
         this.item.set(next);
         this.baseline = next.solution;
         this.control.setValue(next.solution, { emitEvent: false });
+        if (next.archivedAt) {
+          this.control.disable({ emitEvent: false });
+          this.dirty = false;
+        } else {
+          this.control.enable({ emitEvent: false });
+        }
         this.dirty = false;
         this.loading.set(false);
       });
@@ -171,6 +180,7 @@ export class ItemSolution implements OnInit {
         !this.loading() &&
         this.routeNumber() > 0 &&
         !this.dirty &&
+        !this.isArchived() &&
         !this.saving() &&
         !this.favorite.saving() &&
         !this.composing &&
@@ -267,7 +277,7 @@ export class ItemSolution implements OnInit {
 
   private persist(value: string): Observable<Item | null> {
     const card = this.item();
-    if (!card) {
+    if (!card || card.archivedAt) {
       this.resolveFlush(false);
       return of(null);
     }

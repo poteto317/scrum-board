@@ -269,7 +269,36 @@ func (r MySQLRepository) ReplaceSprintItems(ctx context.Context, id int64, itemI
 	if err != nil {
 		return Sprint{}, err
 	}
+	previousSet := make(map[int64]struct{}, len(prevOrder))
+	for _, itemID := range prevOrder {
+		previousSet[itemID] = struct{}{}
+	}
+	finalSet := make(map[int64]struct{}, len(final))
+	for _, itemID := range final {
+		finalSet[itemID] = struct{}{}
+	}
+	for _, itemID := range prevOrder {
+		archived, checkErr := sprintItemArchived(ctx, tx, itemID)
+		if checkErr != nil {
+			return Sprint{}, checkErr
+		}
+		if archived {
+			if _, included := finalSet[itemID]; !included {
+				final = append(final, itemID)
+				finalSet[itemID] = struct{}{}
+			}
+		}
+	}
 	for _, iid := range final {
+		if _, wasMember := previousSet[iid]; wasMember {
+			archived, checkErr := sprintItemArchived(ctx, tx, iid)
+			if checkErr != nil {
+				return Sprint{}, checkErr
+			}
+			if archived {
+				continue
+			}
+		}
 		if err = assertSprintMemberEligible(ctx, tx, s, iid); err != nil {
 			return Sprint{}, err
 		}
@@ -378,13 +407,16 @@ func deleteSprintItemsForItemTx(ctx context.Context, tx *sql.Tx, itemID int64) e
 
 func assertSprintMemberEligible(ctx context.Context, tx *sql.Tx, sprint Sprint, itemID int64) error {
 	var projectID int64
-	var deletedAt sql.NullTime
-	err := tx.QueryRowContext(ctx, `SELECT project_id, deleted_at FROM items WHERE id=? FOR UPDATE`, itemID).Scan(&projectID, &deletedAt)
+	var deletedAt, archivedAt sql.NullTime
+	err := tx.QueryRowContext(ctx, `SELECT project_id, deleted_at, archived_at FROM items WHERE id=? FOR UPDATE`, itemID).Scan(&projectID, &deletedAt, &archivedAt)
 	if err != nil {
 		return dbError(err)
 	}
 	if deletedAt.Valid {
 		return ErrNotFound
+	}
+	if archivedAt.Valid {
+		return ErrSprintConflict
 	}
 	if projectID != sprint.ProjectID {
 		return ErrSprint
@@ -402,6 +434,14 @@ LIMIT 1`, itemID, SprintStatusPlanned, SprintStatusActive, sprint.ID).Scan(&othe
 		return err
 	}
 	return nil
+}
+
+func sprintItemArchived(ctx context.Context, tx *sql.Tx, itemID int64) (bool, error) {
+	var archivedAt sql.NullTime
+	if err := tx.QueryRowContext(ctx, "SELECT archived_at FROM items WHERE id=? FOR UPDATE", itemID).Scan(&archivedAt); err != nil {
+		return false, dbError(err)
+	}
+	return archivedAt.Valid, nil
 }
 
 type sprintQuerier interface {

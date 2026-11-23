@@ -22,6 +22,7 @@ var (
 	boardBacklogHeaderMenuIDs = map[string]struct{}{
 		"open_projects":  {},
 		"open_trash":     {},
+		"open_archive":   {},
 		"open_users":     {},
 		"open_recurring": {},
 		"open_settings":  {},
@@ -29,6 +30,7 @@ var (
 	itemDetailHeaderMenuIDs = map[string]struct{}{
 		"open_projects":  {},
 		"open_trash":     {},
+		"open_archive":   {},
 		"open_users":     {},
 		"open_recurring": {},
 		"open_settings":  {},

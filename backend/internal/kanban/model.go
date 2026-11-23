@@ -68,6 +68,8 @@ type Item struct {
 	CloseReason     string        `json:"closeReason"`
 	Favorite        bool          `json:"favorite"`
 	DueAt           *time.Time    `json:"dueAt"`
+	DoneAt          *time.Time    `json:"doneAt,omitempty"`
+	ArchivedAt      *time.Time    `json:"archivedAt,omitempty"`
 	DeletedAt       *time.Time    `json:"deletedAt,omitempty"`
 	ViewAccess      string        `json:"viewAccess"`
 	EditAccess      string        `json:"editAccess"`
@@ -76,9 +78,9 @@ type Item struct {
 	ViewerCanEdit   bool `json:"canEdit,omitempty"`
 	ViewerCanManage bool `json:"canManage,omitempty"`
 	// ACL is omitempty: only set for manage-capable responses.
-	ACL             *ItemACL      `json:"acl,omitempty"`
-	CreatedAt       time.Time     `json:"createdAt"`
-	UpdatedAt       time.Time     `json:"updatedAt"`
+	ACL       *ItemACL  `json:"acl,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // TrashItem is one soft-deleted card for the trash list API.

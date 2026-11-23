@@ -97,7 +97,15 @@ func (r MySQLRepository) ListComments(ctx context.Context, itemID int64) ([]Comm
 }
 
 func (r MySQLRepository) CreateComment(ctx context.Context, itemID int64, author, body string, createdByUserID int64) (Comment, error) {
-	res, err := r.DB.ExecContext(ctx, `INSERT INTO item_comments(item_id, author, body, created_by_user_id) VALUES (?,?,?,?)`,
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Comment{}, err
+	}
+	defer tx.Rollback()
+	if err = ensureActiveItemForWrite(ctx, tx, itemID); err != nil {
+		return Comment{}, err
+	}
+	res, err := tx.ExecContext(ctx, `INSERT INTO item_comments(item_id, author, body, created_by_user_id) VALUES (?,?,?,?)`,
 		itemID, author, body, createdByUserID)
 	if err != nil {
 		return Comment{}, fmt.Errorf("create comment: %w", err)
@@ -106,7 +114,14 @@ func (r MySQLRepository) CreateComment(ctx context.Context, itemID int64, author
 	if err != nil {
 		return Comment{}, err
 	}
-	return r.getComment(ctx, itemID, id)
+	comment, err := getCommentFrom(ctx, tx, itemID, id)
+	if err != nil {
+		return Comment{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Comment{}, err
+	}
+	return comment, nil
 }
 
 func (r MySQLRepository) GetComment(ctx context.Context, itemID, commentID int64) (Comment, error) {
@@ -114,7 +129,15 @@ func (r MySQLRepository) GetComment(ctx context.Context, itemID, commentID int64
 }
 
 func (r MySQLRepository) UpdateComment(ctx context.Context, itemID, commentID int64, body *string) (Comment, error) {
-	cur, err := r.getComment(ctx, itemID, commentID)
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Comment{}, err
+	}
+	defer tx.Rollback()
+	if err = ensureActiveItemForWrite(ctx, tx, itemID); err != nil {
+		return Comment{}, err
+	}
+	cur, err := getCommentFrom(ctx, tx, itemID, commentID)
 	if err != nil {
 		return Comment{}, err
 	}
@@ -122,16 +145,38 @@ func (r MySQLRepository) UpdateComment(ctx context.Context, itemID, commentID in
 	if body != nil {
 		nextBody = *body
 	}
-	_, err = r.DB.ExecContext(ctx, `UPDATE item_comments SET body=? WHERE id=? AND item_id=?`,
+	result, err := tx.ExecContext(ctx, `UPDATE item_comments SET body=? WHERE id=? AND item_id=?`,
 		nextBody, commentID, itemID)
 	if err != nil {
 		return Comment{}, fmt.Errorf("update comment: %w", err)
 	}
-	return r.getComment(ctx, itemID, commentID)
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return Comment{}, err
+	}
+	if changed == 0 {
+		return Comment{}, ErrNotFound
+	}
+	next, err := getCommentFrom(ctx, tx, itemID, commentID)
+	if err != nil {
+		return Comment{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Comment{}, err
+	}
+	return next, nil
 }
 
 func (r MySQLRepository) DeleteComment(ctx context.Context, itemID, commentID int64) error {
-	res, err := r.DB.ExecContext(ctx, `DELETE FROM item_comments WHERE id=? AND item_id=?`, commentID, itemID)
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = ensureActiveItemForWrite(ctx, tx, itemID); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM item_comments WHERE id=? AND item_id=?`, commentID, itemID)
 	if err != nil {
 		return fmt.Errorf("delete comment: %w", err)
 	}
@@ -142,11 +187,17 @@ func (r MySQLRepository) DeleteComment(ctx context.Context, itemID, commentID in
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (r MySQLRepository) getComment(ctx context.Context, itemID, commentID int64) (Comment, error) {
-	row := r.DB.QueryRowContext(ctx, `SELECT id, item_id, author, body, created_by_user_id, created_at, updated_at
+	return getCommentFrom(ctx, r.DB, itemID, commentID)
+}
+
+func getCommentFrom(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, itemID, commentID int64) (Comment, error) {
+	row := q.QueryRowContext(ctx, `SELECT id, item_id, author, body, created_by_user_id, created_at, updated_at
  FROM item_comments WHERE id=? AND item_id=?`, commentID, itemID)
 	c, err := scanComment(row)
 	if err == sql.ErrNoRows {

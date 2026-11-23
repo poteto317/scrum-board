@@ -303,5 +303,7 @@ echo "  curl -sS -u '${AUTH_USER}:***' -b /tmp/sb.ck '${SERVICE_URL}/api/board' 
 echo ""
 echo "Trash purge Scheduler (daily POST /api/trash/purge):"
 echo "  SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-trash-purge-scheduler.sh"
+echo "Archive Scheduler (daily 03:30 Asia/Tokyo POST /api/archive/auto-archive):"
+echo "  SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-archive-scheduler.sh"
 echo "Recurring run Scheduler (every 15m POST /api/recurring/run):"
 echo "  SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=${PUBLIC_ORIGIN} ./scripts/ensure-recurring-run-scheduler.sh"

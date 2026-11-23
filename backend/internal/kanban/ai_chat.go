@@ -32,9 +32,9 @@ type AIMessage struct {
 
 // AIUsage is the workspace-wide cumulative AI usage counters.
 type AIUsage struct {
-	RequestCount int64  `json:"requestCount"`
-	InputTokens  int64  `json:"inputTokens"`
-	OutputTokens int64  `json:"outputTokens"`
+	RequestCount int64 `json:"requestCount"`
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
 	// LimitTokens is the optional workspace token budget (input+output). nil = unlimited.
 	LimitTokens *int64 `json:"limitTokens,omitempty"`
 }
@@ -130,6 +130,9 @@ func (r MySQLRepository) AppendAITurn(ctx context.Context, itemID int64, userBod
 		return err
 	}
 	defer tx.Rollback()
+	if err = ensureActiveItemForWrite(ctx, tx, itemID); err != nil {
+		return err
+	}
 
 	var count int
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM item_ai_messages WHERE item_id=?`, itemID).Scan(&count); err != nil {
@@ -159,7 +162,18 @@ func (r MySQLRepository) AppendAITurn(ctx context.Context, itemID int64, userBod
 }
 
 func (r MySQLRepository) ClearAIMessages(ctx context.Context, itemID int64) error {
-	_, err := r.DB.ExecContext(ctx, `DELETE FROM item_ai_messages WHERE item_id=?`, itemID)
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = ensureActiveItemForWrite(ctx, tx, itemID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM item_ai_messages WHERE item_id=?`, itemID); err != nil {
+		return fmt.Errorf("clear ai messages: %w", err)
+	}
+	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("clear ai messages: %w", err)
 	}

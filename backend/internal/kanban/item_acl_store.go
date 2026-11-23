@@ -72,7 +72,7 @@ func (r MySQLRepository) ReplaceItemACL(ctx context.Context, id int64, viewAcces
 
 	viewAccess = NormalizeViewAccess(viewAccess)
 	editAccess = NormalizeEditAccess(editAccess)
-	res, err := tx.ExecContext(ctx, `UPDATE items SET view_access=?, edit_access=? WHERE id=? AND deleted_at IS NULL`,
+	res, err := tx.ExecContext(ctx, `UPDATE items SET view_access=?, edit_access=? WHERE id=? AND deleted_at IS NULL AND archived_at IS NULL`,
 		viewAccess, editAccess, id)
 	if err != nil {
 		return Item{}, err

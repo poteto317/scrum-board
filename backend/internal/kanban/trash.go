@@ -67,8 +67,21 @@ SELECT id, project_id, column_id FROM items
 		if err != nil {
 			return Item{}, err
 		}
-		if _, err = tx.ExecContext(ctx, "UPDATE items SET column_id=? WHERE id=?", todoID, id); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE items SET column_id=?,done_at=NULL WHERE id=?", todoID, id); err != nil {
 			return Item{}, err
+		}
+	} else {
+		columnDone := false
+		for _, column := range cols {
+			if column.ID == columnID {
+				columnDone = column.Name == "Done"
+				break
+			}
+		}
+		if !columnDone {
+			if _, err = tx.ExecContext(ctx, "UPDATE items SET done_at=NULL WHERE id=?", id); err != nil {
+				return Item{}, err
+			}
 		}
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE items SET deleted_at=NULL WHERE id=?", id); err != nil {

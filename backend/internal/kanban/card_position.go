@@ -125,7 +125,7 @@ func lockExistingColumn(ctx context.Context, tx *sql.Tx, columnID int64) error {
 }
 
 func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID, projectID int64) (int, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT id,position FROM items WHERE column_id=? AND project_id=? ORDER BY id FOR UPDATE", columnID, projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT id,position FROM items WHERE column_id=? AND project_id=? AND deleted_at IS NULL AND archived_at IS NULL ORDER BY id FOR UPDATE", columnID, projectID)
 	if err != nil {
 		return 0, err
 	}
@@ -151,7 +151,7 @@ func nextCardPosition(ctx context.Context, tx *sql.Tx, columnID, projectID int64
 // Empty column: 0. Non-empty: max(offset_y)+freePlacementStepY.
 func nextFreeOffsetY(ctx context.Context, tx *sql.Tx, columnID, projectID int64) (int, error) {
 	var max sql.NullInt64
-	if err := tx.QueryRowContext(ctx, "SELECT MAX(offset_y) FROM items WHERE column_id=? AND project_id=?", columnID, projectID).Scan(&max); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT MAX(offset_y) FROM items WHERE column_id=? AND project_id=? AND deleted_at IS NULL AND archived_at IS NULL", columnID, projectID).Scan(&max); err != nil {
 		return 0, err
 	}
 	if !max.Valid {
@@ -179,7 +179,7 @@ func reassignPositionsByOffsetY(ctx context.Context, tx *sql.Tx) error {
 	for _, project := range projects {
 		for _, col := range cols {
 			rows, err := tx.QueryContext(ctx, `
-SELECT id FROM items WHERE column_id=? AND project_id=?
+SELECT id FROM items WHERE column_id=? AND project_id=? AND deleted_at IS NULL AND archived_at IS NULL
  ORDER BY offset_y, position, id FOR UPDATE`, col.ID, project.ID)
 			if err != nil {
 				return err
@@ -209,7 +209,7 @@ SELECT id FROM items WHERE column_id=? AND project_id=?
 }
 
 func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID, projectID int64) error {
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE column_id=? AND project_id=? AND deleted_at IS NULL ORDER BY position,id FOR UPDATE", columnID, projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE column_id=? AND project_id=? AND deleted_at IS NULL AND archived_at IS NULL ORDER BY position,id FOR UPDATE", columnID, projectID)
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID, projectID
 }
 
 func listOrderedCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.position,c.id", projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.position,c.id", projectID)
 	if err != nil {
 		return nil, err
 	}
