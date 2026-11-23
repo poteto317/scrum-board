@@ -414,6 +414,8 @@ describe('DescriptionBlocksEditor', () => {
     f.componentInstance.requestDeleteImage(4);
     f.detectChanges();
     expect(f.componentInstance.confirmDeleteId()).toBe(4);
+    expect(f.nativeElement.querySelector('.form-actions')).not.toBeNull();
+    expect(f.nativeElement.querySelector('.danger-button')).not.toBeNull();
     expect(apiStub.deleteAttachment).not.toHaveBeenCalled();
     f.componentInstance.confirmDeleteImage();
     f.detectChanges();
