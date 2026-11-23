@@ -42,15 +42,21 @@ type scanner interface{ Scan(...any) error }
 
 func scanCard(s scanner) (Item, error) {
 	var c Item
-	var dueAt sql.NullTime
+	var dueAt, doneAt, archivedAt sql.NullTime
 	var createdBy sql.NullInt64
-	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.ProjectID, &c.Title, &c.Description, &c.Solution, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &c.Favorite, &dueAt, &c.ViewAccess, &c.EditAccess, &createdBy, &c.CreatedAt, &c.UpdatedAt)
+	err := s.Scan(&c.ID, &c.Number, &c.ColumnID, &c.ProjectID, &c.Title, &c.Description, &c.Solution, &c.Position, &c.OffsetY, &c.BacklogPosition, &c.Assignee, &c.CloseReason, &c.Favorite, &dueAt, &doneAt, &archivedAt, &c.ViewAccess, &c.EditAccess, &createdBy, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, dbError(err)
 	}
 	if dueAt.Valid {
 		u := TruncateDueAtMinute(dueAt.Time)
 		c.DueAt = &u
+	}
+	if doneAt.Valid {
+		c.DoneAt = &doneAt.Time
+	}
+	if archivedAt.Valid {
+		c.ArchivedAt = &archivedAt.Time
 	}
 	if createdBy.Valid {
 		id := createdBy.Int64
@@ -70,7 +76,7 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.item_number, c.column_id, c.project_id, c.title, c.description, c.solution, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.favorite, c.due_at, c.view_access, c.edit_access, c.created_by_user_id, c.created_at, c.updated_at"
+const cardFields = "c.id, n.item_number, c.column_id, c.project_id, c.title, c.description, c.solution, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.favorite, c.due_at, c.done_at, c.archived_at, c.view_access, c.edit_access, c.created_by_user_id, c.created_at, c.updated_at"
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -131,7 +137,7 @@ func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Bo
 	if err != nil {
 		return b, err
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL ORDER BY c.position,c.id", scope)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.position,c.id", scope)
 	if err != nil {
 		return b, err
 	}
@@ -167,7 +173,7 @@ func (r MySQLRepository) GetDeletedItem(ctx context.Context, id, projectID int64
 }
 
 func (r MySQLRepository) ListLivingItems(ctx context.Context) ([]Item, error) {
-	rows, err := r.DB.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.deleted_at IS NULL ORDER BY c.id")
+	rows, err := r.DB.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.id")
 	if err != nil {
 		return nil, err
 	}
@@ -232,8 +238,12 @@ func createItemInTx(ctx context.Context, tx *sql.Tx, in ItemInput) (Item, error)
 	if err != nil {
 		return Item{}, err
 	}
-	result, err := tx.ExecContext(ctx, `INSERT INTO items(column_id,project_id,title,description,solution,position,offset_y,backlog_position,assignee,close_reason,favorite,view_access,edit_access,created_by_user_id)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, in.ColumnID, projectID, in.Title, in.Description, in.Solution, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason, in.Favorite, ViewAccessOpen, EditAccessOpen, in.CreatedByUserID)
+	doneAt, err := doneAtForColumn(ctx, tx, in.ColumnID)
+	if err != nil {
+		return Item{}, err
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO items(column_id,project_id,title,description,solution,position,offset_y,backlog_position,assignee,close_reason,favorite,done_at,view_access,edit_access,created_by_user_id)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, in.ColumnID, projectID, in.Title, in.Description, in.Solution, nextPos, offsetY, nextBacklog, in.Assignee, in.CloseReason, in.Favorite, doneAt, ViewAccessOpen, EditAccessOpen, in.CreatedByUserID)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
@@ -301,11 +311,11 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		}
 	} else {
 		var lockedID int64
-		if err = tx.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? AND deleted_at IS NULL FOR UPDATE", id).Scan(&lockedID); err != nil {
+		if err = tx.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? AND deleted_at IS NULL AND archived_at IS NULL FOR UPDATE", id).Scan(&lockedID); err != nil {
 			return Item{}, dbError(err)
 		}
 	}
-	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.deleted_at IS NULL", id)
+	c, err := loadCard(ctx, tx, "SELECT "+cardFields+numberedCards+" WHERE c.id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL", id)
 	if err != nil {
 		return c, err
 	}
@@ -336,6 +346,19 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	}
 	columnChanged := p.ColumnID != nil && *p.ColumnID != sourceColumnID
 	if columnChanged {
+		sourceDone, err := isDoneColumn(ctx, tx, sourceColumnID)
+		if err != nil {
+			return Item{}, err
+		}
+		targetDone, err := isDoneColumn(ctx, tx, *p.ColumnID)
+		if err != nil {
+			return Item{}, err
+		}
+		if targetDone && !sourceDone {
+			c.DoneAt = &now
+		} else if !targetDone {
+			c.DoneAt = nil
+		}
 		c.ColumnID = *p.ColumnID
 	}
 	if projectChanged {
@@ -389,7 +412,7 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		u := TruncateDueAtMinute(*p.DueAt)
 		c.DueAt = &u
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,solution=?,column_id=?,project_id=?,position=?,offset_y=?,backlog_position=?,assignee=?,close_reason=?,favorite=?,due_at=?,updated_at=? WHERE id=?", c.Title, c.Description, c.Solution, c.ColumnID, c.ProjectID, c.Position, c.OffsetY, c.BacklogPosition, c.Assignee, c.CloseReason, c.Favorite, c.DueAt, now, id)
+	_, err = tx.ExecContext(ctx, "UPDATE items SET title=?,description=?,solution=?,column_id=?,project_id=?,position=?,offset_y=?,backlog_position=?,assignee=?,close_reason=?,favorite=?,due_at=?,done_at=?,updated_at=? WHERE id=?", c.Title, c.Description, c.Solution, c.ColumnID, c.ProjectID, c.Position, c.OffsetY, c.BacklogPosition, c.Assignee, c.CloseReason, c.Favorite, c.DueAt, c.DoneAt, now, id)
 	if err != nil {
 		return Item{}, dbError(err)
 	}
@@ -417,6 +440,7 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	}
 	return c, tx.Commit()
 }
+
 // DeleteItem soft-deletes a living item (sets deleted_at). Already soft-deleted or missing → ErrNotFound.
 // Other columns are left unchanged (L-015).
 func (r MySQLRepository) DeleteItem(ctx context.Context, id int64) error {
@@ -430,7 +454,7 @@ func (r MySQLRepository) DeleteItem(ctx context.Context, id int64) error {
 		return err
 	}
 	now := time.Now().UTC()
-	res, err := tx.ExecContext(ctx, "UPDATE items SET deleted_at=? WHERE id=? AND deleted_at IS NULL", now, id)
+	res, err := tx.ExecContext(ctx, "UPDATE items SET deleted_at=? WHERE id=? AND deleted_at IS NULL AND archived_at IS NULL", now, id)
 	if err != nil {
 		return err
 	}

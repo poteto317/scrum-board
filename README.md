@@ -14,6 +14,7 @@
 - アイテムは列内に縦積み（列ごとの縦スクロールは無く、長い列はページを縦スクロール）。列が増えたらボード内で横スクロール
 - ボードは5秒ごとに最新の状態へ自動で更新（アイテムや列のドラッグ中・保存中・レイアウト切替中・追加モーダル表示中は更新しません）
 - プロダクトバックログ（全ステータスの優先順位リスト。ドラッグ／キーボードで並び替え、バックログからも新規追加・常に Todo）
+- Doneから10日経過したアイテムのプロジェクト別アーカイブ（ヘッダーの「アーカイブ」から参照、編集権限があればDoneへ解除）
 - MySQLへの永続化
 - APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのアイテムを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[OpenAPI: refined](docs/openapi.yaml)）
 
@@ -131,6 +132,7 @@ frontend/src/app/
   api-error.ts         通信失敗の表示文言
   form-validation.ts   Unicode対応のフォーム入力検証
   board.ts/html/css     ボード・列追加・アイテム追加
+  archive.*             プロジェクト別アーカイブ一覧・解除
   item-detail.*        詳細・編集・ステータス変更・削除
   modal.ts             native dialogのフォーカス管理
   app.routes.ts        画面のルーティング
@@ -186,6 +188,9 @@ HTTP API の**契約正本**は [OpenAPI（`docs/openapi.yaml`）](docs/openapi.
 | PATCH | `/api/items/by-number/{number}/assignee` | 対応者変更 |
 | PATCH | `/api/items/{id}` | アイテム部分更新 |
 | DELETE | `/api/items/{id}` | 削除 |
+| GET | `/api/archive?projectId={id}` | プロジェクト別アーカイブ一覧 |
+| POST | `/api/items/{id}/unarchive?projectId={id}` | アーカイブ解除してDoneへ戻す |
+| POST | `/api/archive/auto-archive` | Doneから10日経過したアイテムを自動アーカイブ（Scheduler token または管理者セッション） |
 | GET | `/api/command-templates` | コマンドテンプレート一覧 |
 | POST | `/api/command-templates` | コマンドテンプレート追加 |
 | PATCH | `/api/command-templates/{id}` | コマンドテンプレート更新 |
@@ -427,6 +432,12 @@ gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 ```
 
 スクリプトは `secretmanager.googleapis.com` を有効化し、上記 3 秘密を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
+
+アーカイブ・ゴミ箱 purge・recurring run の Cloud Scheduler ジョブは、デプロイ時には作成・実行されません。必要なジョブだけ、デプロイ後に同じ `GCP_PROJECT` / `GCP_REGION` と Cloud Run の `SCHEDULER_JOB_TOKEN`、`PUBLIC_ORIGIN` を設定して個別スクリプトを実行してください。アーカイブは毎日 03:30（Asia/Tokyo）です。
+
+```sh
+SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN="$SERVICE_URL" ./scripts/ensure-archive-scheduler.sh
+```
 
 **イメージタグとハードニング:** `deploy/Dockerfile` のベースイメージは digest 固定、API プロセスはコンテナ内の非 root ユーザーで起動します。`deploy-gcp.sh` は **クリーンな git 作業ツリー** 上で `git rev-parse HEAD` を Artifact Registry のタグにし、Cloud Run デプロイもその **SHA タグ** を参照します（`:latest` は併記 push のみ）。デプロイ／nginx／ルート `.dockerignore`／Actions ピン／stylesheet onload／GCP_PROJECT フォールバック を直す前後で `./scripts/check-deploy-image-hardening.sh`・`./scripts/check-nginx-tls-headers.sh`・`./scripts/check-root-dockerignore.sh`・`./scripts/check-workflow-action-pins.sh`・`./scripts/check-no-deferred-stylesheet-onload.sh`・`./scripts/check-no-gcp-project-fallback.sh` を実行してください（`secret-scan` workflow の `deploy-guards` job でも同セット＋該当 `--selftest` を実行）。ロールバックは過去のコミット SHA タグを `--image` に指定して再デプロイします。
 

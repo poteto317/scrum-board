@@ -57,6 +57,10 @@ export interface Item {
   favorite: boolean;
   /** 期限 UTC `…Z`（秒 00）。欠落時は null（normalizeItem で補完。空文字にしない）。 */
   dueAt: string | null;
+  /** Done に入った日時。非 Done のカードでは null。 */
+  doneAt?: string | null;
+  /** アーカイブ日時。通常カードでは null。 */
+  archivedAt?: string | null;
   /** 閲覧: public | open | restricted。欠落時は open（normalizeItem）。 */
   viewAccess?: 'public' | 'open' | 'restricted';
   /** 編集: open | restricted。欠落時は open（normalizeItem）。 */

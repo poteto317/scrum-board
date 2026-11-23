@@ -19,7 +19,7 @@ func (r MySQLRepository) ReplaceItemCommandTemplates(ctx context.Context, cardID
 		return nil, err
 	}
 	defer tx.Rollback()
-	if err = ensureCardExistsTx(ctx, tx, cardID); err != nil {
+	if err = ensureActiveItemForWrite(ctx, tx, cardID); err != nil {
 		return nil, err
 	}
 	if err = validateTemplateIDsTx(ctx, tx, ids); err != nil {
@@ -71,7 +71,8 @@ func (r MySQLRepository) ApplyCommandTemplatesToAllItems(ctx context.Context, te
 	if err = validateTemplateIDsTx(ctx, tx, ids); err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM items WHERE deleted_at IS NULL")
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM items
+WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY id FOR UPDATE`)
 	if err != nil {
 		return err
 	}
@@ -98,15 +99,6 @@ func (r MySQLRepository) ApplyCommandTemplatesToAllItems(ctx context.Context, te
 func (r MySQLRepository) ensureCardExists(ctx context.Context, cardID int64) error {
 	var id int64
 	err := r.DB.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? AND deleted_at IS NULL", cardID).Scan(&id)
-	if err == sql.ErrNoRows {
-		return ErrNotFound
-	}
-	return err
-}
-
-func ensureCardExistsTx(ctx context.Context, tx *sql.Tx, cardID int64) error {
-	var id int64
-	err := tx.QueryRowContext(ctx, "SELECT id FROM items WHERE id=? AND deleted_at IS NULL", cardID).Scan(&id)
 	if err == sql.ErrNoRows {
 		return ErrNotFound
 	}

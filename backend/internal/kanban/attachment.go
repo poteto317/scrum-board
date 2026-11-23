@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	attachmentMaxBytes        = 5 << 20 // 5 MiB
-	attachmentMaxCount        = 20
-	attachmentMaxName         = 200
+	attachmentMaxBytes      = 5 << 20 // 5 MiB
+	attachmentMaxCount      = 20
+	attachmentMaxName       = 200
 	attachmentMaxConcurrent = 4
 )
 
@@ -181,7 +181,8 @@ func (r MySQLRepository) CreateAttachment(
 
 	// Serialize attachment inserts per item (count check vs concurrent POSTs).
 	var lockedItem, projectID int64
-	if err = tx.QueryRowContext(ctx, `SELECT id, project_id FROM items WHERE id=? AND deleted_at IS NULL FOR UPDATE`, itemID).Scan(&lockedItem, &projectID); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT id, project_id FROM items
+WHERE id=? AND deleted_at IS NULL AND archived_at IS NULL FOR UPDATE`, itemID).Scan(&lockedItem, &projectID); err != nil {
 		return Attachment{}, dbError(err)
 	}
 	var projectBytes int64
@@ -395,6 +396,9 @@ func (r MySQLRepository) DeleteAttachment(ctx context.Context, blobs BlobStorage
 		return err
 	}
 	defer tx.Rollback()
+	if err = ensureActiveItemForWrite(ctx, tx, itemID); err != nil {
+		return err
+	}
 	if err = r.stripAttachmentFromBodiesTx(ctx, tx, itemID, itemNumber, attachmentID); err != nil {
 		return err
 	}

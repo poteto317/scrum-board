@@ -425,6 +425,18 @@ export class Api {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.get<{ items: TrashItem[] }>('/api/trash', params ? { params } : {});
   }
+  listArchivedItems(projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.get<{ items: Item[] }>('/api/archive', params ? { params } : {});
+  }
+  restoreArchivedItem(id: number, projectId?: number) {
+    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+    return this.http.post<Item>(
+      `/api/items/${id}/unarchive`,
+      {},
+      params ? { params } : {},
+    );
+  }
   restoreItem(id: number, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.post<Item>(

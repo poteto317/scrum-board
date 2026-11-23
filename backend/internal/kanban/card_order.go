@@ -13,12 +13,13 @@ type cardReorderPlan struct {
 	Query         string
 	Args          []any
 	NextOffset    int
+	DoneAt        *time.Time
 }
 
 // planCardReorder decides whether to skip an UPDATE and, if not, which query/args to run.
 // updated_at is the card's edit time: only a column (status) change moves it. A card that merely
 // shifts position/offset keeps it (and its history revision) as it was.
-func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now time.Time) cardReorderPlan {
+func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now time.Time, sourceDone, targetDone bool) cardReorderPlan {
 	nextOffset := before.OffsetY
 	offsetChanged := false
 	if offsetY != nil {
@@ -26,20 +27,29 @@ func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now tim
 		offsetChanged = before.OffsetY != nextOffset
 	}
 	columnChanged := before.ColumnID != columnID
+	doneAt := before.DoneAt
+	if columnChanged {
+		if targetDone && !sourceDone {
+			doneAt = &now
+		} else if !targetDone {
+			doneAt = nil
+		}
+	}
 	if !columnChanged && before.Position == pos && !offsetChanged {
-		return cardReorderPlan{Skip: true, NextOffset: nextOffset}
+		return cardReorderPlan{Skip: true, NextOffset: nextOffset, DoneAt: doneAt}
 	}
 	query := "UPDATE items SET column_id=?, position=?, offset_y=?, updated_at=updated_at WHERE id=?"
 	args := []any{columnID, pos, nextOffset, before.ID}
 	if columnChanged {
-		query = "UPDATE items SET column_id=?, position=?, offset_y=?, updated_at=? WHERE id=?"
-		args = []any{columnID, pos, nextOffset, now, before.ID}
+		query = "UPDATE items SET column_id=?, position=?, offset_y=?, done_at=?, updated_at=? WHERE id=?"
+		args = []any{columnID, pos, nextOffset, doneAt, now, before.ID}
 	}
 	return cardReorderPlan{
 		ColumnChanged: columnChanged,
 		Query:         query,
 		Args:          args,
 		NextOffset:    nextOffset,
+		DoneAt:        doneAt,
 	}
 }
 
@@ -58,8 +68,10 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 		return nil, err
 	}
 	knownColumns := make(map[int64]struct{}, len(cols))
+	doneColumns := make(map[int64]bool, len(cols))
 	for _, c := range cols {
 		knownColumns[c.ID] = struct{}{}
+		doneColumns[c.ID] = c.Name == "Done"
 	}
 	for _, order := range orders {
 		if _, ok := knownColumns[order.ColumnID]; !ok {
@@ -110,7 +122,7 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 			if order.OffsetYs != nil {
 				offsetY = &(*order.OffsetYs)[pos]
 			}
-			plan := planCardReorder(before, order.ColumnID, pos, offsetY, now)
+			plan := planCardReorder(before, order.ColumnID, pos, offsetY, now, doneColumns[before.ColumnID], doneColumns[order.ColumnID])
 			if plan.Skip {
 				continue
 			}
@@ -122,6 +134,7 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 				after.ColumnID = order.ColumnID
 				after.Position = pos
 				after.OffsetY = plan.NextOffset
+				after.DoneAt = plan.DoneAt
 				after.UpdatedAt = now
 				if err = appendHistory(ctx, tx, &before, after, "updated"); err != nil {
 					return nil, err
@@ -148,7 +161,7 @@ func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64, proj
 	if len(columnIDs) == 0 {
 		return nil, ErrItemOrder
 	}
-	query := "SELECT id FROM items WHERE project_id=? AND deleted_at IS NULL AND column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
+	query := "SELECT id FROM items WHERE project_id=? AND deleted_at IS NULL AND archived_at IS NULL AND column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
 	args := make([]any, 0, len(columnIDs)+1)
 	args = append(args, projectID)
 	for _, id := range columnIDs {

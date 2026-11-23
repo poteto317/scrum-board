@@ -17,8 +17,14 @@ EXEMPT = {
     ("POST", "/api/auth/logout"),
     ("POST", "/api/trash/purge"),
     ("POST", "/api/recurring/run"),
+    ("POST", "/api/archive/auto-archive"),
     ("GET", "/api/public-config"),
     ("GET", "/api/health"),
+}
+SCHEDULER_EXEMPT = {
+    ("POST", "/api/trash/purge"),
+    ("POST", "/api/recurring/run"),
+    ("POST", "/api/archive/auto-archive"),
 }
 OPTIONAL = {
     ("GET", "/api/items/{id}"),
@@ -51,7 +57,11 @@ def main() -> int:
             continue
         sec = op.get("security")
         key = (method, path)
-        if key in EXEMPT or key in OPTIONAL:
+        if key in SCHEDULER_EXEMPT:
+            required = [{"schedulerJobToken": []}, {"cookieAuth": []}]
+            if sec != required:
+                security_bad.append(f"{method} {path}: expected schedulerJobToken OR cookieAuth, got {sec!r}")
+        elif key in EXEMPT or key in OPTIONAL:
             if sec != []:
                 security_bad.append(f"{method} {path}: expected security [], got {sec!r}")
             if key in OPTIONAL and "viewAccess=public" not in (op.get("description") or ""):

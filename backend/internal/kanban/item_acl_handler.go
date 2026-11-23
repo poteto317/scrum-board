@@ -119,6 +119,18 @@ func (h handler) requireEdit(w http.ResponseWriter, r *http.Request, item Item) 
 	return userPtr, true
 }
 
+func (h handler) requireActiveEdit(w http.ResponseWriter, r *http.Request, item Item) (*User, bool) {
+	user, ok := h.requireEdit(w, r, item)
+	if !ok {
+		return nil, false
+	}
+	if item.ArchivedAt != nil {
+		reply(w, http.StatusConflict, map[string]string{"message": "アーカイブを解除してから変更してください。"})
+		return nil, false
+	}
+	return user, true
+}
+
 func (h handler) requireManage(w http.ResponseWriter, r *http.Request, item Item) (*User, bool) {
 	st, err := h.loadItemACLState(r.Context(), item)
 	if err != nil {
@@ -135,6 +147,18 @@ func (h handler) requireManage(w http.ResponseWriter, r *http.Request, item Item
 		return nil, false
 	}
 	return &user, true
+}
+
+func (h handler) requireActiveManage(w http.ResponseWriter, r *http.Request, item Item) (*User, bool) {
+	user, ok := h.requireManage(w, r, item)
+	if !ok {
+		return nil, false
+	}
+	if item.ArchivedAt != nil {
+		reply(w, http.StatusConflict, map[string]string{"message": "アーカイブを解除してから変更してください。"})
+		return nil, false
+	}
+	return user, true
 }
 
 func (h handler) filterBoardItems(ctx context.Context, items []Item, user *User) ([]Item, error) {
@@ -218,7 +242,7 @@ func (h handler) patchItemACL(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	manager, ok := h.requireManage(w, r, item)
+	manager, ok := h.requireActiveManage(w, r, item)
 	if !ok {
 		return
 	}

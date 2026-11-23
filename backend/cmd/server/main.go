@@ -102,6 +102,9 @@ func run() error {
 		err = repo.InitializeFavorite(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeArchive(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeHistory(migrationCtx)
 	}
 	if err == nil {

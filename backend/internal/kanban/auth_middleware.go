@@ -32,6 +32,8 @@ func sessionExempt(r *http.Request) bool {
 		return true
 	case r.Method == http.MethodPost && path == "/api/recurring/run":
 		return true
+	case r.Method == http.MethodPost && path == "/api/archive/auto-archive":
+		return true
 	case r.Method == http.MethodGet && path == "/api/public-config":
 		return true
 	case r.Method == http.MethodGet && path == "/api/health":

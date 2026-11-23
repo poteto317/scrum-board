@@ -46,7 +46,7 @@ func (h handler) replaceItemCommandTemplatesByNumber(w http.ResponseWriter, r *h
 		fail(w, err)
 		return
 	}
-	if _, ok := h.requireEdit(w, r, card); !ok {
+	if _, ok := h.requireActiveEdit(w, r, card); !ok {
 		return
 	}
 	ids, ok := decodeTemplateIDs(w, r)

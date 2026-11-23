@@ -34,7 +34,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       security: []
-      description: セッション Cookie 不要（sessionExempt）。`Content-Type: application/json` 必須。`Origin` ヘッダがある場合は PUBLIC_ORIGIN（未設定時はリクエストの origin）と一致すること。連続失敗が上限に達すると一時的に 429 を返す。ゲートウェイ（nginx limit_req）の 429 は本文形式がアプリ JSON と異なる場合がある。
+      description: >-
+        セッション Cookie 不要（sessionExempt）。`Content-Type: application/json` 必須。
+        `Origin` ヘッダがある場合は PUBLIC_ORIGIN（未設定時はリクエストの origin）と一致すること。
+        連続失敗が上限に達すると一時的に 429 を返す。ゲートウェイ（nginx limit_req）の 429 は本文形式がアプリ JSON と異なる場合がある。
       requestBody:
         required: true
         content:
@@ -1776,6 +1779,43 @@ paths:
       security:
       - cookieAuth: []
       - basicAuth: []
+  /api/items/{id}/unarchive:
+    post:
+      summary: アーカイブ解除してDoneへ戻す
+      operationId: post_api_items_id_unarchive
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 解除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '403':
+          description: 編集権限がない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: アーカイブ済み対象が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
   /api/list-filter:
     get:
       summary: 一覧フィルタ取得
@@ -2377,6 +2417,80 @@ paths:
             schema:
               $ref: '#/components/schemas/JsonValue'
       description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/archive:
+    get:
+      summary: プロジェクト別アーカイブ一覧
+      operationId: get_api_archive
+      parameters:
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 閲覧可能なアーカイブ済みアイテム
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Item'
+                required:
+                - items
+        '400':
+          description: 不正なプロジェクト
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+  /api/archive/auto-archive:
+    post:
+      summary: Doneから10日経過したアイテムを自動アーカイブ（セッション免除）
+      operationId: post_api_archive_auto_archive
+      responses:
+        '200':
+          description: 処理件数
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  archived:
+                    type: integer
+                required:
+                - archived
+        '403':
+          description: トークン・管理者セッションなし、または Origin 不一致
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type が application/json 以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - schedulerJobToken: []
+      - cookieAuth: []
+      description: >-
+        セッション Cookie ミドルウェアは免除。`X-Scheduler-Token` または管理者セッションが必要。
+        `Content-Type: application/json` 必須。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
   /api/trash:
     get:
       summary: ゴミ箱一覧
@@ -2422,7 +2536,9 @@ paths:
       security:
       - schedulerJobToken: []
       - cookieAuth: []
-      description: セッション Cookie ミドルウェアは免除。`X-Scheduler-Token` または管理者セッションが必要。`Content-Type: application/json` 必須。
+      description: >-
+        セッション Cookie ミドルウェアは免除。`X-Scheduler-Token` または管理者セッションが必要。
+        `Content-Type: application/json` 必須。
       requestBody:
         required: false
         content:
@@ -2808,6 +2924,16 @@ components:
         dueAt:
           type: string
           description: UTC。未設定は空文字または省略
+        doneAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Done 列に入った時刻。Done 以外では null
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: アーカイブ日時。アクティブなアイテムでは null
         closeReason:
           type: string
         viewAccess:

@@ -28,6 +28,8 @@ CREATE TABLE items (
  close_reason TEXT NOT NULL DEFAULT (''),
  favorite TINYINT(1) NOT NULL DEFAULT 0,
  due_at DATETIME NULL,
+ done_at DATETIME(6) NULL,
+ archived_at DATETIME(6) NULL,
  deleted_at DATETIME(6) NULL,
  view_access VARCHAR(16) NOT NULL DEFAULT 'open',
  edit_access VARCHAR(16) NOT NULL DEFAULT 'open',
@@ -39,7 +41,9 @@ CREATE TABLE items (
  INDEX items_column_position (column_id, position, id),
  INDEX items_backlog_position (backlog_position, id),
  INDEX items_project_position (project_id, column_id, position, id),
- INDEX items_project_deleted_at (project_id, deleted_at)
+ INDEX items_project_deleted_at (project_id, deleted_at),
+ INDEX idx_items_project_archived (project_id, archived_at, id),
+ INDEX idx_items_done_archived_deleted (done_at, archived_at, deleted_at)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE TABLE board_settings (
  setting_key VARCHAR(64) PRIMARY KEY,

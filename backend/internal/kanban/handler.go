@@ -9,19 +9,19 @@ import (
 )
 
 type handler struct {
-	repo            Repository
-	formatter       ItemFormatter
-	chatter         ItemChatter
-	slots           chan struct{}
-	publicOrigin    string
-	prTitleResolver *PRTitleResolver
-	blobs           BlobStorage
-	rateLimiter     AIRateLimiter
-	loginAttempts       LoginAttemptLimiter
-	messageMax          int
-	historyTurns        int
-	schedulerJobToken   string
-	attachmentSlots     chan struct{}
+	repo              Repository
+	formatter         ItemFormatter
+	chatter           ItemChatter
+	slots             chan struct{}
+	publicOrigin      string
+	prTitleResolver   *PRTitleResolver
+	blobs             BlobStorage
+	rateLimiter       AIRateLimiter
+	loginAttempts     LoginAttemptLimiter
+	messageMax        int
+	historyTurns      int
+	schedulerJobToken string
+	attachmentSlots   chan struct{}
 }
 
 // Option customizes NewHandler without changing the call sites that only need the repository.
@@ -103,13 +103,13 @@ func WithAttachmentConcurrency(n int) Option {
 
 func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{
-		repo:          repo,
-		slots:         make(chan struct{}, maxConcurrentFormats),
-		blobs:         UnavailableBlobStorage{},
-		rateLimiter:   NewNoopAIRateLimiter(),
-		loginAttempts:       NewMemoryLoginAttemptLimiter(),
-		messageMax:          maxAIChatMessageLen,
-		historyTurns:        maxAIChatHistoryTurns,
+		repo:              repo,
+		slots:             make(chan struct{}, maxConcurrentFormats),
+		blobs:             UnavailableBlobStorage{},
+		rateLimiter:       NewNoopAIRateLimiter(),
+		loginAttempts:     NewMemoryLoginAttemptLimiter(),
+		messageMax:        maxAIChatMessageLen,
+		historyTurns:      maxAIChatHistoryTurns,
 		schedulerJobToken: HandlerTestSchedulerToken,
 		attachmentSlots:   make(chan struct{}, attachmentMaxConcurrent),
 		// prTitleResolver nil by default so unit tests do not hit GitHub; wire in production via WithPRTitleResolver.
@@ -143,6 +143,8 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/sprints/{id}/complete", h.completeSprint)
 	mux.HandleFunc("GET /api/backlog", h.backlog)
 	mux.HandleFunc("PUT /api/backlog/order", h.reorderBacklog)
+	mux.HandleFunc("GET /api/archive", h.listArchivedItems)
+	mux.HandleFunc("POST /api/archive/auto-archive", h.autoArchive)
 	mux.HandleFunc("GET /api/items/by-number/{number}/history", h.history)
 	mux.HandleFunc("GET /api/items/by-number/{number}/comments", h.listComments)
 	mux.HandleFunc("POST /api/items/by-number/{number}/comments", h.createComment)
@@ -171,6 +173,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("PATCH /api/items/by-number/{number}/assignee", h.changeAssigneeByNumber)
 	mux.HandleFunc("DELETE /api/items/{id}", h.deleteItem)
 	mux.HandleFunc("POST /api/items/{id}/restore", h.restoreItem)
+	mux.HandleFunc("POST /api/items/{id}/unarchive", h.restoreArchivedItem)
 	mux.HandleFunc("GET /api/trash", h.listTrash)
 	mux.HandleFunc("DELETE /api/trash/{id}", h.hardDeleteTrash)
 	mux.HandleFunc("POST /api/trash/purge", h.purgeTrash)
@@ -626,7 +629,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if _, ok := h.requireEdit(w, r, existing); !ok {
+	if _, ok := h.requireActiveEdit(w, r, existing); !ok {
 		return
 	}
 	p := ItemPatch{ColumnID: body.ColumnID, ProjectID: body.ProjectID, Title: body.Title, Description: body.Description, Solution: body.Solution, PRURLs: body.PRURLs}
@@ -769,7 +772,7 @@ func (h handler) deleteItem(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if _, ok := h.requireEdit(w, r, existing); !ok {
+	if _, ok := h.requireActiveEdit(w, r, existing); !ok {
 		return
 	}
 	if e := h.repo.DeleteItem(r.Context(), n); e != nil {

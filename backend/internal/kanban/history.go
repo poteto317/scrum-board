@@ -68,6 +68,7 @@ func historyValues(ctx context.Context, tx *sql.Tx, c Item) (map[string]string, 
 		"title": c.Title, "description": c.Description, "solution": c.Solution, "status": name,
 		"prUrls": prURLsJSON(c.PRURLs), "relatedItems": relatedItemsJSON(c.RelatedItems), "assignee": c.Assignee,
 		"closeReason": c.CloseReason, "favorite": strconv.FormatBool(c.Favorite), "dueAt": dueAtHistoryValue(c.DueAt),
+		"archivedAt": historyTimeValue(c.ArchivedAt),
 	}, nil
 }
 func appendHistory(ctx context.Context, tx *sql.Tx, before *Item, after Item, kind string) error {
@@ -83,7 +84,7 @@ func appendHistory(ctx context.Context, tx *sql.Tx, before *Item, after Item, ki
 		}
 	}
 	changes := []HistoryChange{}
-	for _, field := range []string{"title", "description", "solution", "status", "prUrls", "relatedItems", "assignee", "closeReason", "favorite", "dueAt"} {
+	for _, field := range []string{"title", "description", "solution", "status", "prUrls", "relatedItems", "assignee", "closeReason", "favorite", "dueAt", "archivedAt"} {
 		if before == nil || old[field] != values[field] {
 			changes = append(changes, HistoryChange{field, old[field], values[field]})
 		}
@@ -92,4 +93,11 @@ func appendHistory(ctx context.Context, tx *sql.Tx, before *Item, after Item, ki
 		return nil
 	}
 	return insertHistory(ctx, tx, after.ID, HistoryEvent{Kind: kind, OccurredAt: after.UpdatedAt, Changes: changes}, nil)
+}
+
+func historyTimeValue(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }

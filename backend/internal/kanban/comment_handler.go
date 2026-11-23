@@ -136,7 +136,7 @@ func (h handler) commentParentItem(w http.ResponseWriter, r *http.Request, needE
 		return Item{}, false
 	}
 	if needEdit {
-		if _, ok := h.requireEdit(w, r, card); !ok {
+		if _, ok := h.requireActiveEdit(w, r, card); !ok {
 			return Item{}, false
 		}
 	} else if _, _, ok := h.requireView(w, r, card); !ok {

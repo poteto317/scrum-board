@@ -13,6 +13,7 @@ describe('header-menu pure helpers', () => {
     expect(resolvePageKind('/')).toBe('board');
     expect(resolvePageKind('/backlog')).toBe('backlog');
     expect(resolvePageKind('/trash')).toBeNull();
+    expect(resolvePageKind('/archive')).toBeNull();
     expect(resolvePageKind('/users')).toBeNull();
     expect(resolvePageKind('/projects')).toBeNull();
     expect(resolvePageKind('/recurring')).toBeNull();
@@ -28,6 +29,7 @@ describe('header-menu pure helpers', () => {
     expect(catalogIdsForPageKind('board')).toEqual([
       'open_projects',
       'open_trash',
+      'open_archive',
       'open_users',
       'open_recurring',
       'open_settings',
@@ -35,6 +37,7 @@ describe('header-menu pure helpers', () => {
     expect(catalogIdsForPageKind('itemDetail')).toEqual([
       'open_projects',
       'open_trash',
+      'open_archive',
       'open_users',
       'open_recurring',
       'open_settings',
@@ -48,12 +51,14 @@ describe('header-menu pure helpers', () => {
     const prefs = { hiddenIds: ['open_trash', 'item_history'] };
     expect(visibleMenuItemIds('board', prefs)).toEqual([
       'open_projects',
+      'open_archive',
       'open_users',
       'open_recurring',
       'open_settings',
     ]);
     expect(visibleMenuItemIds('itemDetail', prefs)).toEqual([
       'open_projects',
+      'open_archive',
       'open_users',
       'open_recurring',
       'open_settings',
@@ -64,8 +69,8 @@ describe('header-menu pure helpers', () => {
 
   it('empty workspace has no hidden ids', () => {
     const empty = emptyWorkspaceHeaderMenu();
-    expect(visibleMenuItemIds('board', empty.board)).toHaveLength(5);
-    expect(visibleMenuItemIds('itemDetail', empty.itemDetail)).toHaveLength(8);
+    expect(visibleMenuItemIds('board', empty.board)).toHaveLength(6);
+    expect(visibleMenuItemIds('itemDetail', empty.itemDetail)).toHaveLength(9);
   });
 
   it('builds catalog and favorite labels', () => {
