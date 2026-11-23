@@ -507,6 +507,22 @@ dialog.modal-backdrop::backdrop {
 .task-card .copy-link-icon {
   display: block;
 }
+/* Board quick-actions: keep command + link side-by-side (L-792 ancestor). */
+.board-page .task-card .card-quick-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+.board-page .task-card .card-quick-actions .copy-card-link {
+  position: static;
+}
+.board-page .task-card .task-card-body {
+  padding-right: 72px;
+}
 
 /* Shared status dots: board columns + project select (L-792 ancestors). */
 .kanban-column .status-dot,
