@@ -103,12 +103,17 @@ func (m *memoryRepo) RunRecurring(ctx context.Context) (created, skipped, failed
 			skipped++
 			continue
 		}
+		title, description, prepErr := materializeRecurringFire(rule, now)
+		if prepErr != nil {
+			failed++
+			continue
+		}
 		projectID := rule.ProjectID
 		_, createErr := m.CreateItem(ctx, ItemInput{
 			ColumnID:        rule.ColumnID,
 			ProjectID:       &projectID,
-			Title:           rule.Title,
-			Description:     rule.Description,
+			Title:           title,
+			Description:     description,
 			CreatedByUserID: nil,
 		})
 		if createErr != nil {

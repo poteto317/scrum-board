@@ -3,6 +3,7 @@ package kanban
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -110,6 +111,67 @@ func TestRunRecurringFailedAndSkippedCounters(t *testing.T) {
 	}
 	if repo.recurringRules[1].LastFiredAt == nil {
 		t.Fatal("created rule should set lastFiredAt")
+	}
+}
+
+func TestRunRecurringExpandsPlaceholders(t *testing.T) {
+	repo := fresh()
+	now := time.Now().UTC()
+	repo.ensureRecurring()
+	repo.recurringRules[1] = RecurringRule{
+		ID: 1, ProjectID: 1, Name: "dyn", Title: "週次 {{weekStart}}", Description: "日 {{date}}",
+		Cron: "0 0 * * *", Timezone: "UTC", ColumnID: 1, Enabled: true,
+		CreatedAt: now.Add(-48 * time.Hour), UpdatedAt: now.Add(-48 * time.Hour),
+	}
+	repo.nextRecurringID = 2
+	created, _, failed, err := repo.RunRecurring(t.Context())
+	if err != nil || created != 1 || failed != 0 {
+		t.Fatalf("created=%d failed=%d err=%v", created, failed, err)
+	}
+	wantTitle, wantDesc, wantErr := materializeRecurringFire(repo.recurringRules[1], now)
+	if wantErr != nil {
+		t.Fatalf("want materialize: %v", wantErr)
+	}
+	var found *Item
+	for _, c := range repo.cards {
+		if strings.Contains(c.Title, "週次") {
+			cc := c
+			found = &cc
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("item missing")
+	}
+	if found.Title != wantTitle || found.Description != wantDesc {
+		t.Fatalf("got title=%q desc=%q want title=%q desc=%q", found.Title, found.Description, wantTitle, wantDesc)
+	}
+	if strings.Contains(found.Title, "{{") || strings.Contains(found.Description, "{{weekStart}}") {
+		t.Fatalf("placeholders left: %#v", found)
+	}
+}
+
+func TestRunRecurringExpandOverlongFails(t *testing.T) {
+	repo := fresh()
+	now := time.Now().UTC()
+	repo.ensureRecurring()
+	// 195 + {{date}}(10) = 205 > 200
+	tpl := strings.Repeat("あ", 195) + "{{date}}"
+	repo.recurringRules[1] = RecurringRule{
+		ID: 1, ProjectID: 1, Name: "long", Title: tpl, Description: "",
+		Cron: "0 0 * * *", Timezone: "UTC", ColumnID: 1, Enabled: true,
+		CreatedAt: now.Add(-48 * time.Hour), UpdatedAt: now.Add(-48 * time.Hour),
+	}
+	repo.nextRecurringID = 2
+	created, _, failed, err := repo.RunRecurring(t.Context())
+	if err != nil || created != 0 || failed != 1 {
+		t.Fatalf("created=%d failed=%d err=%v", created, failed, err)
+	}
+	if len(repo.cards) != 0 {
+		t.Fatalf("want no items, got %d", len(repo.cards))
+	}
+	if repo.recurringRules[1].LastFiredAt != nil {
+		t.Fatal("failed expand must not set lastFiredAt")
 	}
 }
 
