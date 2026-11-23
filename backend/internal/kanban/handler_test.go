@@ -108,7 +108,7 @@ func (m *memoryRepo) boardForScope(itemProjectID int64) (Board, error) {
 	}
 	b := Board{Columns: cols, Items: []Item{}, Settings: settings}
 	for _, c := range m.cards {
-		if m.living(c) && m.cardProjectID(c) == scope {
+		if m.living(c) && c.ArchivedAt == nil && m.cardProjectID(c) == scope {
 			b.Items = append(b.Items, c)
 		}
 	}
