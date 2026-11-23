@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CommandTemplate } from './command-template';
+import { ConditionalGetResult, getJSONConditional } from './conditional-get';
 import { ItemOrderColumn } from './item-order';
 import { WorkspaceListFilters } from './list-filter';
 import { WorkspaceHeaderMenu } from './header-menu';
@@ -21,7 +22,9 @@ import {
   SprintSummary,
   normalizeComment,
 } from './models';
-import { map } from 'rxjs';
+import { map, Observable } from 'rxjs';
+
+export type { ConditionalGetResult };
 
 export type { ItemOrderColumn };
 
@@ -148,6 +151,12 @@ export class Api {
     const params =
       projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.get<BoardData>('/api/board', params ? { params } : {});
+  }
+  boardConditional(
+    projectId?: number,
+    etag?: string | null,
+  ): Observable<ConditionalGetResult<BoardData>> {
+    return getJSONConditional<BoardData>(this.http, '/api/board', { projectId, etag });
   }
   patchBoardSettings(body: {
     cardLayout?: CardLayout;
@@ -320,6 +329,15 @@ export class Api {
     const params =
       projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
     return this.http.get<{ items: Item[] }>('/api/backlog', params ? { params } : {});
+  }
+  backlogConditional(
+    projectId?: number,
+    etag?: string | null,
+  ): Observable<ConditionalGetResult<{ items: Item[] }>> {
+    return getJSONConditional<{ items: Item[] }>(this.http, '/api/backlog', {
+      projectId,
+      etag,
+    });
   }
   reorderBacklog(itemIds: number[]) {
     return this.http.put<{ items: Item[] }>('/api/backlog/order', { itemIds });
