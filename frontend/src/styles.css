@@ -177,6 +177,56 @@ select {
   gap: 9px;
   margin-top: 28px;
 }
+/* Shared page chrome (was only in some component CSS → other pages looked unstyled). */
+.breadcrumb {
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  gap: 12px;
+}
+.breadcrumb a {
+  text-decoration: none;
+  color: var(--muted);
+}
+.breadcrumb a:hover {
+  color: var(--ink);
+}
+.breadcrumb strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+.breadcrumb span {
+  color: #c3c7c2;
+}
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 37px 0 28px;
+}
+.eyebrow {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 2.3px;
+  margin-bottom: 12px;
+}
+h1 {
+  font-size: 36px;
+  letter-spacing: -1px;
+  line-height: 1.4;
+  font-weight: 650;
+  margin: 0;
+}
+.heading-dot {
+  color: var(--accent);
+}
+.page-heading p {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
 .state-panel {
   display: flex;
   align-items: center;
