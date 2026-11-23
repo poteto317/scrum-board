@@ -2356,9 +2356,11 @@ describe('Board add dialog accidental close', () => {
     const origClose = proto.close;
     proto.showModal = function () {
       this.open = true;
+      this.setAttribute('open', '');
     };
     proto.close = function () {
       this.open = false;
+      this.removeAttribute('open');
     };
     return () => {
       proto.showModal = origShowModal;
@@ -2555,5 +2557,118 @@ describe('Board list filter', () => {
     expect(f.componentInstance.filteredItemCount()).toBe(1);
     expect(f.nativeElement.textContent).toContain('Beta');
     expect(f.componentInstance.canReorderItems()).toBe(false);
+  });
+});
+
+describe('Board layout styles', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
+
+  function stubDialog() {
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShowModal = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+      this.setAttribute('open', '');
+    };
+    proto.close = function () {
+      this.open = false;
+      this.removeAttribute('open');
+    };
+    return () => {
+      proto.showModal = origShowModal;
+      proto.close = origClose;
+    };
+  }
+
+  it('keeps copy-card-link static inside card-quick-actions (board.css contract)', async () => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: singleCardBoard,
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: {
+              board: { query: string; statusIds: number[] };
+              backlog: { query: string; statusIds: number[] };
+            }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.querySelector('.task-card .card-quick-actions .copy-card-link')).not.toBeNull();
+    const css = Array.from(document.querySelectorAll('style'))
+      .map((el) => el.textContent ?? '')
+      .join('\n');
+    expect(css).toMatch(
+      /\.task-card(?:\[[^\]]*\])?\s+\.card-quick-actions(?:\[[^\]]*\])?\s+\.copy-card-link(?:\[[^\]]*\])?\s*\{[^}]*position:\s*static/s,
+    );
+  });
+
+  it('applies flex centering when dialog.modal-backdrop has [open]', async () => {
+    const restore = stubDialog();
+    // Source contract: npm run test:css-contract (styles.css). Here only prove [open]+flex selector behavior in jsdom.
+    const tag = document.createElement('style');
+    tag.textContent =
+      'dialog.modal-backdrop[open]{display:flex;align-items:center;justify-content:center;padding:24px}';
+    document.head.appendChild(tag);
+    try {
+      TestBed.configureTestingModule({
+        imports: [Board],
+        providers: [
+          provideRouter([]),
+          {
+            provide: Api,
+            useValue: {
+              board: () =>
+                of({
+                  columns: [
+                    { id: 1, name: 'Todo', position: 0 },
+                    { id: 2, name: 'Doing', position: 1 },
+                  ],
+                  items: [],
+                }),
+              listCommandTemplates: () => of({ templates: [] }),
+              listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+              listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+              putListFilter: (f: {
+                board: { query: string; statusIds: number[] };
+                backlog: { query: string; statusIds: number[] };
+              }) => of(f),
+            },
+          },
+        ],
+      });
+      const f = TestBed.createComponent(Board);
+      f.detectChanges();
+      await f.whenStable();
+      f.componentInstance.openItem(1);
+      f.detectChanges();
+      const dialog = f.nativeElement.querySelector('dialog.modal-backdrop') as HTMLDialogElement;
+      expect(dialog).not.toBeNull();
+      expect(dialog.hasAttribute('open')).toBe(true);
+      const style = getComputedStyle(dialog);
+      expect(style.display).toBe('flex');
+      expect(style.alignItems).toBe('center');
+      expect(style.justifyContent).toBe('center');
+      f.destroy();
+    } finally {
+      tag.remove();
+      restore();
+    }
   });
 });
