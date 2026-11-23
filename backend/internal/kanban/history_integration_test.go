@@ -289,14 +289,15 @@ func TestMySQLImportWorksWithInterpolatedParams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Fresh DSN connection with the same standard flags as production (not a prepared-vs-interpolated contrast).
 	mysqlconfig.ApplyStandardDriverFlags(cfg)
-	plain, err := sql.Open("mysql", cfg.FormatDSN())
+	conn, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { plain.Close() })
+	t.Cleanup(func() { conn.Close() })
 	v := HistoricalRecord{Number: 1, ItemID: 1, CreatedAt: c.CreatedAt, Key: "interpolated", OccurredAt: c.CreatedAt, Changes: []HistoryChange{{Field: "status", Before: "Todo", After: "Done"}}, Note: "client-side parameter interpolation"}
-	if err = (MySQLRepository{DB: plain}).ImportHistory(context.Background(), []HistoricalRecord{v}); err != nil {
+	if err = (MySQLRepository{DB: conn}).ImportHistory(context.Background(), []HistoricalRecord{v}); err != nil {
 		t.Fatal(err)
 	}
 }
