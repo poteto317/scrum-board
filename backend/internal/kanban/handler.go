@@ -216,7 +216,7 @@ func (h handler) backlog(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	reply(w, 200, map[string][]Item{"items": filtered})
+	replyJSONWithETag(w, r, map[string][]Item{"items": filtered})
 }
 
 func (h handler) reorderBacklog(w http.ResponseWriter, r *http.Request) {
@@ -265,7 +265,7 @@ func (h handler) board(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.Items = filtered
-	reply(w, 200, b)
+	replyJSONWithETag(w, r, b)
 }
 
 func (h handler) boardForRequest(r *http.Request) (Board, error) {

@@ -25,7 +25,7 @@ import {
   CdkDragStart,
   CdkDropList,
 } from '@angular/cdk/drag-drop';
-import { Subscription, filter, finalize, firstValueFrom, map } from 'rxjs';
+import { Observable, Subscription, filter, finalize, firstValueFrom, map, tap } from 'rxjs';
 import { AiChatContext } from './ai-chat-context';
 import { toAiChatOptions } from './ai-chat-target';
 import { Api } from './api';
@@ -71,7 +71,7 @@ import {
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
 import { viewAccessLabel } from './item-acl';
-import { CardLayout, Item, Column } from './models';
+import { BoardData, CardLayout, Item, Column } from './models';
 import {
   COMMAND_ITEM_MENU_EMPTY,
   CommandTemplate,
@@ -82,6 +82,7 @@ import { CopyCommandFeedback } from './copy-command-feedback';
 import { CopyFeedbackBanner } from './copy-feedback-banner';
 import { CopyLinkFeedback } from './copy-link-feedback';
 import { LatestCopyFeedback } from './latest-copy-feedback';
+import { ConditionalGetResult, etagFetchKey, resolveBoardConditional } from './conditional-get';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import {
   scheduleScrollRestore,
@@ -140,6 +141,8 @@ export class Board implements OnInit {
   /** Template-safe busy flag while active project reload is in flight. */
   readonly projectSwitching = computed(() => this.projectSession.switching());
   private boardLoadGeneration = 0;
+  /** ETag by fetchKey (projectId query or 0). */
+  private boardEtags = new Map<number, string>();
   private projectSwitchSub?: Subscription;
   private readonly appOrigin = inject(AppOrigin);
   private readonly router = inject(Router);
@@ -404,10 +407,23 @@ export class Board implements OnInit {
   private pollBoard() {
     const requestedFor = this.data();
     const projectId = this.boardProjectIdForFetch();
-    return this.api.board(projectId).pipe(
-      map((raw) => applyBoardMobileSettings(raw)),
+    const key = etagFetchKey(projectId);
+    const etag = this.boardEtags.get(key);
+    return this.boardGetConditional(projectId, etag).pipe(
+      filter((r): r is Extract<ConditionalGetResult<BoardData>, { status: 'ok' }> => r.status === 'ok'),
+      tap((r) => {
+        if (r.etag) this.boardEtags.set(key, r.etag);
+      }),
+      map((r) => applyBoardMobileSettings(r.body)),
       filter(() => this.data() === requestedFor),
     );
+  }
+
+  private boardGetConditional(
+    projectId?: number,
+    etag?: string | null,
+  ): Observable<ConditionalGetResult<BoardData>> {
+    return resolveBoardConditional(this.api, projectId, etag);
   }
 
   async copyItemLink(number: number, projectId?: number) {
@@ -606,19 +622,21 @@ export class Board implements OnInit {
     this.error.set('');
     this.reorderError.set('');
     this.reorderConflict.set(false);
-    this.api
-      .board()
+    this.boardEtags.clear();
+    this.boardGetConditional()
       .pipe(
         finalize(() => {
           if (generation === this.boardLoadGeneration) this.loading.set(false);
         }),
       )
       .subscribe({
-        next: (d) => {
+        next: (r) => {
           if (generation !== this.boardLoadGeneration) return;
+          if (r.status !== 'ok') return;
+          if (r.etag) this.boardEtags.set(etagFetchKey(), r.etag);
           applyBoardDataWithActiveSync(
             this.projectSession,
-            applyBoardMobileSettings(d),
+            applyBoardMobileSettings(r.body),
             (board) => {
               this.rememberBoardCache(board);
               this.data.set(board);
@@ -649,8 +667,10 @@ export class Board implements OnInit {
       this.data.update((d) => ({ ...d, items: cached }));
     }
     this.projectSwitchSub?.unsubscribe();
-    this.projectSwitchSub = this.api
-      .board(this.boardProjectIdForFetch())
+    const projectId = this.boardProjectIdForFetch();
+    const key = etagFetchKey(projectId);
+    this.boardEtags.delete(key);
+    this.projectSwitchSub = this.boardGetConditional(projectId)
       .pipe(
         finalize(() => {
           if (generation !== this.boardLoadGeneration) return;
@@ -659,12 +679,14 @@ export class Board implements OnInit {
         }),
       )
       .subscribe({
-        next: (d) => {
+        next: (r) => {
           if (generation !== this.boardLoadGeneration) return;
+          if (r.status !== 'ok') return;
+          if (r.etag) this.boardEtags.set(key, r.etag);
           this.error.set('');
           applyBoardDataWithActiveSync(
             this.projectSession,
-            applyBoardMobileSettings(d),
+            applyBoardMobileSettings(r.body),
             (board) => {
               this.rememberBoardCache(board);
               this.data.set(board);

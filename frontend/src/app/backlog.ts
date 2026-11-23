@@ -17,7 +17,13 @@ import {
 import { Location, NgStyle } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { Subscription, finalize, firstValueFrom, forkJoin } from 'rxjs';
+import { EMPTY, Observable, Subscription, finalize, firstValueFrom, forkJoin, map, mergeMap, tap } from 'rxjs';
+import { mergeBacklogBoardPoll } from './backlog-board-poll';
+import {
+  ConditionalGetResult,
+  resolveBacklogConditional,
+  resolveBoardConditional,
+} from './conditional-get';
 import { AiChatContext } from './ai-chat-context';
 import { toAiChatOptions } from './ai-chat-target';
 import { Api } from './api';
@@ -53,7 +59,7 @@ import {
 import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-filter';
 import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
-import { Item, Column } from './models';
+import { BoardData, Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import { itemsForActiveProject } from './project-items';
 import { ProjectBoardCache } from './project-board-cache';
@@ -78,6 +84,9 @@ export class Backlog implements OnInit {
   /** Template-safe busy flag while active project reload is in flight. */
   readonly projectSwitching = computed(() => this.projectSession.switching());
   private backlogLoadGeneration = 0;
+  /** ETag by resource for fetchKey 0 on this page. */
+  private backlogEtag = '';
+  private boardEtag = '';
   private projectSwitchSub?: Subscription;
   private readonly router = inject(Router);
   private readonly location = inject(Location);
@@ -190,14 +199,14 @@ export class Backlog implements OnInit {
         !this.projectSession.switching() &&
         this.modal() === null &&
         this.draggingItemId() === null,
-      fetch: () => forkJoin({ backlog: this.api.backlog(), board: this.api.board() }),
-      apply: ({ backlog, board }) => {
+      fetch: () => this.pollBacklogBoard(),
+      apply: ({ items, columns }) => {
         this.error.set('');
-        if (!sameJson(this.items(), backlog.items)) {
-          this.rememberBacklogCache(backlog.items);
-          this.items.set(backlog.items);
+        if (!sameJson(this.items(), items)) {
+          this.rememberBacklogCache(items);
+          this.items.set(items);
         }
-        if (!sameJson(this.columns(), board.columns)) this.columns.set(board.columns);
+        if (!sameJson(this.columns(), columns)) this.columns.set(columns);
       },
       ...zoneAwareTimers(this.zone),
     });
@@ -244,7 +253,12 @@ export class Backlog implements OnInit {
     this.error.set('');
     this.reorderError.set('');
     this.reorderConflict.set(false);
-    forkJoin({ backlog: this.api.backlog(), board: this.api.board() })
+    this.backlogEtag = '';
+    this.boardEtag = '';
+    forkJoin({
+      backlog: this.backlogGetConditional(),
+      board: this.boardGetConditional(),
+    })
       .pipe(
         finalize(() => {
           if (generation === this.backlogLoadGeneration) this.loading.set(false);
@@ -253,10 +267,12 @@ export class Backlog implements OnInit {
       .subscribe({
         next: ({ backlog, board }) => {
           if (generation !== this.backlogLoadGeneration) return;
-          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board), () => {
-            this.rememberBacklogCache(backlog.items);
-            this.items.set(backlog.items);
-            this.columns.set(board.columns);
+          if (backlog.status !== 'ok' || board.status !== 'ok') return;
+          this.rememberEtagsFromOk(backlog, board);
+          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board.body), () => {
+            this.rememberBacklogCache(backlog.body.items);
+            this.items.set(backlog.body.items);
+            this.columns.set(board.body.columns);
             // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
             // (not the loading-only first paint).
             this.scheduleBacklogScrollRestore();
@@ -267,6 +283,39 @@ export class Backlog implements OnInit {
           this.error.set(errorMessage(e));
         },
       });
+  }
+
+  /** ETag keys use fetchKey 0 (backlog page does not pass projectId). */
+  private pollBacklogBoard(): Observable<{ items: Item[]; columns: Column[] }> {
+    const prev = { items: this.items(), columns: this.columns() };
+    return forkJoin({
+      backlog: this.backlogGetConditional(this.backlogEtag || null),
+      board: this.boardGetConditional(this.boardEtag || null),
+    }).pipe(
+      tap(({ backlog, board }) => this.rememberEtagsFromOk(backlog, board)),
+      map(({ backlog, board }) => mergeBacklogBoardPoll(prev, backlog, board)),
+      mergeMap((merged) => (merged ? [merged] : EMPTY)),
+    );
+  }
+
+  private boardGetConditional(
+    etag?: string | null,
+  ): Observable<ConditionalGetResult<BoardData>> {
+    return resolveBoardConditional(this.api, undefined, etag);
+  }
+
+  private backlogGetConditional(
+    etag?: string | null,
+  ): Observable<ConditionalGetResult<{ items: Item[] }>> {
+    return resolveBacklogConditional(this.api, undefined, etag);
+  }
+
+  private rememberEtagsFromOk(
+    backlog: ConditionalGetResult<{ items: Item[] }>,
+    board: ConditionalGetResult<BoardData>,
+  ) {
+    if (backlog.status === 'ok' && backlog.etag) this.backlogEtag = backlog.etag;
+    if (board.status === 'ok' && board.etag) this.boardEtag = board.etag;
   }
 
   /**
@@ -282,7 +331,12 @@ export class Backlog implements OnInit {
       this.items.set(cached);
     }
     this.projectSwitchSub?.unsubscribe();
-    this.projectSwitchSub = forkJoin({ backlog: this.api.backlog(), board: this.api.board() })
+    this.backlogEtag = '';
+    this.boardEtag = '';
+    this.projectSwitchSub = forkJoin({
+      backlog: this.backlogGetConditional(),
+      board: this.boardGetConditional(),
+    })
       .pipe(
         finalize(() => {
           if (generation !== this.backlogLoadGeneration) return;
@@ -293,11 +347,13 @@ export class Backlog implements OnInit {
       .subscribe({
         next: ({ backlog, board }) => {
           if (generation !== this.backlogLoadGeneration) return;
+          if (backlog.status !== 'ok' || board.status !== 'ok') return;
+          this.rememberEtagsFromOk(backlog, board);
           this.error.set('');
-          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board), () => {
-            this.rememberBacklogCache(backlog.items);
-            this.items.set(backlog.items);
-            this.columns.set(board.columns);
+          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board.body), () => {
+            this.rememberBacklogCache(backlog.body.items);
+            this.items.set(backlog.body.items);
+            this.columns.set(board.body.columns);
           });
         },
         error: (e) => {
