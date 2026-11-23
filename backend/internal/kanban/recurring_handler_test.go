@@ -125,6 +125,7 @@ func TestRunRecurringExpandsPlaceholders(t *testing.T) {
 	repo.ensureRecurring()
 	repo.recurringRules[1] = rule
 	repo.nextRecurringID = 2
+	// RunRecurring uses its own time.Now(); compare against a before/after window (UTC day boundary).
 	before := time.Now().UTC()
 	created, _, failed, err := repo.RunRecurring(t.Context())
 	after := time.Now().UTC()

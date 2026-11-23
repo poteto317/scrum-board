@@ -105,6 +105,7 @@ func (m *memoryRepo) RunRecurring(ctx context.Context) (created, skipped, failed
 		}
 		title, description, prepErr := materializeRecurringFire(rule, now)
 		if prepErr != nil {
+			// Test repo: no slog; production MySQL path logs "recurring run materialize".
 			failed++
 			continue
 		}
