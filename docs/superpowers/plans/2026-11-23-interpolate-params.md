@@ -38,7 +38,7 @@ cd backend && go test ./internal/mysqlconfig/ -count=1 -race
 
 - [x] `mysqlTestDB` に `cfg.InterpolateParams = true`（`MultiStatements=true` は維持・触らない）
 - [x] `KANBAN_TEST_DSN` 付きで `./internal/kanban/` を実行。**`TestMySQLActivateSprintConcurrent` は既知フレークのため skip**（本変更と無関係）。
-- [x] 失敗時は JSON / 履歴 import（`TestMySQLImportWorksWithInterpolatedParams` 含む）を優先確認。（Import 経路 GREEN。履歴 baseline の archivedAt 期待ずれは既知フレークで本変更無関係）
+- [x] 失敗時は JSON / 履歴 import（`TestMySQLImportHistoryWithStandardDriverFlags` 含む）を優先確認。（Import 経路 GREEN。履歴 baseline の archivedAt 期待ずれは既知フレークで本変更無関係）
 
 ```bash
 cd backend && KANBAN_TEST_DSN='scrum:scrum_dev@tcp(127.0.0.1:3307)/scrumboard_numbering_test?parseTime=true' \

@@ -4,7 +4,7 @@
 
 `go-sql-driver/mysql` の既定では、プレースホルダ付きクエリは Prepare → Execute → Close の 3 段階になり、往復が増える。API サーバは `mysqlconfig.ForServer`、一部 CLI（`rewrite-origins`）は `mysqlconfig.ForCLI` 経由。**`import-history` は `mysql.ParseDSN` 直叩きで mysqlconfig 外**（今回の入口統一対象外）。
 
-`InterpolateParams = true` の先例は、履歴統合の **専用テスト**（`TestMySQLImportWorksWithInterpolatedParams`）が別接続で有効化している程度。大半の `mysqlTestDB` 経路は未設定。
+`InterpolateParams = true` の先例は、履歴統合の **専用テスト**（`TestMySQLImportHistoryWithStandardDriverFlags`）が別接続で有効化している程度。大半の `mysqlTestDB` 経路は未設定。
 
 ## 決めたこと
 
@@ -15,7 +15,7 @@
 | import-history | **非対象**（mysqlconfig 外のまま。カードの入口は `mysqlconfig/config.go`） |
 | 文字コード | **DB_* / FromDBEnv**: 既存 `Params charset=utf8mb4` でカード記載どおり追加緩和なし。**DSN 直指定**（`KANBAN_TEST_DSN` / Import DSN）は呼び出し側の charset に依存し、今回 Params を強制しない |
 | 統合テスト接続 | `mysqlTestDB` でも `InterpolateParams = true`。**「本番と同じは InterpolateParams のみ」**（`MultiStatements=true` はテスト用のまま） |
-| 既存対比テスト | `TestMySQLImportWorksWithInterpolatedParams` は両方 true になっても残す（冗長なら後で整理可・必須ではない） |
+| 既存対比テスト | `TestMySQLImportHistoryWithStandardDriverFlags` は両方 true になっても残す（冗長なら後で整理可・必須ではない） |
 | 非対象 | クエリ書き換え、接続プール、本番往復計測、`import-history` |
 | API | HTTP / OpenAPI 変更なし |
 
