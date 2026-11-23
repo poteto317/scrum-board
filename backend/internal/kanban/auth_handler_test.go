@@ -138,11 +138,11 @@ func TestSessionMiddlewareExemptAndRequired(t *testing.T) {
 	if w := requestAnon(h, "POST", "/api/archive/auto-archive", "{}"); w.Code != 403 {
 		t.Fatalf("archive auto-run anon=%d body=%s", w.Code, w.Body)
 	}
-	if w := requestScheduler(h, "POST", "/api/archive/auto-archive", "{}"); w.Code != 503 {
-		t.Fatalf("archive auto-run scheduler should pass auth and reach unavailable repository: %d body=%s", w.Code, w.Body)
+	if w := requestScheduler(h, "POST", "/api/archive/auto-archive", "{}"); w.Code != 200 {
+		t.Fatalf("archive auto-run scheduler=%d body=%s", w.Code, w.Body)
 	}
-	if w := requestWithCookie(h, "POST", "/api/archive/auto-archive", "{}", HandlerTestSessionID); w.Code != 503 {
-		t.Fatalf("archive auto-run admin should pass auth and reach unavailable repository: %d body=%s", w.Code, w.Body)
+	if w := requestWithCookie(h, "POST", "/api/archive/auto-archive", "{}", HandlerTestSessionID); w.Code != 200 {
+		t.Fatalf("archive auto-run admin=%d body=%s", w.Code, w.Body)
 	}
 	if w := requestAnon(h, "GET", "/api/board", ""); w.Code != 401 {
 		t.Fatalf("board anon=%d", w.Code)
