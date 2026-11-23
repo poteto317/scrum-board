@@ -81,12 +81,19 @@ paths:
       summary: バックログ
       operationId: get_api_backlog
       parameters:
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+        description: プロジェクトで絞り込む（省略時はワークスペース全体）
       - name: If-None-Match
         in: header
         required: false
         schema:
           type: string
-        description: 前回応答の ETag。一致すれば 304
+        description: 前回応答の ETag。一致すれば 304（projectId スコープ別）
       responses:
         '200':
           description: 成功
@@ -145,12 +152,19 @@ paths:
       summary: ボード（列＋アイテム）
       operationId: get_api_board
       parameters:
+      - name: projectId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+        description: プロジェクトで絞り込む（省略時はワークスペース全体）
       - name: If-None-Match
         in: header
         required: false
         schema:
           type: string
-        description: 前回応答の ETag。一致すれば 304
+        description: 前回応答の ETag。一致すれば 304（projectId スコープ別）
       responses:
         '200':
           description: 成功
