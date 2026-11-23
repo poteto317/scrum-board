@@ -116,22 +116,26 @@ func TestRunRecurringFailedAndSkippedCounters(t *testing.T) {
 
 func TestRunRecurringExpandsPlaceholders(t *testing.T) {
 	repo := fresh()
-	now := time.Now().UTC()
-	repo.ensureRecurring()
-	repo.recurringRules[1] = RecurringRule{
+	past := time.Now().UTC().Add(-48 * time.Hour)
+	rule := RecurringRule{
 		ID: 1, ProjectID: 1, Name: "dyn", Title: "週次 {{weekStart}}", Description: "日 {{date}}",
 		Cron: "0 0 * * *", Timezone: "UTC", ColumnID: 1, Enabled: true,
-		CreatedAt: now.Add(-48 * time.Hour), UpdatedAt: now.Add(-48 * time.Hour),
+		CreatedAt: past, UpdatedAt: past,
 	}
+	repo.ensureRecurring()
+	repo.recurringRules[1] = rule
 	repo.nextRecurringID = 2
+	before := time.Now().UTC()
 	created, _, failed, err := repo.RunRecurring(t.Context())
+	after := time.Now().UTC()
 	if err != nil || created != 1 || failed != 0 {
 		t.Fatalf("created=%d failed=%d err=%v", created, failed, err)
 	}
-	wantTitle, wantDesc, wantErr := materializeRecurringFire(repo.recurringRules[1], now)
+	wantTitle, wantDesc, wantErr := materializeRecurringFire(rule, before)
 	if wantErr != nil {
 		t.Fatalf("want materialize: %v", wantErr)
 	}
+	altTitle, altDesc, _ := materializeRecurringFire(rule, after)
 	var found *Item
 	for _, c := range repo.cards {
 		if strings.Contains(c.Title, "週次") {
@@ -143,8 +147,10 @@ func TestRunRecurringExpandsPlaceholders(t *testing.T) {
 	if found == nil {
 		t.Fatal("item missing")
 	}
-	if found.Title != wantTitle || found.Description != wantDesc {
-		t.Fatalf("got title=%q desc=%q want title=%q desc=%q", found.Title, found.Description, wantTitle, wantDesc)
+	okTitle := found.Title == wantTitle || found.Title == altTitle
+	okDesc := found.Description == wantDesc || found.Description == altDesc
+	if !okTitle || !okDesc {
+		t.Fatalf("got title=%q desc=%q want ~%q / %q", found.Title, found.Description, wantTitle, wantDesc)
 	}
 	if strings.Contains(found.Title, "{{") || strings.Contains(found.Description, "{{weekStart}}") {
 		t.Fatalf("placeholders left: %#v", found)
