@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -77,4 +78,29 @@ func TestPlanCardReorder(t *testing.T) {
 			t.Fatalf("doneAt=%v", plan.DoneAt)
 		}
 	})
+}
+
+func TestBuildCardReorderBatchSQL(t *testing.T) {
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	rows := []appliedCardReorder{
+		{ID: 10, ColumnID: 1, Position: 0, Plan: cardReorderPlan{NextOffset: 0}},
+		{ID: 11, ColumnID: 1, Position: 1, Plan: cardReorderPlan{NextOffset: 40}},
+	}
+	q, args := buildCardReorderBatchSQL(rows, false, now)
+	if !strings.Contains(q, "updated_at=updated_at") || strings.Contains(q, "done_at=") {
+		t.Fatalf("same-col query=%q", q)
+	}
+	if len(args) != 14 { // 3 CASE pairs ×2 rows + 2 ids
+		t.Fatalf("args len=%d want 14: %v", len(args), args)
+	}
+	moved := []appliedCardReorder{
+		{ID: 10, ColumnID: 2, Position: 0, Plan: cardReorderPlan{NextOffset: 0, DoneAt: &now}},
+	}
+	q, args = buildCardReorderBatchSQL(moved, true, now)
+	if !strings.Contains(q, "done_at=") || !strings.Contains(q, "updated_at=CASE") {
+		t.Fatalf("moved query=%q", q)
+	}
+	if len(args) != 11 { // 5 CASE pairs + 1 id
+		t.Fatalf("moved args len=%d want 11: %v", len(args), args)
+	}
 }

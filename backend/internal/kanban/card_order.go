@@ -19,6 +19,7 @@ type cardReorderPlan struct {
 // planCardReorder decides whether to skip an UPDATE and, if not, which query/args to run.
 // updated_at is the card's edit time: only a column (status) change moves it. A card that merely
 // shifts position/offset keeps it (and its history revision) as it was.
+// ReorderItems uses Skip/ColumnChanged/NextOffset/DoneAt only; Query/Args remain for unit tests.
 func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now time.Time, sourceDone, targetDone bool) cardReorderPlan {
 	nextOffset := before.OffsetY
 	offsetChanged := false
@@ -53,6 +54,15 @@ func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now tim
 	}
 }
 
+// appliedCardReorder is one non-skip plan plus the target column/position for CASE batching.
+type appliedCardReorder struct {
+	ID       int64
+	ColumnID int64
+	Position int
+	Plan     cardReorderPlan
+	Before   Item
+}
+
 func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOrder) ([]Item, error) {
 	if err := validateItemOrder(orders); err != nil {
 		return nil, err
@@ -67,6 +77,7 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 	if err != nil {
 		return nil, err
 	}
+	countReorderMeasuredSQL()
 	knownColumns := make(map[int64]struct{}, len(cols))
 	doneColumns := make(map[int64]bool, len(cols))
 	for _, c := range cols {
@@ -97,6 +108,7 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 	if err != nil {
 		return nil, err
 	}
+	countReorderMeasuredSQL()
 	existing, err := lockCardsInColumns(ctx, tx, columnIDs, active)
 	if err != nil {
 		return nil, err
@@ -115,6 +127,7 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 	}
 
 	now := time.Now().UTC()
+	var sameCol, moved []appliedCardReorder
 	for _, order := range orders {
 		for pos, cardID := range order.ItemIDs {
 			before := existingSet[cardID]
@@ -126,21 +139,22 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 			if plan.Skip {
 				continue
 			}
-			if _, err = tx.ExecContext(ctx, plan.Query, plan.Args...); err != nil {
-				return nil, err
-			}
+			row := appliedCardReorder{ID: cardID, ColumnID: order.ColumnID, Position: pos, Plan: plan, Before: before}
 			if plan.ColumnChanged {
-				after := before
-				after.ColumnID = order.ColumnID
-				after.Position = pos
-				after.OffsetY = plan.NextOffset
-				after.DoneAt = plan.DoneAt
-				after.UpdatedAt = now
-				if err = appendHistory(ctx, tx, &before, after, "updated"); err != nil {
-					return nil, err
-				}
+				moved = append(moved, row)
+			} else {
+				sameCol = append(sameCol, row)
 			}
 		}
+	}
+	if err = execCardReorderBatch(ctx, tx, sameCol, false, now); err != nil {
+		return nil, err
+	}
+	if err = execCardReorderBatch(ctx, tx, moved, true, now); err != nil {
+		return nil, err
+	}
+	if err = appendMovedCardHistory(ctx, tx, moved, now); err != nil {
+		return nil, err
 	}
 
 	cards, err := listOrderedCards(ctx, tx, active)
@@ -153,15 +167,89 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 	return cards, nil
 }
 
-// lockCardsInColumns reads and locks every card in the given columns. ORDER BY only sorts the result: InnoDB
-// locks rows in the order the chosen index is scanned (items_column_position for a large table, the primary key
-// for a tiny one), so the lock order is not guaranteed. Callers are serialized by the all-columns lock
-// (lockColumnRows / lockExistingColumn) taken first, which is what keeps concurrent writers from deadlocking.
+func appendMovedCardHistory(ctx context.Context, tx *sql.Tx, moved []appliedCardReorder, now time.Time) error {
+	for _, row := range moved {
+		after := row.Before
+		after.ColumnID = row.ColumnID
+		after.Position = row.Position
+		after.OffsetY = row.Plan.NextOffset
+		after.DoneAt = row.Plan.DoneAt
+		after.UpdatedAt = now
+		before := row.Before
+		if err := appendHistory(ctx, tx, &before, after, "updated"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func buildCardReorderBatchSQL(rows []appliedCardReorder, columnChanged bool, now time.Time) (string, []any) {
+	n := len(rows)
+	args := make([]any, 0, n*10)
+	colCase := "CASE id"
+	posCase := "CASE id"
+	offCase := "CASE id"
+	for _, row := range rows {
+		colCase += " WHEN ? THEN ?"
+		args = append(args, row.ID, row.ColumnID)
+	}
+	colCase += " END"
+	for _, row := range rows {
+		posCase += " WHEN ? THEN ?"
+		args = append(args, row.ID, row.Position)
+	}
+	posCase += " END"
+	for _, row := range rows {
+		offCase += " WHEN ? THEN ?"
+		args = append(args, row.ID, row.Plan.NextOffset)
+	}
+	offCase += " END"
+	var query string
+	if columnChanged {
+		doneCase := "CASE id"
+		updCase := "CASE id"
+		for _, row := range rows {
+			doneCase += " WHEN ? THEN ?"
+			args = append(args, row.ID, row.Plan.DoneAt)
+		}
+		doneCase += " END"
+		for _, row := range rows {
+			updCase += " WHEN ? THEN ?"
+			args = append(args, row.ID, now)
+		}
+		updCase += " END"
+		query = "UPDATE items SET column_id=" + colCase + ", position=" + posCase + ", offset_y=" + offCase +
+			", done_at=" + doneCase + ", updated_at=" + updCase + " WHERE id IN (" + placeholders(n) + ")"
+	} else {
+		query = "UPDATE items SET column_id=" + colCase + ", position=" + posCase + ", offset_y=" + offCase +
+			", updated_at=updated_at WHERE id IN (" + placeholders(n) + ")"
+	}
+	for _, row := range rows {
+		args = append(args, row.ID)
+	}
+	return query, args
+}
+
+func execCardReorderBatch(ctx context.Context, tx *sql.Tx, rows []appliedCardReorder, columnChanged bool, now time.Time) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	query, args := buildCardReorderBatchSQL(rows, columnChanged, now)
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	countReorderMeasuredSQL()
+	return nil
+}
+
+// lockCardsInColumns locks every card in the given columns with one SELECT … FOR UPDATE of
+// reorder/history fields only (no description/PR/related). ORDER BY id does not define InnoDB
+// lock order; callers take lockColumnRows first so concurrent writers do not deadlock.
 func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64, projectID int64) ([]Item, error) {
 	if len(columnIDs) == 0 {
 		return nil, ErrItemOrder
 	}
-	query := "SELECT id FROM items WHERE project_id=? AND deleted_at IS NULL AND archived_at IS NULL AND column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
+	query := "SELECT id, column_id, project_id, position, offset_y, done_at, updated_at FROM items WHERE project_id=? AND deleted_at IS NULL AND archived_at IS NULL AND column_id IN (" + placeholders(len(columnIDs)) + ") ORDER BY id FOR UPDATE"
 	args := make([]any, 0, len(columnIDs)+1)
 	args = append(args, projectID)
 	for _, id := range columnIDs {
@@ -171,36 +259,19 @@ func lockCardsInColumns(ctx context.Context, tx *sql.Tx, columnIDs []int64, proj
 	if err != nil {
 		return nil, err
 	}
-	var ids []int64
+	defer rows.Close()
+	cards := make([]Item, 0)
 	for rows.Next() {
-		var id int64
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return nil, err
-	}
-	rows.Close()
-	cards := make([]Item, 0, len(ids))
-	for _, id := range ids {
-		c, err := scanCard(tx.QueryRowContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.id=?", id))
-		if err != nil {
+		var c Item
+		if err = rows.Scan(&c.ID, &c.ColumnID, &c.ProjectID, &c.Position, &c.OffsetY, &c.DoneAt, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		cards = append(cards, c)
 	}
-	// PR URLs are read in a separate query (not joined) so one card is never returned once per PR and
-	// item_pr_links rows are never locked on behalf of a reorder.
-	if err = attachPRURLs(ctx, tx, cards); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	if err = attachRelatedItems(ctx, tx, cards); err != nil {
-		return nil, err
-	}
+	countReorderMeasuredSQL()
 	return cards, nil
 }
 
