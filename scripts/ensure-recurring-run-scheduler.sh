@@ -4,11 +4,13 @@
 # even if a rule's cron is finer.
 #
 # Usage (after deploy; same env as deploy-gcp.sh):
-#   SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=https://....run.app \
+#   GCP_PROJECT=... SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=https://....run.app \
 #     ./scripts/ensure-recurring-run-scheduler.sh
 #
+# Required: GCP_PROJECT, SCHEDULER_JOB_TOKEN, PUBLIC_ORIGIN
 # Optional overrides:
-#   GCP_PROJECT, GCP_REGION, SCHEDULER_JOB_NAME (default: scrum-board-recurring-run)
+#   GCP_REGION (default: asia-northeast1)
+#   SCHEDULER_JOB_NAME (default: scrum-board-recurring-run)
 #   SCHEDULER_CRON (default: */15 * * * *  — every 15 minutes Asia/Tokyo)
 #   SCHEDULER_TZ (default: Asia/Tokyo)
 #
@@ -23,7 +25,6 @@ require() {
   fi
 }
 
-GCP_PROJECT="${GCP_PROJECT:-daily-routine-app-8a832}"
 GCP_REGION="${GCP_REGION:-asia-northeast1}"
 SCHEDULER_JOB_NAME="${SCHEDULER_JOB_NAME:-scrum-board-recurring-run}"
 SCHEDULER_CRON="${SCHEDULER_CRON:-*/15 * * * *}"

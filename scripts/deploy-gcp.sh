@@ -16,7 +16,6 @@ require() {
   fi
 }
 
-GCP_PROJECT="${GCP_PROJECT:-daily-routine-app-8a832}"
 GCP_REGION="${GCP_REGION:-asia-northeast1}"
 AR_REPO="${AR_REPO:-scrum-board}"
 SERVICE_NAME="${SERVICE_NAME:-scrum-board}"

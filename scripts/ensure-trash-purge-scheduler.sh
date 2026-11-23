@@ -2,11 +2,13 @@
 # Ensure a daily Cloud Scheduler job that POSTs /api/trash/purge with X-Scheduler-Token.
 #
 # Usage (after deploy; same env as deploy-gcp.sh):
-#   SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=https://....run.app \
+#   GCP_PROJECT=... SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN=https://....run.app \
 #     ./scripts/ensure-trash-purge-scheduler.sh
 #
+# Required: GCP_PROJECT, SCHEDULER_JOB_TOKEN, PUBLIC_ORIGIN
 # Optional overrides:
-#   GCP_PROJECT, GCP_REGION, SCHEDULER_JOB_NAME (default: scrum-board-trash-purge)
+#   GCP_REGION (default: asia-northeast1)
+#   SCHEDULER_JOB_NAME (default: scrum-board-trash-purge)
 #   SCHEDULER_CRON (default: 15 3 * * *  — 03:15 Asia/Tokyo)
 #   SCHEDULER_TZ (default: Asia/Tokyo)
 #
@@ -21,7 +23,6 @@ require() {
   fi
 }
 
-GCP_PROJECT="${GCP_PROJECT:-daily-routine-app-8a832}"
 GCP_REGION="${GCP_REGION:-asia-northeast1}"
 SCHEDULER_JOB_NAME="${SCHEDULER_JOB_NAME:-scrum-board-trash-purge}"
 SCHEDULER_CRON="${SCHEDULER_CRON:-15 3 * * *}"
