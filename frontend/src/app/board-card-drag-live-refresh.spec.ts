@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of, Subject } from 'rxjs';
+import { map, of, Subject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
@@ -56,6 +56,9 @@ function withoutA(): NormalizedBoardData {
 async function setup(reorderItems: ReturnType<typeof vi.fn> = vi.fn()) {
   vi.useFakeTimers();
   const board = vi.fn(() => of(todoBoard([A, B, C, D, E])));
+  const boardConditional = vi.fn(() =>
+    board().pipe(map((body) => ({ status: 'ok' as const, etag: '"t"', body }))),
+  );
   TestBed.configureTestingModule({
     imports: [Board],
     providers: [
@@ -64,6 +67,7 @@ async function setup(reorderItems: ReturnType<typeof vi.fn> = vi.fn()) {
         provide: Api,
         useValue: {
           board,
+          boardConditional,
           reorderItems,
           reorderColumns: vi.fn(),
           listCommandTemplates: () => of({ templates: [] }),
@@ -76,7 +80,7 @@ async function setup(reorderItems: ReturnType<typeof vi.fn> = vi.fn()) {
   const f = TestBed.createComponent(Board);
   f.detectChanges();
   await f.whenStable();
-  return { f, board, reorderItems, component: f.componentInstance };
+  return { f, board, boardConditional, reorderItems, component: f.componentInstance };
 }
 
 function titles(component: Board): string[] {
