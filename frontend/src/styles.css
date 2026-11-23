@@ -259,6 +259,13 @@ dialog.modal-backdrop {
 dialog.modal-backdrop:not([open]) {
   display: none;
 }
+/* Pair with .modal-backdrop above: UA dialog[open]{display:block} wins over the class-only flex rule. */
+dialog.modal-backdrop[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
 dialog.modal-backdrop::backdrop {
   background: #1e2b2155;
   backdrop-filter: blur(3px);
