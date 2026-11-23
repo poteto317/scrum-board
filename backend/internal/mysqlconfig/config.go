@@ -29,10 +29,18 @@ func FromDBEnv(getenv func(string) string) *mysql.Config {
 		cfg.Net = "tcp"
 		cfg.Addr = EnvWithDefault(getenv, "DB_ADDRESS", "127.0.0.1:3307")
 	}
-	cfg.ParseTime = true
-	cfg.Loc = time.UTC
+	ApplyStandardDriverFlags(cfg)
 	cfg.Params = map[string]string{"charset": "utf8mb4"}
 	return cfg
+}
+
+// ApplyStandardDriverFlags sets ParseTime, UTC location, and InterpolateParams.
+// Prefer FromDBEnv / ForServer / ForCLI for app connections; call this after
+// ParseDSN in tests or other DSN entry points that must match those defaults.
+func ApplyStandardDriverFlags(cfg *mysql.Config) {
+	cfg.ParseTime = true
+	cfg.Loc = time.UTC
+	cfg.InterpolateParams = true
 }
 
 // ApplyTimeouts sets dial, read, and write timeouts on an existing config.
@@ -56,8 +64,7 @@ func ForCLI(getenv func(string) string) (*mysql.Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid KANBAN_IMPORT_DSN")
 		}
-		cfg.ParseTime = true
-		cfg.Loc = time.UTC
+		ApplyStandardDriverFlags(cfg)
 		cfg.MultiStatements = false
 		ApplyTimeouts(cfg, 5*time.Second, 30*time.Second, 30*time.Second)
 		return cfg, nil
