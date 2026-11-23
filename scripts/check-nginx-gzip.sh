@@ -75,9 +75,20 @@ check_conf() {
     echo "error: $label missing 'gzip_comp_level 5;'" >&2; return 1
   }
 
+  local types_block
+  types_block="$(awk '
+    /^[[:space:]]*gzip_types/ { in_types=1 }
+    in_types {
+      print
+      if ($0 ~ /;/) exit
+    }
+  ' "$conf")"
+  [ -n "$types_block" ] || {
+    echo "error: $label missing gzip_types block" >&2; return 1
+  }
   local t
   for t in "${TYPES[@]}"; do
-    grep -qF "$t" "$conf" || {
+    echo "$types_block" | grep -qF "$t" || {
       echo "error: $label gzip_types missing $t" >&2; return 1
     }
   done
@@ -148,6 +159,31 @@ server {
 EOF
   if ! check_conf "$tmp" "selftest-complete"; then
     echo "error: --selftest expected success on complete fixture" >&2
+    exit 1
+  fi
+  # Outside gzip_types, text/plain must not satisfy the type contract (deploy uses default_type text/plain).
+  cat >"$tmp" <<'EOF'
+server {
+  default_type text/plain;
+  gzip on;
+  gzip_comp_level 5;
+  gzip_min_length 256;
+  gzip_vary on;
+  gzip_proxied any;
+  gzip_types
+    text/css text/xml application/json
+    application/javascript text/javascript application/xml image/svg+xml;
+  location /api/ {
+    proxy_pass http://127.0.0.1:1;
+    proxy_buffering on;
+    proxy_buffer_size 128k;
+    proxy_buffers 8 256k;
+    proxy_busy_buffers_size 512k;
+  }
+}
+EOF
+  if check_conf "$tmp" "selftest-types-scope"; then
+    echo "error: --selftest expected failure when text/plain only outside gzip_types" >&2
     exit 1
   fi
   echo "ok: check-nginx-gzip --selftest"
