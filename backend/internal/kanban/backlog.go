@@ -56,21 +56,27 @@ func (r MySQLRepository) ReorderBacklog(ctx context.Context, cardIDs []int64) ([
 	if _, err = lockColumnRows(ctx, tx); err != nil {
 		return nil, err
 	}
+	countBacklogReorderMeasuredSQL()
 	active, err := resolvedActiveProjectID(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
+	countBacklogReorderMeasuredSQL()
 	existing, err := lockProjectCards(ctx, tx, active)
 	if err != nil {
 		return nil, err
 	}
+	countBacklogReorderMeasuredSQL()
 	if !sameItemIDSet(existing, cardIDs) {
 		return nil, ErrBacklogMismatch
 	}
-	for pos, id := range cardIDs {
-		if _, err = tx.ExecContext(ctx, "UPDATE items SET backlog_position=?, updated_at=updated_at WHERE id=?", pos, id); err != nil {
-			return nil, err
-		}
+	current, err := lockBacklogPositions(ctx, tx, active)
+	if err != nil {
+		return nil, err
+	}
+	countBacklogReorderMeasuredSQL()
+	if err = execBacklogReorderBatch(ctx, tx, changedBacklogAssignments(current, cardIDs)); err != nil {
+		return nil, err
 	}
 	cards, err := listBacklogCards(ctx, tx, active)
 	if err != nil {
@@ -96,6 +102,61 @@ func nextBacklogPosition(ctx context.Context, tx *sql.Tx, projectID int64) (int,
 		return 0, err
 	}
 	return maxPos + 1, nil
+}
+
+type backlogPositionAssign struct {
+	ID       int64
+	Position int
+}
+
+func lockBacklogPositions(ctx context.Context, tx *sql.Tx, projectID int64) (map[int64]int, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT id, backlog_position FROM items WHERE project_id=? AND deleted_at IS NULL AND archived_at IS NULL ORDER BY id FOR UPDATE", projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[int64]int)
+	for rows.Next() {
+		var id int64
+		var pos int
+		if err = rows.Scan(&id, &pos); err != nil {
+			return nil, err
+		}
+		out[id] = pos
+	}
+	return out, rows.Err()
+}
+
+func changedBacklogAssignments(current map[int64]int, cardIDs []int64) []backlogPositionAssign {
+	changed := make([]backlogPositionAssign, 0, len(cardIDs))
+	for pos, id := range cardIDs {
+		if cur, ok := current[id]; !ok || cur != pos {
+			changed = append(changed, backlogPositionAssign{ID: id, Position: pos})
+		}
+	}
+	return changed
+}
+
+func buildBacklogReorderBatchSQL(rows []backlogPositionAssign) (string, []any) {
+	ids := make([]int64, len(rows))
+	values := make([]int, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+		values[i] = row.Position
+	}
+	return buildIntCaseColumnUpdateSQL("backlog_position", ids, values)
+}
+
+func execBacklogReorderBatch(ctx context.Context, tx *sql.Tx, rows []backlogPositionAssign) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	query, args := buildBacklogReorderBatchSQL(rows)
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	countBacklogReorderMeasuredSQL()
+	return nil
 }
 
 func lockProjectCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]int64, error) {
