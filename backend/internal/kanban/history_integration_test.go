@@ -278,7 +278,7 @@ func TestMySQLImportRejectsFutureOccurredAtWithoutWriting(t *testing.T) {
 	}
 }
 
-func TestMySQLImportWorksWithInterpolatedParams(t *testing.T) {
+func TestMySQLImportHistoryWithStandardDriverFlags(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	mustInit(t, MySQLRepository{DB: db})
 	c, err := MySQLRepository{DB: db}.GetItem(context.Background(), 1)
