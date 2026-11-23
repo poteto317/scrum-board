@@ -399,7 +399,7 @@ gcloud sql users create scrum \
 
 ### 3. Artifact Registry とイメージのビルド・デプロイ
 
-リポジトリルートで `scripts/deploy-gcp.sh` を使います。必須環境変数が欠けると **即終了** します（値の一覧は `.env.example` のコメント参照）。
+リポジトリルートで `scripts/deploy-gcp.sh` を使います。必須環境変数（少なくとも `GCP_PROJECT`・`CLOUDSQL_INSTANCE`・DB/AUTH/ADMIN/SCHEDULER 系）が欠けると **即終了** します。`.env.example` の GCP 行は例示のみで、スクリプトの本番既定ではありません。
 
 **秘密の正本は Secret Manager です。** `export` した `DB_PASSWORD` / `AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD` はスクリプトが SM に載せる一時入力であり、Cloud Run の平文環境変数には残りません（`--set-secrets` + 平文の `--remove-env-vars`）。3 パスワードは **再デプロイでも毎回 require**（シード後もキーを残し、値はローテ可）。
 

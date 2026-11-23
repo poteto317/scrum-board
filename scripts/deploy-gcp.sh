@@ -3,6 +3,10 @@
 # Passwords (AUTH_PASSWORD, ADMIN_INITIAL_PASSWORD, DB_PASSWORD) are written to Secret Manager
 # and mounted with --set-secrets — never left as plaintext Cloud Run env vars.
 # Non-secret config still uses --env-vars-file (avoids comma/= parsing issues in --set-env-vars).
+#
+# Required: GCP_PROJECT, CLOUDSQL_INSTANCE, DB_USER, DB_PASSWORD, DB_NAME,
+#   AUTH_USER, AUTH_PASSWORD, ADMIN_INITIAL_PASSWORD, SCHEDULER_JOB_TOKEN
+# Optional: GCP_REGION (default asia-northeast1), AR_REPO, SERVICE_NAME, PUBLIC_ORIGIN, SECRET_ID_*
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
