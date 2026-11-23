@@ -76,12 +76,18 @@ func (r MySQLRepository) runOneRecurringRule(ctx context.Context, id int64, now 
 		return 0, 1, 0
 	}
 
+	title, description, err := materializeRecurringFire(rule, now)
+	if err != nil {
+		slog.Error("recurring run materialize", "ruleId", id, "error", err)
+		return 0, 0, 1
+	}
+
 	projectID := rule.ProjectID
 	_, err = createItemInTx(ctx, tx, ItemInput{
 		ColumnID:        rule.ColumnID,
 		ProjectID:       &projectID,
-		Title:           rule.Title,
-		Description:     rule.Description,
+		Title:           title,
+		Description:     description,
 		CreatedByUserID: nil,
 	})
 	if err != nil {

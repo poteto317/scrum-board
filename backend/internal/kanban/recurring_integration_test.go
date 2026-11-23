@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -85,6 +86,94 @@ func TestRunRecurringMySQLCreatesAndSkips(t *testing.T) {
 	}
 	if c2 != 0 || f2 != 1 {
 		t.Fatalf("second run created=%d skipped=%d failed=%d", c2, s2, f2)
+	}
+}
+
+func TestRunRecurringMySQLExpandsPlaceholders(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	r := MySQLRepository{DB: db}
+	past := time.Now().UTC().Add(-48 * time.Hour)
+	rule, err := r.CreateRecurringRule(ctx, 1, RecurringRuleInput{
+		Name: "dyn", Title: "週次 {{weekStart}}", Description: "日 {{date}}",
+		Cron: "0 0 * * *", Timezone: "UTC", ColumnID: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `UPDATE recurring_rules SET created_at=? WHERE id=?`, past, rule.ID)
+
+	before := time.Now().UTC()
+	created, _, failed, err := r.RunRecurring(ctx)
+	after := time.Now().UTC()
+	if err != nil || created != 1 || failed != 0 {
+		t.Fatalf("created=%d failed=%d err=%v", created, failed, err)
+	}
+	wantTitle, wantDesc, wantErr := materializeRecurringFire(rule, before)
+	if wantErr != nil {
+		t.Fatal(wantErr)
+	}
+	// Run uses its own now; date tokens equal if same UTC calendar day as before/after window.
+	altTitle, altDesc, _ := materializeRecurringFire(rule, after)
+	board, err := r.Board(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found *Item
+	for i := range board.Items {
+		if strings.HasPrefix(board.Items[i].Title, "週次 ") {
+			found = &board.Items[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("expanded item missing")
+	}
+	okTitle := found.Title == wantTitle || found.Title == altTitle
+	okDesc := found.Description == wantDesc || found.Description == altDesc
+	if !okTitle || !okDesc {
+		t.Fatalf("got title=%q desc=%q want ~%q / %q", found.Title, found.Description, wantTitle, wantDesc)
+	}
+	if strings.Contains(found.Title, "{{") || strings.Contains(found.Description, "{{") {
+		t.Fatalf("placeholders left: %+v", found)
+	}
+	reloaded, err := loadRecurringRule(ctx, db, rule.ID)
+	if err != nil || reloaded.LastFiredAt == nil {
+		t.Fatalf("lastFiredAt: %+v err=%v", reloaded, err)
+	}
+}
+
+func TestRunRecurringMySQLExpandOverlongFails(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	ctx := context.Background()
+	r := MySQLRepository{DB: db}
+	past := time.Now().UTC().Add(-48 * time.Hour)
+	tpl := strings.Repeat("あ", 195) + "{{date}}"
+	rule, err := r.CreateRecurringRule(ctx, 1, RecurringRuleInput{
+		Name: "long", Title: tpl, Description: "",
+		Cron: "0 0 * * *", Timezone: "UTC", ColumnID: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `UPDATE recurring_rules SET created_at=? WHERE id=?`, past, rule.ID)
+
+	created, _, failed, err := r.RunRecurring(ctx)
+	if err != nil || created != 0 || failed != 1 {
+		t.Fatalf("created=%d failed=%d err=%v", created, failed, err)
+	}
+	board, err := r.Board(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range board.Items {
+		if strings.Contains(item.Title, "あ") || strings.Contains(item.Title, "{{") {
+			t.Fatalf("unexpected item: %+v", item)
+		}
+	}
+	reloaded, err := loadRecurringRule(ctx, db, rule.ID)
+	if err != nil || reloaded.LastFiredAt != nil || !reloaded.Enabled {
+		t.Fatalf("failed rule state: %+v err=%v", reloaded, err)
 	}
 }
 
