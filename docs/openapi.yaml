@@ -2019,7 +2019,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JsonValue'
+                $ref: '#/components/schemas/RecurringRuleList'
       security:
       - cookieAuth: []
       - basicAuth: []
@@ -2032,7 +2032,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JsonValue'
+                $ref: '#/components/schemas/RecurringRule'
         '400':
           description: 不正な入力
           content:
@@ -2049,11 +2049,11 @@ paths:
       - cookieAuth: []
       - basicAuth: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JsonValue'
-      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+              $ref: '#/components/schemas/RecurringRuleCreate'
   /api/recurring-rules/{id}:
     patch:
       summary: 繰り返しルール更新
@@ -2064,7 +2064,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JsonValue'
+                $ref: '#/components/schemas/RecurringRule'
         '400':
           description: 不正な入力
           content:
@@ -2087,11 +2087,11 @@ paths:
       - cookieAuth: []
       - basicAuth: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JsonValue'
-      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+              $ref: '#/components/schemas/RecurringRulePatch'
     delete:
       summary: 繰り返しルール削除
       operationId: delete_api_recurring_rules_id
@@ -2119,7 +2119,9 @@ paths:
       operationId: post_api_recurring_run
       responses:
         '200':
-          description: 成功
+          description: >-
+            成功。ルールごとに title/description の {{weekStart}}/{{date}} をルール TZ で展開し、
+            展開後の長さ検証に失敗したルールは起票せず failed に計上する（全体は 200）。
           content:
             application/json:
               schema:
@@ -2139,7 +2141,10 @@ paths:
       security:
       - schedulerJobToken: []
       - cookieAuth: []
-      description: セッション Cookie ミドルウェアは免除。`X-Scheduler-Token`（環境変数 SCHEDULER_JOB_TOKEN と一致）または管理者セッションが必要。`Content-Type: application/json` 必須。
+      description: >-
+        セッション Cookie ミドルウェアは免除。`X-Scheduler-Token`（環境変数 SCHEDULER_JOB_TOKEN と一致）
+        または管理者セッションが必要。`Content-Type: application/json` 必須。
+        起票時にテンプレートを展開し、展開後 valid 失敗・TZ 不正は当該ルールを failed として数える。
       requestBody:
         required: false
         content:
@@ -2646,6 +2651,109 @@ components:
       additionalProperties: false
     JsonValue:
       description: 当該エンドポイントの JSON 応答。フィールド詳細は必要に応じて本スキーマを具体化する。
+    RecurringExpandableText:
+      type: string
+      description: >-
+        保存時はテンプレートのまま。POST /api/recurring/run 起票時のみ展開。
+        完全一致の {{weekStart}}（ルール TZ でその週の日曜、YYYY-MM-DD）と
+        {{date}}（run の now のルール TZ ローカル日付、YYYY-MM-DD）のみ置換。
+        空白入り・別ケース・未知の {{...}} は正規化せず残す（別トークンへマップしない）。
+        展開後の title/description が長さ上限を超える場合は当該ルールが failed（起票しない）。
+    RecurringRule:
+      type: object
+      required:
+      - id
+      - projectId
+      - name
+      - title
+      - description
+      - cron
+      - timezone
+      - columnId
+      - enabled
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        name:
+          type: string
+        title:
+          $ref: '#/components/schemas/RecurringExpandableText'
+        description:
+          $ref: '#/components/schemas/RecurringExpandableText'
+        cron:
+          type: string
+        timezone:
+          type: string
+        columnId:
+          type: integer
+        enabled:
+          type: boolean
+        lastFiredAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    RecurringRuleList:
+      type: object
+      required:
+      - rules
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecurringRule'
+      additionalProperties: false
+    RecurringRuleCreate:
+      type: object
+      required:
+      - name
+      - title
+      - cron
+      - columnId
+      properties:
+        name:
+          type: string
+        title:
+          $ref: '#/components/schemas/RecurringExpandableText'
+        description:
+          $ref: '#/components/schemas/RecurringExpandableText'
+        cron:
+          type: string
+        timezone:
+          type: string
+        columnId:
+          type: integer
+        enabled:
+          type: boolean
+      additionalProperties: false
+    RecurringRulePatch:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          $ref: '#/components/schemas/RecurringExpandableText'
+        description:
+          $ref: '#/components/schemas/RecurringExpandableText'
+        cron:
+          type: string
+        timezone:
+          type: string
+        columnId:
+          type: integer
+        enabled:
+          type: boolean
+      additionalProperties: false
     ItemComment:
       type: object
       required:
