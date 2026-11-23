@@ -513,12 +513,12 @@ func (h handler) reorderItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userPtr := requestUserPtr(r)
-	expanded, submitted, err := h.expandItemOrdersWithHidden(r.Context(), in.Columns, userPtr)
+	expanded, submitted, byID, err := h.expandItemOrdersWithHidden(r.Context(), in.Columns, userPtr)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	if !h.requireEditOnItemIDs(w, r, submitted) {
+	if !h.requireEditOnLoadedItems(w, userPtr, byID, submitted) {
 		return
 	}
 	cards, err := h.repo.ReorderItems(r.Context(), expanded)
