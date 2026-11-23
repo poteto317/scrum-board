@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func seedCards(repo *memoryRepo) {
@@ -157,6 +158,69 @@ func TestReorderItemsStorageFailure(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), secret) {
 		t.Fatalf("leaked: %s", w.Body.String())
+	}
+}
+
+type getItemCountingRepo struct {
+	*memoryRepo
+	gets int
+}
+
+func (r *getItemCountingRepo) GetItem(ctx context.Context, id int64) (Item, error) {
+	r.gets++
+	return r.memoryRepo.GetItem(ctx, id)
+}
+
+func TestReorderItemsHandlerDoesNotCallGetItem(t *testing.T) {
+	base := fresh()
+	seedCards(base)
+	repo := &getItemCountingRepo{memoryRepo: base}
+	h := NewHandler(repo)
+	w := request(h, "PUT", "/api/items/order", `{"columns":[{"columnId":1,"itemIds":[2,1]}]}`)
+	if w.Code != 200 {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body)
+	}
+	if repo.gets != 0 {
+		t.Fatalf("GetItem called %d times; want 0", repo.gets)
+	}
+}
+
+func TestReorderItemsHandlerRejectsWithoutEdit(t *testing.T) {
+	m := fresh()
+	seedCards(m)
+	hash, _ := HashPassword("x")
+	m.users = append(m.users, User{ID: 2, LoginName: "mem", DisplayName: "mem", PasswordHash: hash, Role: RoleMember})
+	for id, c := range m.cards {
+		c.ViewAccess = ViewAccessOpen
+		c.EditAccess = EditAccessRestricted
+		m.cards[id] = c
+		m.aclEntries[id] = ItemACL{EditUserIDs: []int64{1}}
+	}
+	sess := Session{ID: "mem-reorder", UserID: 2, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	m.sessions[sess.ID] = sess
+	w := requestWithCookie(NewHandler(m), "PUT", "/api/items/order", `{"columns":[{"columnId":1,"itemIds":[2,1]}]}`, sess.ID)
+	if w.Code != 403 || !strings.Contains(w.Body.String(), msgEditForbidden) {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body)
+	}
+}
+
+func TestReorderItemsHandlerRejectsWithoutView(t *testing.T) {
+	m := fresh()
+	seedCards(m)
+	hash, _ := HashPassword("x")
+	m.users = append(m.users, User{ID: 2, LoginName: "mem", DisplayName: "mem", PasswordHash: hash, Role: RoleMember})
+	for id, c := range m.cards {
+		c.ViewAccess = ViewAccessRestricted
+		c.EditAccess = EditAccessRestricted
+		m.cards[id] = c
+		m.aclEntries[id] = ItemACL{ViewUserIDs: []int64{1}, EditUserIDs: []int64{1}}
+	}
+	sess := Session{ID: "mem-reorder-view", UserID: 2, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+	m.sessions[sess.ID] = sess
+	// Submitted IDs are in byID (Board is unfiltered) but member cannot view → 403.
+	w := requestWithCookie(NewHandler(m), "PUT", "/api/items/order", `{"columns":[{"columnId":1,"itemIds":[1,2]},{"columnId":2,"itemIds":[3]}]}`, sess.ID)
+	if w.Code != 403 || !strings.Contains(w.Body.String(), msgViewForbidden) {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body)
 	}
 }
 

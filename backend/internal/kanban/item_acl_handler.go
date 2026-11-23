@@ -119,6 +119,23 @@ func (h handler) requireEdit(w http.ResponseWriter, r *http.Request, item Item) 
 	return userPtr, true
 }
 
+// replyIfCannotEdit writes 401/403 when view/edit fails. Shared by requireEdit and requireEditOnLoadedItems.
+func replyIfCannotEdit(w http.ResponseWriter, st ItemACLState, userPtr *User) bool {
+	if !CanView(st, userPtr) {
+		if userPtr == nil {
+			reply(w, 401, map[string]string{"message": msgLoginRequired})
+		} else {
+			reply(w, 403, map[string]string{"message": msgViewForbidden})
+		}
+		return false
+	}
+	if !CanEdit(st, userPtr) {
+		reply(w, 403, map[string]string{"message": msgEditForbidden})
+		return false
+	}
+	return true
+}
+
 func (h handler) requireActiveEdit(w http.ResponseWriter, r *http.Request, item Item) (*User, bool) {
 	user, ok := h.requireEdit(w, r, item)
 	if !ok {
@@ -299,14 +316,14 @@ func mergeHiddenIntoOrder(oldOrder, visibleOrder []int64, hidden map[int64]struc
 	return out
 }
 
-func (h handler) expandItemOrdersWithHidden(ctx context.Context, orders []ItemColumnOrder, user *User) ([]ItemColumnOrder, []int64, error) {
+func (h handler) expandItemOrdersWithHidden(ctx context.Context, orders []ItemColumnOrder, user *User) ([]ItemColumnOrder, []int64, map[int64]Item, error) {
 	board, err := h.repo.Board(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	entries, err := h.repo.ListACLEntriesForItems(ctx, itemIDsOf(board.Items))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	attachACLState(board.Items, entries)
 	byID := make(map[int64]Item, len(board.Items))
@@ -344,7 +361,27 @@ func (h handler) expandItemOrdersWithHidden(ctx context.Context, orders []ItemCo
 		}
 		expanded = append(expanded, cp)
 	}
-	return expanded, submittedIDs, nil
+	return expanded, submittedIDs, byID, nil
+}
+
+// requireEditOnLoadedItems checks CanEdit against ACL already attached on byID items.
+// IDs missing from byID are skipped (ReorderItems returns 409 on set mismatch). No GetItem / ACL reload.
+func (h handler) requireEditOnLoadedItems(w http.ResponseWriter, userPtr *User, byID map[int64]Item, ids []int64) bool {
+	seen := map[int64]struct{}{}
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		item, ok := byID[id]
+		if !ok {
+			continue
+		}
+		if !replyIfCannotEdit(w, aclStateFromItem(item), userPtr) {
+			return false
+		}
+	}
+	return true
 }
 
 func (h handler) expandBacklogWithHidden(ctx context.Context, visible []int64, user *User) ([]int64, []int64, error) {
