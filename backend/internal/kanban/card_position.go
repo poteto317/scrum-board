@@ -227,13 +227,31 @@ func compactColumnPositions(ctx context.Context, tx *sql.Tx, columnID, projectID
 		return err
 	}
 	rows.Close()
+	countCompactMeasuredSQL()
 	// Closing a gap is not an edit of the remaining cards, so their updated_at stays as it was.
-	for pos, id := range ids {
-		if _, err = tx.ExecContext(ctx, "UPDATE items SET position=?, updated_at=updated_at WHERE id=? AND position<>?", pos, id, pos); err != nil {
-			return err
-		}
+	return execCompactPositionBatch(ctx, tx, ids)
+}
+
+func execCompactPositionBatch(ctx context.Context, tx *sql.Tx, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
 	}
+	query, args := buildCompactPositionBatchSQL(ids)
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	countCompactMeasuredSQL()
 	return nil
+}
+
+// buildCompactPositionBatchSQL densifies positions to 0..n-1 in scan order (CASE + updated_at=updated_at).
+// Scan order alone defines targets, so current position need not be read (unlike backlog change-only CASE).
+func buildCompactPositionBatchSQL(ids []int64) (string, []any) {
+	values := make([]int, len(ids))
+	for i := range ids {
+		values[i] = i
+	}
+	return buildIntCaseColumnUpdateSQL("position", ids, values)
 }
 
 func listOrderedCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
