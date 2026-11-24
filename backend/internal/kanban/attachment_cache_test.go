@@ -49,6 +49,9 @@ func TestAttachmentContentIsCachedForAnHourWithAnETag(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "private, max-age=3600" {
 		t.Fatalf("Cache-Control=%q", got)
 	}
+	if got := rec.Header().Get("Vary"); got != "Cookie, Authorization" {
+		t.Fatalf("Vary=%q", got)
+	}
 	want := `"` + strconv.FormatInt(att.ID, 10) + "-" + strconv.FormatInt(att.ByteSize, 10) + `"`
 	if got := rec.Header().Get("ETag"); got != want {
 		t.Fatalf("ETag=%q, want %q", got, want)
@@ -62,7 +65,7 @@ func TestAttachmentContentAnswers304WithoutABodyWhenTheETagMatches(t *testing.T)
 	if rec.Code != http.StatusNotModified || rec.Body.Len() != 0 {
 		t.Fatalf("matching ETag: %d body=%d bytes", rec.Code, rec.Body.Len())
 	}
-	if rec.Header().Get("ETag") != etag || rec.Header().Get("Cache-Control") != "private, max-age=3600" || rec.Header().Get("Vary") != "Cookie" || rec.Header().Get("Content-Type") != "" {
+	if rec.Header().Get("ETag") != etag || rec.Header().Get("Cache-Control") != "private, max-age=3600" || rec.Header().Get("Vary") != "Cookie, Authorization" || rec.Header().Get("Content-Type") != "" {
 		t.Fatalf("304 headers: %v", rec.Header())
 	}
 	if other := getContent(h, card.Number, att.ID, `"0-0"`); other.Code != 200 || other.Body.Len() == 0 {
