@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"slices"
 	"testing"
 	"time"
@@ -75,5 +76,50 @@ func TestTrashListHidesExpiredItemsWithoutPurgingThem(t *testing.T) {
 	}
 	if _, ok := repo.cards[2]; !ok {
 		t.Fatal("listing must not purge: the expired row is left to /api/trash/purge")
+	}
+}
+
+// The handler passes the signed-in user to the viewer filter: a member sees the open row, not a
+// restricted one they are not on; the admin sees both; the list needs a session.
+func TestTrashListFiltersByTheSignedInUser(t *testing.T) {
+	repo := fresh()
+	h := NewHandler(repo)
+	now := time.Now().UTC()
+	repo.cards[1] = Item{ID: 1, Number: 1, ColumnID: 1, ProjectID: 1, Title: "open", ViewAccess: ViewAccessOpen, DeletedAt: &now}
+	repo.cards[2] = Item{ID: 2, Number: 2, ColumnID: 1, ProjectID: 1, Title: "restricted", ViewAccess: ViewAccessRestricted, DeletedAt: &now}
+	member, err := repo.CreateUser(t.Context(), UserCreateInput{LoginName: "trash-member", Password: "password1", DisplayName: "Member", Role: RoleMember})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := repo.CreateSession(t.Context(), member.ID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := func(rec *httptest.ResponseRecorder) []string {
+		t.Helper()
+		if rec.Code != 200 {
+			t.Fatalf("list: %d %s", rec.Code, rec.Body)
+		}
+		var listed struct {
+			Items []TrashItem `json:"items"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, it := range listed.Items {
+			out = append(out, it.Title)
+		}
+		slices.Sort(out)
+		return out
+	}
+	if got := titles(requestWithCookie(h, "GET", "/api/trash?projectId=1", "", sess.ID)); !slices.Equal(got, []string{"open"}) {
+		t.Fatalf("member sees %v; want only the open row", got)
+	}
+	if got := titles(request(h, "GET", "/api/trash?projectId=1", "")); !slices.Equal(got, []string{"open", "restricted"}) {
+		t.Fatalf("admin sees %v; want both", got)
+	}
+	if rec := requestAnon(h, "GET", "/api/trash?projectId=1", ""); rec.Code != 401 {
+		t.Fatalf("anonymous list = %d; want 401", rec.Code)
 	}
 }
