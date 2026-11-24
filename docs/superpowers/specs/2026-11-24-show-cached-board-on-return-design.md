@@ -15,7 +15,9 @@
 - **取得に失敗したら、これまでどおりエラーの表示（再試行）にする。** 古い内容を出したままにしない。キャッシュを表示していた場合は、`data`／`items`・`columns` も空に戻す（AI チャットの候補に古い内容を残さない）。
 - **キャッシュを表示してよい条件:** 表示中のプロジェクトが決まっていて（`activeId` あり）、プロジェクトの切替中でなく、ボードは保存した設定の `activeProjectId` が `activeId` と一致するときだけ。別のプロジェクトのスナップショットや、古いプリフェッチ由来の設定を出さない。
 - **キャッシュ表示中にプロジェクトを切り替えたら、スピナーに戻す。** 旧プロジェクトの列と新プロジェクトのアイテムが混ざって見えるのを避ける（`reloadAfterProjectSwitch` の先頭で `showingCached` を false にする）。
-- **キャッシュを最新に保つ:** モバイルで選んだ列を保存したら、その設定もキャッシュに反映する。バックログは、アイテムだけでなく列だけが変わったときもキャッシュを更新する。
+- **キャッシュを最新に保つ:** 画面で内容を変える操作の後は、キャッシュも更新する（ボード: モバイルの列の選択、レイアウトの切替、列の並べ替え。バックログ: 並べ替え、アイテムの追加）。バックログは、アイテムだけでなく列だけが変わったときも更新する。戻ったときに、直前の操作の前の内容が一瞬出ないようにするため。
+- **バックログは、深いリンクの表示（`ephemeralActiveView`）ではキャッシュを使わず、保存もしない。** バックログの取得はプロジェクトを指定せず、保存してあるプロジェクトのアイテムを返すので、深いリンク先のプロジェクトをキーにすると、別のプロジェクトのアイテムを見せてしまう。
+- **詳細画面で編集して戻ったとき**、画面の内容は一瞬だけ編集前になり、すぐ最新に置き換わる（詳細画面はキャッシュを更新しない。仕様）。
 - **スクロール位置の復元** は、キャッシュを表示した時点で予約する（既存の `scrollRestoreAttempted` で 1 回だけ）。
 - **ログアウトでキャッシュを消す（セキュリティの #100）** は、既存の `AuthSession.clearSubject()`（`ProjectBoardCache.clear()`）で満たされている。今回は、キャッシュを使う側を足すだけで、消す仕組みは変えない。
 
@@ -26,10 +28,10 @@
 1. 戻ったとき、キャッシュがあれば、読み込み中の表示を挟まずに、前回の内容が出る（`shows the previous content at once, ...`）。
 2. 最新が届いたら置き換わり、キャッシュも最新になる。内容が同じなら、置き換えない（`replaces the cached content with the response, ...`、`keeps the same ... when the response equals the cached ...`）。
 3. 最新が届くまでは、編集と自動反映は止まったまま。ボードの追加・列の追加・モバイルの列切替も止まる（`keeps editing blocked until ...`、`refuses to open the add forms or change the mobile column ...`）。
-4. キャッシュが無い・使えない（ボードの `settings` なし、バックログの列なし）、表示中のプロジェクトが無い、切替中、設定のプロジェクトが違うときは、これまでどおり読み込み中の表示（`shows the loading panel when ...`、`... while a project switch is in progress`、`does not show a board whose settings belong to another project`）。
+4. キャッシュが無い・使えない（ボードの `settings` なし、バックログの列なし）、表示中のプロジェクトが無い、切替中、設定のプロジェクトが違う、バックログが深いリンクの表示（`does not show, nor store, a backlog while the view is a deep link ...`）のときは、これまでどおり読み込み中の表示（`shows the loading panel when ...`、`... while a project switch is in progress`、`does not show a board whose settings belong to another project`）。
 5. 取得に失敗したら、古い内容でなく、エラーの表示になり、古いデータも残らない（`shows the error panel, not the stale cache, ...`、`drops the cached cards when the request fails, ...`）。
 6. キャッシュ表示中にプロジェクトを切り替えたら、スピナーに戻る（`goes back to the loading panel when the project is switched ...`）。
-7. 選んだモバイルの列がキャッシュに反映される（`saves the chosen mobile column into the cache`）。バックログの列だけの変更もキャッシュに反映される（自動反映の `apply` で、アイテムまたは列のどちらかが変わったときに更新する。この分岐を通す専用のテストは無い。保存と取得は `project-board-cache.spec.ts`、アイテムと列を組で持つことは `drops the earlier columns ...` で確認）。
+7. 選んだモバイルの列、レイアウトの切替、列の並べ替え、バックログの並べ替えがキャッシュに反映される（`saves the chosen mobile column into the cache`、`keeps the cache in step with a column reorder, ...`、`... a layout switch, ...`、`keeps the cache in step with a reorder, ...`）。バックログの列だけの変更もキャッシュに反映される（自動反映の `apply` で、アイテムまたは列のどちらかが変わったときに更新する。この分岐を通す専用のテストは無い。保存と取得は `project-board-cache.spec.ts`、アイテムと列を組で持つことは `drops the earlier columns ...` で確認）。
 8. キャッシュの `settings`・バックログの列が、コピーとして保存・取得され、`clear()` で消える（`project-board-cache.spec.ts`）。
 9. ログアウトでキャッシュが消える（`auth-session.spec.ts` の `clearSubject clears board cache ...`。設定つきのボードとバックログの表示用データも消えることを確認）。
 10. 既存のテストが通る（`ng test` 全体）。
