@@ -179,7 +179,7 @@ describe('ItemDetail autosave', () => {
     expect(f.componentInstance.canRestoreArchive()).toBe(true);
     expect(f.nativeElement.textContent).toContain('詳細は閲覧のみです');
     expect((f.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement).disabled).toBe(true);
-    expect(f.nativeElement.textContent).toContain('Doneへ戻す');
+    expect(f.nativeElement.textContent).toContain('元の列へ戻す');
     f.destroy();
   });
   it('clears AiChatContext when route number changes while item is null', async () => {
