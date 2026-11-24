@@ -3,6 +3,7 @@ package kanban
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -130,6 +131,15 @@ func mysqlSprintItemIDs(t *testing.T, r MySQLRepository, sprintID int64) []int64
 // then archived, then another project, then another open sprint. Each case here fails for one
 // reason only, and the last one for two (the first reason in the order must win).
 func TestMySQLReplaceSprintItemsReportsTheFirstReasonAMemberCannotJoin(t *testing.T) {
+	for _, batch := range []int{1000, 2} { // 2: the members to check span several statements
+		old := sprintBatchSize
+		sprintBatchSize = batch
+		t.Cleanup(func() { sprintBatchSize = old })
+		reportsTheFirstReason(t)
+	}
+}
+
+func reportsTheFirstReason(t *testing.T) {
 	db := mysqlTestDB(t, "")
 	r := MySQLRepository{DB: db}
 	ctx := context.Background()
@@ -296,5 +306,48 @@ func TestMySQLSprintBatchesGiveTheSameResultWhenSplit(t *testing.T) {
 	}
 	if len(listed) != 6 || total != 8+5 {
 		t.Fatalf("%d sprints with %d members", len(listed), total)
+	}
+}
+
+// Two replacements that put the same item into two different sprints at the same time: exactly one
+// may win. The loser waits for the item row, then must see the winner's membership (a current
+// read, not the snapshot it took when it started).
+func TestMySQLReplaceSprintItemsConcurrentlyIntoTwoSprintsLetsOneWin(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustInit(t, r)
+	a, _ := mysqlSprintWithItems(t, r, "race-a", 0)
+	b, _ := mysqlSprintWithItems(t, r, "race-b", 0)
+	item, err := r.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "contended"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := []int64{item.ID}
+	var wg sync.WaitGroup
+	results := make(chan error, 2)
+	for _, id := range []int64{a.ID, b.ID} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := r.ReplaceSprintItems(ctx, id, ids, nil)
+			results <- err
+		}()
+	}
+	wg.Wait()
+	close(results)
+	var ok, conflict int
+	for err := range results {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, ErrSprintConflict):
+			conflict++
+		default:
+			t.Fatalf("unexpected: %v", err)
+		}
+	}
+	if ok != 1 || conflict != 1 {
+		t.Fatalf("want one success and one conflict, got ok=%d conflict=%d", ok, conflict)
 	}
 }
