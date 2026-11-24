@@ -547,20 +547,24 @@ func (m *memoryRepo) HardDeleteTrashItem(ctx context.Context, id, projectID int6
 	return m.HardDeleteItem(ctx, id)
 }
 
-func (m *memoryRepo) ListTrash(_ context.Context, projectID int64) ([]TrashItem, error) {
-	if _, err := m.PurgeExpiredTrashForProject(context.Background(), projectID); err != nil {
-		return nil, err
-	}
-	out := []TrashItem{}
+func (m *memoryRepo) ListTrash(_ context.Context, projectID int64) ([]TrashEntry, error) {
+	cutoff := trashCutoff(time.Now().UTC())
+	out := []TrashEntry{}
 	for _, c := range m.cards {
-		if m.living(c) || m.cardProjectID(c) != projectID || c.DeletedAt == nil {
+		if m.living(c) || m.cardProjectID(c) != projectID || c.DeletedAt == nil || !c.DeletedAt.After(cutoff) {
 			continue
 		}
-		out = append(out, TrashItem{
-			ID: c.ID, Number: c.Number, Title: c.Title, ProjectID: m.cardProjectID(c), DeletedAt: *c.DeletedAt,
+		state := aclStateFromItem(c)
+		if acl, ok := m.aclEntries[c.ID]; ok {
+			state.ViewUserIDs = acl.ViewUserIDs
+			state.EditUserIDs = acl.EditUserIDs
+		}
+		out = append(out, TrashEntry{
+			TrashItem: TrashItem{ID: c.ID, Number: c.Number, Title: c.Title, ProjectID: m.cardProjectID(c), DeletedAt: *c.DeletedAt},
+			ACL:       state,
 		})
 	}
-	slices.SortFunc(out, func(a, b TrashItem) int {
+	slices.SortFunc(out, func(a, b TrashEntry) int {
 		if c := b.DeletedAt.Compare(a.DeletedAt); c != 0 {
 			return c
 		}
@@ -587,24 +591,14 @@ func (m *memoryRepo) RestoreItem(ctx context.Context, id, projectID int64) (Item
 }
 
 func (m *memoryRepo) PurgeExpiredTrash(ctx context.Context) (int64, error) {
-	return m.purgeExpiredMemory(ctx, 0)
+	return m.purgeExpiredMemory(ctx)
 }
 
-func (m *memoryRepo) PurgeExpiredTrashForProject(ctx context.Context, projectID int64) (int64, error) {
-	if projectID <= 0 {
-		return 0, ErrProject
-	}
-	return m.purgeExpiredMemory(ctx, projectID)
-}
-
-func (m *memoryRepo) purgeExpiredMemory(_ context.Context, projectID int64) (int64, error) {
+func (m *memoryRepo) purgeExpiredMemory(_ context.Context) (int64, error) {
 	cutoff := trashCutoff(time.Now().UTC())
 	var n int64
 	for id, c := range m.cards {
 		if c.DeletedAt == nil || c.DeletedAt.After(cutoff) {
-			continue
-		}
-		if projectID > 0 && m.cardProjectID(c) != projectID {
 			continue
 		}
 		delete(m.cards, id)

@@ -12,31 +12,74 @@ func trashCutoff(now time.Time) time.Time {
 	return now.Add(-trashRetention)
 }
 
-// ListTrash returns soft-deleted items for projectID, newest deleted_at first.
-// Opportunistic purge for that project runs first.
-func (r MySQLRepository) ListTrash(ctx context.Context, projectID int64) ([]TrashItem, error) {
-	if _, err := r.PurgeExpiredTrashForProject(ctx, projectID); err != nil {
-		return nil, err
-	}
+// ListTrash returns the soft-deleted items of projectID still within the retention period, newest
+// deleted_at first, with the access policy of each. It only reads: expired rows are hidden and
+// left to the purge job (POST /api/trash/purge), and the allowlists of the restricted items come
+// from one batched query, so the number of statements does not grow with the trash.
+func (r MySQLRepository) ListTrash(ctx context.Context, projectID int64) ([]TrashEntry, error) {
 	rows, err := r.DB.QueryContext(ctx, `
-SELECT c.id, n.item_number, c.title, c.project_id, c.deleted_at
+SELECT c.id, n.item_number, c.title, c.project_id, c.deleted_at, c.view_access, c.edit_access, c.created_by_user_id
   FROM items c
   JOIN item_numbers n ON n.item_id=c.id
- WHERE c.project_id=? AND c.deleted_at IS NOT NULL
- ORDER BY c.deleted_at DESC, c.id DESC`, projectID)
+ WHERE c.project_id=? AND c.deleted_at IS NOT NULL AND c.deleted_at>?
+ ORDER BY c.deleted_at DESC, c.id DESC`, projectID, trashCutoff(time.Now().UTC()))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []TrashItem{}
-	for rows.Next() {
-		var t TrashItem
-		if err = rows.Scan(&t.ID, &t.Number, &t.Title, &t.ProjectID, &t.DeletedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, t)
+	out, restricted, err := scanTrashEntries(rows)
+	if err != nil {
+		return nil, err
 	}
-	return out, rows.Err()
+	if err = r.attachTrashAllowlists(ctx, out, restricted); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// scanTrashEntries reads and closes rows, and returns the ids whose allowlists are still to load
+// (the restricted ones).
+func scanTrashEntries(rows *sql.Rows) ([]TrashEntry, []int64, error) {
+	out := []TrashEntry{}
+	var restricted []int64
+	for rows.Next() {
+		var e TrashEntry
+		var createdBy sql.NullInt64
+		if err := rows.Scan(&e.ID, &e.Number, &e.Title, &e.ProjectID, &e.DeletedAt, &e.ACL.ViewAccess, &e.ACL.EditAccess, &createdBy); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		if createdBy.Valid {
+			id := createdBy.Int64
+			e.ACL.CreatedByUserID = &id
+		}
+		if e.ACL.ViewAccess == "" {
+			e.ACL.ViewAccess = ViewAccessOpen
+		}
+		if e.ACL.ViewAccess == ViewAccessRestricted || e.ACL.EditAccess == EditAccessRestricted {
+			restricted = append(restricted, e.ID)
+		}
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, nil, err
+	}
+	return out, restricted, rows.Close()
+}
+
+// attachTrashAllowlists loads the allowlists of the restricted entries in one query.
+func (r MySQLRepository) attachTrashAllowlists(ctx context.Context, entries []TrashEntry, restrictedIDs []int64) error {
+	allowlists, err := r.ListACLEntriesForItems(ctx, restrictedIDs)
+	if err != nil {
+		return err
+	}
+	for i := range entries {
+		if acl, ok := allowlists[entries[i].ID]; ok {
+			entries[i].ACL.ViewUserIDs = acl.ViewUserIDs
+			entries[i].ACL.EditUserIDs = acl.EditUserIDs
+		}
+	}
+	return nil
 }
 
 // RestoreItem clears deleted_at for a soft-deleted item in projectID.
@@ -105,18 +148,10 @@ func todoColumnIDFromColumns(cols []Column) (int64, error) {
 
 // PurgeExpiredTrash hard-deletes soft-deleted rows across all projects at/ past retention.
 func (r MySQLRepository) PurgeExpiredTrash(ctx context.Context) (int64, error) {
-	return r.purgeExpired(ctx, 0)
+	return r.purgeExpired(ctx)
 }
 
-// PurgeExpiredTrashForProject hard-deletes expired soft-deleted rows for one project.
-func (r MySQLRepository) PurgeExpiredTrashForProject(ctx context.Context, projectID int64) (int64, error) {
-	if projectID <= 0 {
-		return 0, ErrProject
-	}
-	return r.purgeExpired(ctx, projectID)
-}
-
-func (r MySQLRepository) purgeExpired(ctx context.Context, projectID int64) (int64, error) {
+func (r MySQLRepository) purgeExpired(ctx context.Context) (int64, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -126,18 +161,10 @@ func (r MySQLRepository) purgeExpired(ctx context.Context, projectID int64) (int
 		return 0, err
 	}
 	cutoff := trashCutoff(time.Now().UTC())
-	var rows *sql.Rows
-	if projectID > 0 {
-		rows, err = tx.QueryContext(ctx, `
-SELECT id FROM items
- WHERE project_id=? AND deleted_at IS NOT NULL AND deleted_at<=?
- ORDER BY id FOR UPDATE`, projectID, cutoff)
-	} else {
-		rows, err = tx.QueryContext(ctx, `
+	rows, err := tx.QueryContext(ctx, `
 SELECT id FROM items
  WHERE deleted_at IS NOT NULL AND deleted_at<=?
  ORDER BY id FOR UPDATE`, cutoff)
-	}
 	if err != nil {
 		return 0, err
 	}
