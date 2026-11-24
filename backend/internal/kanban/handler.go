@@ -448,6 +448,8 @@ func (h handler) batchPRTitles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	titles := make(map[string]string, len(in.URLs))
+	// Access is checked one URL at a time (database); the GitHub lookups then run together.
+	var allowedURLs []string
 	for _, raw := range in.URLs {
 		url := strings.TrimSpace(raw)
 		if url == "" || !validPRURL(url) {
@@ -462,7 +464,10 @@ func (h handler) batchPRTitles(w http.ResponseWriter, r *http.Request) {
 			titles[url] = FallbackPRTitle(url)
 			continue
 		}
-		titles[url] = ResolvePRTitleLabel(r.Context(), h.prTitleResolver, url)
+		allowedURLs = append(allowedURLs, url)
+	}
+	for i, label := range resolvePRTitleLabels(r.Context(), h.prTitleResolver, allowedURLs) {
+		titles[allowedURLs[i]] = label
 	}
 	reply(w, 200, map[string]map[string]string{"titles": titles})
 }

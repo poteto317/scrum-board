@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGetItemEnrichesPRTitles(t *testing.T) {
@@ -208,5 +209,42 @@ func TestBatchPRTitlesRejectsTooMany(t *testing.T) {
 	w := request(h, "POST", "/api/pr-titles", string(body))
 	if w.Code != 400 {
 		t.Fatalf("want 400 got %d %s", w.Code, w.Body)
+	}
+}
+
+func TestBatchPRTitlesResolvesURLsConcurrently(t *testing.T) {
+	repo := fresh()
+	const n = 8
+	urls := make([]string, n)
+	quoted := make([]string, n)
+	for i := range urls {
+		urls[i] = "https://github.com/a/b/pull/" + strconv.Itoa(i+1)
+		quoted[i] = `"` + urls[i] + `"`
+	}
+	rt := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		time.Sleep(150 * time.Millisecond)
+		return titleResponse("T"), nil
+	})
+	h := NewHandler(repo, WithPRTitleResolver(NewPRTitleResolver(rt, "")))
+	request(h, "POST", "/api/items", `{"title":"x","columnId":1,"prUrls":[`+strings.Join(quoted, ",")+`]}`)
+	start := time.Now()
+	w := request(h, "POST", "/api/pr-titles", `{"urls":[`+strings.Join(quoted, ",")+`]}`)
+	elapsed := time.Since(start)
+	if w.Code != 200 {
+		t.Fatalf("POST %d %s", w.Code, w.Body)
+	}
+	var out struct {
+		Titles map[string]string `json:"titles"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range urls {
+		if out.Titles[u] != "T" {
+			t.Fatalf("titles %#v", out.Titles)
+		}
+	}
+	if elapsed > time.Second {
+		t.Fatalf("%d URLs took %v: they were resolved one by one", n, elapsed)
 	}
 }
