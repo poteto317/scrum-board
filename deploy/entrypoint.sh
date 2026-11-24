@@ -40,8 +40,8 @@ su -s /bin/sh app -c 'exec /server' &
 api_pid=$!
 
 # Migrations (e.g. per-project numbering ALTER/renumber) can take well over a few seconds.
-# Match the server migration budget (~2m) so this wait does not give up on a healthy, still-migrating API
-# before Cloud Run's startup probe (240s) does.
+# The wait matches the server migration budget (~2m) and ends before Cloud Run's startup probe grace
+# (240s) runs out, so an API that never becomes ready fails here with a clear error.
 # Poll every 0.2s (600 x 0.2s = 120s) so a fast start is not held back by the polling step.
 i=0
 while [ "$i" -lt 600 ]; do
