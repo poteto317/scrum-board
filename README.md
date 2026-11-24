@@ -496,3 +496,9 @@ Artifact Registry の古いイメージも容量に応じて削除できます�
 ### デプロイ試行の記録
 
 実環境での試行結果は `docs/production-deploy-status.md` を参照してください（成功 URL またはブロック理由）。
+
+### 本番イメージのビルドキャッシュ
+
+`./scripts/deploy-gcp.sh` は Docker BuildKit と buildx（Docker Desktop標準）を使い、`linux/amd64` のイメージをローカルへロードしてからpushします。Node/Goのビルド段はホストCPUで動き、GoはターゲットCPUへクロスコンパイルします。
+
+同じbuilderではnpmダウンロード、Goモジュール、Goコンパイルのキャッシュを再利用します。ソースだけの変更では依存取得レイヤーを再利用し、Goの変更したパッケージとリンクだけを再実行します。キャッシュの削除・GC・builder変更後は依存を再取得します。`.dockerignore` はローカルの依存・ビルド成果物・秘密ファイルを本番ビルドコンテキストから除外します。
