@@ -44,18 +44,19 @@ describe('HeaderMenu component', () => {
     return f.nativeElement.querySelector('#header-menu-trigger') as HTMLButtonElement;
   }
 
-  it('places hamburger outside .header-end with margin-left auto', () => {
+  it('places the hamburger host last in .app-header with margin-left auto and flex-shrink 0', () => {
     const { f } = setup();
     const header = f.nativeElement.querySelector('.app-header') as HTMLElement;
-    const end = header.querySelector('.header-end');
-    const menu = header.querySelector('app-header-menu');
+    const end = header.querySelector('.header-end') as HTMLElement;
+    const menu = header.querySelector('app-header-menu') as HTMLElement;
     expect(end).toBeTruthy();
     expect(menu).toBeTruthy();
-    if (end && menu) {
-      expect(end.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    }
-    const style = getComputedStyle(menu!.querySelector('.header-menu-root') as HTMLElement);
+    expect(end.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // margin-left:auto は flex の子（ホスト要素）に付けないと右端に寄らない
+    expect(header.lastElementChild).toBe(menu);
+    const style = getComputedStyle(menu);
     expect(style.marginLeft).toBe('auto');
+    expect(style.flexShrink).toBe('0');
     expect(f.nativeElement.querySelector('#project-add')).toBeNull();
   });
 
