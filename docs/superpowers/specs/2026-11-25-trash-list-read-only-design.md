@@ -13,7 +13,7 @@
 ## 決めたこと
 
 - **一覧は読み取りだけにする。** 期限切れの削除をやめる。保持期間（30 日）を過ぎたものは、一覧から外す（`deleted_at > 現在 - 30 日`）。削除そのものは、定期ジョブ `POST /api/trash/purge`（`scripts/ensure-trash-purge-scheduler.sh`）に任せる。これは、添付の実体の削除も行う。
-- **N+1 をやめる。** 一覧のクエリで、権限の判定に必要な列（`view_access`、`edit_access`、`created_by_user_id`）も取る。制限付きのアイテムの許可リスト（`item_acl_entries`）は、まとめて 1 回で取る（`ListACLEntriesForItems`）。文の数は、件数にかかわらず、一覧 1 + 許可リスト 1 の 2 文。
+- **N+1 をやめる。** 一覧のクエリで、権限の判定に必要な列（`view_access`、`edit_access`、`created_by_user_id`）も取る。制限付きのアイテムの許可リスト（`item_acl_entries`）は、まとめて 1 回で取る（`ListACLEntriesForItems`）。文の数は、件数にかかわらず、一覧 1 文（制限付きのアイテムがあれば、許可リスト 1 文を足した 2 文）が上限。
 - リポジトリの `ListTrash` は、`TrashEntry`（`TrashItem` と `ItemACLState`）を返す。ハンドラーは、純粋な関数 `filterTrashForViewer` で、閲覧できるものだけを `TrashItem` にして返す。応答の形は変えない。
 - 使われなくなる `PurgeExpiredTrashForProject`（インターフェース・MySQL・メモリ実装）を削除する。
 - 復元・完全削除・定期ジョブの動作は変えない。
