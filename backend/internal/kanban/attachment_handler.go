@@ -117,12 +117,53 @@ func (h handler) getAttachmentContent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// The row is read first: it must exist for this item before a 304 (a deleted or foreign
+	// attachment is a 404), and it gives the ETag without opening the blob.
+	attachment, err := h.repo.GetAttachment(r.Context(), card.ID, attachmentID)
+	if err != nil {
+		failAttachment(w, err)
+		return
+	}
+	etag := attachmentETag(attachment)
+	if etagMatches(r.Header.Get("If-None-Match"), etag) {
+		setAttachmentCacheHeaders(w, etag)
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	h.withAttachmentSlot(w, r, func() {
-		h.serveAttachmentContent(w, r, card.ID, attachmentID)
+		h.serveAttachmentContent(w, r, card.ID, attachmentID, etag)
 	})
 }
 
-func (h handler) serveAttachmentContent(w http.ResponseWriter, r *http.Request, itemID, attachmentID int64) {
+// attachmentCacheControl: an attachment's bytes never change for its id, so the browser may keep
+// them for an hour; after that it revalidates with the ETag, and every request is still
+// permission-checked.
+const attachmentCacheControl = "private, max-age=3600"
+
+// The cache headers are set only on a 200 or 304, so an error response is never cached.
+func setAttachmentCacheHeaders(w http.ResponseWriter, etag string) {
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", attachmentCacheControl)
+	// A different session (another user on the same browser) must not reuse the cached copy.
+	w.Header().Add("Vary", "Cookie")
+}
+
+func attachmentETag(a Attachment) string {
+	return `"` + strconv.FormatInt(a.ID, 10) + "-" + strconv.FormatInt(a.ByteSize, 10) + `"`
+}
+
+// etagMatches reports whether an If-None-Match header lists etag (or *), comparing weakly.
+func etagMatches(header, etag string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimPrefix(strings.TrimSpace(candidate), "W/")
+		if candidate == "*" || candidate == etag {
+			return true
+		}
+	}
+	return false
+}
+
+func (h handler) serveAttachmentContent(w http.ResponseWriter, r *http.Request, itemID, attachmentID int64, etag string) {
 	rc, contentType, err := h.repo.OpenAttachmentContent(r.Context(), h.blobs, itemID, attachmentID)
 	if err != nil {
 		failAttachment(w, err)
@@ -130,7 +171,7 @@ func (h handler) serveAttachmentContent(w http.ResponseWriter, r *http.Request, 
 	}
 	defer rc.Close()
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=60")
+	setAttachmentCacheHeaders(w, etag)
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, rc)
 }

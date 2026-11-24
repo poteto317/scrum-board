@@ -121,6 +121,15 @@ func (m *memoryRepo) CreateAttachment(
 	return a, nil
 }
 
+func (m *memoryRepo) GetAttachment(ctx context.Context, itemID, id int64) (Attachment, error) {
+	m.ensureAttachments()
+	a, ok := m.attachments[id]
+	if !ok || a.ItemID != itemID {
+		return Attachment{}, ErrNotFound
+	}
+	return a.Attachment, nil
+}
+
 func (m *memoryRepo) OpenAttachmentContent(ctx context.Context, blobs BlobStorage, itemID, id int64) (io.ReadCloser, string, error) {
 	m.ensureAttachments()
 	a, ok := m.attachments[id]
@@ -130,7 +139,15 @@ func (m *memoryRepo) OpenAttachmentContent(ctx context.Context, blobs BlobStorag
 	if blobs == nil {
 		return nil, "", ErrBlobStorageUnavailable
 	}
-	return blobs.Get(ctx, a.objectKey)
+	rc, ct, err := blobs.Get(ctx, a.objectKey)
+	if err != nil {
+		return nil, "", err
+	}
+	// Like MySQLRepository: the type stored at upload wins over the blob's.
+	if a.ContentType != "" {
+		ct = a.ContentType
+	}
+	return rc, ct, nil
 }
 
 func (m *memoryRepo) DeleteAttachment(ctx context.Context, blobs BlobStorage, itemID, attachmentID, itemNumber int64) error {
