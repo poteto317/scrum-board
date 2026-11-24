@@ -255,7 +255,7 @@ func buildCompactPositionBatchSQL(ids []int64) (string, []any) {
 }
 
 func listOrderedCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.position,c.id", projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardListFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.position,c.id", projectID)
 	if err != nil {
 		return nil, err
 	}

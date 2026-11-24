@@ -76,7 +76,20 @@ func scanCard(s scanner) (Item, error) {
 // numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
 // 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
 // FOR UPDATE で使っても結合先の行までロックしない。
-const cardFields = "c.id, n.item_number, c.column_id, c.project_id, c.title, c.description, c.solution, c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.favorite, c.due_at, c.done_at, c.archived_at, c.view_access, c.edit_access, c.created_by_user_id, c.created_at, c.updated_at"
+// cardFieldsHead / cardFieldsTail は、説明とソリューションの列の前後（カンマと空白を含む）。
+// 全文用（cardFields）と一覧用（cardListFields）で、この 2 つの間だけを差し替える。
+const cardFieldsHead = "c.id, n.item_number, c.column_id, c.project_id, c.title, "
+const cardFieldsTail = ", c.position, c.offset_y, c.backlog_position, c.assignee, c.close_reason, c.favorite, c.due_at, c.done_at, c.archived_at, c.view_access, c.edit_access, c.created_by_user_id, c.created_at, c.updated_at"
+const cardFields = cardFieldsHead + "c.description, c.solution" + cardFieldsTail
+
+// listDescriptionRunes は一覧の応答に載せる説明の最大文字数（Unicode のコードポイント）。
+// cardListFields の LEFT(...) の 500 と同じ値にする（const では組み込めないので、変えるときは SQL も直す。
+// 食い違いは handler_test.go の cardListFields の整合テストが検知する）。
+const listDescriptionRunes = 500
+
+// cardListFields は一覧の応答用。説明を先頭 listDescriptionRunes 文字に切り、ソリューションは空にする。
+// 列の並びは cardFields と同じなので scanCard で読める。全文は詳細の取得（cardFields）で返す。
+const cardListFields = cardFieldsHead + "LEFT(c.description, 500), ''" + cardFieldsTail
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
@@ -205,7 +218,7 @@ func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Bo
 	if err != nil {
 		return b, err
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.position,c.id", scope)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardListFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.position,c.id", scope)
 	if err != nil {
 		return b, err
 	}
