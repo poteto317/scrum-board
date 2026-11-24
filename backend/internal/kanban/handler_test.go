@@ -93,28 +93,28 @@ func (m *memoryRepo) BoardForProject(_ context.Context, projectID int64) (Board,
 	return m.boardForScope(projectID)
 }
 
+// sortedColumns returns a copy of the columns ordered by position, then id.
+func (m *memoryRepo) sortedColumns() []Column {
+	cols := slices.Clone(m.columns)
+	slices.SortFunc(cols, func(a, b Column) int {
+		if c := cmp.Compare(a.Position, b.Position); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return cols
+}
+
 func (m *memoryRepo) BoardMeta(_ context.Context) (BoardMeta, error) {
 	if m.boardMetaFail != nil {
 		return BoardMeta{}, m.boardMetaFail
 	}
-	cols := slices.Clone(m.columns)
-	slices.SortFunc(cols, func(a, b Column) int {
-		if c := cmp.Compare(a.Position, b.Position); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.ID, b.ID)
-	})
+	cols := m.sortedColumns()
 	return BoardMeta{Columns: cols, Settings: m.resolvedSettings(cols)}, nil
 }
 
 func (m *memoryRepo) boardForScope(itemProjectID int64) (Board, error) {
-	cols := slices.Clone(m.columns)
-	slices.SortFunc(cols, func(a, b Column) int {
-		if c := cmp.Compare(a.Position, b.Position); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.ID, b.ID)
-	})
+	cols := m.sortedColumns()
 	active := m.resolvedActive()
 	settings := m.resolvedSettings(cols)
 	scope, err := resolveItemListScope(active, itemProjectID, m.projects)
