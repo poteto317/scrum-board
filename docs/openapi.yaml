@@ -2590,6 +2590,7 @@ paths:
   /api/trash:
     get:
       summary: ゴミ箱一覧
+      description: 読み取りのみ。保持期間（30 日）を過ぎたものは返さないが、削除はしない（削除は `POST /api/trash/purge` の定期ジョブ）。閲覧権限のあるものだけを返す。
       operationId: get_api_trash
       responses:
         '200':
