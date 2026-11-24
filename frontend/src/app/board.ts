@@ -71,7 +71,7 @@ import {
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
 import { viewAccessLabel } from './item-acl';
-import { BoardData, CardLayout, Item, Column } from './models';
+import { BoardData, BoardSettings, CardLayout, Item, Column } from './models';
 import {
   COMMAND_ITEM_MENU_EMPTY,
   CommandTemplate,
@@ -158,6 +158,11 @@ export class Board implements OnInit {
 
   readonly data = signal<NormalizedBoardData>(normalizeBoardData({ columns: [], items: [] }));
   readonly loading = signal(true);
+  /**
+   * True while the board of an earlier visit is on screen and the fresh one is still on its way
+   * (`loading` stays true then, so editing and live refresh stay blocked until it arrives).
+   */
+  readonly showingCached = signal(false);
   readonly error = signal('');
   readonly saving = signal(false);
   readonly reordering = signal(false);
@@ -317,7 +322,7 @@ export class Board implements OnInit {
 
   ngOnInit() {
     this.bindBoardMobileMedia();
-    this.load();
+    this.load({ useCache: true });
     this.listFilter.load();
     bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadAfterProjectSwitch());
     this.destroyRef.onDestroy(() => {
@@ -616,9 +621,11 @@ export class Board implements OnInit {
     this.closeCommandMenu();
   }
 
-  load() {
+  /** `useCache`: on first entry, show the board of the earlier visit while the fresh one loads. */
+  load(options: { useCache?: boolean } = {}) {
     const generation = ++this.boardLoadGeneration;
     this.loading.set(true);
+    this.showCachedBoard(options.useCache === true);
     this.error.set('');
     this.reorderError.set('');
     this.reorderConflict.set(false);
@@ -626,7 +633,9 @@ export class Board implements OnInit {
     this.boardGetConditional()
       .pipe(
         finalize(() => {
-          if (generation === this.boardLoadGeneration) this.loading.set(false);
+          if (generation !== this.boardLoadGeneration) return;
+          this.loading.set(false);
+          this.showingCached.set(false);
         }),
       )
       .subscribe({
@@ -639,7 +648,8 @@ export class Board implements OnInit {
             applyBoardMobileSettings(r.body),
             (board) => {
               this.rememberBoardCache(board);
-              this.data.set(board);
+              // Unchanged since the cached view: skip rebuilding every card.
+              if (!sameJson(this.data(), board)) this.data.set(board);
               // Schedule after data arrives so the first afterNextRender sees #boardScroll
               // (not the loading-only first paint).
               this.scheduleBoardScrollRestore();
@@ -649,9 +659,34 @@ export class Board implements OnInit {
         },
         error: (e) => {
           if (generation !== this.boardLoadGeneration) return;
+          // The error panel replaces the cached board; the AI chat candidates are built from data(),
+          // so nothing stale may stay in it.
+          if (this.showingCached()) this.data.set(normalizeBoardData({ columns: [], items: [] }));
           this.error.set(errorMessage(e));
         },
       });
+  }
+
+  /**
+   * Puts the board of the earlier visit on screen at once (no loading panel). Only a snapshot that
+   * has its settings can be laid out; anything else falls back to the loading panel.
+   */
+  private showCachedBoard(useCache: boolean) {
+    this.showingCached.set(false);
+    if (!useCache) return;
+    // Only a board that is certainly the active project's: its settings name the same project.
+    const activeId = this.projectSession.activeId();
+    if (activeId == null || this.projectSession.switching()) return;
+    const snap = this.projectBoardCache.getBoardSnapshot(activeId);
+    if (!snap?.settings || snap.settings.activeProjectId !== activeId) return;
+    this.data.set(
+      applyBoardMobileSettings(
+        normalizeBoardData({ columns: snap.columns, items: snap.items, settings: snap.settings }),
+      ),
+    );
+    this.showingCached.set(true);
+    this.scheduleBoardScrollRestore();
+    this.scheduleCardHeightMeasure();
   }
 
   /**
@@ -660,6 +695,8 @@ export class Board implements OnInit {
    */
   private reloadAfterProjectSwitch() {
     const generation = ++this.boardLoadGeneration;
+    // The cached view of the old project must not stay on screen next to the new project's items.
+    this.showingCached.set(false);
     const activeId = this.projectSession.activeId();
     const cached = activeId != null ? this.projectBoardCache.getBoard(activeId) : undefined;
     if (cached) {
@@ -701,10 +738,14 @@ export class Board implements OnInit {
       });
   }
 
-  private rememberBoardCache(board: { items: Item[]; columns: Column[] }) {
+  private rememberBoardCache(board: {
+    items: Item[];
+    columns: Column[];
+    settings?: BoardSettings;
+  }) {
     const activeId = this.projectSession.activeId();
     if (activeId != null && activeId > 0) {
-      this.projectBoardCache.putBoard(activeId, board.items, board.columns);
+      this.projectBoardCache.putBoard(activeId, board.items, board.columns, board.settings);
     }
   }
 
@@ -719,10 +760,14 @@ export class Board implements OnInit {
     const columnId = Number(rawId);
     return saveMobileBoardColumn(
       {
-        isBusy: () => this.settingsSaving() || this.layoutSwitching() || this.reordering(),
+        isBusy: () =>
+          this.loading() || this.settingsSaving() || this.layoutSwitching() || this.reordering(),
         setSettingsSaving: (busy) => this.settingsSaving.set(busy),
         getData: () => this.data(),
-        setData: (data) => this.data.set(data),
+        setData: (data) => {
+          this.data.set(data);
+          this.rememberBoardCache(data);
+        },
         setReorderError: (message) => this.reorderError.set(message),
         setReorderConflict: (conflict) => this.reorderConflict.set(conflict),
         patchBoardSettings: (body) => this.api.patchBoardSettings(body),
@@ -741,14 +786,14 @@ export class Board implements OnInit {
   }
 
   openColumn() {
-    if (this.reordering()) return;
+    if (this.loading() || this.reordering()) return;
     this.columnForm.reset();
     this.formError.set('');
     this.modal.set('column');
   }
 
   openItem(_columnId?: number) {
-    if (this.reordering() || this.projectSession.switching()) return;
+    if (this.loading() || this.reordering() || this.projectSession.switching()) return;
     this.itemForm.reset({ title: '', description: '' });
     this.formError.set('');
     this.modal.set('item');

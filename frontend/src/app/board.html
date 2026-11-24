@@ -17,7 +17,7 @@
         <span class="sr-only">表示するステータス</span>
         <select
           aria-label="表示するステータス"
-          [disabled]="data().columns.length === 0 || selectedMobileColumnId() === 0 || settingsSaving()"
+          [disabled]="loading() || data().columns.length === 0 || selectedMobileColumnId() === 0 || settingsSaving()"
           [value]="selectedMobileColumnId()"
           (change)="onMobileColumnChange($any($event.target).value)"
         >
@@ -51,7 +51,7 @@
     >
   </section>
   <app-list-filter-bar class="board-list-filter" view="board" [columns]="data().columns" />
-  @if (loading()) {
+  @if (loading() && !showingCached()) {
     <div class="state-panel" role="status">
       <span class="spinner"></span>ボードを読み込んでいます…
     </div>
@@ -333,12 +333,12 @@
                 </div>
               }
             </div>
-            <button class="add-card" (click)="openItem(column.id)" [disabled]="reordering() || projectSwitching()">
+            <button class="add-card" (click)="openItem(column.id)" [disabled]="loading() || reordering() || projectSwitching()">
               <span aria-hidden="true">＋</span> アイテムを追加
             </button>
           </section>
         }
-        <button class="add-column-tile" (click)="openColumn()" [disabled]="reordering() || projectSwitching()">
+        <button class="add-column-tile" (click)="openColumn()" [disabled]="loading() || reordering() || projectSwitching()">
           <span aria-hidden="true">＋</span> 列を追加
         </button>
       </div>
