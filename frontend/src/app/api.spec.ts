@@ -15,6 +15,35 @@ describe('Api', () => {
     http = TestBed.inject(HttpTestingController);
   });
   afterEach(() => http.verify());
+  it('boardMeta GETs /api/board/meta without items or query', () => {
+    let body: unknown;
+    api.boardMeta().subscribe((b) => (body = b));
+    const req = http.expectOne('/api/board/meta');
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.keys()).toEqual([]);
+    req.flush({ columns: [{ id: 1, name: 'Todo' }], settings: { cardLayout: 'pack' } });
+    expect(body).toEqual({ columns: [{ id: 1, name: 'Todo' }], settings: { cardLayout: 'pack' } });
+  });
+  it('boardMetaConditional sends If-None-Match and maps 304 to notModified', () => {
+    let result: unknown;
+    api.boardMetaConditional('"abc"').subscribe((r) => (result = r));
+    const req = http.expectOne('/api/board/meta');
+    expect(req.request.headers.get('If-None-Match')).toBe('"abc"');
+    req.flush(null, { status: 304, statusText: 'Not Modified', headers: { ETag: '"abc"' } });
+    expect(result).toEqual({ status: 'notModified', etag: '"abc"' });
+  });
+  it('boardMetaConditional returns ok with the ETag on 200', () => {
+    let result: unknown;
+    api.boardMetaConditional(null).subscribe((r) => (result = r));
+    const req = http.expectOne('/api/board/meta');
+    expect(req.request.headers.has('If-None-Match')).toBe(false);
+    req.flush({ columns: [], settings: { cardLayout: 'pack' } }, { headers: { ETag: '"v1"' } });
+    expect(result).toEqual({
+      status: 'ok',
+      etag: '"v1"',
+      body: { columns: [], settings: { cardLayout: 'pack' } },
+    });
+  });
   it('sends the selected status as columnId', () => {
     api.updateItem(7, { columnId: 3 }).subscribe();
     const req = http.expectOne('/api/items/7');
