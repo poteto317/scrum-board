@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -24,6 +25,9 @@ type memoryRepo struct {
 	settings           BoardSettings
 	settingsFail       error
 	boardMetaFail      error
+	boardCalls         atomic.Int64
+	activeIDCalls      atomic.Int64
+	columnsCalls       atomic.Int64
 	aclListFail        error
 	listFilter         *WorkspaceListFilters
 	headerMenu         *WorkspaceHeaderMenu
@@ -83,6 +87,7 @@ func (m *memoryRepo) living(c Item) bool {
 }
 
 func (m *memoryRepo) Board(ctx context.Context) (Board, error) {
+	m.boardCalls.Add(1)
 	return m.boardForScope(0)
 }
 
@@ -111,6 +116,16 @@ func (m *memoryRepo) BoardMeta(_ context.Context) (BoardMeta, error) {
 	}
 	cols := m.sortedColumns()
 	return BoardMeta{Columns: cols, Settings: m.resolvedSettings(cols)}, nil
+}
+
+func (m *memoryRepo) ActiveProjectID(_ context.Context) (int64, error) {
+	m.activeIDCalls.Add(1)
+	return m.resolvedActive(), nil
+}
+
+func (m *memoryRepo) Columns(_ context.Context) ([]Column, error) {
+	m.columnsCalls.Add(1)
+	return m.sortedColumns(), nil
 }
 
 func (m *memoryRepo) boardForScope(itemProjectID int64) (Board, error) {
@@ -1391,4 +1406,22 @@ func (m *memoryRepo) SetAICreditLimit(_ context.Context, limit *int64) error {
 	v := *limit
 	m.aiUsage.LimitTokens = &v
 	return nil
+}
+
+// projectId を省略した番号指定の API は、アクティブなプロジェクトを調べるためにボード全件を読まない。
+func TestByNumberWithoutProjectIDDoesNotReadWholeBoard(t *testing.T) {
+	repo := fresh()
+	repo.cards[18] = Item{ID: 18, Number: 3, ColumnID: 1, Title: "number three"}
+	h := NewHandler(repo)
+	boardBefore := repo.boardCalls.Load()
+	w := request(h, "GET", "/api/items/by-number/3", "")
+	if w.Code != 200 {
+		t.Fatalf("status=%d %s", w.Code, w.Body)
+	}
+	if repo.activeIDCalls.Load() == 0 {
+		t.Fatal("ActiveProjectID was not used to resolve the active project")
+	}
+	if got := repo.boardCalls.Load() - boardBefore; got != 0 {
+		t.Fatalf("Board was read %d times", got)
+	}
 }

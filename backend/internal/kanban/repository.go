@@ -153,6 +153,38 @@ func (r MySQLRepository) BoardMeta(ctx context.Context) (BoardMeta, error) {
 	return BoardMeta{Columns: head.Columns, Settings: head.Settings}, tx.Commit()
 }
 
+// ActiveProjectID resolves the active project from settings and projects only.
+func (r MySQLRepository) ActiveProjectID(ctx context.Context) (int64, error) {
+	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	rawSettings, err := loadBoardSettings(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	projects, err := listProjects(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	return resolveActiveProjectID(rawSettings.ActiveProjectID, projects), tx.Commit()
+}
+
+// Columns returns the ordered columns without reading settings, projects or items.
+func (r MySQLRepository) Columns(ctx context.Context) ([]Column, error) {
+	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	columns, err := listOrderedColumns(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	return columns, tx.Commit()
+}
+
 // loadBoard loads columns/settings with resolved active. If itemProjectID > 0, items are
 // for that project (must exist); otherwise items use the resolved active project.
 func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Board, error) {

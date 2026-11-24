@@ -204,6 +204,11 @@ type Repository interface {
 	Board(context.Context) (Board, error)
 	// BoardMeta returns the same columns and resolved settings as Board, without reading items.
 	BoardMeta(context.Context) (BoardMeta, error)
+	// ActiveProjectID returns the resolved active project id (same rule as Board's
+	// settings.activeProjectId) reading only settings and projects, not columns or items.
+	ActiveProjectID(context.Context) (int64, error)
+	// Columns returns the ordered columns (same as Board's columns) without reading settings, projects or items.
+	Columns(context.Context) ([]Column, error)
 	// BoardForProject returns the same columns/settings as Board (active unchanged in settings),
 	// but items belong to projectID. projectID must exist; otherwise ErrProject.
 	BoardForProject(context.Context, int64) (Board, error)
