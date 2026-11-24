@@ -20,7 +20,7 @@
   - `getComputedStyle(menu)` の `marginLeft` が `'auto'`、`flexShrink` が `'0'` であることを検証する。`.header-menu-root` の `marginLeft` の検証は外す。
   - `display` は検証しない（実ブラウザーでフレックスアイテムは `:host` が無くてもブロック化されるので、`:host` の有無の判別にならない。`display: block` はコメント付きの任意指定）。
 - [ ] `cd frontend && npm test -- --watch=false` を実行し、書き換えたテストが落ちることを確認する。失敗の理由が、`marginLeft` の比較（`expected '' to be 'auto'` に相当）であることを確認する（要素が `null`・描画エラーなど別の理由で落ちていないこと）。
-- [ ] 判別のため、テストを落とす前に `:host { margin-left: auto; flex-shrink: 0; }` を一時的に足して jsdom が値を返すかを確かめ、すぐ戻す。値が返らない（`:host` を解決しない）場合は、`getComputedStyle` の検証を、`document.querySelectorAll('style')` の本文を結合して `:host`（エンキャプス属性付き）のブロックに `margin-left: auto` と `flex-shrink: 0` があることを正規表現で確かめる検証に置き換える（知見 L-795: dev-flow-kit の lessons/review-lessons.md）。`lastElementChild` の検証は残す。設計書の条件 4 は、どちらの方法でも `margin-left: auto` と `flex-shrink: 0` の両方を固定することとする。
+- [x] 判別のため、テストを落とす前に `:host { margin-left: auto; flex-shrink: 0; }` を一時的に足して jsdom が値を返すかを確かめる想定だった。実装時は、`:host` を足した後のテストが通り、足す前は `expected '' to be 'auto'` で落ちたので、jsdom は `:host` の宣言を解決して値を返す。`getComputedStyle` の検証のままでよく、style 本文の正規表現の検査への切り替えは不要だった。
 
 ## Task 2: CSS を直す
 
