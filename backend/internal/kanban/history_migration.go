@@ -16,25 +16,31 @@ func (r MySQLRepository) prepareHistory(ctx context.Context) error {
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`)
 	return err
 }
-func (r MySQLRepository) InitializeHistory(ctx context.Context) error {
-	if err := r.prepareHistory(ctx); err != nil {
-		return err
-	}
-	rows, err := r.DB.QueryContext(ctx, "SELECT id FROM items ORDER BY id")
+// itemIDsWithoutHistory lists, in id order, the items that have no history event yet
+// (trash included). Start-up runs this every time, so it is one statement however many
+// items exist; the per-item transaction below runs only for the ones returned here.
+func (r MySQLRepository) itemIDsWithoutHistory(ctx context.Context) ([]int64, error) {
+	rows, err := r.DB.QueryContext(ctx, `SELECT i.id FROM items i
+ WHERE NOT EXISTS (SELECT 1 FROM item_history h WHERE h.item_id=i.id) ORDER BY i.id`)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	defer rows.Close()
 	ids := []int64{}
 	for rows.Next() {
 		var id int64
 		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return err
+			return nil, err
 		}
 		ids = append(ids, id)
 	}
-	err = rows.Err()
-	rows.Close()
+	return ids, rows.Err()
+}
+func (r MySQLRepository) InitializeHistory(ctx context.Context) error {
+	if err := r.prepareHistory(ctx); err != nil {
+		return err
+	}
+	ids, err := r.itemIDsWithoutHistory(ctx)
 	if err != nil {
 		return err
 	}
