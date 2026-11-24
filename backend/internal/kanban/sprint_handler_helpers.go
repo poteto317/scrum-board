@@ -46,11 +46,11 @@ func (h handler) enrichSprintForResponse(ctx context.Context, s Sprint, user *Us
 	if s.Items == nil {
 		s.Items = []SprintItem{}
 	}
-	board, err := h.repo.Board(ctx)
+	columns, err := h.repo.Columns(ctx)
 	if err != nil {
 		return Sprint{}, err
 	}
-	s.SuggestedVelocity = suggestedVelocity(board.Columns, filtered)
+	s.SuggestedVelocity = suggestedVelocity(columns, filtered)
 	return s, nil
 }
 

@@ -466,3 +466,19 @@ func TestSprintScopedProjectMismatch404(t *testing.T) {
 	}
 }
 
+// スプリント詳細の suggestedVelocity は、列だけを読んで求める（ボード全件を読まない）。
+func TestSprintDetailReadsColumnsNotWholeBoard(t *testing.T) {
+	repo := fresh()
+	h := NewHandler(repo)
+	s := createSprintOK(t, h, `{"name":"S","goal":"g","startDate":"2026-11-21","endDate":"2026-12-04"}`)
+	boardBefore := repo.boardCalls.Load()
+	if w := request(h, "GET", "/api/sprints/"+itoa(s.ID), ""); w.Code != 200 {
+		t.Fatalf("get: %d %s", w.Code, w.Body)
+	}
+	if repo.columnsCalls.Load() == 0 {
+		t.Fatal("Columns was not used")
+	}
+	if got := repo.boardCalls.Load() - boardBefore; got != 0 {
+		t.Fatalf("Board was read %d times", got)
+	}
+}
