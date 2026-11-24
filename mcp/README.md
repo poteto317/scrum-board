@@ -57,7 +57,7 @@ Basic Auth が必要な場合は `env` に `SCRUM_BOARD_AUTH_USER` / `SCRUM_BOAR
 | ツール | 用途 | 主な引数 |
 |--------|------|----------|
 | `list_projects` | プロジェクト一覧 | なし |
-| `get_board` | 列・アイテム・settings | なし |
+| `get_board` | 列・アイテム・settings（アイテムの説明は先頭 500 文字まで、`solution` は空文字。全文は `get_item`） | なし |
 | `set_active_project` | アクティブプロジェクト切替 | **必須** `activeProjectId` |
 | `get_item` | 番号で取得 | **必須** `number`；任意 `projectId` |
 | `create_item` | 作成（列名を board から id 解決） | **必須** `title`, `description`, `column`；任意 `projectId`, `assignee` |

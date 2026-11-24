@@ -44,6 +44,7 @@ export function normalizeStatusIds(ids: number[], knownColumnIds: number[]): num
   return out;
 }
 
+/** 一覧の応答の説明は先頭 500 文字まで（backend の listDescriptionRunes）なので、文字での絞り込みはその範囲だけを検索する（全文は詳細で取る）。 */
 export function itemMatchesFilter(
   item: { title: string; description: string; columnId: number },
   filter: ListFilter,
