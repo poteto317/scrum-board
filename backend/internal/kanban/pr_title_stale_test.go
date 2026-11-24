@@ -209,3 +209,35 @@ func TestPRTitleResolverDoesNotAskAgainWhenAnAnswerArrivedMeanwhile(t *testing.T
 		t.Fatalf("%d GitHub calls, label %q", rt.calls.Load(), f.label)
 	}
 }
+
+func TestPRTitleResolverHandsOutOneFlightPerURL(t *testing.T) {
+	url := "https://github.com/o/r/pull/17"
+	rt := newSlowTransport(func(int32) *http.Response { return titleResponse("One") })
+	r := NewPRTitleResolver(rt, "")
+	first := r.startFetch(url, "o/r#17")
+	second := r.startFetch(url, "o/r#17")
+	if first != second {
+		t.Fatal("a second caller asking while the request is in flight must share it")
+	}
+	close(rt.release)
+	<-first.done
+	if first.label != "One" || rt.calls.Load() != 1 {
+		t.Fatalf("label %q, %d GitHub calls", first.label, rt.calls.Load())
+	}
+}
+
+func TestPRTitleResolverStopsWaitingForAFirstAnswerAfterFirstWait(t *testing.T) {
+	url := "https://github.com/o/r/pull/18"
+	rt := newSlowTransport(func(int32) *http.Response { return titleResponse("Late") })
+	r := NewPRTitleResolver(rt, "")
+	r.firstWait = 30 * time.Millisecond
+	start := time.Now()
+	if got := r.Resolve(context.Background(), url); got != "o/r#18" {
+		t.Fatalf("got %q", got)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("waited %v for a first answer", elapsed)
+	}
+	close(rt.release)
+	eventually(t, "the late answer", func() bool { return r.Resolve(context.Background(), url) == "Late" })
+}

@@ -79,6 +79,8 @@ type PRTitleResolver struct {
 	now    func() time.Time
 	// slotWait bounds the wait for one of the GitHub request slots.
 	slotWait time.Duration
+	// firstWait bounds how long a never-seen URL makes its caller wait for the first answer.
+	firstWait time.Duration
 	// inflight shares one GitHub request among everyone who wants the same URL at the same time.
 	inflight map[string]*titleFlight
 }
@@ -118,13 +120,14 @@ func NewPRTitleResolver(rt http.RoundTripper, token ...string) *PRTitleResolver 
 		tok = strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
 	}
 	return &PRTitleResolver{
-		client:   &http.Client{Timeout: prTitleAPITimeout, Transport: rt},
-		token:    tok,
-		cache:    make(map[string]cacheTitleEntry),
-		slots:    make(chan struct{}, prTitleMaxConcurrent),
-		now:      time.Now,
-		slotWait: 2 * prTitleAPITimeout,
-		inflight: make(map[string]*titleFlight),
+		client:    &http.Client{Timeout: prTitleAPITimeout, Transport: rt},
+		token:     tok,
+		cache:     make(map[string]cacheTitleEntry),
+		slots:     make(chan struct{}, prTitleMaxConcurrent),
+		now:       time.Now,
+		slotWait:  2 * prTitleAPITimeout,
+		firstWait: prTitleAPITimeout + prTitleAPITimeout/2,
+		inflight:  make(map[string]*titleFlight),
 	}
 }
 
@@ -136,7 +139,7 @@ type githubPullResponse struct {
 //
 // A cached label is returned at once, even after it has expired: an expired one is refreshed in
 // the background, so polling never waits for GitHub (and a failing URL is asked about at most once
-// per cache lifetime). Only a URL never seen before waits for its first answer, bounded by ctx.
+// per cache lifetime). Only a URL never seen before waits for its first answer, bounded by ctx and by firstWait.
 func (r *PRTitleResolver) Resolve(ctx context.Context, prURL string) string {
 	fallback := FallbackPRTitle(prURL)
 	if !validPRURL(prURL) {
@@ -153,9 +156,13 @@ func (r *PRTitleResolver) Resolve(ctx context.Context, prURL string) string {
 		return e.label
 	}
 	f := r.startFetch(prURL, fallback)
+	timer := time.NewTimer(r.firstWait)
+	defer timer.Stop()
 	select {
 	case <-f.done:
 		return f.label
+	case <-timer.C:
+		return fallback
 	case <-ctx.Done():
 		return fallback
 	}
