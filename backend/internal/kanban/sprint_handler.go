@@ -61,15 +61,10 @@ func (h handler) listSprints(w http.ResponseWriter, r *http.Request) {
 		failSprint(w, err)
 		return
 	}
-	userPtr := requestUserPtr(r)
-	out := make([]Sprint, 0, len(list))
-	for _, s := range list {
-		enriched, err := h.enrichSprintForResponse(r.Context(), s, userPtr, true)
-		if err != nil {
-			fail(w, err)
-			return
-		}
-		out = append(out, enriched)
+	out, err := h.summarizeSprintsForResponse(r.Context(), list, requestUserPtr(r))
+	if err != nil {
+		fail(w, err)
+		return
 	}
 	reply(w, 200, map[string][]Sprint{"sprints": out})
 }
@@ -417,7 +412,7 @@ func (h handler) replySprintDetail(w http.ResponseWriter, r *http.Request, s Spr
 
 func (h handler) replySprintDetailStatus(w http.ResponseWriter, r *http.Request, s Sprint, status int) {
 	userPtr := requestUserPtr(r)
-	enriched, err := h.enrichSprintForResponse(r.Context(), s, userPtr, false)
+	enriched, err := h.enrichSprintForResponse(r.Context(), s, userPtr)
 	if err != nil {
 		fail(w, err)
 		return
@@ -426,32 +421,33 @@ func (h handler) replySprintDetailStatus(w http.ResponseWriter, r *http.Request,
 	reply(w, status, sprintDetailResponseBody(enriched))
 }
 
-func (h handler) filterSprintItems(ctx context.Context, items []SprintItem, user *User) ([]SprintItem, error) {
+// visibleSprintItemIDs returns which of items the user may see. The members already carry what
+// the decision takes; the allowlists of the restricted ones are read together, once.
+func (h handler) visibleSprintItemIDs(ctx context.Context, items []SprintItem, user *User) (map[int64]struct{}, error) {
+	vis := map[int64]struct{}{}
 	if len(items) == 0 {
-		return []SprintItem{}, nil
+		return vis, nil
 	}
-	ids := make([]int64, len(items))
+	// filterBoardItems looks only at these three columns and the (here empty) related items. If it
+	// ever looks at more, the member has to carry them too.
+	stubs := make([]Item, len(items))
 	for i, it := range items {
-		ids[i] = it.ID
+		stubs[i] = Item{ID: it.ID, ViewAccess: it.ViewAccess, EditAccess: it.EditAccess, CreatedByUserID: it.CreatedByUserID}
 	}
-	full := make([]Item, 0, len(items))
-	for _, id := range ids {
-		item, err := h.repo.GetItem(ctx, id)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				continue
-			}
-			return nil, err
-		}
-		full = append(full, item)
-	}
-	visible, err := h.filterBoardItems(ctx, full, user)
+	visible, err := h.filterBoardItems(ctx, stubs, user)
 	if err != nil {
 		return nil, err
 	}
-	vis := map[int64]struct{}{}
 	for _, it := range visible {
 		vis[it.ID] = struct{}{}
+	}
+	return vis, nil
+}
+
+func (h handler) filterSprintItems(ctx context.Context, items []SprintItem, user *User) ([]SprintItem, error) {
+	vis, err := h.visibleSprintItemIDs(ctx, items, user)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]SprintItem, 0, len(items))
 	for _, it := range items {
@@ -463,13 +459,9 @@ func (h handler) filterSprintItems(ctx context.Context, items []SprintItem, user
 }
 
 func (h handler) invisibleSprintMemberIDs(ctx context.Context, items []SprintItem, user *User) ([]int64, error) {
-	filtered, err := h.filterSprintItems(ctx, items, user)
+	vis, err := h.visibleSprintItemIDs(ctx, items, user)
 	if err != nil {
 		return nil, err
-	}
-	vis := map[int64]struct{}{}
-	for _, it := range filtered {
-		vis[it.ID] = struct{}{}
 	}
 	out := make([]int64, 0)
 	for _, it := range items {
@@ -479,4 +471,3 @@ func (h handler) invisibleSprintMemberIDs(ctx context.Context, items []SprintIte
 	}
 	return out, nil
 }
-

@@ -3,6 +3,7 @@ package kanban
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -86,22 +87,33 @@ ORDER BY start_date DESC, id DESC`, projectID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []Sprint{}
 	for rows.Next() {
 		s, err := scanSprint(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
-		ids, err := loadSprintItemIDs(ctx, r.DB, s.ID)
-		if err != nil {
-			return nil, err
-		}
-		s.Items = sprintItemsFromIDs(ids)
-		s.ItemCount = len(ids)
 		out = append(out, s)
 	}
-	return out, rows.Err()
+	err = rows.Err()
+	rows.Close() // before the next query: one request must not hold two connections
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int64, len(out))
+	for i, s := range out {
+		ids[i] = s.ID
+	}
+	members, err := loadSprintItemsBySprint(ctx, r.DB, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Items = members[out[i].ID]
+		out[i].ItemCount = len(out[i].Items)
+	}
+	return out, nil
 }
 
 func (r MySQLRepository) GetSprint(ctx context.Context, id int64) (Sprint, error) {
@@ -277,37 +289,49 @@ func (r MySQLRepository) ReplaceSprintItems(ctx context.Context, id int64, itemI
 	for _, itemID := range final {
 		finalSet[itemID] = struct{}{}
 	}
+	// Everything the checks need is read (and the items locked) up front: one statement for the
+	// items involved and one for the other sprints they already belong to (each repeated per
+	// sprintBatchSize items, so the count is fixed up to that many).
+	involved := append(append([]int64(nil), prevOrder...), final...)
+	states, err := lockSprintMemberStates(ctx, tx, involved)
+	if err != nil {
+		return Sprint{}, err
+	}
 	for _, itemID := range prevOrder {
-		archived, checkErr := sprintItemArchived(ctx, tx, itemID)
-		if checkErr != nil {
-			return Sprint{}, checkErr
+		st, ok := states[itemID]
+		if !ok {
+			return Sprint{}, dbError(sql.ErrNoRows)
 		}
-		if archived {
+		if st.archived {
 			if _, included := finalSet[itemID]; !included {
 				final = append(final, itemID)
 				finalSet[itemID] = struct{}{}
 			}
 		}
 	}
+	elsewhere, err := itemsInOtherOpenSprints(ctx, tx, final, id)
+	if err != nil {
+		return Sprint{}, err
+	}
 	for _, iid := range final {
-		if _, wasMember := previousSet[iid]; wasMember {
-			archived, checkErr := sprintItemArchived(ctx, tx, iid)
-			if checkErr != nil {
-				return Sprint{}, checkErr
-			}
-			if archived {
-				continue
-			}
+		if _, wasMember := previousSet[iid]; wasMember && states[iid].archived {
+			continue
 		}
-		if err = assertSprintMemberEligible(ctx, tx, s, iid); err != nil {
+		if err = checkSprintMemberEligible(s, iid, states, elsewhere); err != nil {
 			return Sprint{}, err
 		}
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM sprint_items WHERE sprint_id=?`, id); err != nil {
 		return Sprint{}, err
 	}
-	for pos, iid := range final {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO sprint_items(sprint_id, item_id, position) VALUES(?,?,?)`, id, iid, pos); err != nil {
+	for start := 0; start < len(final); start += sprintBatchSize {
+		chunk := final[start:min(start+sprintBatchSize, len(final))]
+		args := make([]any, 0, len(chunk)*3)
+		for i, iid := range chunk {
+			args = append(args, id, iid, start+i)
+		}
+		values := strings.TrimSuffix(strings.Repeat("(?,?,?),", len(chunk)), ",")
+		if _, err = tx.ExecContext(ctx, `INSERT INTO sprint_items(sprint_id, item_id, position) VALUES `+values, args...); err != nil {
 			return Sprint{}, err
 		}
 	}
@@ -405,43 +429,103 @@ func deleteSprintItemsForItemTx(ctx context.Context, tx *sql.Tx, itemID int64) e
 	return err
 }
 
-func assertSprintMemberEligible(ctx context.Context, tx *sql.Tx, sprint Sprint, itemID int64) error {
-	var projectID int64
-	var deletedAt, archivedAt sql.NullTime
-	err := tx.QueryRowContext(ctx, `SELECT project_id, deleted_at, archived_at FROM items WHERE id=? FOR UPDATE`, itemID).Scan(&projectID, &deletedAt, &archivedAt)
-	if err != nil {
-		return dbError(err)
-	}
-	if deletedAt.Valid {
-		return ErrNotFound
-	}
-	if archivedAt.Valid {
-		return ErrSprintConflict
-	}
-	if projectID != sprint.ProjectID {
-		return ErrSprint
-	}
-	var otherSprint int64
-	err = tx.QueryRowContext(ctx, `
-SELECT si.sprint_id FROM sprint_items si
-JOIN sprints s ON s.id=si.sprint_id
-WHERE si.item_id=? AND s.status IN (?,?) AND si.sprint_id<>?
-LIMIT 1`, itemID, SprintStatusPlanned, SprintStatusActive, sprint.ID).Scan(&otherSprint)
-	if err == nil {
-		return ErrSprintConflict
-	}
-	if err != sql.ErrNoRows {
-		return err
-	}
-	return nil
+// sprintBatchSize caps the ids (or rows) of one batched statement, which keeps it far below
+// MySQL's limit of 65535 placeholders. A variable so a test can make the batches small (1 or more).
+var sprintBatchSize = 1000
+
+// sortedUniqueIDs returns ids without duplicates, in ascending order (the order the item rows are
+// locked in, so concurrent replacements lock alike).
+func sortedUniqueIDs(ids []int64) []int64 {
+	out := slices.Clone(ids)
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
-func sprintItemArchived(ctx context.Context, tx *sql.Tx, itemID int64) (bool, error) {
-	var archivedAt sql.NullTime
-	if err := tx.QueryRowContext(ctx, "SELECT archived_at FROM items WHERE id=? FOR UPDATE", itemID).Scan(&archivedAt); err != nil {
-		return false, dbError(err)
+// sprintMemberState is what deciding whether an item may be in a sprint takes.
+type sprintMemberState struct {
+	projectID int64
+	deleted   bool
+	archived  bool
+}
+
+// lockSprintMemberStates reads and locks the given items, in id order, sprintBatchSize at a time.
+// Unknown ids have no entry.
+func lockSprintMemberStates(ctx context.Context, tx *sql.Tx, ids []int64) (map[int64]sprintMemberState, error) {
+	out := map[int64]sprintMemberState{}
+	ids = sortedUniqueIDs(ids)
+	for chunk := range slices.Chunk(ids, sprintBatchSize) {
+		rows, err := tx.QueryContext(ctx, `
+SELECT id, project_id, deleted_at IS NOT NULL, archived_at IS NOT NULL
+FROM items WHERE id IN (`+placeholders(len(chunk))+`) ORDER BY id FOR UPDATE`, int64Args(chunk)...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id int64
+			var st sprintMemberState
+			if err = rows.Scan(&id, &st.projectID, &st.deleted, &st.archived); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out[id] = st
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return archivedAt.Valid, nil
+	return out, nil
+}
+
+// itemsInOtherOpenSprints returns which of ids are already in a planned or active sprint other
+// than sprintID, sprintBatchSize ids at a time.
+func itemsInOtherOpenSprints(ctx context.Context, tx *sql.Tx, ids []int64, sprintID int64) (map[int64]struct{}, error) {
+	out := map[int64]struct{}{}
+	// Only the duplicates are dropped here (the order does not matter for a read).
+	for chunk := range slices.Chunk(sortedUniqueIDs(ids), sprintBatchSize) {
+		args := append([]any{SprintStatusPlanned, SprintStatusActive, sprintID}, int64Args(chunk)...)
+		rows, err := tx.QueryContext(ctx, `
+SELECT DISTINCT si.item_id FROM sprint_items si
+JOIN sprints s ON s.id=si.sprint_id
+WHERE s.status IN (?,?) AND si.sprint_id<>? AND si.item_id IN (`+placeholders(len(chunk))+`)`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id int64
+			if err = rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out[id] = struct{}{}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// checkSprintMemberEligible decides, from what was read up front, whether the item may be in the
+// sprint. The checks run in a fixed order, so the first failing one decides the error.
+func checkSprintMemberEligible(sprint Sprint, itemID int64, states map[int64]sprintMemberState, elsewhere map[int64]struct{}) error {
+	st, ok := states[itemID]
+	if !ok || st.deleted {
+		return ErrNotFound
+	}
+	if st.archived {
+		return ErrSprintConflict
+	}
+	if st.projectID != sprint.ProjectID {
+		return ErrSprint
+	}
+	if _, taken := elsewhere[itemID]; taken {
+		return ErrSprintConflict
+	}
+	return nil
 }
 
 type sprintQuerier interface {
@@ -473,47 +557,31 @@ FROM sprints WHERE id=?`, id)
 	return scanSprint(row)
 }
 
-func loadSprintItemIDs(ctx context.Context, q interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}, sprintID int64) ([]int64, error) {
-	rows, err := q.QueryContext(ctx, `
-SELECT si.item_id
-FROM sprint_items si
-JOIN items c ON c.id=si.item_id
-WHERE si.sprint_id=? AND c.deleted_at IS NULL
-  AND c.project_id=(SELECT project_id FROM sprints WHERE id=?)
-ORDER BY si.position ASC, c.id ASC`, sprintID, sprintID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []int64{}
-	for rows.Next() {
-		var id int64
-		if err = rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
-}
+// sprintMemberColumns are the columns of a sprint member (see SprintItem); the member's items
+// row is aliased c, its number n.
+const sprintMemberColumns = "c.id, n.item_number, c.title, c.column_id, c.view_access, c.edit_access, c.created_by_user_id"
 
-func sprintItemsFromIDs(ids []int64) []SprintItem {
-	if len(ids) == 0 {
-		return nil
+// scanSprintItem scans one row of sprintMemberColumns; lead are the destinations of the columns
+// selected before them, in the same order as in the SELECT.
+func scanSprintItem(rows *sql.Rows, lead ...any) (SprintItem, error) {
+	var it SprintItem
+	var createdBy sql.NullInt64
+	dest := slices.Concat(lead, []any{&it.ID, &it.Number, &it.Title, &it.ColumnID, &it.ViewAccess, &it.EditAccess, &createdBy})
+	if err := rows.Scan(dest...); err != nil {
+		return SprintItem{}, err
 	}
-	out := make([]SprintItem, len(ids))
-	for i, id := range ids {
-		out[i] = SprintItem{ID: id}
+	if createdBy.Valid {
+		v := createdBy.Int64
+		it.CreatedByUserID = &v
 	}
-	return out
+	return it, nil
 }
 
 func loadSprintItems(ctx context.Context, q interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, sprintID int64) ([]SprintItem, error) {
 	rows, err := q.QueryContext(ctx, `
-SELECT c.id, n.item_number, c.title, c.column_id
+SELECT `+sprintMemberColumns+`
 FROM sprint_items si
 JOIN items c ON c.id=si.item_id
 JOIN item_numbers n ON n.item_id=c.id
@@ -526,13 +594,49 @@ ORDER BY si.position ASC, c.id ASC`, sprintID, sprintID)
 	defer rows.Close()
 	out := []SprintItem{}
 	for rows.Next() {
-		var it SprintItem
-		if err = rows.Scan(&it.ID, &it.Number, &it.Title, &it.ColumnID); err != nil {
+		it, err := scanSprintItem(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, it)
 	}
 	return out, rows.Err()
+}
+
+// loadSprintItemsBySprint reads the members of all the given sprints in one statement, in
+// position order, keyed by sprint id. A sprint without members has no entry.
+func loadSprintItemsBySprint(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, sprintIDs []int64) (map[int64][]SprintItem, error) {
+	out := map[int64][]SprintItem{}
+	for chunk := range slices.Chunk(sprintIDs, sprintBatchSize) {
+		rows, err := q.QueryContext(ctx, `
+SELECT si.sprint_id, `+sprintMemberColumns+`
+FROM sprint_items si
+JOIN sprints s ON s.id=si.sprint_id
+JOIN items c ON c.id=si.item_id AND c.project_id=s.project_id
+JOIN item_numbers n ON n.item_id=c.id
+WHERE si.sprint_id IN (`+placeholders(len(chunk))+`) AND c.deleted_at IS NULL
+ORDER BY si.sprint_id, si.position ASC, c.id ASC`, int64Args(chunk)...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var sprintID int64
+			it, err := scanSprintItem(rows, &sprintID)
+			if err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out[sprintID] = append(out[sprintID], it)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 func scanSprint(s scanner) (Sprint, error) {

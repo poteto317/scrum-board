@@ -172,6 +172,7 @@ func (m *memoryRepo) UserBySessionID(_ context.Context, sessionID string, now ti
 }
 
 func (m *memoryRepo) ListACLEntriesForItems(_ context.Context, itemIDs []int64) (map[int64]ItemACL, error) {
+	m.aclListCalls.Add(1)
 	if m.aclListFail != nil {
 		return nil, m.aclListFail
 	}
