@@ -33,7 +33,7 @@
 3. `/trash` で当該プロジェクトのゴミ箱一覧を見られる。各行に削除日時・残日数目安・復元・完全削除がある。
 4. 復元で `deleted_at` をクリアし、削除前の `column_id` に戻す。その列が無い／別プロジェクト等で無効なら Todo 列へ。番号・履歴・コメント等は残る。
 5. ゴミ箱からの完全削除は **確認ダイアログ 1 回**のうえ hard delete（現行 CASCADE と同じ）。soft delete 済みのものだけ許可。
-6. 経過時間が **`>= 30×24h`**（ちょうど 30 日を含む）の行は hard purge。未満は復元可。経路: (a) `POST /api/trash/purge`（全プロジェクト・Scheduler 向け）(b) `GET /api/trash` 冒頭の機会削除（**当該 `projectId` のみ**）。両方ともサーバ時刻基準。
+6. 経過時間が **`>= 30×24h`**（ちょうど 30 日を含む）の行は hard purge。未満は復元可。経路: (a) `POST /api/trash/purge`（全プロジェクト・Scheduler 向け）~~(b) `GET /api/trash` 冒頭の機会削除（当該 `projectId` のみ）~~（#130 で廃止: 一覧は読み取りだけで、期限切れは隠すだけ。[設計書](2026-11-25-trash-list-read-only-design.md)）。サーバ時刻基準。
 7. ヘッダーメニューに「ゴミ箱」を追加（board / backlog / itemDetail で表示可）。選択で `/trash` へ遷移。
 8. プロジェクト切替時はゴミ箱もアクティブプロジェクトの一覧に切り替わる（既存の project スコープ規則に従う）。
 9. Close 列の挙動は変えない。
@@ -51,7 +51,7 @@
 | 操作 | 方法 | 挙動 |
 |------|------|------|
 | ゴミ箱へ | 既存 `DELETE /api/items/{id}` | soft delete（`deleted_at = now`）。既に削除済みなら 404。 |
-| 一覧 | `GET /api/trash?projectId=` | 当該プロジェクトの機会 purge の後、同プロジェクトの `deleted_at IS NOT NULL` を返す（新しい順）。 |
+| 一覧 | `GET /api/trash?projectId=` | 同プロジェクトの `deleted_at IS NOT NULL` のうち、保持期間内のものを返す（新しい順）。読み取りのみ（#130）。 |
 | 復元 | `POST /api/items/{id}/restore`（project スコープ可） | soft delete 済みのみ。`deleted_at` クリア。列が無効なら Todo。 |
 | 完全削除 | `DELETE /api/trash/{id}`（project スコープ可） | soft delete 済みのみ hard delete。生存中・他プロジェクト・未存在は **404**。 |
 | 一括 purge | `POST /api/trash/purge` | 全プロジェクトで `now - deleted_at >= 30×24h` を hard delete。認証は既存 Basic と同じ。レスポンスに削除件数。 |
