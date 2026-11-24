@@ -237,6 +237,43 @@ describe('startLiveRefresh', () => {
       stop();
     });
 
+    it('a request that completes without a value (304) ends the failure streak: the server answered', () => {
+      const doc = mockDoc(false);
+      let mode: 'fail' | 'empty' = 'fail';
+      const fetch = vi.fn(() => (mode === 'fail' ? throwError(() => new Error('net')) : EMPTY));
+      const stop = startLiveRefresh({ ...base(doc), fetch });
+      const at = advanceAndCount(fetch);
+      expect(at(5000)).toBe(1); // fails (failure 1), skip 1
+      mode = 'empty';
+      expect(at(5000)).toBe(1); // skipped
+      expect(at(5000)).toBe(2); // answers with nothing: streak over
+      mode = 'fail';
+      expect(at(5000)).toBe(3); // asked again at once
+      expect(at(5000)).toBe(3); // this failure is failure 1 again: skip 1, not 2
+      expect(at(5000)).toBe(4);
+      stop();
+    });
+
+    it('survives fetch throwing synchronously: no stuck in-flight mark, counted as a failure', () => {
+      const doc = mockDoc(false);
+      let calls = 0;
+      const fetch = vi.fn(() => {
+        calls += 1;
+        if (calls === 1) throw new Error('boom');
+        return of(1);
+      });
+      const apply = vi.fn();
+      const stop = startLiveRefresh({ ...base(doc), fetch, apply });
+      expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
+      expect(fetch).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(5000); // skip 1 (failure back-off)
+      expect(fetch).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(5000); // not blocked for 30s by a stuck mark
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(apply).toHaveBeenCalledWith(1);
+      stop();
+    });
+
     it('a success ends the back-off', () => {
       const doc = mockDoc(false);
       let fail = true;

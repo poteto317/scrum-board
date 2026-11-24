@@ -92,8 +92,17 @@ export function startLiveRefresh<T>(options: LiveRefreshOptions<T>): () => void 
     const gen = ++generation;
     subscription?.unsubscribe();
     if (stalled) recordFailure();
+    let request: Observable<T>;
+    try {
+      request = options.fetch();
+    } catch {
+      // A fetch that throws before returning an Observable must not leave the in-flight mark set.
+      pendingSince = null;
+      recordFailure();
+      return;
+    }
     pendingSince = now();
-    subscription = options.fetch().subscribe({
+    subscription = request.subscribe({
       next: (data) => {
         if (gen !== generation) return;
         pendingSince = null;
@@ -109,11 +118,14 @@ export function startLiveRefresh<T>(options: LiveRefreshOptions<T>): () => void 
         pendingSince = null;
         recordFailure();
       },
-      // A response filtered out upstream (e.g. 304 Not Modified) completes without a value:
-      // the request is over, so the next tick must not wait for it. Failures are left as they are.
+      // A response filtered out upstream (e.g. 304 Not Modified) completes without a value: the
+      // server answered, so the request is over (the next tick must not wait for it) and the
+      // failure streak ends. `error` never reaches here.
       complete: () => {
         if (gen !== generation) return;
         pendingSince = null;
+        failures = 0;
+        ticksToSkip = 0;
       },
     });
   };
