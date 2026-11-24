@@ -107,6 +107,12 @@ type Board struct {
 	Items    []Item        `json:"items"`
 	Settings BoardSettings `json:"settings"`
 }
+
+// BoardMeta is Board without items: columns and resolved settings only (GET /api/board/meta).
+type BoardMeta struct {
+	Columns  []Column      `json:"columns"`
+	Settings BoardSettings `json:"settings"`
+}
 type ItemInput struct {
 	ColumnID     int64         `json:"columnId"`
 	ProjectID    *int64        `json:"projectId,omitempty"`
@@ -196,6 +202,8 @@ type SprintPatch struct {
 // Repository keeps HTTP independent of MySQL, so handlers can be tested without a database.
 type Repository interface {
 	Board(context.Context) (Board, error)
+	// BoardMeta returns the same columns and resolved settings as Board, without reading items.
+	BoardMeta(context.Context) (BoardMeta, error)
 	// BoardForProject returns the same columns/settings as Board (active unchanged in settings),
 	// but items belong to projectID. projectID must exist; otherwise ErrProject.
 	BoardForProject(context.Context, int64) (Board, error)

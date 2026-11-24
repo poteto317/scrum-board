@@ -127,6 +127,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/users", h.createUser)
 	mux.HandleFunc("PATCH /api/users/{id}", h.patchUser)
 	mux.HandleFunc("GET /api/board", h.board)
+	mux.HandleFunc("GET /api/board/meta", h.boardMeta)
 	mux.HandleFunc("PATCH /api/board/settings", h.updateBoardSettings)
 	mux.HandleFunc("GET /api/projects", h.listProjects)
 	mux.HandleFunc("POST /api/projects", h.createProject)
@@ -266,6 +267,17 @@ func (h handler) board(w http.ResponseWriter, r *http.Request) {
 	}
 	b.Items = filtered
 	replyJSONWithETag(w, r, b)
+}
+
+// boardMeta returns columns and resolved settings without items (no per-item ACL applies).
+// projectId is intentionally not read: columns and settings do not depend on the project.
+func (h handler) boardMeta(w http.ResponseWriter, r *http.Request) {
+	meta, err := h.repo.BoardMeta(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	replyJSONWithETag(w, r, meta)
 }
 
 func (h handler) boardForRequest(r *http.Request) (Board, error) {
