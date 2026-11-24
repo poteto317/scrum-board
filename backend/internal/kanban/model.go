@@ -92,6 +92,13 @@ type TrashItem struct {
 	DeletedAt time.Time `json:"deletedAt"`
 }
 
+// TrashEntry is a trash row with the access policy needed to decide who may see it, so the
+// list can be filtered without loading each item again.
+type TrashEntry struct {
+	TrashItem
+	ACL ItemACLState
+}
+
 type ItemColumnOrder struct {
 	ColumnID int64   `json:"columnId"`
 	ItemIDs  []int64 `json:"itemIds"`
@@ -237,10 +244,9 @@ type Repository interface {
 	DeleteItem(context.Context, int64) error
 	HardDeleteItem(context.Context, int64) error
 	HardDeleteTrashItem(context.Context, int64, int64) error
-	ListTrash(context.Context, int64) ([]TrashItem, error)
+	ListTrash(context.Context, int64) ([]TrashEntry, error)
 	RestoreItem(context.Context, int64, int64) (Item, error)
 	PurgeExpiredTrash(context.Context) (int64, error)
-	PurgeExpiredTrashForProject(context.Context, int64) (int64, error)
 	CreateColumn(context.Context, string) (Column, error)
 	ReorderColumns(context.Context, []int64) ([]Column, error)
 	ReorderItems(context.Context, []ItemColumnOrder) ([]Item, error)

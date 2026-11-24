@@ -11,29 +11,23 @@ func (h handler) listTrash(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	items, err := h.repo.ListTrash(r.Context(), pid)
+	entries, err := h.repo.ListTrash(r.Context(), pid)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	userPtr := requestUserPtr(r)
-	out := make([]TrashItem, 0, len(items))
-	for _, row := range items {
-		deleted, err := h.repo.GetDeletedItem(r.Context(), row.ID, pid)
-		if err != nil {
-			fail(w, err)
-			return
-		}
-		st, err := h.loadItemACLState(r.Context(), deleted)
-		if err != nil {
-			fail(w, err)
-			return
-		}
-		if CanView(st, userPtr) {
-			out = append(out, row)
+	reply(w, 200, map[string][]TrashItem{"items": filterTrashForViewer(entries, requestUserPtr(r))})
+}
+
+// filterTrashForViewer keeps the trash rows the viewer may see.
+func filterTrashForViewer(entries []TrashEntry, user *User) []TrashItem {
+	out := make([]TrashItem, 0, len(entries))
+	for _, entry := range entries {
+		if CanView(entry.ACL, user) {
+			out = append(out, entry.TrashItem)
 		}
 	}
-	reply(w, 200, map[string][]TrashItem{"items": out})
+	return out
 }
 
 func (h handler) restoreItem(w http.ResponseWriter, r *http.Request) {
