@@ -54,12 +54,15 @@ describe('AuthSession', () => {
   });
 
   it('clearSubject clears board cache and project session', () => {
-    cache.putBoard(1, [item(1)], cols);
+    cache.putBoard(1, [item(1)], cols, { cardLayout: 'pack' });
+    cache.putBacklog(1, [item(1)], cols);
     projectSession.projects.set([{ id: 1, name: 'A', position: 0 }]);
     projectSession.activeId.set(1);
     projectSession.bootstrapped.set(true);
     auth.clearSubject();
     expect(cache.getBoard(1)).toBeUndefined();
+    expect(cache.getBoardSnapshot(1)).toBeUndefined();
+    expect(cache.getBacklogView(1)).toBeUndefined();
     expect(projectSession.projects()).toEqual([]);
     expect(projectSession.activeId()).toBeNull();
     expect(projectSession.bootstrapped()).toBe(false);
