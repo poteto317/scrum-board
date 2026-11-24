@@ -18,6 +18,10 @@ const (
 	prTitleCacheTTLFailure = time.Minute
 	prTitleCacheMaxEntries = 512
 	prTitleMaxConcurrent   = 8
+	// How long a never-seen URL makes its caller wait for the first answer, and how long a request
+	// waits for one of the prTitleMaxConcurrent slots. Both are separate from the request time.
+	prTitleFirstWait = 3 * time.Second
+	prTitleSlotWait  = 4 * time.Second
 	// A real title that cannot be refreshed (deleted PR, private repository) is dropped after this.
 	prTitleStaleMaxAge = time.Hour
 	prTitleUserAgent   = "scrum-board-kanban"
@@ -125,8 +129,8 @@ func NewPRTitleResolver(rt http.RoundTripper, token ...string) *PRTitleResolver 
 		cache:     make(map[string]cacheTitleEntry),
 		slots:     make(chan struct{}, prTitleMaxConcurrent),
 		now:       time.Now,
-		slotWait:  2 * prTitleAPITimeout,
-		firstWait: prTitleAPITimeout + prTitleAPITimeout/2,
+		slotWait:  prTitleSlotWait,
+		firstWait: prTitleFirstWait,
 		inflight:  make(map[string]*titleFlight),
 	}
 }
