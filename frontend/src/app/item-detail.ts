@@ -33,8 +33,8 @@ import {
 } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
-import { fetchBoardMeta } from './conditional-get';
 import { errorMessage } from './api-error';
+import { fetchBoardMeta } from './conditional-get';
 import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
 import { UsersSession } from './users-session';
