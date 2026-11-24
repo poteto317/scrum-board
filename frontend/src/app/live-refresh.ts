@@ -72,10 +72,17 @@ export function startLiveRefresh<T>(options: LiveRefreshOptions<T>): () => void 
     }
   };
 
-  /** Space the next requests out; called for a failed request and for one given up on. */
+  /** Space the next requests out; called for a failed request, one given up on, and a fetch that threw. */
   const recordFailure = () => {
     failures += 1;
     ticksToSkip = backoffTicks(failures, maxBackoffTicks);
+  };
+
+  /** The server answered (with or without a value): the request is over and the failure streak ends. */
+  const recordAnswer = () => {
+    pendingSince = null;
+    failures = 0;
+    ticksToSkip = 0;
   };
 
   const tick = () => {
@@ -105,9 +112,7 @@ export function startLiveRefresh<T>(options: LiveRefreshOptions<T>): () => void 
     subscription = request.subscribe({
       next: (data) => {
         if (gen !== generation) return;
-        pendingSince = null;
-        failures = 0;
-        ticksToSkip = 0;
+        recordAnswer();
         // Re-check after the response: reordering/modal may have started mid-flight.
         if (!options.enabled()) return;
         options.apply(data);
@@ -123,9 +128,7 @@ export function startLiveRefresh<T>(options: LiveRefreshOptions<T>): () => void 
       // failure streak ends. `error` never reaches here.
       complete: () => {
         if (gen !== generation) return;
-        pendingSince = null;
-        failures = 0;
-        ticksToSkip = 0;
+        recordAnswer();
       },
     });
   };
