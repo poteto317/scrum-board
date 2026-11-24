@@ -40,6 +40,10 @@ assert_grep 'htpasswd -i' "$EP" 'htpasswd stdin mode'
 assert_grep 'htpasswd -i -B' "$EP" 'htpasswd bcrypt'
 assert_grep 'chmod 640 /etc/nginx/.htpasswd' "$EP" 'htpasswd file permissions' fixed
 assert_grep 'curl -sf' "$EP" 'curl readiness probe'
+# Cold start (#122): poll every 0.2s for 120s, and probe every 1s for the same 240s grace as before.
+assert_grep '    sleep 0.2' "$EP" 'fast readiness polling' fixed
+assert_grep 'while [ "$i" -lt 600 ]' "$EP" 'readiness budget of 600 polls (120s at 0.2s)' fixed
+assert_grep '--startup-probe=tcpSocket.port=8080,periodSeconds=1,failureThreshold=240,timeoutSeconds=1' "$DEPLOY" 'startup probe every 1s with a 240s grace' fixed
 assert_grep 'status --porcelain' "$DEPLOY" 'clean working tree before deploy'
 assert_grep 'IMAGE_TAG="\$\(git -C "\$ROOT" rev-parse HEAD\)"' "$DEPLOY" 'git SHA image tag'
 assert_grep 'docker push "$IMAGE_URI"' "$DEPLOY" 'push SHA-tagged image' fixed
