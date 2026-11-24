@@ -57,6 +57,10 @@ describe('HeaderMenu component', () => {
     const style = getComputedStyle(menu);
     expect(style.marginLeft).toBe('auto');
     expect(style.flexShrink).toBe('0');
+  });
+
+  it('does not render a project add button in the header', () => {
+    const { f } = setup();
     expect(f.nativeElement.querySelector('#project-add')).toBeNull();
   });
 
