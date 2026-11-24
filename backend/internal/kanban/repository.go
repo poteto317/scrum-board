@@ -108,12 +108,12 @@ func (r MySQLRepository) BoardForProject(ctx context.Context, projectID int64) (
 }
 
 // boardHead is what loadBoardHead resolves inside one transaction. BoardMeta returns
-// Columns and Settings; loadBoard also needs Projects and Active to scope the items.
+// Columns and Settings; loadBoard also needs Projects to scope the items (the resolved
+// active project is Settings.ActiveProjectID).
 type boardHead struct {
 	Columns  []Column
 	Settings BoardSettings
 	Projects []Project
-	Active   int64
 }
 
 // loadBoardHead reads columns, settings and projects inside tx and resolves the mobile
@@ -135,7 +135,7 @@ func loadBoardHead(ctx context.Context, tx *sql.Tx) (boardHead, error) {
 	settings.MobileBoardColumnID = resolveMobileBoardColumnID(rawSettings.MobileBoardColumnID, columns)
 	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
 	settings.ActiveProjectID = active
-	return boardHead{Columns: columns, Settings: settings, Projects: projects, Active: active}, nil
+	return boardHead{Columns: columns, Settings: settings, Projects: projects}, nil
 }
 
 // BoardMeta returns columns and resolved settings without reading items.
@@ -169,7 +169,7 @@ func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Bo
 	}
 	b.Columns = head.Columns
 	b.Settings = head.Settings
-	scope, err := resolveItemListScope(head.Active, itemProjectID, head.Projects)
+	scope, err := resolveItemListScope(head.Settings.ActiveProjectID, itemProjectID, head.Projects)
 	if err != nil {
 		return b, err
 	}
