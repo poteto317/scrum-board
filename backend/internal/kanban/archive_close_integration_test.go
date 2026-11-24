@@ -224,3 +224,67 @@ func TestMySQLMovingBetweenDoneAndCloseDoesNotRestartTheArchiveTimer(t *testing.
 		t.Fatalf("ArchiveDoneItems() = %d, %v; want 1 (Done->Close keeps the original finish time)", archived, err)
 	}
 }
+
+// The backfill counts only a move into Done/Close from outside, like the archive check (#128 review).
+func TestMySQLInitializeArchiveBackfillIgnoresDoneToCloseMoves(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustInit(t, r)
+	closeID := mysqlColumnID(t, r, "Close")
+	it, err := r.CreateItem(ctx, ItemInput{ColumnID: closeID, Title: "done, then closed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, "UPDATE items SET done_at=NULL, updated_at=? WHERE id=?", time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC), it.ID); err != nil {
+		t.Fatal(err)
+	}
+	enteredAt := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	movedAt := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, ev := range []HistoryEvent{
+		{Kind: "updated", OccurredAt: enteredAt, Changes: []HistoryChange{{Field: "status", Before: "Doing", After: "Done"}}},
+		{Kind: "updated", OccurredAt: movedAt, Changes: []HistoryChange{{Field: "status", Before: "Done", After: "Close"}}},
+	} {
+		if err = insertHistory(ctx, tx, it.ID, ev, "backfill-done-to-close-"+string(rune('a'+i))); err != nil {
+			tx.Rollback()
+			t.Fatal(err)
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.InitializeArchive(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var got time.Time
+	if err = db.QueryRowContext(ctx, "SELECT done_at FROM items WHERE id=?", it.ID).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.UTC().Equal(enteredAt) {
+		t.Fatalf("done_at=%v, want the time it entered Done (%v), not the Done->Close move", got.UTC(), enteredAt)
+	}
+}
+
+// An archived item whose column is no longer Done/Close goes back to Done.
+func TestMySQLRestoringAnArchivedItemFromAnUnfinishedColumnGoesToDone(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+	mustInit(t, r)
+	doneID, todoID := mysqlColumnID(t, r, "Done"), mysqlColumnID(t, r, "Todo")
+	it, err := r.CreateItem(ctx, ItemInput{ColumnID: doneID, Title: "archived, then its column changed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ExecContext(ctx, "UPDATE items SET archived_at=?, column_id=? WHERE id=?", time.Now().UTC(), todoID, it.ID); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := r.RestoreArchivedItem(ctx, it.ID, it.ProjectID)
+	if err != nil || restored.ColumnID != doneID {
+		t.Fatalf("restored = %+v, %v; want it in Done", restored, err)
+	}
+}
