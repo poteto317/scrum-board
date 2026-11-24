@@ -379,15 +379,7 @@ func (h handler) getItem(w http.ResponseWriter, r *http.Request) {
 	reply(w, 200, c)
 }
 func (h handler) activeProjectForByNumber(ctx context.Context) (int64, error) {
-	board, err := h.repo.Board(ctx)
-	if err != nil {
-		return 0, err
-	}
-	projects, err := h.repo.ListProjects(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return resolveActiveProjectID(board.Settings.ActiveProjectID, projects), nil
+	return h.repo.ActiveProjectID(ctx)
 }
 
 func (h handler) resolveByNumberProjectID(r *http.Request) (int64, error) {

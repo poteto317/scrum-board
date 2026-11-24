@@ -65,3 +65,35 @@ ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`, key, missingID)
 		t.Fatalf("columns differ: meta=%+v board=%+v", meta.Columns, board.Columns)
 	}
 }
+
+// ActiveProjectID と Columns は、Board と同じ解決結果を返す（保存済みの ID が無いときの代替も含む）。
+func TestActiveProjectIDAndColumnsMatchBoardMySQL(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+
+	mustExec(t, db, `INSERT INTO board_settings(setting_key, setting_value) VALUES(?, ?)
+ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`, settingKeyActiveProjectID, "999999")
+	t.Cleanup(func() {
+		mustExec(t, db, `DELETE FROM board_settings WHERE setting_key=?`, settingKeyActiveProjectID)
+	})
+
+	board, err := r.Board(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := r.ActiveProjectID(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active == 999999 || active != board.Settings.ActiveProjectID {
+		t.Fatalf("active=%d board=%d", active, board.Settings.ActiveProjectID)
+	}
+	columns, err := r.Columns(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(columns, board.Columns) {
+		t.Fatalf("columns differ: %+v vs %+v", columns, board.Columns)
+	}
+}
