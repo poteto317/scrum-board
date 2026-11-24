@@ -44,11 +44,13 @@ function mountBacklog(options: {
   withColumns?: boolean;
   activeId?: number | null;
   switching?: boolean;
+  ephemeral?: boolean;
 }) {
   const heldBacklog = new Subject<{ items: Item[] }>();
   const heldBoard = new Subject<{ columns: Column[]; items: Item[] }>();
   const backlog = vi.fn(() => heldBacklog.asObservable());
   const board = vi.fn(() => heldBoard.asObservable());
+  const reorderBacklog = vi.fn();
   TestBed.configureTestingModule({
     imports: [Backlog],
     providers: [
@@ -58,6 +60,7 @@ function mountBacklog(options: {
         useValue: {
           backlog,
           board,
+          reorderBacklog,
           patchBoardSettings: vi.fn(),
           listFilter: () =>
             of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
@@ -69,6 +72,7 @@ function mountBacklog(options: {
   const session = TestBed.inject(ProjectSession);
   session.activeId.set(options.activeId === undefined ? 1 : options.activeId);
   session.switching.set(options.switching === true);
+  session.ephemeralActiveView.set(options.ephemeral === true);
   const cache = TestBed.inject(ProjectBoardCache);
   if (options.cachedTitles) {
     cache.putBacklog(
@@ -87,7 +91,7 @@ function mountBacklog(options: {
     heldBoard.next({ columns, items });
     heldBoard.complete();
   };
-  return { f, backlog, board, cache, titles, answer, heldBacklog, heldBoard };
+  return { f, backlog, board, cache, titles, answer, heldBacklog, heldBoard, reorderBacklog };
 }
 
 describe('Backlog shown from the cache on return (#124)', () => {
@@ -179,6 +183,24 @@ describe('Backlog shown from the cache on return (#124)', () => {
     expect(f.componentInstance.items()).toBe(before);
     expect(f.componentInstance.loading()).toBe(false);
     expect(f.componentInstance.showingCached()).toBe(false);
+    f.destroy();
+  });
+
+  it('keeps the cache in step with a reorder, so the next return shows the new order', () => {
+    const { f, answer, cache, reorderBacklog } = mountBacklog({ cachedTitles: ['A', 'B'] });
+    answer(['A', 'B']);
+    reorderBacklog.mockReturnValue(of({ items: [card(2, 'B'), card(1, 'A')] }));
+    (f.componentInstance as unknown as { applyReorder(a: number, b: number): void }).applyReorder(0, 1);
+    expect(cache.getBacklogView(1)?.items.map((i) => i.title)).toEqual(['B', 'A']);
+    f.destroy();
+  });
+
+  it('does not show, nor store, a backlog while the view is a deep link (the fetch is not scoped to it)', () => {
+    const { f, titles, answer, cache } = mountBacklog({ cachedTitles: ['A'], ephemeral: true });
+    expect(f.nativeElement.textContent).toContain(SPINNER);
+    expect(titles()).toEqual([]);
+    answer(['Other project item']);
+    expect(cache.getBacklogView(1)?.items.map((i) => i.title)).toEqual(['A']);
     f.destroy();
   });
 
