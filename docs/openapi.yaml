@@ -1831,7 +1831,7 @@ paths:
       - basicAuth: []
   /api/items/{id}/unarchive:
     post:
-      summary: アーカイブ解除してDoneへ戻す
+      summary: アーカイブ解除して元の列（Done または Close）へ戻す
       operationId: post_api_items_id_unarchive
       parameters:
       - name: id
@@ -2502,7 +2502,7 @@ paths:
       - basicAuth: []
   /api/archive/auto-archive:
     post:
-      summary: Doneから10日経過したアイテムを自動アーカイブ（セッション免除）
+      summary: Done・Closeから10日経過したアイテムを自動アーカイブ（セッション免除）
       operationId: post_api_archive_auto_archive
       responses:
         '200':

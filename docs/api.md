@@ -8,7 +8,7 @@
 
 ## アーカイブ
 
-`GET /api/archive?projectId={projectId}` で閲覧可能なプロジェクト別アーカイブを取得します。Done から10日経過したアイテムは毎日 03:30（Asia/Tokyo）に自動アーカイブされ、`POST /api/items/{id}/unarchive?projectId={projectId}` で編集権限のあるユーザーが Done に戻せます。自動処理は Cloud Scheduler から `POST /api/archive/auto-archive` を呼び出し、`X-Scheduler-Token` を送信します。
+`GET /api/archive?projectId={projectId}` で閲覧可能なプロジェクト別アーカイブを取得します。Done・Close から10日経過したアイテムは毎日 03:30（Asia/Tokyo）に自動アーカイブされ、`POST /api/items/{id}/unarchive?projectId={projectId}` で編集権限のあるユーザーが元の列（Done または Close）に戻せます。自動処理は Cloud Scheduler から `POST /api/archive/auto-archive` を呼び出し、`X-Scheduler-Token` を送信します。
 
 ## 非規範の curl 例
 
