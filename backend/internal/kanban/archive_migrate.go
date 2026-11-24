@@ -2,8 +2,6 @@ package kanban
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -81,50 +79,16 @@ ORDER BY i.id`)
 	}
 	for _, item := range items {
 		at := item.updatedAt.UTC()
-		event, found, err := latestItemStatusEvent(ctx, r.DB, item.id)
+		entered, err := latestFinishedTransitionAt(ctx, r.DB, item.id)
 		if err != nil {
 			return fmt.Errorf("read latest status history for item %d: %w", item.id, err)
 		}
-		if found && isFinishedColumnName(event.Note) {
-			at = event.OccurredAt.UTC()
+		if entered != nil {
+			at = entered.UTC()
 		}
 		if _, err = r.DB.ExecContext(ctx, `UPDATE items SET done_at=? WHERE id=? AND done_at IS NULL`, at, item.id); err != nil {
 			return fmt.Errorf("backfill done_at for item %d: %w", item.id, err)
 		}
 	}
 	return nil
-}
-
-func latestItemStatusEvent(ctx context.Context, q interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}, itemID int64) (HistoryEvent, bool, error) {
-	rows, err := q.QueryContext(ctx, `SELECT kind, occurred_at, changes
-FROM item_history
-WHERE item_id=? AND kind='updated'
-ORDER BY occurred_at DESC, id DESC`, itemID)
-	if err != nil {
-		return HistoryEvent{}, false, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var kind string
-		var occurredAt time.Time
-		var payload []byte
-		if err = rows.Scan(&kind, &occurredAt, &payload); err != nil {
-			return HistoryEvent{}, false, err
-		}
-		var changes []HistoryChange
-		if err = json.Unmarshal(payload, &changes); err != nil {
-			return HistoryEvent{}, false, fmt.Errorf("decode item %d history changes: %w", itemID, err)
-		}
-		for _, change := range changes {
-			if change.Field == "status" {
-				return HistoryEvent{Kind: kind, OccurredAt: occurredAt, Changes: changes, Note: change.After}, true, nil
-			}
-		}
-	}
-	if err = rows.Err(); err != nil {
-		return HistoryEvent{}, false, err
-	}
-	return HistoryEvent{}, false, nil
 }
