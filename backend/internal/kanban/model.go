@@ -275,6 +275,7 @@ type Repository interface {
 	SetAICreditLimit(ctx context.Context, limit *int64) error
 	ListAttachments(context.Context, int64) ([]Attachment, error)
 	CreateAttachment(ctx context.Context, blobs BlobStorage, itemID int64, field string, commentID *int64, name, contentType string, size int64, body io.Reader, userID *int64) (Attachment, error)
+	GetAttachment(ctx context.Context, itemID, id int64) (Attachment, error)
 	OpenAttachmentContent(ctx context.Context, blobs BlobStorage, itemID, id int64) (io.ReadCloser, string, error)
 	DeleteAttachment(ctx context.Context, blobs BlobStorage, itemID, attachmentID, itemNumber int64) error
 	ListAttachmentObjectKeysByItemID(context.Context, int64) ([]string, error)

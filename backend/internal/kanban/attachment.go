@@ -246,6 +246,11 @@ VALUES (?,?,?,?,?,?,?,?)`,
 	return r.getAttachment(ctx, itemID, id)
 }
 
+// GetAttachment is the attachment's row for the item (ErrNotFound when it is not that item's).
+func (r MySQLRepository) GetAttachment(ctx context.Context, itemID, id int64) (Attachment, error) {
+	return r.getAttachment(ctx, itemID, id)
+}
+
 func (r MySQLRepository) getAttachment(ctx context.Context, itemID, id int64) (Attachment, error) {
 	var a Attachment
 	var commentID sql.NullInt64
@@ -314,7 +319,8 @@ func (r MySQLRepository) OpenAttachmentContent(ctx context.Context, blobs BlobSt
 	if err != nil {
 		return nil, "", err
 	}
-	if ct == "" {
+	// The type stored at upload (an allowlisted image type) is the source of truth.
+	if contentType != "" {
 		ct = contentType
 	}
 	return rc, ct, nil
