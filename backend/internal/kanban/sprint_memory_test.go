@@ -25,7 +25,7 @@ func (m *memoryRepo) ListSprints(_ context.Context, projectID int64) ([]Sprint, 
 		if s.ProjectID != projectID {
 			continue
 		}
-		cp := m.sprintWithItemIDRefs(s.ID)
+		cp := m.sprintWithItems(s.ID)
 		out = append(out, cp)
 	}
 	slices.SortFunc(out, func(a, b Sprint) int {
@@ -285,7 +285,9 @@ func (m *memoryRepo) assertSprintMemberEligible(sprint Sprint, itemID int64) err
 	return nil
 }
 
-func (m *memoryRepo) sprintWithItemIDRefs(id int64) Sprint {
+// sprintWithItems returns the sprint with its living members of the same project, each carrying
+// what visibility takes (as the MySQL list and detail do).
+func (m *memoryRepo) sprintWithItems(id int64) Sprint {
 	s := m.sprints[id]
 	ids := m.sprintItems[id]
 	items := make([]SprintItem, 0, len(ids))
@@ -294,20 +296,9 @@ func (m *memoryRepo) sprintWithItemIDRefs(id int64) Sprint {
 		if !ok || !m.living(c) || m.cardProjectID(c) != s.ProjectID {
 			continue
 		}
-		items = append(items, SprintItem{ID: iid})
+		items = append(items, SprintItem{ID: c.ID, Number: c.Number, Title: c.Title, ColumnID: c.ColumnID, ViewAccess: c.ViewAccess, EditAccess: c.EditAccess, CreatedByUserID: c.CreatedByUserID})
 	}
 	s.Items = items
 	s.ItemCount = len(items)
-	return s
-}
-
-func (m *memoryRepo) sprintWithItems(id int64) Sprint {
-	s := m.sprintWithItemIDRefs(id)
-	items := make([]SprintItem, 0, len(s.Items))
-	for _, it := range s.Items {
-		c := m.cards[it.ID]
-		items = append(items, SprintItem{ID: c.ID, Number: c.Number, Title: c.Title, ColumnID: c.ColumnID})
-	}
-	s.Items = items
 	return s
 }

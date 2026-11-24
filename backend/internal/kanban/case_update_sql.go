@@ -2,6 +2,7 @@ package kanban
 
 import "fmt"
 
+// placeholders(len(ids)) and int64Args(ids) go together in an IN (...) clause.
 func placeholders(n int) string {
 	if n <= 0 {
 		return ""
@@ -14,6 +15,14 @@ func placeholders(n int) string {
 		b = append(b, '?')
 	}
 	return string(b)
+}
+
+func int64Args(ids []int64) []any {
+	out := make([]any, len(ids))
+	for i, id := range ids {
+		out[i] = id
+	}
+	return out
 }
 
 // buildIntCaseColumnUpdateSQL builds

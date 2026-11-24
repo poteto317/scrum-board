@@ -30,18 +30,41 @@ func suggestedVelocity(columns []Column, items []SprintItem) int {
 	return n
 }
 
-// enrichSprintForResponse applies ACL filtering. summary clears items and zeroes suggestedVelocity (list).
-func (h handler) enrichSprintForResponse(ctx context.Context, s Sprint, user *User, summary bool) (Sprint, error) {
+// summarizeSprintsForResponse applies ACL filtering to a list: each sprint keeps only its count of
+// visible members (items cleared, suggestedVelocity zero). The members of all the sprints are
+// checked together, so the work does not grow with the number of sprints.
+func (h handler) summarizeSprintsForResponse(ctx context.Context, list []Sprint, user *User) ([]Sprint, error) {
+	var all []SprintItem
+	for _, s := range list {
+		all = append(all, s.Items...)
+	}
+	vis, err := h.visibleSprintItemIDs(ctx, all, user)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Sprint, 0, len(list))
+	for _, s := range list {
+		n := 0
+		for _, it := range s.Items {
+			if _, ok := vis[it.ID]; ok {
+				n++
+			}
+		}
+		s.ItemCount = n
+		s.Items = nil
+		s.SuggestedVelocity = 0
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+// enrichSprintForResponse applies ACL filtering to one sprint and fills suggestedVelocity (detail).
+func (h handler) enrichSprintForResponse(ctx context.Context, s Sprint, user *User) (Sprint, error) {
 	filtered, err := h.filterSprintItems(ctx, s.Items, user)
 	if err != nil {
 		return Sprint{}, err
 	}
 	s.ItemCount = len(filtered)
-	if summary {
-		s.Items = nil
-		s.SuggestedVelocity = 0
-		return s, nil
-	}
 	s.Items = filtered
 	if s.Items == nil {
 		s.Items = []SprintItem{}

@@ -179,6 +179,12 @@ type SprintItem struct {
 	Number   int64  `json:"number"`
 	Title    string `json:"title"`
 	ColumnID int64  `json:"columnId"`
+	// What deciding who may see the member takes. Read together with the member (sprintMemberColumns)
+	// and never serialised; build a SprintItem anywhere else and these are empty, which reads as
+	// "no restriction" — so do not.
+	ViewAccess      string `json:"-"`
+	EditAccess      string `json:"-"`
+	CreatedByUserID *int64 `json:"-"`
 }
 
 type SprintCreateInput struct {

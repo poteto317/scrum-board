@@ -28,6 +28,8 @@ type memoryRepo struct {
 	boardCalls         atomic.Int64
 	activeIDCalls      atomic.Int64
 	columnsCalls       atomic.Int64
+	getItemCalls       atomic.Int64
+	aclListCalls       atomic.Int64
 	aclListFail        error
 	listFilter         *WorkspaceListFilters
 	headerMenu         *WorkspaceHeaderMenu
@@ -252,6 +254,7 @@ func (m *memoryRepo) validProject(id int64) bool {
 	return false
 }
 func (m *memoryRepo) GetItem(_ context.Context, id int64) (Item, error) {
+	m.getItemCalls.Add(1)
 	c, ok := m.cards[id]
 	if !ok || !m.living(c) {
 		return Item{}, ErrNotFound
