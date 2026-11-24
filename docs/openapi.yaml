@@ -858,11 +858,51 @@ paths:
       responses:
         '200':
           description: バイナリ
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 強い ETag（`"<添付ID>-<バイト数>"`）。内容は ID ごとに変わらない
+            Cache-Control:
+              schema:
+                type: string
+              description: private, max-age=3600
+            Vary:
+              schema:
+                type: string
+              description: Cookie（別のセッションが前のキャッシュを使わない）
           content:
-            application/octet-stream:
+            image/jpeg:
               schema:
                 type: string
                 format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/gif:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: 未変更（本文なし）。認証・権限・添付の存在確認は 200 と同じ（削除済み・他 item の id は 404）
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 200 と同じ ETag
+            Cache-Control:
+              schema:
+                type: string
+              description: private, max-age=3600
+            Vary:
+              schema:
+                type: string
+              description: Cookie
         '401':
           description: 未ログインかつ非 public
           content:
@@ -892,6 +932,12 @@ paths:
         required: true
         schema:
           type: integer
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+        description: 前回応答の ETag。一致すれば 304
       security: []
       description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
         `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
