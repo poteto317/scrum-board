@@ -166,7 +166,10 @@ export function registerTools(server: McpServer, client: HttpClient): void {
 
   server.registerTool(
     'get_board',
-    { description: 'Get board columns, items, and settings for the active project' },
+    {
+      description:
+        'Get board columns, items, and settings for the active project. Item descriptions are truncated to the first 500 characters and solutions are omitted; use get_item for the full text',
+    },
     async () => safeTool(() => handlers.get_board()),
   );
 
