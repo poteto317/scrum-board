@@ -5,7 +5,6 @@ import {
   computed,
   DestroyRef,
   effect,
-  untracked,
   ElementRef,
   HostListener,
   inject,
@@ -13,6 +12,7 @@ import {
   NgZone,
   OnInit,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { Location, NgStyle } from '@angular/common';
@@ -69,7 +69,7 @@ import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 type RowBounds = { top: number; height: number };
-type RowSnapshot = { els: HTMLElement[]; rows: RowBounds[]; scroll: number };
+type RowSnapshot = { elements: HTMLElement[]; bounds: RowBounds[]; scrollOffset: number };
 
 @Component({
   selector: 'app-backlog',
@@ -117,8 +117,8 @@ export class Backlog implements OnInit {
   private readonly listContainer = viewChild<ElementRef<HTMLElement>>('listContainer');
   private scrollRestoreGeneration = 0;
   private scrollRestoreAttempted = false;
-  private removeDragOverListener: (() => void) | null = null;
-  /** The rows as measured when the current drag began (null when none is under way). */
+  private removeDragListeners: (() => void) | null = null;
+  /** The rows as measured when the current drag began; null when none is under way or they have to be measured again. */
   private dragRows: RowSnapshot | null = null;
 
   readonly items = signal<Item[]>([]);
@@ -202,7 +202,7 @@ export class Backlog implements OnInit {
     this.listFilter.load();
     bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadAfterProjectSwitch());
     this.destroyRef.onDestroy(() => {
-      this.endListDragOver();
+      this.endDragTracking();
       this.scrollRestoreGeneration++;
       this.backlogLoadGeneration++;
       this.closeCommandMenu();
@@ -726,7 +726,7 @@ export class Backlog implements OnInit {
     }
     this.draggingItemId.set(card.id);
     this.dropSlot.set(null);
-    this.beginListDragOver();
+    this.beginDragTracking();
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', String(card.id));
@@ -740,12 +740,13 @@ export class Backlog implements OnInit {
   }
 
   /**
-   * `dragover` fires every few tens of milliseconds. As a template output it would mark the view
-   * dirty each time and re-check every row, so it is listened to here, for the length of one drag,
-   * and the rows are measured once, at its start.
+   * Starts following a drag over the list. `dragover` fires every few tens of milliseconds: as a
+   * template output it would mark the view dirty each time and re-check every row. So it is
+   * listened to here, for the length of one drag (together with `resize`, which makes the rows be
+   * measured again), and the rows are measured once, now.
    */
-  private beginListDragOver() {
-    this.endListDragOver();
+  private beginDragTracking() {
+    this.endDragTracking();
     // On the document, not on the scroll element (`backlogScroll`): that element is re-created when
     // the view switches between loading, error and list, and a listener on the old one would be lost.
     const listener = (event: DragEvent) => {
@@ -758,16 +759,16 @@ export class Backlog implements OnInit {
     const onResize = () => (this.dragRows = null);
     document.addEventListener('dragover', listener);
     window.addEventListener('resize', onResize);
-    this.removeDragOverListener = () => {
+    this.removeDragListeners = () => {
       document.removeEventListener('dragover', listener);
       window.removeEventListener('resize', onResize);
     };
     this.dragRows = this.snapshotRows();
   }
 
-  private endListDragOver() {
-    this.removeDragOverListener?.();
-    this.removeDragOverListener = null;
+  private endDragTracking() {
+    this.removeDragListeners?.();
+    this.removeDragListeners = null;
     this.dragRows = null;
   }
 
@@ -840,11 +841,10 @@ export class Backlog implements OnInit {
    * the rows that were measured (the list was re-rendered or re-ordered) or the window was resized.
    */
   private currentRowBounds(): RowBounds[] {
-    if (!this.removeDragOverListener) return this.snapshotRows().rows; // no drag under way
     let drag = this.dragRows;
-    if (!drag || !this.sameRows(drag.els)) drag = this.dragRows = this.snapshotRows();
-    const moved = this.scrollOffset() - drag.scroll;
-    return drag.rows.map((r) => ({ top: r.top - moved, height: r.height }));
+    if (!drag || !this.sameRows(drag.elements)) drag = this.dragRows = this.snapshotRows();
+    const moved = this.scrollOffset() - drag.scrollOffset;
+    return drag.bounds.map((r) => ({ top: r.top - moved, height: r.height }));
   }
 
   private rowElements(): HTMLElement[] {
@@ -852,19 +852,19 @@ export class Backlog implements OnInit {
     return container ? Array.from(container.querySelectorAll<HTMLElement>('.backlog-row')) : [];
   }
 
-  private sameRows(els: HTMLElement[]): boolean {
+  private sameRows(elements: HTMLElement[]): boolean {
     const now = this.rowElements();
-    return now.length === els.length && now.every((el, i) => el === els[i]);
+    return now.length === elements.length && now.every((el, i) => el === elements[i]);
   }
 
   /** The rows' positions on screen, with the scroll they were measured at. */
   private snapshotRows(): RowSnapshot {
-    const els = this.rowElements();
-    const rows = els.map((el) => {
+    const elements = this.rowElements();
+    const bounds = elements.map((el) => {
       const rect = el.getBoundingClientRect();
       return { top: rect.top, height: rect.height };
     });
-    return { els, rows, scroll: this.scrollOffset() };
+    return { elements, bounds, scrollOffset: this.scrollOffset() };
   }
 
   /** How far the list and the page are scrolled: rows move on screen by the change of this. */
@@ -873,7 +873,7 @@ export class Backlog implements OnInit {
   }
 
   private resetDragState() {
-    this.endListDragOver();
+    this.endDragTracking();
     this.draggingItemId.set(null);
     this.dropSlot.set(null);
   }
