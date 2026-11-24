@@ -29,3 +29,39 @@ func TestBoardMetaMatchesBoardMySQL(t *testing.T) {
 		t.Fatalf("settings differ: meta=%+v board=%+v", meta.Settings, board.Settings)
 	}
 }
+
+// A saved active project or mobile column that no longer exists must resolve to the same
+// fallback in BoardMeta and Board (both go through loadBoardHead).
+func TestBoardMetaResolvesMissingIDsLikeBoardMySQL(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	r := MySQLRepository{DB: db}
+	ctx := context.Background()
+
+	const missingID = "999999"
+	for _, key := range []string{settingKeyActiveProjectID, settingKeyMobileBoardColumnID} {
+		mustExec(t, db, `INSERT INTO board_settings(setting_key, setting_value) VALUES(?, ?)
+ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)`, key, missingID)
+		key := key
+		t.Cleanup(func() {
+			mustExec(t, db, `DELETE FROM board_settings WHERE setting_key=?`, key)
+		})
+	}
+
+	board, err := r.Board(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta, err := r.BoardMeta(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if board.Settings.ActiveProjectID == 999999 || board.Settings.MobileBoardColumnID == 999999 {
+		t.Fatalf("missing ids were not resolved to a fallback: %+v", board.Settings)
+	}
+	if !reflect.DeepEqual(meta.Settings, board.Settings) {
+		t.Fatalf("settings differ: meta=%+v board=%+v", meta.Settings, board.Settings)
+	}
+	if !reflect.DeepEqual(meta.Columns, board.Columns) {
+		t.Fatalf("columns differ: meta=%+v board=%+v", meta.Columns, board.Columns)
+	}
+}
