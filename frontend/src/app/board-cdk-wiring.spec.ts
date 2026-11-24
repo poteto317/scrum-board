@@ -124,7 +124,7 @@ describe('Board template CDK wiring', () => {
     ).toBe(true);
   });
 
-  // CDK's own edge scrolling is switched off, so (cdkDragMoved) is the only thing that scrolls while a card is
+  // CDK's own edge scrolling is switched off, so the drag's `moved` stream (subscribed in onItemDragStarted) is the only thing that scrolls while a card is
   // dragged. Driving a real mouse drag checks the template binding itself, not just onItemDragMoved.
   it('scrolls the board and the page while a real mouse drag is held at an edge', async () => {
     const board: BoardData = {

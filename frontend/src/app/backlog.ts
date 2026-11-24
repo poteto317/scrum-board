@@ -5,6 +5,7 @@ import {
   computed,
   DestroyRef,
   effect,
+  untracked,
   ElementRef,
   HostListener,
   inject,
@@ -68,7 +69,7 @@ import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
 
 type RowBounds = { top: number; height: number };
-type RowSnapshot = { rows: RowBounds[]; scroll: number };
+type RowSnapshot = { els: HTMLElement[]; rows: RowBounds[]; scroll: number };
 
 @Component({
   selector: 'app-backlog',
@@ -157,6 +158,13 @@ export class Backlog implements OnInit {
     if (openId === null) return;
     if (!this.filteredItems().some((card) => card.id === openId)) {
       this.closeCommandMenu();
+    }
+  });
+  /** The dragged row went away (a refresh removed it): no dragend can come, so end the drag here. */
+  private readonly endDragWhenRowGone = effect(() => {
+    const dragging = this.draggingItemId();
+    if (dragging !== null && !this.items().some((card) => card.id === dragging)) {
+      untracked(() => this.resetDragState());
     }
   });
   readonly filterActive = computed(() =>
@@ -746,8 +754,14 @@ export class Backlog implements OnInit {
         this.onListDragOver(event);
       }
     };
+    // The rows move without the list changing when the viewport does: measure again then.
+    const onResize = () => (this.dragRows = null);
     document.addEventListener('dragover', listener);
-    this.removeDragOverListener = () => document.removeEventListener('dragover', listener);
+    window.addEventListener('resize', onResize);
+    this.removeDragOverListener = () => {
+      document.removeEventListener('dragover', listener);
+      window.removeEventListener('resize', onResize);
+    };
     this.dragRows = this.snapshotRows();
   }
 
@@ -822,28 +836,35 @@ export class Backlog implements OnInit {
 
   /**
    * Where the rows are now. During a drag they were measured when it began and only the scroll since
-   * then is added (measuring each dragover forces a layout); if the rows are not the ones that were
-   * measured (the list changed during the drag), they are measured again.
+   * then is added (measuring each dragover forces a layout). They are measured again if they are not
+   * the rows that were measured (the list was re-rendered or re-ordered) or the window was resized.
    */
   private currentRowBounds(): RowBounds[] {
+    if (!this.removeDragOverListener) return this.snapshotRows().rows; // no drag under way
     let drag = this.dragRows;
-    if (!drag) return this.snapshotRows().rows;
-    const rowCount = this.listContainer()?.nativeElement.querySelectorAll('.backlog-row').length;
-    if (drag.rows.length !== rowCount) drag = this.dragRows = this.snapshotRows();
+    if (!drag || !this.sameRows(drag.els)) drag = this.dragRows = this.snapshotRows();
     const moved = this.scrollOffset() - drag.scroll;
     return drag.rows.map((r) => ({ top: r.top - moved, height: r.height }));
   }
 
+  private rowElements(): HTMLElement[] {
+    const container = this.listContainer()?.nativeElement;
+    return container ? Array.from(container.querySelectorAll<HTMLElement>('.backlog-row')) : [];
+  }
+
+  private sameRows(els: HTMLElement[]): boolean {
+    const now = this.rowElements();
+    return now.length === els.length && now.every((el, i) => el === els[i]);
+  }
+
   /** The rows' positions on screen, with the scroll they were measured at. */
   private snapshotRows(): RowSnapshot {
-    const container = this.listContainer()?.nativeElement;
-    const rows = container
-      ? Array.from(container.querySelectorAll<HTMLElement>('.backlog-row')).map((el) => {
-          const rect = el.getBoundingClientRect();
-          return { top: rect.top, height: rect.height };
-        })
-      : [];
-    return { rows, scroll: this.scrollOffset() };
+    const els = this.rowElements();
+    const rows = els.map((el) => {
+      const rect = el.getBoundingClientRect();
+      return { top: rect.top, height: rect.height };
+    });
+    return { els, rows, scroll: this.scrollOffset() };
   }
 
   /** How far the list and the page are scrolled: rows move on screen by the change of this. */
