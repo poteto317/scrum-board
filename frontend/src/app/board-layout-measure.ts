@@ -45,19 +45,28 @@ export function measurePackOffsetsAsItems(
   return applyMeasuredOffsets(items, measurePackOffsets(root, columns));
 }
 
+/** Map の挿入順によらず、対象カードと高さが同じかを比較する。 */
+export function sameCardHeights(
+  a: ReadonlyMap<number, number>,
+  b: ReadonlyMap<number, number>,
+): boolean {
+  return a.size === b.size && Array.from(a).every(([id, height]) => b.get(id) === height);
+}
+
 export type ScheduleCardHeightMeasureDeps = {
   destroyRef: DestroyRef;
   injector: Injector;
   getRoot: () => HTMLElement | null | undefined;
+  isEnabled: () => boolean;
   setHeights: (heights: Map<number, number>) => void;
 };
 
-/** 次フレームでカード高さを測り setHeights へ渡す。 */
+/** 自由配置が有効な場合のみ、次の描画後にカード高さを測る。 */
 export function scheduleCardHeightMeasure(deps: ScheduleCardHeightMeasureDeps): void {
-  if (deps.destroyRef.destroyed) return;
+  if (deps.destroyRef.destroyed || !deps.isEnabled()) return;
   afterNextRender(
     () => {
-      if (deps.destroyRef.destroyed) return;
+      if (deps.destroyRef.destroyed || !deps.isEnabled()) return;
       const root = deps.getRoot();
       if (!root) return;
       const next = new Map<number, number>();

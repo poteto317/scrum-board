@@ -45,6 +45,7 @@ import { saveMobileBoardColumn } from './board-mobile-settings';
 import { cardLayoutToggleGate } from './board-layout-settings';
 import {
   measurePackOffsetsAsItems,
+  sameCardHeights,
   scheduleCardHeightMeasure,
 } from './board-layout-measure';
 import { switchFreeToPack, switchPackToFree } from './board-layout-switch';
@@ -179,7 +180,7 @@ export class Board implements OnInit {
   private dragMovedSub: Subscription | null = null;
   private dragMovedSinceTick = false;
   private itemDragGrabOffsetY = 0;
-  private readonly cardHeights = signal<ReadonlyMap<number, number>>(new Map());
+  private readonly cardHeights = signal<ReadonlyMap<number, number>>(new Map(), { equal: sameCardHeights });
   private readonly releaseDragOnDestroy = this.destroyRef.onDestroy(() => {
     this.stopAutoScrollTimer();
     this.stopDragMoved();
@@ -364,7 +365,11 @@ export class Board implements OnInit {
   private bindBoardMobileMedia() {
     if (typeof matchMedia !== 'function') return;
     const mq = matchMedia(boardMobileMediaQuery());
-    const sync = () => this.isBoardMobile.set(mq.matches);
+    const sync = () => {
+      const wasMobile = this.isBoardMobile();
+      this.isBoardMobile.set(mq.matches);
+      if (wasMobile && this.isFreeLayout()) this.scheduleCardHeightMeasure();
+    };
     sync();
     mq.addEventListener('change', sync);
     this.destroyRef.onDestroy(() => mq.removeEventListener('change', sync));
@@ -1162,6 +1167,7 @@ export class Board implements OnInit {
       destroyRef: this.destroyRef,
       injector: this.injector,
       getRoot: () => this.columnsContainer()?.nativeElement,
+      isEnabled: () => this.isFreeLayout(),
       setHeights: (heights) => this.cardHeights.set(heights),
     });
   }
