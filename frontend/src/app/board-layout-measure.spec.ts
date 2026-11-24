@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyMeasuredOffsets, measurePackOffsets, measurePackOffsetsAsItems } from './board-layout-measure';
+import { applyMeasuredOffsets, measurePackOffsets, measurePackOffsetsAsItems, sameCardHeights } from './board-layout-measure';
 import { dropListIdForColumn } from './item-order';
 import { Item } from './models';
 
@@ -72,5 +72,15 @@ describe('measurePackOffsetsAsItems', () => {
     const measured = measurePackOffsetsAsItems(root, [{ id: 1 }], items);
     expect(measured.find((c) => c.id === 7)?.offsetY).toBe(45);
     expect(measured.find((c) => c.id === 8)?.offsetY).toBe(3);
+  });
+});
+
+describe('sameCardHeights', () => {
+  it('compares card IDs and heights independently of insertion order', () => {
+    expect(sameCardHeights(new Map([[1, 80], [2, 95]]), new Map([[2, 95], [1, 80]]))).toBe(true);
+    expect(sameCardHeights(new Map(), new Map())).toBe(true);
+    expect(sameCardHeights(new Map([[1, 80]]), new Map([[1, 95]]))).toBe(false);
+    expect(sameCardHeights(new Map([[1, 80]]), new Map([[2, 80]]))).toBe(false);
+    expect(sameCardHeights(new Map([[1, 80]]), new Map())).toBe(false);
   });
 });
