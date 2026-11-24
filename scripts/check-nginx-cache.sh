@@ -31,8 +31,7 @@ check_conf() {
   # Comment lines are dropped so a commented-out line cannot satisfy a check.
   body="$(sed 's/^[[:space:]]*#.*//' "$conf")"
 
-  # map: check the three rules appear in this order (step counts how many were seen).
-  # The map must hold, in this order: no-cache default, empty /api/, immutable js/css.
+  # map: the rules must appear in this order (step counts how many were seen): in this order: no-cache default, empty /api/, immutable js/css.
   echo "$body" | awk '
     /map[[:space:]]+\$uri[[:space:]]+\$static_cache_control[[:space:]]*\{/ { in_map=1; next }
     in_map && /\}/ { in_map=0 }
@@ -46,7 +45,7 @@ check_conf() {
 
   # add_header must sit directly in server{} (depth 1): inside a location it would
   # reset the inherited nosniff/CSP/HSTS. "always" would cache a 404 for a year.
-  # add_header: track brace depth; the cache header only at server level, never inside a location.
+  # (awk tracks brace depth.)
   echo "$body" | awk '
     { line=$0
       if (line ~ /add_header/) {
