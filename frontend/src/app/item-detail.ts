@@ -33,6 +33,7 @@ import {
 } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
+import { fetchBoardMeta } from './conditional-get';
 import { errorMessage } from './api-error';
 import { Column, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
@@ -398,8 +399,8 @@ export class ItemDetail implements OnInit {
         }),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(({ board, card, query }) => {
-        this.columns.set(board.columns);
+      .subscribe(({ meta, card, query }) => {
+        this.columns.set(meta.columns);
         const projectId = card.projectId ?? 0;
         this.autosave.reset({
           ...card,
@@ -436,15 +437,15 @@ export class ItemDetail implements OnInit {
             : this.projectSession.activeId() ?? undefined;
         const scopedProjectId = projectId && projectId > 0 ? projectId : undefined;
         return forkJoin({
-          board: this.api.board(),
+          meta: fetchBoardMeta(this.api),
           card: this.api.itemByNumber(number, scopedProjectId),
         });
       },
-      apply: ({ board, card }) => {
+      apply: ({ meta, card }) => {
         if (card.number !== this.routeNumber()) return;
         if (this.autosave.hasChanges() || this.listDragging() || this.busy()) return;
         this.error.set('');
-        this.columns.set(board.columns);
+        this.columns.set(meta.columns);
         const next = {
           ...card,
           projectId: card.projectId ?? 0,
@@ -488,7 +489,7 @@ export class ItemDetail implements OnInit {
     const scopedProjectId = projectId > 0 ? projectId : undefined;
     const load$ = () =>
       forkJoin({
-        board: this.api.board(),
+        meta: fetchBoardMeta(this.api),
         card: this.api.itemByNumber(number, scopedProjectId),
       });
     const settleLoad = (source: ReturnType<typeof load$>) =>

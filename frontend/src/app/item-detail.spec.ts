@@ -1598,6 +1598,79 @@ describe('ItemDetail live refresh', () => {
   });
 });
 
+describe('ItemDetail board meta wiring (#118)', () => {
+  let api: Record<string, ReturnType<typeof vi.fn>>;
+  const metaColumns = [
+    { id: 1, name: 'Todo', position: 0 },
+    { id: 2, name: 'Doing', position: 0 },
+    { id: 3, name: 'Close', position: 0 },
+  ];
+  beforeEach(() => {
+    vi.useFakeTimers();
+    api = {
+      listUsers: vi.fn(() => of([])),
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      listAIChat: vi.fn(() => of([])),
+      // The full board must never be requested: items are not needed here (L-060: assert wiring).
+      board: vi.fn(() => {
+        throw new Error('GET /api/board must not be used by item detail');
+      }),
+      boardMeta: vi.fn(() => of({ columns: metaColumns, settings: { cardLayout: 'pack' } })),
+      itemByNumber: vi.fn(() => of(card)),
+      updateItem: vi.fn((_id, patch) => of({ ...card, ...patch })),
+      deleteItem: vi.fn(() => of(undefined)),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
+      deleteAttachment: vi.fn(() => of(undefined)),
+      listAttachments: vi.fn(() => of([])),
+    };
+    TestBed.configureTestingModule({
+      imports: [ItemDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: new BehaviorSubject(new Map([['number', '3']])).asObservable(),
+            queryParamMap: of(new Map()),
+          },
+        },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+      ],
+    });
+  });
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('loads columns from boardMeta on the initial load and never from board', () => {
+    const f = TestBed.createComponent(ItemDetail);
+    f.detectChanges();
+    expect(api['boardMeta']).toHaveBeenCalledTimes(1);
+    expect(api['board']).not.toHaveBeenCalled();
+    expect(f.componentInstance.columns().map((c) => c.id)).toEqual([1, 2, 3]);
+    f.destroy();
+  });
+
+  it('polls boardMeta (not board) and applies its columns', async () => {
+    const f = TestBed.createComponent(ItemDetail);
+    f.detectChanges();
+    api['boardMeta'].mockReturnValue(
+      of({ columns: [...metaColumns, { id: 4, name: 'Review', position: 0 }], settings: { cardLayout: 'pack' } }),
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(api['boardMeta'].mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(api['board']).not.toHaveBeenCalled();
+    expect(f.componentInstance.columns().map((c) => c.id)).toEqual([1, 2, 3, 4]);
+    f.destroy();
+  });
+});
+
 describe('ItemDetail Close reason', () => {
   let params: BehaviorSubject<Map<string, string>>;
   let api: {
