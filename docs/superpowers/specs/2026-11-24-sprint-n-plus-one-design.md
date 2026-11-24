@@ -13,7 +13,7 @@
 ## 決めたこと
 
 - **スプリントのメンバー（`SprintItem`）に、閲覧の判定に必要な列を持たせる。** `ViewAccess`・`EditAccess`・`CreatedByUserID`（JSON には出さない）。メンバーを読む 1 つのクエリが、アイテムとの結合で、これらも返す。
-- **一覧は、スプリントの行を読み切って閉じてから、全スプリントのメンバーを 1 文で読む**（`loadSprintItemsBySprint`、`IN (…)`）。1 リクエストの DB 接続は 1 本。
+- **一覧は、スプリントの行を読み切って閉じてから、全スプリントのメンバーをまとめて読む**（`loadSprintItemsBySprint`、`IN (…)`。スプリントが `sprintBatchSize`（1000）を超えたら、1000 ごとに 1 文）。1 リクエストの DB 接続は 1 本。
 - **閲覧の可否は、メンバーに載せた列から決める。** 制限付きのメンバーの許可リストは、既存のまとめて取る処理（`ListACLEntriesForItems`）で 1 回だけ読む。`GetItem` は呼ばない。判定の中身（`filterBoardItems`、`CanView`）は変えない。
 - **一覧は、全スプリントのメンバーをまとめて判定し**（許可リストの読み込みは全体で 1 回）、スプリントごとの可視の件数を数える。詳細は、そのスプリントのメンバーを 1 回で判定する。
 - **メンバーの置き換え:** 関係するアイテムの状態（プロジェクト・削除・アーカイブ）を、1 文で読んでロックし（id 順）、別の計画中・進行中のスプリントに入っているかも 1 文で読む。別のスプリントへの所属は、トランザクションの開始時のスナップショットでなく、現在読み（`FOR SHARE`）で読む（アイテムの行ロックを待っている間に、別の置き換えがコミットした所属を見逃して、同じアイテムが 2 つのスプリントに入るのを防ぐ。変更前からあった競合）。確認は、読んだ結果から、従来と同じ順序（見つからない・削除済み → アーカイブ済み → プロジェクトの不一致 → 別のスプリントに所属）で行う。書き込みは、複数行の `INSERT`。1 文のプレースホルダーが MySQL の上限（65535）に届かないよう、読み込みも書き込みも `sprintBatchSize`（1000）件ずつに分けるので、文の数は、1000 件までは固定（それを超えたら 1000 件ごとに 1 文増える）。重複した id は除き、id の昇順でロックする。
@@ -27,9 +27,9 @@
 3. MySQL: `ReplaceSprintItems` が発行する文の数が、アイテム数に依らない（`TestMySQLReplaceSprintItemsStatementCountDoesNotGrowWithItems`）。
 4. 閲覧・編集の権限、アーカイブ済み・削除済み・別プロジェクト・別のスプリントのメンバーの扱いは、従来と同じ（既存のスプリントのテスト、`TestMySQLSprint*`）。
 5. 件数が多くても、分けた文で同じ結果になる（`TestMySQLSprintBatchesGiveTheSameResultWhenSplit`）。
-6. MySQL で、置き換えのエラーの優先順位、アーカイブ済み・見えないメンバーの保持、空の置き換え、権限の列が読めることを確かめる（`TestMySQLReplaceSprintItemsReportsTheFirstReasonAMemberCannotJoin`、`...KeepsArchivedAndRetainedMembersAndAllowsEmpty`、`TestMySQLSprintMembersCarryWhatVisibilityTakes`）。
-7. 同じアイテムを別々のスプリントへ同時に入れる 2 つの置き換えで、成功は 1 つだけ（`TestMySQLReplaceSprintItemsConcurrentlyIntoTwoSprintsLetsOneWin`）。エラーの優先順位は、バッチを小さくしても同じ（`...ReportsTheFirstReasonAMemberCannotJoin`は、バッチ 1000 と 2 で流す）。
-8. 一覧・詳細の応答が、閲覧者に見えるメンバーだけを数え（`itemCount`）、権限の列を含まない（`TestSprintListAndDetailCountOnlyWhatTheViewerMaySee`）。
+6. MySQL で、置き換えのエラーの優先順位、アーカイブ済み・見えないメンバーの保持、空の置き換え、権限の列が読めることを確かめる（`TestMySQLReplaceSprintItemsReportsTheFirstReasonAMemberCannotJoin`、`TestMySQLReplaceSprintItemsKeepsArchivedAndRetainedMembersAndAllowsEmpty`、`TestMySQLSprintMembersCarryWhatVisibilityTakes`）。
+7. 同じアイテムを別々のスプリントへ同時に入れる 2 つの置き換えで、成功は 1 つだけ（`TestMySQLReplaceSprintItemsConcurrentlyIntoTwoSprintsLetsOneWin`）。エラーの優先順位は、バッチを小さくしても同じ（`TestMySQLReplaceSprintItemsReportsTheFirstReasonAMemberCannotJoin` は、バッチ 1000 と 2 のサブテストで流す）。
+8. 一覧・詳細の応答が、閲覧者に見えるメンバーだけを数え（`itemCount`）、権限の列（`viewAccess`・`editAccess`・`createdByUserId`）を、一覧・詳細のどちらの応答にも含まない（`TestSprintListAndDetailCountOnlyWhatTheViewerMaySee`）。
 9. 既存のテストが通る（`TestMySQLActivateSprintConcurrent` は変更前から失敗している）。
 
 ## 範囲外
