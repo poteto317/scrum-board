@@ -27,9 +27,9 @@ describe('ProjectSession', () => {
 
   function flushLoad(activeProjectId = 1) {
     http.expectOne('/api/projects').flush({ projects: [main, next] });
-    http.expectOne('/api/board').flush({
+    http.expectNone('/api/board');
+    http.expectOne('/api/board/meta').flush({
       columns: [],
-      items: [],
       settings: { cardLayout: 'pack', activeProjectId, futureFlag: true },
     });
   }
@@ -91,9 +91,10 @@ describe('ProjectSession', () => {
     session.activeId.set(1);
     session.load();
     http.expectOne('/api/projects').flush({ message: '失敗' }, { status: 500, statusText: 'Error' });
-    const board = http.match('/api/board');
+    http.expectNone('/api/board');
+    const board = http.match('/api/board/meta');
     for (const req of board) {
-      if (!req.cancelled) req.flush({ columns: [], items: [] });
+      if (!req.cancelled) req.flush({ columns: [] });
     }
     expect(session.projects()).toEqual([main]);
     expect(session.activeId()).toBe(1);
@@ -292,9 +293,9 @@ describe('ProjectSession', () => {
     http.expectOne({ method: 'DELETE', url: '/api/projects/1' }).flush(null);
     expect(session.switching()).toBe(true);
     expect(session.projects().map((p) => p.id)).toEqual([2]);
-    http.expectOne('/api/board').flush({
+    http.expectNone('/api/board');
+    http.expectOne('/api/board/meta').flush({
       columns: [],
-      items: [],
       settings: { cardLayout: 'pack', activeProjectId: 2 },
     });
     expect(busyDuringReload).toBe(true);
@@ -309,8 +310,9 @@ describe('ProjectSession', () => {
     session.activeId.set(1);
     session.delete(1);
     http.expectOne({ method: 'DELETE', url: '/api/projects/1' }).flush(null);
+    http.expectNone('/api/board');
     http
-      .expectOne('/api/board')
+      .expectOne('/api/board/meta')
       .flush({ message: '読込失敗' }, { status: 500, statusText: 'Error' });
     expect(session.projects().map((p) => p.id)).toEqual([2]);
     expect(session.activeId()).toBe(2);

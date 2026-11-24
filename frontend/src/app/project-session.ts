@@ -3,7 +3,8 @@ import { defer, EMPTY, Observable, Subject, forkJoin, throwError } from 'rxjs';
 import { catchError, map, tap } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
-import { normalizeBoardData } from './board-data';
+import { normalizeBoardMeta } from './board-data';
+import { fetchBoardMeta } from './conditional-get';
 import { Project } from './models';
 
 export const PROJECT_NAME_REQUIRED = 'プロジェクト名を1〜80文字で入力してください。';
@@ -101,12 +102,12 @@ export class ProjectSession {
     const generation = ++this.loadGeneration;
     forkJoin({
       projects: this.api.listProjects(),
-      board: this.api.board(),
+      meta: fetchBoardMeta(this.api),
     }).subscribe({
-      next: ({ projects, board }) => {
+      next: ({ projects, meta }) => {
         if (generation !== this.loadGeneration) return;
         // Resolve activeId before projects; header select mounts only after bootstrapped.
-        this.syncActiveFromBoard(normalizeBoardData(board).settings.activeProjectId, true);
+        this.syncActiveFromBoard(normalizeBoardMeta(meta).settings.activeProjectId, true);
         this.projects.set(sortProjects(projects.projects ?? []));
         this.bootstrapped.set(true);
         this.error.set('');
@@ -219,10 +220,10 @@ export class ProjectSession {
         }
         // Busy before the select moves to the resolved project (L-842).
         this.switching.set(true);
-        this.api.board().subscribe({
-          next: (board) => {
+        fetchBoardMeta(this.api).subscribe({
+          next: (meta) => {
             const next = parseActiveProjectId(
-              normalizeBoardData(board).settings.activeProjectId,
+              normalizeBoardMeta(meta).settings.activeProjectId,
             );
             this.activeId.set(next);
             this.mutating.set(false);
