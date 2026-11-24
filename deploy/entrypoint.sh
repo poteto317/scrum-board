@@ -40,9 +40,11 @@ su -s /bin/sh app -c 'exec /server' &
 api_pid=$!
 
 # Migrations (e.g. per-project numbering ALTER/renumber) can take well over a few seconds.
-# Match server migration budget (~2m) so the probe does not kill a healthy still-migrating API.
+# Match the server migration budget (~2m) so this wait does not give up on a healthy, still-migrating API
+# before Cloud Run's startup probe (240s) does.
+# Poll every 0.2s (600 x 0.2s = 120s) so a fast start is not held back by the polling step.
 i=0
-while [ "$i" -lt 120 ]; do
+while [ "$i" -lt 600 ]; do
     if curl -sf -o /dev/null http://127.0.0.1:8081/api/public-config 2>/dev/null; then
         break
     fi
@@ -52,7 +54,7 @@ while [ "$i" -lt 120 ]; do
         exit 1
     fi
     i=$((i + 1))
-    sleep 1
+    sleep 0.2
 done
 
 if ! curl -sf -o /dev/null http://127.0.0.1:8081/api/public-config 2>/dev/null; then
