@@ -20,7 +20,7 @@
 1. 履歴が全アイテムにある状態で `InitializeHistory` を呼ぶと、トランザクションを開かない（MySQL の `Com_begin` が増えない。アイテム数に依らない）。
 2. 履歴の無いアイテムだけが抽出され（id 順、ゴミ箱を含む。履歴のあるアイテムは含まれない）、基線がそのアイテムに 1 件だけ作られる。2 回呼んでも増えない。
 3. 複数のインスタンスが同時に `InitializeHistory` を呼んでも、エラーにならず、基線は各アイテム 1 件のまま。
-4. 既存の `TestMySQLHistory*` の結果が変わらない（`TestMySQLHistory`・`TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter` は変更前から失敗しており、今回の変更とは無関係）。
+4. 既存の `TestMySQLHistory*` の結果が変わらない。変更前（`origin/main`）から失敗しているテスト（`TestMySQLHistory`、`TestMySQLHistoryRecordsEachFieldWithBeforeAndAfter`、`TestRenameCardColumnsToItemsIdempotentAndGreenfield`、`TestRenameCardColumnsSkipsGlobalUniqueAfterPerProject`、`TestCommentCascadeAndHistoryUnchangedMySQL`）は今回の変更と無関係で、結果は同じまま。
 5. `check-deploy-image-hardening.sh` が通り、起動確認の値と待機の刻みを検査する。
 
 ## 範囲外（別のカードにする）
