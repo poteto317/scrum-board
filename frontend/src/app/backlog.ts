@@ -117,6 +117,11 @@ export class Backlog implements OnInit {
   readonly items = signal<Item[]>([]);
   readonly columns = signal<Column[]>([]);
   readonly loading = signal(true);
+  /**
+   * True while the backlog of an earlier visit is on screen and the fresh one is still on its way
+   * (`loading` stays true then, so editing and live refresh stay blocked until it arrives).
+   */
+  readonly showingCached = signal(false);
   readonly error = signal('');
   readonly saving = signal(false);
   readonly reordering = signal(false);
@@ -179,7 +184,7 @@ export class Backlog implements OnInit {
   });
 
   ngOnInit() {
-    this.load();
+    this.load({ useCache: true });
     this.listFilter.load();
     bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadAfterProjectSwitch());
     this.destroyRef.onDestroy(() => {
@@ -202,11 +207,11 @@ export class Backlog implements OnInit {
       fetch: () => this.pollBacklogBoard(),
       apply: ({ items, columns }) => {
         this.error.set('');
-        if (!sameJson(this.items(), items)) {
-          this.rememberBacklogCache(items);
-          this.items.set(items);
-        }
-        if (!sameJson(this.columns(), columns)) this.columns.set(columns);
+        const itemsChanged = !sameJson(this.items(), items);
+        const columnsChanged = !sameJson(this.columns(), columns);
+        if (itemsChanged || columnsChanged) this.rememberBacklogCache(items, columns);
+        if (itemsChanged) this.items.set(items);
+        if (columnsChanged) this.columns.set(columns);
       },
       ...zoneAwareTimers(this.zone),
     });
@@ -246,10 +251,12 @@ export class Backlog implements OnInit {
     });
   }
 
-  load() {
+  /** `useCache`: on first entry, show the backlog of the earlier visit while the fresh one loads. */
+  load(options: { useCache?: boolean } = {}) {
     this.closeCommandMenu();
     const generation = ++this.backlogLoadGeneration;
     this.loading.set(true);
+    this.showCachedBacklog(options.useCache === true);
     this.error.set('');
     this.reorderError.set('');
     this.reorderConflict.set(false);
@@ -261,7 +268,9 @@ export class Backlog implements OnInit {
     })
       .pipe(
         finalize(() => {
-          if (generation === this.backlogLoadGeneration) this.loading.set(false);
+          if (generation !== this.backlogLoadGeneration) return;
+          this.loading.set(false);
+          this.showingCached.set(false);
         }),
       )
       .subscribe({
@@ -271,9 +280,10 @@ export class Backlog implements OnInit {
           this.rememberEtagsFromOk(backlog, board);
           const normalized = normalizeBoardMeta(board.body);
           applyBoardDataWithActiveSync(this.projectSession, normalized, (meta) => {
-            this.rememberBacklogCache(backlog.body.items);
-            this.items.set(backlog.body.items);
-            this.columns.set(meta.columns);
+            this.rememberBacklogCache(backlog.body.items, meta.columns);
+            // Unchanged since the cached view: skip rebuilding every card.
+            if (!sameJson(this.items(), backlog.body.items)) this.items.set(backlog.body.items);
+            if (!sameJson(this.columns(), meta.columns)) this.columns.set(meta.columns);
             // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
             // (not the loading-only first paint).
             this.scheduleBacklogScrollRestore();
@@ -281,9 +291,33 @@ export class Backlog implements OnInit {
         },
         error: (e) => {
           if (generation !== this.backlogLoadGeneration) return;
+          // The error panel replaces the cached backlog; the AI chat candidates are built from items(),
+          // so nothing stale may stay in it.
+          if (this.showingCached()) {
+            this.items.set([]);
+            this.columns.set([]);
+          }
           this.error.set(errorMessage(e));
         },
       });
+  }
+
+  /**
+   * Puts the backlog of the earlier visit on screen at once (no loading panel). Needs the items and
+   * the columns they were loaded with; anything less falls back to the loading panel.
+   */
+  private showCachedBacklog(useCache: boolean) {
+    this.showingCached.set(false);
+    if (!useCache) return;
+    const activeId = this.projectSession.activeId();
+    // Unlike the board, the cache is keyed by project and holds no settings that could name another one.
+    if (activeId == null || this.projectSession.switching()) return;
+    const view = this.projectBoardCache.getBacklogView(activeId);
+    if (!view) return;
+    this.items.set(view.items);
+    this.columns.set(view.columns);
+    this.showingCached.set(true);
+    this.scheduleBacklogScrollRestore();
   }
 
   /** ETag keys use fetchKey 0 (backlog page does not pass projectId). */
@@ -327,6 +361,8 @@ export class Backlog implements OnInit {
   private reloadAfterProjectSwitch() {
     this.closeCommandMenu();
     const generation = ++this.backlogLoadGeneration;
+    // The cached view of the old project must not stay on screen next to the new project's items.
+    this.showingCached.set(false);
     const activeId = this.projectSession.activeId();
     const cached = activeId != null ? this.projectBoardCache.getBacklog(activeId) : undefined;
     if (cached) {
@@ -354,7 +390,7 @@ export class Backlog implements OnInit {
           this.error.set('');
           const normalized = normalizeBoardMeta(board.body);
           applyBoardDataWithActiveSync(this.projectSession, normalized, (meta) => {
-            this.rememberBacklogCache(backlog.body.items);
+            this.rememberBacklogCache(backlog.body.items, meta.columns);
             this.items.set(backlog.body.items);
             this.columns.set(meta.columns);
           });
@@ -366,10 +402,10 @@ export class Backlog implements OnInit {
       });
   }
 
-  private rememberBacklogCache(items: Item[]) {
+  private rememberBacklogCache(items: Item[], columns: Column[]) {
     const activeId = this.projectSession.activeId();
     if (activeId != null && activeId > 0) {
-      this.projectBoardCache.putBacklog(activeId, items);
+      this.projectBoardCache.putBacklog(activeId, items, columns);
     }
   }
 
