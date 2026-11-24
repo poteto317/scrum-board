@@ -12,7 +12,8 @@ const MAX_IN_FLIGHT = 2;
 
 /**
  * In-memory snapshots per project for faster project switches and listbox status dots.
- * Board entries are `{ items, columns }` (warm when columns.length >= 1).
+ * Board entries are `{ items, columns, settings? }` (warm when columns.length >= 1; shown at once on
+ * return only with their settings). Backlog entries are items plus the columns they were loaded with.
  * Soft prefetch uses put*IfAbsent (skip when warm); refreshOthers force-fetches via
  * boardWriteGen so late responses cannot clobber a fresher putBoard.
  * Prefetch/refresh must not touch boardLoadGeneration / display state.

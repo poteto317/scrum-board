@@ -51,6 +51,7 @@ function mountBacklog(options: {
   const backlog = vi.fn(() => heldBacklog.asObservable());
   const board = vi.fn(() => heldBoard.asObservable());
   const reorderBacklog = vi.fn();
+  const createItem = vi.fn();
   TestBed.configureTestingModule({
     imports: [Backlog],
     providers: [
@@ -61,6 +62,7 @@ function mountBacklog(options: {
           backlog,
           board,
           reorderBacklog,
+          createItem,
           patchBoardSettings: vi.fn(),
           listFilter: () =>
             of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
@@ -91,7 +93,18 @@ function mountBacklog(options: {
     heldBoard.next({ columns, items });
     heldBoard.complete();
   };
-  return { f, backlog, board, cache, titles, answer, heldBacklog, heldBoard, reorderBacklog };
+  return {
+    f,
+    backlog,
+    board,
+    cache,
+    titles,
+    answer,
+    heldBacklog,
+    heldBoard,
+    reorderBacklog,
+    createItem,
+  };
 }
 
 describe('Backlog shown from the cache on return (#124)', () => {
@@ -190,8 +203,22 @@ describe('Backlog shown from the cache on return (#124)', () => {
     const { f, answer, cache, reorderBacklog } = mountBacklog({ cachedTitles: ['A', 'B'] });
     answer(['A', 'B']);
     reorderBacklog.mockReturnValue(of({ items: [card(2, 'B'), card(1, 'A')] }));
-    (f.componentInstance as unknown as { applyReorder(a: number, b: number): void }).applyReorder(0, 1);
+    (f.componentInstance as unknown as { applyReorder(a: number, b: number): void }).applyReorder(
+      0,
+      1,
+    );
     expect(cache.getBacklogView(1)?.items.map((i) => i.title)).toEqual(['B', 'A']);
+    f.destroy();
+  });
+
+  it('keeps the cache in step with an added item, so the next return shows it', () => {
+    const { f, answer, cache, createItem } = mountBacklog({ cachedTitles: ['A', 'B'] });
+    answer(['A', 'B']);
+    createItem.mockReturnValue(of(card(3, 'New')));
+    const backlog = f.componentInstance;
+    backlog.itemForm.setValue({ title: 'New', description: '' });
+    backlog.addItem();
+    expect(cache.getBacklogView(1)?.items.map((i) => i.title)).toEqual(['A', 'B', 'New']);
     f.destroy();
   });
 
