@@ -394,6 +394,18 @@ describe('Board card reorder state', () => {
     expect(page.scrollTop).toBeLessThan(down);
   });
 
+  it('listens to one drag at a time: a new drag drops the earlier one, and destroying drops the last', async () => {
+    const { f, component } = await setup(vi.fn());
+    startItemDrag(component, initialBoard().items[0]);
+    const first = dragMoved.get(component)!;
+    startItemDrag(component, initialBoard().items[1]);
+    const second = dragMoved.get(component)!;
+    expect(first.observed).toBe(false);
+    expect(second.observed).toBe(true);
+    f.destroy();
+    expect(second.observed).toBe(false);
+  });
+
   it('takes the pointer from the drag it started (not from a template output), and stops listening when it ends', async () => {
     const { f, component } = await setup(vi.fn());
     const scroller = f.nativeElement.querySelector('.board-scroll') as HTMLElement;

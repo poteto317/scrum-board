@@ -275,7 +275,12 @@ describe('Backlog drag does not re-check every row per dragover', () => {
     zone(3).dispatchEvent(dragEvent('dragend', 0));
     expect(removed).toHaveBeenCalledWith('dragover', expect.any(Function));
     scroll.dispatchEvent(dragEvent('dragover', 99));
-    expect(f.componentInstance.dropSlot()).toBeNull(); // nothing listens any more
+    const handler = vi.spyOn(
+      f.componentInstance as unknown as { onListDragOver(e: Event): void },
+      'onListDragOver',
+    );
+    scroll.dispatchEvent(dragEvent('dragover', 99));
+    expect(handler).not.toHaveBeenCalled(); // nothing listens any more
   });
 
   it('stops listening when the page is destroyed in the middle of a drag', async () => {
@@ -284,6 +289,78 @@ describe('Backlog drag does not re-check every row per dragover', () => {
     zone(3).dispatchEvent(dragEvent('dragstart', 10));
     removed.mockClear();
     f.destroy();
+    expect(removed).toHaveBeenCalledWith('dragover', expect.any(Function));
+  });
+  it('measures again when the same number of rows are re-ordered during the drag', async () => {
+    const { f, scroll, zone } = await mountBacklogWithRows(4);
+    onTestFinished(() => f.destroy());
+    zone(3).dispatchEvent(dragEvent('dragstart', 10));
+    // A refresh re-orders the rows (same count): the dragged card (4) is now the first row, and
+    // that row is tall (200px), so the rows are not where they were measured.
+    f.componentInstance.items.update((list) => [list[3], list[0], list[1], list[2]]);
+    f.detectChanges();
+    const rows = Array.from(f.nativeElement.querySelectorAll('.backlog-row')) as HTMLElement[];
+    rows.forEach((row, i) => {
+      const top = i === 0 ? 0 : 140 + i * 70;
+      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({
+        ...rowRect(i),
+        top,
+        height: i === 0 ? 200 : 60,
+      } as DOMRect);
+    });
+    // y=150 is below the dragged row's middle (100) and above the next one's (210 + 30): the slot is
+    // right after the dragged row itself, so there is nothing to move: null. The rows measured at the
+    // start (all 60px high) would give the slot 2, between the second and third rows.
+    scroll.dispatchEvent(dragEvent('dragover', 150));
+    expect(f.componentInstance.dropSlot()).toBeNull();
+  });
+
+  it('measures again when the window is resized during the drag', async () => {
+    const { f, scroll, zone } = await mountBacklogWithRows(4);
+    onTestFinished(() => f.destroy());
+    zone(3).dispatchEvent(dragEvent('dragstart', 10));
+    // The rows moved down by 200px (e.g. the viewport width changed and a banner wrapped).
+    (Array.from(f.nativeElement.querySelectorAll('.backlog-row')) as HTMLElement[]).forEach(
+      (row, i) => {
+        vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({
+          ...rowRect(i),
+          top: i * 70 + 200,
+        } as DOMRect);
+      },
+    );
+    window.dispatchEvent(new Event('resize'));
+    scroll.dispatchEvent(dragEvent('dragover', 299)); // before row 1's new middle (270 + 30 = 300): slot 1
+    expect(f.componentInstance.dropSlot()).toBe(1);
+  });
+
+  it('follows the page when it scrolls (window.scrollY) during the drag', async () => {
+    const { f, scroll, zone } = await mountBacklogWithRows();
+    onTestFinished(() => f.destroy());
+    zone(3).dispatchEvent(dragEvent('dragstart', 10));
+    vi.spyOn(window, 'scrollY', 'get').mockReturnValue(70);
+    scroll.dispatchEvent(dragEvent('dragover', 29)); // as when the list itself scrolls by 70: slot 1
+    expect(f.componentInstance.dropSlot()).toBe(1);
+  });
+
+  it('leaves a dragover outside the list alone', async () => {
+    const { f, zone } = await mountBacklogWithRows();
+    onTestFinished(() => f.destroy());
+    zone(3).dispatchEvent(dragEvent('dragstart', 10));
+    const outside = dragEvent('dragover', 99);
+    document.body.dispatchEvent(outside);
+    expect(outside.defaultPrevented).toBe(false);
+    expect(f.componentInstance.dropSlot()).toBeNull();
+  });
+
+  it('ends the drag when the dragged row disappears and no dragend can come', async () => {
+    const { f, zone } = await mountBacklogWithRows();
+    onTestFinished(() => f.destroy());
+    const removed = vi.spyOn(document, 'removeEventListener');
+    zone(3).dispatchEvent(dragEvent('dragstart', 10));
+    expect(f.componentInstance.draggingItemId()).not.toBeNull();
+    f.componentInstance.items.update((list) => list.slice(0, 3)); // a refresh removes the dragged card
+    f.detectChanges();
+    expect(f.componentInstance.draggingItemId()).toBeNull();
     expect(removed).toHaveBeenCalledWith('dragover', expect.any(Function));
   });
 });
