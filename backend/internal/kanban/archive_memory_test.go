@@ -24,7 +24,7 @@ func (m *memoryRepo) ArchiveDoneItems(_ context.Context) (int, error) {
 	cutoff := now.Add(-archiveAfterDone)
 	var due []int64
 	for _, c := range m.cards {
-		if !m.living(c) || c.ArchivedAt != nil || c.ColumnID != 3 {
+		if !m.living(c) || c.ArchivedAt != nil || !m.finishedColumn(c.ColumnID) {
 			continue
 		}
 		if c.DoneAt == nil || c.DoneAt.After(cutoff) {
@@ -68,11 +68,23 @@ func (m *memoryRepo) RestoreArchivedItem(_ context.Context, id, projectID int64)
 	now := time.Now().UTC()
 	c.ArchivedAt = nil
 	c.DoneAt = &now
-	c.ColumnID = 3
-	c.Position = m.nextPosition(3, projectID)
+	if !m.finishedColumn(c.ColumnID) {
+		c.ColumnID = 3
+	}
+	c.Position = m.nextPosition(c.ColumnID, projectID)
 	c.UpdatedAt = now
 	m.cards[id] = c
 	return c, nil
+}
+
+// finishedColumn reports whether the column is Done or Close (see isFinishedColumnName).
+func (m *memoryRepo) finishedColumn(id int64) bool {
+	for _, col := range m.columns {
+		if col.ID == id {
+			return isFinishedColumnName(col.Name)
+		}
+	}
+	return false
 }
 
 var _ ArchiveRepository = (*memoryRepo)(nil)

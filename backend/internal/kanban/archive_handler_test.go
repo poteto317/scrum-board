@@ -156,3 +156,30 @@ func TestArchiveSkipsNilDoneAt(t *testing.T) {
 		t.Fatal("due item must be archived")
 	}
 }
+
+func TestArchiveHandlesCloseItemsLikeDoneItemsAndRestoresThemToClose(t *testing.T) {
+	m := fresh()
+	m.columns = append(m.columns, Column{ID: 4, Name: "Close", Position: 3})
+	oldDone := time.Now().UTC().Add(-archiveAfterDone - time.Minute)
+	closed, _ := m.CreateItem(t.Context(), ItemInput{ColumnID: 4, Title: "closed", Description: "d"})
+	closed.DoneAt = &oldDone
+	m.cards[closed.ID] = closed
+	doing, _ := m.CreateItem(t.Context(), ItemInput{ColumnID: 2, Title: "doing", Description: "d"})
+	doing.DoneAt = &oldDone // a stale value must not archive an unfinished item
+	m.cards[doing.ID] = doing
+
+	archived, err := m.ArchiveDoneItems(t.Context())
+	if err != nil || archived != 1 {
+		t.Fatalf("ArchiveDoneItems() = %d, %v; want 1 (the Close item)", archived, err)
+	}
+	if got, _ := m.GetItem(t.Context(), closed.ID); got.ArchivedAt == nil {
+		t.Fatal("the old Close item must be archived")
+	}
+	if got, _ := m.GetItem(t.Context(), doing.ID); got.ArchivedAt != nil {
+		t.Fatal("an item that is not in Done or Close must not be archived")
+	}
+	restored, err := m.RestoreArchivedItem(t.Context(), closed.ID, closed.ProjectID)
+	if err != nil || restored.ColumnID != 4 || restored.ArchivedAt != nil {
+		t.Fatalf("restored item = %+v, %v; want it back in Close", restored, err)
+	}
+}
