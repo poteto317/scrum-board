@@ -20,7 +20,7 @@ type cardReorderPlan struct {
 // updated_at is the card's edit time: only a column (status) change moves it. A card that merely
 // shifts position/offset keeps it (and its history revision) as it was.
 // ReorderItems uses Skip/ColumnChanged/NextOffset/DoneAt only; Query/Args remain for unit tests.
-func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now time.Time, sourceDone, targetDone bool) cardReorderPlan {
+func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now time.Time, sourceFinished, targetFinished bool) cardReorderPlan {
 	nextOffset := before.OffsetY
 	offsetChanged := false
 	if offsetY != nil {
@@ -30,9 +30,9 @@ func planCardReorder(before Item, columnID int64, pos int, offsetY *int, now tim
 	columnChanged := before.ColumnID != columnID
 	doneAt := before.DoneAt
 	if columnChanged {
-		if targetDone && !sourceDone {
+		if targetFinished && !sourceFinished {
 			doneAt = &now
-		} else if !targetDone {
+		} else if !targetFinished {
 			doneAt = nil
 		}
 	}
@@ -79,10 +79,10 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 	}
 	countReorderMeasuredSQL()
 	knownColumns := make(map[int64]struct{}, len(cols))
-	doneColumns := make(map[int64]bool, len(cols))
+	finishedColumns := make(map[int64]bool, len(cols))
 	for _, c := range cols {
 		knownColumns[c.ID] = struct{}{}
-		doneColumns[c.ID] = c.Name == "Done"
+		finishedColumns[c.ID] = isFinishedColumnName(c.Name)
 	}
 	for _, order := range orders {
 		if _, ok := knownColumns[order.ColumnID]; !ok {
@@ -135,7 +135,7 @@ func (r MySQLRepository) ReorderItems(ctx context.Context, orders []ItemColumnOr
 			if order.OffsetYs != nil {
 				offsetY = &(*order.OffsetYs)[pos]
 			}
-			plan := planCardReorder(before, order.ColumnID, pos, offsetY, now, doneColumns[before.ColumnID], doneColumns[order.ColumnID])
+			plan := planCardReorder(before, order.ColumnID, pos, offsetY, now, finishedColumns[before.ColumnID], finishedColumns[order.ColumnID])
 			if plan.Skip {
 				continue
 			}
