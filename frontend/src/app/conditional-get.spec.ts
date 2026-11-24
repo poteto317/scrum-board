@@ -1,8 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClient, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { etagFetchKey, getJSONConditional } from './conditional-get';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { of } from 'rxjs';
+import { Api } from './api';
+import {
+  etagFetchKey,
+  fetchBoardMeta,
+  getJSONConditional,
+  resolveBoardMetaConditional,
+} from './conditional-get';
 import { mergeBacklogBoardPoll } from './backlog-board-poll';
 
 describe('conditional-get', () => {
@@ -83,5 +90,60 @@ describe('conditional-get', () => {
         { status: 'ok', etag: '"c"', body: { columns: ['new'] } },
       ),
     ).toEqual({ items: [2], columns: ['new'] });
+  });
+
+  describe('board meta helpers', () => {
+    const boardBody = {
+      columns: [{ id: 1, name: 'Todo' }],
+      items: [{ id: 9 }],
+      settings: { cardLayout: 'pack' as const, activeProjectId: 2 },
+    };
+
+    it('the real Api provides boardMeta and boardMetaConditional (helpers hide a missing method)', () => {
+      const api = TestBed.inject(Api);
+      const required: Required<Pick<Api, 'boardMeta' | 'boardMetaConditional'>> = api;
+      expect(typeof required.boardMeta).toBe('function');
+      expect(typeof required.boardMetaConditional).toBe('function');
+    });
+
+    it('resolveBoardMetaConditional prefers boardMetaConditional and never calls board', () => {
+      const result = { status: 'notModified' as const, etag: '"e"' };
+      const boardMetaConditional = vi.fn(() => of(result));
+      const board = vi.fn();
+      let got: unknown;
+      resolveBoardMetaConditional({ board, boardMetaConditional } as never, '"e"').subscribe((r) => (got = r));
+      expect(boardMetaConditional).toHaveBeenCalledWith('"e"');
+      expect(board).not.toHaveBeenCalled();
+      expect(got).toBe(result);
+    });
+
+    it('resolveBoardMetaConditional falls back to board() and drops items', () => {
+      const board = vi.fn(() => of(boardBody));
+      let got: unknown;
+      resolveBoardMetaConditional({ board } as never, null).subscribe((r) => (got = r));
+      expect(got).toEqual({
+        status: 'ok',
+        etag: '',
+        body: { columns: boardBody.columns, settings: boardBody.settings },
+      });
+    });
+
+    it('fetchBoardMeta prefers boardMeta and never calls board', () => {
+      const meta = { columns: [], settings: { cardLayout: 'pack' as const } };
+      const boardMeta = vi.fn(() => of(meta));
+      const board = vi.fn();
+      let got: unknown;
+      fetchBoardMeta({ board, boardMeta } as never).subscribe((r) => (got = r));
+      expect(boardMeta).toHaveBeenCalledTimes(1);
+      expect(board).not.toHaveBeenCalled();
+      expect(got).toBe(meta);
+    });
+
+    it('fetchBoardMeta falls back to board() and drops items', () => {
+      const board = vi.fn(() => of(boardBody));
+      let got: unknown;
+      fetchBoardMeta({ board } as never).subscribe((r) => (got = r));
+      expect(got).toEqual({ columns: boardBody.columns, settings: boardBody.settings });
+    });
   });
 });

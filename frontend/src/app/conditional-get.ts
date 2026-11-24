@@ -1,5 +1,6 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, catchError, map, of, throwError } from 'rxjs';
+import type { BoardMeta } from './models';
 
 export type ConditionalGetResult<T> =
   | { status: 'ok'; etag: string; body: T }
@@ -74,4 +75,44 @@ export function resolveBacklogConditional<T>(
     return api.backlogConditional(projectId, etag);
   }
   return api.backlog(projectId).pipe(map((body) => ({ status: 'ok' as const, etag: '', body })));
+}
+
+/**
+ * Conditional GET /api/board/meta. Partial test doubles that only have board()
+ * fall back to board() and keep just the columns and settings.
+ */
+export function resolveBoardMetaConditional(
+  api: {
+    board: () => Observable<BoardMetaSource>;
+    boardMetaConditional?: (etag?: string | null) => Observable<ConditionalGetResult<BoardMeta>>;
+  },
+  etag?: string | null,
+): Observable<ConditionalGetResult<BoardMeta>> {
+  if (typeof api.boardMetaConditional === 'function') {
+    return api.boardMetaConditional(etag);
+  }
+  return api.board().pipe(
+    map((body) => ({ status: 'ok' as const, etag: '', body: pickBoardMeta(body) })),
+  );
+}
+
+/**
+ * Plain GET /api/board/meta. Partial test doubles that only have board()
+ * fall back to board() and keep just the columns and settings.
+ */
+export function fetchBoardMeta(api: {
+  board: () => Observable<BoardMetaSource>;
+  boardMeta?: () => Observable<BoardMeta>;
+}): Observable<BoardMeta> {
+  if (typeof api.boardMeta === 'function') {
+    return api.boardMeta();
+  }
+  return api.board().pipe(map(pickBoardMeta));
+}
+
+/** A board() response may carry items; the meta helpers only keep columns and settings. */
+type BoardMetaSource = BoardMeta & { items?: unknown };
+
+function pickBoardMeta(body: BoardMetaSource): BoardMeta {
+  return { columns: body.columns, settings: body.settings };
 }

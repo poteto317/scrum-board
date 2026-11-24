@@ -8,6 +8,7 @@ import { WorkspaceHeaderMenu } from './header-menu';
 import { UserPublic } from './auth';
 import {
   BoardData,
+  BoardMeta,
   BoardSettings,
   CardLayout,
   Item,
@@ -157,6 +158,14 @@ export class Api {
     etag?: string | null,
   ): Observable<ConditionalGetResult<BoardData>> {
     return getJSONConditional<BoardData>(this.http, '/api/board', { projectId, etag });
+  }
+  /** 列と設定だけ（アイテム本体なし）。アイテムが要らない画面はこちらを使う。 */
+  boardMeta() {
+    return this.http.get<BoardMeta>('/api/board/meta');
+  }
+  /** boardMeta() with If-None-Match: 304 is mapped to notModified (backlog polling). */
+  boardMetaConditional(etag?: string | null): Observable<ConditionalGetResult<BoardMeta>> {
+    return getJSONConditional<BoardMeta>(this.http, '/api/board/meta', { etag });
   }
   patchBoardSettings(body: {
     cardLayout?: CardLayout;
