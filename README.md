@@ -502,3 +502,9 @@ Artifact Registry の古いイメージも容量に応じて削除できます�
 `./scripts/deploy-gcp.sh` は Docker BuildKit と buildx（Docker Desktop標準）を使い、`linux/amd64` のイメージをローカルへロードしてからpushします。Node/Goのビルド段はホストCPUで動き、GoはターゲットCPUへクロスコンパイルします。
 
 同じbuilderではnpmダウンロード、Goモジュール、Goコンパイルのキャッシュを再利用します。ソースだけの変更では依存取得レイヤーを再利用し、Goの変更したパッケージとリンクだけを再実行します。キャッシュの削除・GC・builder変更後は依存を再取得します。`.dockerignore` はローカルの依存・ビルド成果物・秘密ファイルを本番ビルドコンテキストから除外します。
+
+### web-devの再起動
+
+`web-dev` は `node scripts/start-docker.mjs` で起動します。依存のmanifest/lock、Node/npmのバージョンとCPU、インストール済みlockが前回成功時と一致し、`npm ls --all` が成功すると `npm ci` を省略します。空ボリュームや不一致・依存欠落時は再インストールし、失敗した場合は画面サーバーを起動しません。
+
+成功記録は依存用ボリューム内の `node_modules/.web-dev-install.json` に保存します。依存ファイル自体の破損などで再インストールしたい場合は、web-devを停止してからこの記録を削除して再起動してください。同じボリュームを複数のweb-devで同時に更新しないでください。変更検知は1000ms間隔でポーリングします（CPU負荷は環境によって変わります）。起動処理のテストは `cd frontend && npm run test:docker-start` です。

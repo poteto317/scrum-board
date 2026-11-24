@@ -4,10 +4,11 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve --host 127.0.0.1 --proxy-config proxy.conf.json",
-    "start:docker": "ng serve --host 0.0.0.0 --port 4200 --poll 2000 --proxy-config proxy.docker.json",
+    "start:docker": "ng serve --host 0.0.0.0 --port 4200 --poll 1000 --proxy-config proxy.docker.json",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "node scripts/check-dialog-modal-open-css.mjs && ng test",
+    "test:docker-start": "node --test scripts/start-docker.test.mjs",
     "test:css-contract": "node scripts/check-dialog-modal-open-css.mjs"
   },
   "private": true,

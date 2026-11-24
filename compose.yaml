@@ -61,7 +61,7 @@ services:
     environment:
       # Docker ボリューム越しの変更検知（@angular/build は --poll と組み合わせる）
       CHOKIDAR_USEPOLLING: "true"
-    command: sh -c "npm ci && npm run start:docker"
+    command: node scripts/start-docker.mjs
     ports:
       - "127.0.0.1:${WEB_PORT:-4200}:4200"
     depends_on:
