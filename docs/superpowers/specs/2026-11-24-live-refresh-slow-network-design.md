@@ -8,7 +8,7 @@
 
 `startLiveRefresh` の中だけを変える（呼び出し側と API は変えない）。
 
-- **前回のリクエストが終わっていない間は、次を投げない。** tick は、リクエストが飛行中なら何もしない。応答が返った時点で、値を出さずに完了した場合（呼び出し側が 304 Not Modified を捨てて `EMPTY` になるボード・バックログ）も、リクエストの終了として扱い、飛行中の印を外す（失敗にも成功にも数えない）。成功した応答は、世代（`generation`）が最新なら従来どおり `apply` に渡す。次の tick から再び投げるのは、成功・値なしの完了の場合で、失敗の場合は下の間引きに従う。飛行中の印は `pendingSince`（リクエストを投げた時刻。応答・失敗・完了で null に戻る）で、購読（`subscription`）とは別に持つ。
+- **前回のリクエストが終わっていない間は、次を投げない。** tick は、リクエストが飛行中なら何もしない。応答が返った時点で、値を出さずに完了した場合（呼び出し側が 304 Not Modified を捨てて `EMPTY` になるボード・バックログ）も、リクエストの終了として扱い、飛行中の印を外す（サーバーが答えたので、失敗の連続は終わる。`apply` はしない）。成功した応答は、世代（`generation`）が最新なら従来どおり `apply` に渡す。次の tick から再び投げるのは、成功・値なしの完了の場合で、失敗の場合は下の間引きに従う。飛行中の印は `pendingSince`（リクエストを投げた時刻。応答・失敗・完了で null に戻る）で、購読（`subscription`）とは別に持つ。
 - **止まったリクエストは諦める。** 飛行中が `maxPendingMs`（既定 30 秒）を超えたら、キャンセルして投げ直し、失敗 1 回として数える（返事の無い回線ではさらに間隔を伸ばす）。応答が永久に返らない場合に、自動反映が永久に止まらないようにするため。経過時間は単調増加の `performance.now()` で測る（壁時計が巻き戻っても止まらない）。
 - **失敗が続いたら間隔を伸ばす。** 連続失敗 n 回目の後、`min(2^(n-1), maxBackoffTicks)` 回の tick を飛ばす（1, 2, 4, …。`maxBackoffTicks` の既定は 12 で、5 秒間隔なら最大 1 分）。成功したら 0 に戻す。
 - **タブに戻ったときは、待たずに投げる。** `visibilitychange` で表示に戻ったら、間引きと飛行中の印を解除して即座に tick する。隠れている間に残った古い・絞られたリクエストは、キャンセルして投げ直す。
@@ -29,11 +29,12 @@
 3. 止まったリクエストを諦めたことも失敗に数え、返事の無い回線では間引きが増える（`counts a request given up on as a failure, ...`）。
 4. 連続失敗で間引きが 1, 2, 4, … と増え、`maxBackoffTicks` で頭打ちになり、成功で解除される（`backs off after consecutive failures ...`、`caps the back-off ...`、`a success ends the back-off`、`backoffTicks`）。
 5. タブに戻ったときは、間引き中でも、飛行中のリクエストがあっても、即座に取得し直す（`returning to the tab fetches at once, ...`、`returning to the tab replaces a request that was in flight`）。
-6. 値を出さずに完了するリクエスト（`EMPTY`）で、次の tick が塞がれない（`frees the next tick when a request completes without emitting ...`）。
+6. 値を出さずに完了するリクエスト（`EMPTY`）で、次の tick が塞がれず、失敗の連続が終わる（`frees the next tick when a request completes without emitting ...`、`a request that completes without a value (304) ends the failure streak ...`）。
 7. `enabled()` が false で応答を捨てても、次の tick が塞がれない（`frees the next tick when a response is discarded ...`）。
 8. 壁時計が巻き戻っても、止まったリクエストを諦められる（`still gives up on a stalled request when the wall clock moves backwards`）。
 9. 停止後に届いた応答は `apply` されない（`does not apply a response that arrives after stop`）。
-10. 既存の `live-refresh.spec.ts` と、4 画面の自動反映のテストが通る（`ng test` 全体）。
+10. `fetch` が Observable を返す前に例外を投げても、飛行中の印が残らず、失敗に数える（`survives fetch throwing synchronously ...`）。
+11. 既存の `live-refresh.spec.ts` と、4 画面の自動反映のテストが通る（`ng test` 全体）。
 
 ## 範囲外
 
