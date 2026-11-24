@@ -11,6 +11,7 @@ import { RouterLink } from '@angular/router';
 import { Subscription, finalize } from 'rxjs';
 import { Api, RecurringRule } from './api';
 import { errorMessage } from './api-error';
+import { fetchBoardMeta } from './conditional-get';
 import { textLimit } from './form-validation';
 import { Modal } from './modal';
 import { Column } from './models';
@@ -234,12 +235,12 @@ export class RecurringPage implements OnInit {
 
   private loadColumns() {
     this.columnsSub?.unsubscribe();
-    this.columnsSub = this.api.board().subscribe({
-      next: (board) => {
-        this.columns.set(board.columns ?? []);
+    this.columnsSub = fetchBoardMeta(this.api).subscribe({
+      next: (meta) => {
+        this.columns.set(meta.columns ?? []);
         const col = this.form.controls.columnId.value;
-        if (col == null && board.columns?.length) {
-          this.form.controls.columnId.setValue(board.columns[0].id);
+        if (col == null && meta.columns?.length) {
+          this.form.controls.columnId.setValue(meta.columns[0].id);
         }
       },
       error: () => {
