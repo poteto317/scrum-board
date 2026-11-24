@@ -275,6 +275,64 @@ describe('ProjectBoardCache', () => {
     expect(cache.revision()).toBe(before);
   });
 
+  it('keeps the board settings with the snapshot, as a copy', () => {
+    const cache = new ProjectBoardCache();
+    const settings = { cardLayout: 'free' as const, activeProjectId: 2 };
+    cache.putBoard(2, [item(1, 2)], cols, settings);
+    const snap = cache.getBoardSnapshot(2);
+    expect(snap?.settings).toEqual(settings);
+    expect(snap?.settings).not.toBe(settings);
+    settings.cardLayout = 'pack' as never;
+    expect(cache.getBoardSnapshot(2)?.settings?.cardLayout).toBe('free');
+  });
+
+  it('has no settings when the board was stored without them', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBoard(2, [item(1, 2)], cols);
+    expect(cache.getBoardSnapshot(2)?.settings).toBeUndefined();
+  });
+
+  it('prefetchBoard keeps the settings of the API response', () => {
+    const cache = new ProjectBoardCache();
+    const api = {
+      board: () => of({ items: [item(1, 3)], columns: cols, settings: { cardLayout: 'free' } }),
+      backlog: () => of([]),
+    } as unknown as Api;
+    cache.prefetchBoard(api, 3);
+    expect(cache.getBoardSnapshot(3)?.settings?.cardLayout).toBe('free');
+  });
+
+  it('keeps backlog items with their columns as one view', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBacklog(2, [item(2, 2)], cols);
+    const view = cache.getBacklogView(2);
+    expect(view?.items.map((i) => i.id)).toEqual([2]);
+    expect(view?.columns).toEqual(cols);
+    expect(view?.columns).not.toBe(cols);
+  });
+
+  it('has no backlog view without columns (items alone cannot be shown)', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBacklog(2, [item(2, 2)]);
+    expect(cache.getBacklogView(2)).toBeUndefined();
+    expect(cache.getBacklog(2)?.map((i) => i.id)).toEqual([2]);
+  });
+
+  it('drops the earlier columns when the items are stored again without columns', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBacklog(2, [item(2, 2)], cols);
+    cache.putBacklog(2, [item(3, 2)]);
+    expect(cache.getBacklogView(2)).toBeUndefined();
+    expect(cache.getBacklog(2)?.map((i) => i.id)).toEqual([3]);
+  });
+
+  it('clear drops the backlog view', () => {
+    const cache = new ProjectBoardCache();
+    cache.putBacklog(2, [item(2, 2)], cols);
+    cache.clear();
+    expect(cache.getBacklogView(2)).toBeUndefined();
+  });
+
   it('clear drops board and backlog snapshots', () => {
     const cache = new ProjectBoardCache();
     cache.putBoard(2, [item(1, 2)], cols);
