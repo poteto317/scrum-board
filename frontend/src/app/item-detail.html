@@ -38,7 +38,7 @@
             [disabled]="archiveRestoreBusy() || projectSession.switching()"
             (click)="restoreFromArchive()"
           >
-            {{ archiveRestoreBusy() ? '解除中…' : 'Doneへ戻す' }}
+            {{ archiveRestoreBusy() ? '解除中…' : '元の列へ戻す' }}
           </button>
         }
         @if (archiveRestoreError()) {
