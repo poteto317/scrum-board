@@ -193,6 +193,8 @@ func lockAllCards(ctx context.Context, tx *sql.Tx) ([]int64, error) {
 	return ids, rows.Err()
 }
 
+// listBacklogCards は一覧の形（説明を切り、ソリューションを空にしたもの。cardListFields）で返す。
+// 応答にだけ使い、書き戻しには使わない。
 func listBacklogCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
 	rows, err := tx.QueryContext(ctx, "SELECT "+cardListFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.backlog_position,c.id", projectID)
 	if err != nil {
