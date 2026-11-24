@@ -248,3 +248,33 @@ func TestBatchPRTitlesResolvesURLsConcurrently(t *testing.T) {
 		t.Fatalf("%d URLs took %v: they were resolved one by one", n, elapsed)
 	}
 }
+
+func TestGetItemResolvesItsPRTitlesConcurrently(t *testing.T) {
+	repo := fresh()
+	const n = 8
+	quoted := make([]string, n)
+	for i := range quoted {
+		quoted[i] = `"https://github.com/a/b/pull/` + strconv.Itoa(i+1) + `"`
+	}
+	rt := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		time.Sleep(150 * time.Millisecond)
+		return titleResponse("T"), nil
+	})
+	h := NewHandler(repo, WithPRTitleResolver(NewPRTitleResolver(rt, "")))
+	request(h, "POST", "/api/items", `{"title":"x","columnId":1,"prUrls":[`+strings.Join(quoted, ",")+`]}`)
+	start := time.Now()
+	w := request(h, "GET", "/api/items/1", "")
+	elapsed := time.Since(start)
+	var item Item
+	if err := json.Unmarshal(w.Body.Bytes(), &item); err != nil || w.Code != 200 {
+		t.Fatalf("GET %d %s %v", w.Code, w.Body, err)
+	}
+	for i, title := range item.PRTitles {
+		if title != "T" {
+			t.Fatalf("prTitles[%d] = %q", i, title)
+		}
+	}
+	if len(item.PRTitles) != n || elapsed > time.Second {
+		t.Fatalf("%d titles in %v: they were resolved one by one", len(item.PRTitles), elapsed)
+	}
+}
