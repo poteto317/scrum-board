@@ -433,7 +433,7 @@ gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 
 スクリプトは `secretmanager.googleapis.com` を有効化し、上記 3 秘密を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
 
-アーカイブ・ゴミ箱 purge・recurring run の Cloud Scheduler ジョブは、デプロイ時には作成・実行されません。必要なジョブだけ、デプロイ後に同じ `GCP_PROJECT` / `GCP_REGION` と Cloud Run の `SCHEDULER_JOB_TOKEN`、`PUBLIC_ORIGIN` を設定して個別スクリプトを実行してください。アーカイブは毎日 03:30（Asia/Tokyo）です。ゴミ箱 purge のジョブが無い環境では、保持期間（30 日）を過ぎた行は一覧に出なくなりますが、DB と添付の実体には残ります（ゴミ箱の一覧は読み取りだけで、削除しません）。
+アーカイブ・ゴミ箱 purge・recurring run の Cloud Scheduler ジョブは、デプロイ時には作成・実行されません。ゴミ箱 purge のジョブは、ゴミ箱の一覧が削除をしないため、実質必須です（#130）。ほかのジョブは必要なものだけ、デプロイ後に同じ `GCP_PROJECT` / `GCP_REGION` と Cloud Run の `SCHEDULER_JOB_TOKEN`、`PUBLIC_ORIGIN` を設定して個別スクリプトを実行してください。アーカイブは毎日 03:30（Asia/Tokyo）です。ゴミ箱 purge のジョブが無い環境では、保持期間（30 日）を過ぎた行は一覧に出なくなりますが、DB と添付の実体には残ります（ゴミ箱の一覧は読み取りだけで、削除しません）。
 
 ```sh
 SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN="$SERVICE_URL" ./scripts/ensure-archive-scheduler.sh
