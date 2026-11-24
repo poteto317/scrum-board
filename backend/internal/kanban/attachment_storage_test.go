@@ -41,3 +41,14 @@ func TestUnavailableBlobStoragePut(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// The GCS writer buffers one chunk in memory; the default is 16 MiB for a 5 MiB limit (#129).
+func TestAttachmentUploadChunkSizeIsSmallAndAligned(t *testing.T) {
+	const gcsChunkMultiple = 256 * 1024
+	if attachmentUploadChunkSize%gcsChunkMultiple != 0 {
+		t.Fatalf("chunk size %d must be a multiple of 256 KiB", attachmentUploadChunkSize)
+	}
+	if attachmentUploadChunkSize <= 0 || attachmentUploadChunkSize >= 16*1024*1024 {
+		t.Fatalf("chunk size %d must be below the 16 MiB default", attachmentUploadChunkSize)
+	}
+}

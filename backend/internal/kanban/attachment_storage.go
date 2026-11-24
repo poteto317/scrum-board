@@ -98,6 +98,10 @@ func (UnavailableBlobStorage) Get(context.Context, string) (io.ReadCloser, strin
 }
 func (UnavailableBlobStorage) Delete(context.Context, string) error { return nil }
 
+// attachmentUploadChunkSize is the GCS writer's buffer (a multiple of 256 KiB). The default is
+// 16 MiB, far above the 5 MiB attachment limit.
+const attachmentUploadChunkSize = 1 << 20
+
 // GCSBlobStorage stores objects in a GCS bucket.
 type GCSBlobStorage struct {
 	client *storage.Client
@@ -119,6 +123,7 @@ func NewGCSBlobStorage(ctx context.Context, bucket string) (*GCSBlobStorage, err
 func (g *GCSBlobStorage) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
 	w := g.client.Bucket(g.bucket).Object(key).NewWriter(ctx)
 	w.ContentType = contentType
+	w.ChunkSize = attachmentUploadChunkSize
 	if size > 0 {
 		w.Size = size
 	}
@@ -130,22 +135,14 @@ func (g *GCSBlobStorage) Put(ctx context.Context, key string, r io.Reader, size 
 }
 
 func (g *GCSBlobStorage) Get(ctx context.Context, key string) (io.ReadCloser, string, error) {
-	obj := g.client.Bucket(g.bucket).Object(key)
-	attrs, err := obj.Attrs(ctx)
+	r, err := g.client.Bucket(g.bucket).Object(key).NewReader(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, "", ErrNotFound
 		}
 		return nil, "", err
 	}
-	r, err := obj.NewReader(ctx)
-	if err != nil {
-		if errors.Is(err, storage.ErrObjectNotExist) {
-			return nil, "", ErrNotFound
-		}
-		return nil, "", err
-	}
-	ct := attrs.ContentType
+	ct := r.Attrs.ContentType
 	if ct == "" {
 		ct = "application/octet-stream"
 	}
