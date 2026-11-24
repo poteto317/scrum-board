@@ -1,11 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 import { finalize } from 'rxjs';
 import { Api } from './api';
-import { Column, Item } from './models';
+import { BoardSettings, Column, Item } from './models';
 
 type PrefetchKind = 'board' | 'backlog';
 
-type BoardSnapshot = { items: Item[]; columns: Column[] };
+type BoardSnapshot = { items: Item[]; columns: Column[]; settings?: BoardSettings };
+type BacklogView = Omit<BoardSnapshot, 'settings'>;
 
 const MAX_IN_FLIGHT = 2;
 
@@ -20,6 +21,8 @@ const MAX_IN_FLIGHT = 2;
 export class ProjectBoardCache {
   private readonly boardSnapshots = new Map<number, BoardSnapshot>();
   private readonly backlogItems = new Map<number, Item[]>();
+  /** Columns seen with the backlog, so the backlog can be shown at once (items alone are not enough). */
+  private readonly backlogColumns = new Map<number, Column[]>();
   private readonly boardWriteGen = new Map<number, number>();
   private readonly inFlight = new Set<string>();
   private running = 0;
@@ -36,6 +39,7 @@ export class ProjectBoardCache {
     this.epoch++;
     this.boardSnapshots.clear();
     this.backlogItems.clear();
+    this.backlogColumns.clear();
     this.boardWriteGen.clear();
     this.inFlight.clear();
     this.queue.length = 0;
@@ -50,10 +54,7 @@ export class ProjectBoardCache {
   getBoardSnapshot(projectId: number): BoardSnapshot | undefined {
     const snap = this.getWarmBoard(projectId);
     if (!snap) return undefined;
-    return {
-      items: snap.items.map((i) => ({ ...i })),
-      columns: snap.columns.map((c) => ({ ...c })),
-    };
+    return cloneSnapshot(snap.items, snap.columns, snap.settings);
   }
 
   /** Read-only warm snapshot without cloning (caller must not mutate). */
@@ -61,28 +62,51 @@ export class ProjectBoardCache {
     return this.getWarmBoard(projectId);
   }
 
+  /** Items only (project switch: the columns on screen stay). Use `getBacklogView` to show at once. */
   getBacklog(projectId: number): Item[] | undefined {
     return cloneList(this.backlogItems.get(projectId));
   }
 
-  putBoardIfAbsent(projectId: number, items: Item[], columns: Column[]): void {
+  /** Items plus the columns they were loaded with (to show the backlog at once); undefined when either is missing. */
+  getBacklogView(projectId: number): BacklogView | undefined {
+    const items = this.backlogItems.get(projectId);
+    const columns = this.backlogColumns.get(projectId);
+    if (!items || !columns || columns.length < 1) return undefined;
+    return { items: cloneList(items) ?? [], columns: columns.map((c) => ({ ...c })) };
+  }
+
+  putBoardIfAbsent(
+    projectId: number,
+    items: Item[],
+    columns: Column[],
+    settings?: BoardSettings,
+  ): void {
     if (!this.isValidBoardPut(projectId, columns)) return;
     if (this.isBoardWarm(projectId)) return;
-    this.writeBoardSnapshot(projectId, items, columns);
+    this.writeBoardSnapshot(projectId, items, columns, settings);
   }
 
   putBacklogIfAbsent(projectId: number, next: Item[]): void {
     putIfAbsent(this.backlogItems, projectId, next);
   }
 
-  putBoard(projectId: number, items: Item[], columns: Column[]): void {
+  putBoard(projectId: number, items: Item[], columns: Column[], settings?: BoardSettings): void {
     if (!this.isValidBoardPut(projectId, columns)) return;
     this.bumpBoardWriteGen(projectId);
-    this.writeBoardSnapshot(projectId, items, columns);
+    this.writeBoardSnapshot(projectId, items, columns, settings);
   }
 
-  putBacklog(projectId: number, next: Item[]): void {
-    put(this.backlogItems, projectId, next);
+  /** Items and columns are a pair: without (valid) columns, the earlier columns are dropped. */
+  putBacklog(projectId: number, items: Item[], columns?: Column[]): void {
+    put(this.backlogItems, projectId, items);
+    if (columns && this.isValidBoardPut(projectId, columns)) {
+      this.backlogColumns.set(
+        projectId,
+        columns.map((c) => ({ ...c })),
+      );
+    } else {
+      this.backlogColumns.delete(projectId);
+    }
   }
 
   prefetchBoard(api: Api, projectId: number): void {
@@ -139,8 +163,8 @@ export class ProjectBoardCache {
           next: (res) => {
             if (epoch !== this.epoch) return;
             if ((this.boardWriteGen.get(projectId) ?? 0) !== gen) return;
-            const { items, columns } = extractBoard(res);
-            this.writeBoardSnapshot(projectId, items, columns);
+            const { items, columns, settings } = extractBoard(res);
+            this.writeBoardSnapshot(projectId, items, columns, settings);
           },
           error: () => undefined,
         });
@@ -175,8 +199,8 @@ export class ProjectBoardCache {
           next: (res) => {
             if (epoch !== this.epoch) return;
             if (kind === 'board') {
-              const { items, columns } = extractBoard(res);
-              this.putBoardIfAbsent(projectId, items, columns);
+              const { items, columns, settings } = extractBoard(res);
+              this.putBoardIfAbsent(projectId, items, columns, settings);
             } else {
               this.putBacklogIfAbsent(projectId, extractItems(res));
             }
@@ -209,9 +233,14 @@ export class ProjectBoardCache {
     return Number.isFinite(projectId) && projectId > 0 && columns.length >= 1;
   }
 
-  private writeBoardSnapshot(projectId: number, items: Item[], columns: Column[]): void {
+  private writeBoardSnapshot(
+    projectId: number,
+    items: Item[],
+    columns: Column[],
+    settings?: BoardSettings,
+  ): void {
     if (!this.isValidBoardPut(projectId, columns)) return;
-    this.boardSnapshots.set(projectId, cloneSnapshot(items, columns));
+    this.boardSnapshots.set(projectId, cloneSnapshot(items, columns, settings));
     this.bumpRevision();
   }
 
@@ -234,24 +263,34 @@ function extractItems(res: unknown): Item[] {
   return [];
 }
 
-function extractBoard(res: unknown): { items: Item[]; columns: Column[] } {
+function extractBoard(res: unknown): {
+  items: Item[];
+  columns: Column[];
+  settings?: BoardSettings;
+} {
   const items = extractItems(res);
   if (!res || typeof res !== 'object' || Array.isArray(res)) {
     return { items, columns: [] };
   }
   const raw = (res as { columns?: Column[] }).columns;
   const columns = Array.isArray(raw) ? raw.filter((c) => c && Number.isFinite(c.id)) : [];
-  return { items, columns };
+  const rawSettings = (res as { settings?: unknown }).settings;
+  const settings =
+    rawSettings && typeof rawSettings === 'object' && !Array.isArray(rawSettings)
+      ? (rawSettings as BoardSettings)
+      : undefined;
+  return { items, columns, settings };
 }
 
 function cloneList(list: Item[] | undefined): Item[] | undefined {
   return list ? list.map((i) => ({ ...i })) : undefined;
 }
 
-function cloneSnapshot(items: Item[], columns: Column[]): BoardSnapshot {
+function cloneSnapshot(items: Item[], columns: Column[], settings?: BoardSettings): BoardSnapshot {
   return {
     items: items.map((i) => ({ ...i })),
     columns: columns.map((c) => ({ ...c })),
+    ...(settings ? { settings: { ...settings } } : {}),
   };
 }
 
