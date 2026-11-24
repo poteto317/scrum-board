@@ -1,7 +1,14 @@
-.header-menu-root {
-  position: relative;
+/* ホスト（app-header-menu）が .app-header の flex の子なので、右端寄せはホストに付ける。
+   内側の .header-menu-root は flex の子ではなく、margin-left: auto が効かない。
+   display: block は任意の明示指定（flex の子はブロック化されるので、配置には影響しない）。 */
+:host {
+  display: block;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+.header-menu-root {
+  position: relative;
 }
 
 .header-menu-trigger {
