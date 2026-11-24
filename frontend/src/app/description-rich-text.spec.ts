@@ -29,6 +29,31 @@ describe('DescriptionRichText', () => {
     return f;
   }
 
+  it('reuses parsed segments across change detection and unrelated input changes', () => {
+    const f = mount({ text: '[see](https://example.com)', itemNumber: 7 });
+    const segments = f.componentInstance.segments();
+    f.detectChanges();
+    f.componentRef.setInput('canDelete', true);
+    f.componentRef.setInput('draggableImages', true);
+    f.detectChanges();
+    expect(f.componentInstance.segments()).toBe(segments);
+    expect(f.nativeElement.querySelector('a').href).toBe('https://example.com/');
+  });
+
+  it('reparses and updates the display when text or item number changes', () => {
+    const f = mount({ text: 'before', itemNumber: 7 });
+    const before = f.componentInstance.segments();
+    f.componentRef.setInput('text', buildAttachmentMarkup(7, 3, 'pic'));
+    f.detectChanges();
+    const image = f.componentInstance.segments();
+    expect(image).not.toBe(before);
+    expect(f.nativeElement.querySelector('img')).toBeTruthy();
+    f.componentRef.setInput('itemNumber', 8);
+    f.detectChanges();
+    expect(f.componentInstance.segments()).not.toBe(image);
+    expect(f.nativeElement.querySelector('img')).toBeNull();
+  });
+
   it('loads attachment images lazily and decodes them asynchronously', () => {
     const f = mount({ text: buildAttachmentMarkup(7, 3, 'pic'), itemNumber: 7 });
     const img = f.nativeElement.querySelector('img') as HTMLImageElement;

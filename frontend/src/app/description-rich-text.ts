@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
 import {
   SCRUM_ATTACHMENT_MIME,
   encodeAttachmentDragPayload,
@@ -70,9 +70,7 @@ export class DescriptionRichText {
   readonly draggableImages = input(false);
   readonly deleteImage = output<number>();
 
-  segments() {
-    return parseDescriptionLinks(this.text(), this.itemNumber());
-  }
+  readonly segments = computed(() => parseDescriptionLinks(this.text(), this.itemNumber()));
 
   onDragStart(attachmentId: number, alt: string, event: DragEvent): void {
     if (!this.draggableImages()) return;
