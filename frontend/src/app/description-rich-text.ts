@@ -19,6 +19,8 @@ import { parseDescriptionLinks } from './description-link';
             <img
               [src]="seg.src"
               [alt]="seg.alt"
+              loading="lazy"
+              decoding="async"
               [attr.draggable]="draggableImages() ? 'true' : 'false'"
               (dragstart)="onDragStart(seg.attachmentId, seg.alt, $event)"
             />

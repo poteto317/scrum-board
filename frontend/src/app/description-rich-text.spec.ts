@@ -29,6 +29,13 @@ describe('DescriptionRichText', () => {
     return f;
   }
 
+  it('loads attachment images lazily and decodes them asynchronously', () => {
+    const f = mount({ text: buildAttachmentMarkup(7, 3, 'pic'), itemNumber: 7 });
+    const img = f.nativeElement.querySelector('img') as HTMLImageElement;
+    expect(img.getAttribute('loading')).toBe('lazy');
+    expect(img.getAttribute('decoding')).toBe('async');
+  });
+
   it('sets custom MIME on image dragstart when draggableImages', () => {
     const markup = buildAttachmentMarkup(7, 3, 'pic');
     const f = mount({ text: `before ${markup} after`, itemNumber: 7, draggableImages: true });
