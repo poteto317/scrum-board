@@ -219,6 +219,38 @@ describe('Board shown from the cache on return (#124)', () => {
     f.destroy();
   });
 
+  it('keeps the cache in step with a column reorder, so the next return shows the new order', () => {
+    const { f, held, cache } = mountBoard({ cached: boardData(['A', 'B']) });
+    held.next(boardData(['A', 'B']));
+    held.complete();
+    const api = TestBed.inject(Api) as unknown as { reorderColumns: ReturnType<typeof vi.fn> };
+    const reordered = [
+      { id: 2, name: 'Doing', position: 0 },
+      { id: 1, name: 'Todo', position: 1 },
+    ];
+    api.reorderColumns.mockReturnValue(of({ columns: reordered }));
+    (f.componentInstance as unknown as { applyReorder(a: number, b: number): void }).applyReorder(0, 1);
+    expect(cache.getBoardSnapshot(1)?.columns.map((c) => c.id)).toEqual([2, 1]);
+    f.destroy();
+  });
+
+  it('keeps the cache in step with a layout switch, so the next return shows the new layout', () => {
+    const { f, held, cache } = mountBoard({ cached: boardData(['A', 'B']) });
+    held.next(boardData(['A', 'B']));
+    held.complete();
+    const deps = (
+      f.componentInstance as unknown as {
+        layoutSwitchDeps(): { updateData(fn: (d: never) => unknown): void };
+      }
+    ).layoutSwitchDeps();
+    deps.updateData(((d: { settings: object }) => ({
+      ...d,
+      settings: { ...d.settings, cardLayout: 'free' },
+    })) as never);
+    expect(cache.getBoardSnapshot(1)?.settings?.cardLayout).toBe('free');
+    f.destroy();
+  });
+
   it('shows the error panel, not the stale cache, when the request fails', () => {
     const { f, held } = mountBoard({ cached: boardData(['A']) });
     held.error({ error: { message: '失敗' } });

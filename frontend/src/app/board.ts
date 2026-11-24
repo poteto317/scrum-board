@@ -1109,9 +1109,14 @@ export class Board implements OnInit {
       setLayoutSwitching: (busy: boolean) => this.layoutSwitching.set(busy),
       setSettingsSaving: (busy: boolean) => this.settingsSaving.set(busy),
       getData: () => this.data(),
-      setData: (data: NormalizedBoardData) => this.data.set(withResolvedMobileColumnId(data)),
-      updateData: (fn: (data: NormalizedBoardData) => NormalizedBoardData) =>
-        this.data.update((d) => withResolvedMobileColumnId(fn(d))),
+      setData: (data: NormalizedBoardData) => {
+        this.data.set(withResolvedMobileColumnId(data));
+        this.rememberBoardCache(this.data());
+      },
+      updateData: (fn: (data: NormalizedBoardData) => NormalizedBoardData) => {
+        this.data.update((d) => withResolvedMobileColumnId(fn(d)));
+        this.rememberBoardCache(this.data());
+      },
       setReorderError: (message: string) => this.reorderError.set(message),
       setReorderConflict: (conflict: boolean) => this.reorderConflict.set(conflict),
       setReorderAnnouncement: (message: string) => this.reorderAnnouncement.set(message),
@@ -1269,6 +1274,7 @@ export class Board implements OnInit {
     this.reorderError.set('');
     this.reorderConflict.set(false);
     this.data.update((d) => ({ ...d, columns: nextColumns }));
+    this.rememberBoardCache(this.data());
     restoreFocus();
 
     this.api
@@ -1277,11 +1283,13 @@ export class Board implements OnInit {
       .subscribe({
         next: (res) => {
           this.data.update((d) => ({ ...d, columns: res.columns }));
+          this.rememberBoardCache(this.data());
           this.reorderAnnouncement.set(`${movedColumn.name}列を${toIndex + 1}番目に移動しました`);
           restoreFocus();
         },
         error: (e) => {
           this.data.update((d) => ({ ...d, columns: previousColumns }));
+          this.rememberBoardCache(this.data());
           this.reorderError.set(errorMessage(e));
           this.reorderConflict.set((e as { status?: number } | null)?.status === 409);
           this.reorderAnnouncement.set('列の移動を保存できませんでした');

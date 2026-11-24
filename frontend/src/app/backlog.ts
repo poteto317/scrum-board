@@ -311,7 +311,10 @@ export class Backlog implements OnInit {
     if (!useCache) return;
     const activeId = this.projectSession.activeId();
     // Unlike the board, the cache is keyed by project and holds no settings that could name another one.
-    if (activeId == null || this.projectSession.switching()) return;
+    // A deep link views a project other than the saved one, but this fetch is not scoped to it.
+    if (activeId == null || this.projectSession.switching() || this.projectSession.ephemeralActiveView()) {
+      return;
+    }
     const view = this.projectBoardCache.getBacklogView(activeId);
     if (!view) return;
     this.items.set(view.items);
@@ -404,7 +407,8 @@ export class Backlog implements OnInit {
 
   private rememberBacklogCache(items: Item[], columns: Column[]) {
     const activeId = this.projectSession.activeId();
-    if (activeId != null && activeId > 0) {
+    // Not while viewing a deep link: the fetch is not scoped to it, so the key would be wrong.
+    if (activeId != null && activeId > 0 && !this.projectSession.ephemeralActiveView()) {
       this.projectBoardCache.putBacklog(activeId, items, columns);
     }
   }
@@ -686,6 +690,7 @@ export class Backlog implements OnInit {
       .subscribe({
         next: (card) => {
           this.items.update((list) => [...list, card]);
+          this.rememberBacklogCache(this.items(), this.columns());
           this.modal.set(null);
         },
         error: (e) => this.formError.set(errorMessage(e)),
@@ -812,6 +817,7 @@ export class Backlog implements OnInit {
     this.reorderError.set('');
     this.reorderConflict.set(false);
     this.items.set(next);
+    this.rememberBacklogCache(next, this.columns());
     restoreFocus();
 
     this.api
@@ -820,11 +826,13 @@ export class Backlog implements OnInit {
       .subscribe({
         next: (res) => {
           this.items.set(res.items);
+          this.rememberBacklogCache(res.items, this.columns());
           this.reorderAnnouncement.set(`${formatItemNumber(moved.number)} を${toIndex + 1}番目に移動しました`);
           restoreFocus();
         },
         error: (e) => {
           this.items.set(previous);
+          this.rememberBacklogCache(previous, this.columns());
           this.reorderError.set(errorMessage(e));
           this.reorderConflict.set((e as { status?: number } | null)?.status === 409);
           this.reorderAnnouncement.set('バックログの移動を保存できませんでした');
