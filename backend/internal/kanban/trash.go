@@ -52,9 +52,7 @@ func scanTrashEntries(rows *sql.Rows) ([]TrashEntry, []int64, error) {
 			id := createdBy.Int64
 			e.ACL.CreatedByUserID = &id
 		}
-		if e.ACL.ViewAccess == "" {
-			e.ACL.ViewAccess = ViewAccessOpen
-		}
+		e.ACL.ViewAccess = NormalizeViewAccess(e.ACL.ViewAccess)
 		if e.ACL.ViewAccess == ViewAccessRestricted || e.ACL.EditAccess == EditAccessRestricted {
 			restricted = append(restricted, e.ID)
 		}
