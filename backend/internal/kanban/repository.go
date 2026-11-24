@@ -427,17 +427,17 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	}
 	columnChanged := p.ColumnID != nil && *p.ColumnID != sourceColumnID
 	if columnChanged {
-		sourceDone, err := isDoneColumn(ctx, tx, sourceColumnID)
+		sourceFinished, err := isFinishedColumn(ctx, tx, sourceColumnID)
 		if err != nil {
 			return Item{}, err
 		}
-		targetDone, err := isDoneColumn(ctx, tx, *p.ColumnID)
+		targetFinished, err := isFinishedColumn(ctx, tx, *p.ColumnID)
 		if err != nil {
 			return Item{}, err
 		}
-		if targetDone && !sourceDone {
+		if targetFinished && !sourceFinished {
 			c.DoneAt = &now
-		} else if !targetDone {
+		} else if !targetFinished {
 			c.DoneAt = nil
 		}
 		c.ColumnID = *p.ColumnID

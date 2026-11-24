@@ -104,3 +104,17 @@ func TestBuildCardReorderBatchSQL(t *testing.T) {
 		t.Fatalf("moved args len=%d want 11: %v", len(args), args)
 	}
 }
+
+func TestPlanCardReorderKeepsTheFinishedTimeBetweenFinishedColumns(t *testing.T) {
+	now := time.Now().UTC()
+	doneAt := now.Add(-time.Hour)
+	card := Item{ID: 1, ColumnID: 2, DoneAt: &doneAt}
+	// source and target are both finished (Done -> Close): the time is kept.
+	if plan := planCardReorder(card, 3, 0, nil, now, true, true); plan.DoneAt == nil || !plan.DoneAt.Equal(doneAt) {
+		t.Fatalf("Done->Close doneAt=%v; want %v", plan.DoneAt, doneAt)
+	}
+	// Close -> Todo clears it.
+	if plan := planCardReorder(card, 1, 0, nil, now, true, false); plan.DoneAt != nil {
+		t.Fatalf("Close->Todo doneAt=%v; want nil", plan.DoneAt)
+	}
+}

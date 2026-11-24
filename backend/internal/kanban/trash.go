@@ -71,14 +71,14 @@ SELECT id, project_id, column_id FROM items
 			return Item{}, err
 		}
 	} else {
-		columnDone := false
+		columnFinished := false
 		for _, column := range cols {
 			if column.ID == columnID {
-				columnDone = column.Name == "Done"
+				columnFinished = isFinishedColumnName(column.Name)
 				break
 			}
 		}
-		if !columnDone {
+		if !columnFinished {
 			if _, err = tx.ExecContext(ctx, "UPDATE items SET done_at=NULL WHERE id=?", id); err != nil {
 				return Item{}, err
 			}
