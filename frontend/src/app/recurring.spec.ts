@@ -157,6 +157,25 @@ describe('Recurring page', () => {
     };
   }
 
+  it('loads columns from boardMeta and never requests the full board (#118)', () => {
+    const board = vi.fn(() => {
+      throw new Error('GET /api/board must not be used by the recurring page');
+    });
+    const boardMeta = vi.fn(() =>
+      of({
+        columns: [
+          { id: 1, name: 'Todo', position: 0 },
+          { id: 2, name: 'Doing', position: 1 },
+        ],
+        settings: { cardLayout: 'pack', activeProjectId: 1 },
+      }),
+    );
+    const { f } = setup({ board, boardMeta });
+    expect(boardMeta).toHaveBeenCalled();
+    expect(board).not.toHaveBeenCalled();
+    f.destroy();
+  });
+
   it('shows empty only on successful zero-rule GET', () => {
     const { f } = setup({ listRecurringRules: vi.fn(() => of({ rules: [] })) });
     expect(f.nativeElement.textContent).toContain('繰り返しルールはまだありません');
