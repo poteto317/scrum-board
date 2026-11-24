@@ -30,7 +30,7 @@ nginx は、ハッシュ付きの JS / CSS にも `index.html` にも `Cache-Con
 
 ## 拡張子を足すとき
 
-`.woff2` など js/css 以外を長期キャッシュにする場合は、両方の `nginx.conf` で `map` の正規表現と `js|mjs|css` の `location` を同じ拡張子に揃え、`check-nginx-cache.sh` の正規表現も直す。
+`.woff2` など js/css 以外を長期キャッシュにする場合は、両方の `nginx.conf` で `map` の正規表現と `js|mjs|css` の `location` を同じ拡張子に揃え、`check-nginx-cache.sh` の正規表現と、`--selftest` の fixture・変異（`js-extension-changed` など）も直す。
 
 ## 範囲外
 
