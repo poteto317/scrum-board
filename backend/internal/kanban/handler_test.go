@@ -23,6 +23,7 @@ type memoryRepo struct {
 	defaultTemplateIDs []int64
 	settings           BoardSettings
 	settingsFail       error
+	boardMetaFail      error
 	aclListFail        error
 	listFilter         *WorkspaceListFilters
 	headerMenu         *WorkspaceHeaderMenu
@@ -90,6 +91,20 @@ func (m *memoryRepo) BoardForProject(_ context.Context, projectID int64) (Board,
 		return Board{}, ErrProject
 	}
 	return m.boardForScope(projectID)
+}
+
+func (m *memoryRepo) BoardMeta(_ context.Context) (BoardMeta, error) {
+	if m.boardMetaFail != nil {
+		return BoardMeta{}, m.boardMetaFail
+	}
+	cols := slices.Clone(m.columns)
+	slices.SortFunc(cols, func(a, b Column) int {
+		if c := cmp.Compare(a.Position, b.Position); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return BoardMeta{Columns: cols, Settings: m.resolvedSettings(cols)}, nil
 }
 
 func (m *memoryRepo) boardForScope(itemProjectID int64) (Board, error) {

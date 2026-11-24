@@ -107,6 +107,52 @@ func (r MySQLRepository) BoardForProject(ctx context.Context, projectID int64) (
 	return r.loadBoard(ctx, projectID)
 }
 
+// boardHead is what loadBoardHead resolves inside one transaction. BoardMeta returns
+// Columns and Settings; loadBoard also needs Projects and Active to scope the items.
+type boardHead struct {
+	Columns  []Column
+	Settings BoardSettings
+	Projects []Project
+	Active   int64
+}
+
+// loadBoardHead reads columns, settings and projects inside tx and resolves the mobile
+// column and active project. Shared by loadBoard and BoardMeta so the rules live in one place.
+func loadBoardHead(ctx context.Context, tx *sql.Tx) (boardHead, error) {
+	columns, err := listOrderedColumns(ctx, tx)
+	if err != nil {
+		return boardHead{}, err
+	}
+	rawSettings, err := loadBoardSettings(ctx, tx)
+	if err != nil {
+		return boardHead{}, err
+	}
+	projects, err := listProjects(ctx, tx)
+	if err != nil {
+		return boardHead{}, err
+	}
+	settings := rawSettings
+	settings.MobileBoardColumnID = resolveMobileBoardColumnID(rawSettings.MobileBoardColumnID, columns)
+	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
+	settings.ActiveProjectID = active
+	return boardHead{Columns: columns, Settings: settings, Projects: projects, Active: active}, nil
+}
+
+// BoardMeta returns columns and resolved settings without reading items.
+func (r MySQLRepository) BoardMeta(ctx context.Context) (BoardMeta, error) {
+	empty := BoardMeta{Columns: []Column{}, Settings: BoardSettings{CardLayout: CardLayoutPack}}
+	tx, err := r.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return empty, err
+	}
+	defer tx.Rollback()
+	head, err := loadBoardHead(ctx, tx)
+	if err != nil {
+		return empty, err
+	}
+	return BoardMeta{Columns: head.Columns, Settings: head.Settings}, tx.Commit()
+}
+
 // loadBoard loads columns/settings with resolved active. If itemProjectID > 0, items are
 // for that project (must exist); otherwise items use the resolved active project.
 func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Board, error) {
@@ -117,23 +163,13 @@ func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Bo
 		return b, err
 	}
 	defer tx.Rollback()
-	b.Columns, err = listOrderedColumns(ctx, tx)
+	head, err := loadBoardHead(ctx, tx)
 	if err != nil {
 		return b, err
 	}
-	rawSettings, err := loadBoardSettings(ctx, tx)
-	if err != nil {
-		return b, err
-	}
-	projects, err := listProjects(ctx, tx)
-	if err != nil {
-		return b, err
-	}
-	b.Settings = rawSettings
-	b.Settings.MobileBoardColumnID = resolveMobileBoardColumnID(rawSettings.MobileBoardColumnID, b.Columns)
-	active := resolveActiveProjectID(rawSettings.ActiveProjectID, projects)
-	b.Settings.ActiveProjectID = active
-	scope, err := resolveItemListScope(active, itemProjectID, projects)
+	b.Columns = head.Columns
+	b.Settings = head.Settings
+	scope, err := resolveItemListScope(head.Active, itemProjectID, head.Projects)
 	if err != nil {
 		return b, err
 	}
