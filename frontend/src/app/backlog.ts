@@ -22,7 +22,7 @@ import { mergeBacklogBoardPoll } from './backlog-board-poll';
 import {
   ConditionalGetResult,
   resolveBacklogConditional,
-  resolveBoardConditional,
+  resolveBoardMetaConditional,
 } from './conditional-get';
 import { AiChatContext } from './ai-chat-context';
 import { toAiChatOptions } from './ai-chat-target';
@@ -31,7 +31,7 @@ import { errorMessage } from './api-error';
 import { AuthSession } from './auth-session';
 import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
 import { applyBoardDataWithActiveSync } from './board-active-sync';
-import { normalizeBoardData } from './board-data';
+import { normalizeBoardMeta } from './board-data';
 import { textLimit } from './form-validation';
 import { formatItemNumber } from './item-number';
 import { viewAccessLabel } from './item-acl';
@@ -59,7 +59,7 @@ import {
 import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-filter';
 import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
-import { BoardData, Item, Column } from './models';
+import { BoardMeta, Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import { itemsForActiveProject } from './project-items';
 import { ProjectBoardCache } from './project-board-cache';
@@ -86,7 +86,7 @@ export class Backlog implements OnInit {
   private backlogLoadGeneration = 0;
   /** ETag by resource for fetchKey 0 on this page. */
   private backlogEtag = '';
-  private boardEtag = '';
+  private boardMetaEtag = '';
   private projectSwitchSub?: Subscription;
   private readonly router = inject(Router);
   private readonly location = inject(Location);
@@ -254,10 +254,10 @@ export class Backlog implements OnInit {
     this.reorderError.set('');
     this.reorderConflict.set(false);
     this.backlogEtag = '';
-    this.boardEtag = '';
+    this.boardMetaEtag = '';
     forkJoin({
       backlog: this.backlogGetConditional(),
-      board: this.boardGetConditional(),
+      board: this.boardMetaGetConditional(),
     })
       .pipe(
         finalize(() => {
@@ -269,10 +269,11 @@ export class Backlog implements OnInit {
           if (generation !== this.backlogLoadGeneration) return;
           if (backlog.status !== 'ok' || board.status !== 'ok') return;
           this.rememberEtagsFromOk(backlog, board);
-          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board.body), () => {
+          const normalized = normalizeBoardMeta(board.body);
+          applyBoardDataWithActiveSync(this.projectSession, normalized, (meta) => {
             this.rememberBacklogCache(backlog.body.items);
             this.items.set(backlog.body.items);
-            this.columns.set(board.body.columns);
+            this.columns.set(meta.columns);
             // Schedule after data arrives so the first afterNextRender sees .backlog-scroll
             // (not the loading-only first paint).
             this.scheduleBacklogScrollRestore();
@@ -290,7 +291,7 @@ export class Backlog implements OnInit {
     const prev = { items: this.items(), columns: this.columns() };
     return forkJoin({
       backlog: this.backlogGetConditional(this.backlogEtag || null),
-      board: this.boardGetConditional(this.boardEtag || null),
+      board: this.boardMetaGetConditional(this.boardMetaEtag || null),
     }).pipe(
       tap(({ backlog, board }) => this.rememberEtagsFromOk(backlog, board)),
       map(({ backlog, board }) => mergeBacklogBoardPoll(prev, backlog, board)),
@@ -298,10 +299,11 @@ export class Backlog implements OnInit {
     );
   }
 
-  private boardGetConditional(
+  /** 列と設定だけ（アイテム本体は backlog 側から取る）。GET /api/board/meta。 */
+  private boardMetaGetConditional(
     etag?: string | null,
-  ): Observable<ConditionalGetResult<BoardData>> {
-    return resolveBoardConditional(this.api, undefined, etag);
+  ): Observable<ConditionalGetResult<BoardMeta>> {
+    return resolveBoardMetaConditional(this.api, etag);
   }
 
   private backlogGetConditional(
@@ -312,10 +314,10 @@ export class Backlog implements OnInit {
 
   private rememberEtagsFromOk(
     backlog: ConditionalGetResult<{ items: Item[] }>,
-    board: ConditionalGetResult<BoardData>,
+    board: ConditionalGetResult<BoardMeta>,
   ) {
     if (backlog.status === 'ok' && backlog.etag) this.backlogEtag = backlog.etag;
-    if (board.status === 'ok' && board.etag) this.boardEtag = board.etag;
+    if (board.status === 'ok' && board.etag) this.boardMetaEtag = board.etag;
   }
 
   /**
@@ -332,10 +334,10 @@ export class Backlog implements OnInit {
     }
     this.projectSwitchSub?.unsubscribe();
     this.backlogEtag = '';
-    this.boardEtag = '';
+    this.boardMetaEtag = '';
     this.projectSwitchSub = forkJoin({
       backlog: this.backlogGetConditional(),
-      board: this.boardGetConditional(),
+      board: this.boardMetaGetConditional(),
     })
       .pipe(
         finalize(() => {
@@ -350,10 +352,11 @@ export class Backlog implements OnInit {
           if (backlog.status !== 'ok' || board.status !== 'ok') return;
           this.rememberEtagsFromOk(backlog, board);
           this.error.set('');
-          applyBoardDataWithActiveSync(this.projectSession, normalizeBoardData(board.body), () => {
+          const normalized = normalizeBoardMeta(board.body);
+          applyBoardDataWithActiveSync(this.projectSession, normalized, (meta) => {
             this.rememberBacklogCache(backlog.body.items);
             this.items.set(backlog.body.items);
-            this.columns.set(board.body.columns);
+            this.columns.set(meta.columns);
           });
         },
         error: (e) => {

@@ -1,7 +1,7 @@
 import { ApplicationRef } from '@angular/core';
 import { provideRouter, Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
-import { of, Subject, throwError } from 'rxjs';
+import { Observable, of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Api } from './api';
 import { Backlog } from './backlog';
@@ -10,7 +10,8 @@ import {
   readReturnTo,
   saveBacklogScroll,
 } from './list-scroll-session';
-import { Item, Column } from './models';
+import { BoardMeta, Item, Column } from './models';
+import type { ConditionalGetResult } from './conditional-get';
 import { TODO_COLUMN_MISSING } from './todo-column';
 import {
   COMMAND_ITEM_MENU_EMPTY,
@@ -570,6 +571,124 @@ describe('Backlog live refresh', () => {
     api.backlog.mockReturnValue(of({ items: [] }));
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.componentInstance.items()).toHaveLength(before);
+    f.destroy();
+  });
+});
+
+describe('Backlog board meta wiring (#118)', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function setup() {
+    const cards = makeCards();
+    const columns = makeColumns();
+    const api = {
+      backlog: vi.fn(() => of({ items: cards })),
+      // The full board must never be requested: backlog needs columns and settings only (L-060).
+      board: vi.fn(() => {
+        throw new Error('GET /api/board must not be used by backlog');
+      }),
+      boardConditional: vi.fn(() => {
+        throw new Error('GET /api/board must not be used by backlog');
+      }),
+      boardMetaConditional: vi.fn(
+        (_etag?: string | null): Observable<ConditionalGetResult<BoardMeta>> =>
+          of({
+            status: 'ok' as const,
+            etag: '"m1"',
+            body: { columns, settings: { cardLayout: 'pack' as const, activeProjectId: 1 } },
+          }),
+      ),
+      patchBoardSettings: vi.fn(() =>
+        of({ settings: { cardLayout: 'pack' as const, activeProjectId: 2 } }),
+      ),
+      createItem: vi.fn(),
+      reorderBacklog: vi.fn(),
+      listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+      putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+    };
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [provideRouter([]), { provide: Api, useValue: api }],
+    });
+    return { api, columns };
+  }
+
+  it('load() reads columns and settings from boardMetaConditional, not board', () => {
+    vi.useFakeTimers();
+    const { api, columns } = setup();
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    expect(api.boardMetaConditional).toHaveBeenCalledTimes(1);
+    expect(api.boardMetaConditional.mock.calls[0][0]).toBeUndefined();
+    expect(api.board).not.toHaveBeenCalled();
+    expect(api.boardConditional).not.toHaveBeenCalled();
+    expect(f.componentInstance.columns()).toEqual(columns);
+    f.destroy();
+  });
+
+  it('polling sends the remembered meta ETag and never requests the full board', async () => {
+    vi.useFakeTimers();
+    const { api } = setup();
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(api.boardMetaConditional.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(api.boardMetaConditional.mock.calls[1][0]).toBe('"m1"');
+    expect(api.board).not.toHaveBeenCalled();
+    expect(api.boardConditional).not.toHaveBeenCalled();
+    f.destroy();
+  });
+
+  it('keeps the previous columns when only the meta poll is 304 and the backlog changed', async () => {
+    vi.useFakeTimers();
+    const { api, columns } = setup();
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    expect(f.componentInstance.columns()).toEqual(columns);
+    api.boardMetaConditional.mockReturnValue(of({ status: 'notModified' as const, etag: '"m1"' }));
+    const next = [...makeCards(), { ...makeCards()[0], id: 70, number: 70, title: 'Polled while 304' }];
+    api.backlog.mockReturnValue(of({ items: next }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.componentInstance.items().some((c) => c.number === 70)).toBe(true);
+    expect(f.componentInstance.columns()).toEqual(columns);
+    f.destroy();
+  });
+
+  it('survives a meta response without columns (normalized to an empty list)', () => {
+    vi.useFakeTimers();
+    const { api } = setup();
+    api.boardMetaConditional.mockReturnValue(
+      of({
+        status: 'ok' as const,
+        etag: '"m2"',
+        body: { settings: { cardLayout: 'pack' as const } } as unknown as BoardMeta,
+      }),
+    );
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    expect(f.componentInstance.columns()).toEqual([]);
+    expect(f.componentInstance.error()).toBe('');
+    f.destroy();
+  });
+
+  it('reload after a project switch reads boardMetaConditional without an ETag', async () => {
+    vi.useFakeTimers();
+    const { api } = setup();
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    const session = TestBed.inject(ProjectSession);
+    session.activeId.set(1);
+    const before = api.boardMetaConditional.mock.calls.length;
+    session.switchTo(2).subscribe({ error: () => undefined });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.boardMetaConditional.mock.calls.length).toBe(before + 1);
+    expect(api.boardMetaConditional.mock.calls[before][0]).toBeUndefined();
+    expect(api.board).not.toHaveBeenCalled();
+    expect(api.boardConditional).not.toHaveBeenCalled();
     f.destroy();
   });
 });
