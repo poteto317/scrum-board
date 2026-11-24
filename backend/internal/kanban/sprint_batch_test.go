@@ -87,8 +87,7 @@ func TestSprintDetailReadsItemsInOneGoWhateverTheSize(t *testing.T) {
 
 // What the response says, not only how it was read: a member sees the open items, an admin all.
 func TestSprintListAndDetailCountOnlyWhatTheViewerMaySee(t *testing.T) {
-	repo, h, sess, ids := sprintBatchFixture(t, 2, 4) // per sprint: 2 open, 2 restricted
-	_ = repo
+	_, h, sess, ids := sprintBatchFixture(t, 2, 4) // per sprint: 2 open, 2 restricted
 	var list struct {
 		Sprints []Sprint `json:"sprints"`
 	}
@@ -119,7 +118,15 @@ func TestSprintListAndDetailCountOnlyWhatTheViewerMaySee(t *testing.T) {
 	if detail.ItemCount != 4 || len(detail.Items) != 4 {
 		t.Fatalf("admin's detail: itemCount %d, items %d (want all 4)", detail.ItemCount, len(detail.Items))
 	}
-	if body := w.Body.String(); strings.Contains(body, "viewAccess") || strings.Contains(body, "createdByUserId") {
-		t.Fatalf("the visibility columns must not reach the response: %s", body)
+	for name, body := range map[string]string{
+		"admin's detail": w.Body.String(),
+		"member's list":  requestWithCookie(h, "GET", "/api/sprints", "", sess).Body.String(),
+		"admin's list":   request(h, "GET", "/api/sprints", "").Body.String(),
+	} {
+		for _, column := range []string{"viewAccess", "editAccess", "createdByUserId"} {
+			if strings.Contains(body, column) {
+				t.Fatalf("%s: %s must not reach the response: %s", name, column, body)
+			}
+		}
 	}
 }

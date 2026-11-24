@@ -3,6 +3,7 @@ package kanban
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -129,13 +130,15 @@ func mysqlSprintItemIDs(t *testing.T, r MySQLRepository, sprintID int64) []int64
 
 // The order in which ReplaceSprintItems reports a member that cannot join: not found or deleted,
 // then archived, then another project, then another open sprint. Each case here fails for one
-// reason only, and the last one for two (the first reason in the order must win).
+// reason only, and the last two for two reasons each (the first reason in the order must win).
 func TestMySQLReplaceSprintItemsReportsTheFirstReasonAMemberCannotJoin(t *testing.T) {
 	for _, batch := range []int{1000, 2} { // 2: the members to check span several statements
-		old := sprintBatchSize
-		sprintBatchSize = batch
-		t.Cleanup(func() { sprintBatchSize = old })
-		reportsTheFirstReason(t)
+		t.Run("batch "+strconv.Itoa(batch), func(t *testing.T) {
+			old := sprintBatchSize
+			sprintBatchSize = batch
+			t.Cleanup(func() { sprintBatchSize = old })
+			reportsTheFirstReason(t)
+		})
 	}
 }
 

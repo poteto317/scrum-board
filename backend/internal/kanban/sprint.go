@@ -484,7 +484,7 @@ FROM items WHERE id IN (`+placeholders(len(chunk))+`) ORDER BY id FOR UPDATE`, i
 // must be seen, or the same item could end up in two sprints.
 func itemsInOtherOpenSprints(ctx context.Context, tx *sql.Tx, ids []int64, sprintID int64) (map[int64]struct{}, error) {
 	out := map[int64]struct{}{}
-	// Only the duplicates are dropped here (the order does not matter for a read).
+	// Sorted and without duplicates: this read locks (FOR SHARE), so it takes its locks in id order.
 	for chunk := range slices.Chunk(sortedUniqueIDs(ids), sprintBatchSize) {
 		args := append([]any{SprintStatusPlanned, SprintStatusActive, sprintID}, int64Args(chunk)...)
 		rows, err := tx.QueryContext(ctx, `
