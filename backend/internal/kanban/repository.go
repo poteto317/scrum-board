@@ -73,9 +73,6 @@ func scanCard(s scanner) (Item, error) {
 	return c, nil
 }
 
-// numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
-// 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
-// FOR UPDATE で使っても結合先の行までロックしない。
 // cardFieldsHead / cardFieldsTail は、説明とソリューションの列の前後（カンマと空白を含む）。
 // 全文用（cardFields）と一覧用（cardListFields）で、この 2 つの間だけを差し替える。
 const cardFieldsHead = "c.id, n.item_number, c.column_id, c.project_id, c.title, "
@@ -90,6 +87,9 @@ const listDescriptionRunes = 500
 // cardListFields は一覧の応答用。説明を先頭 listDescriptionRunes 文字に切り、ソリューションは空にする。
 // 列の並びは cardFields と同じなので scanCard で読める。全文は詳細の取得（cardFields）で返す。
 const cardListFields = cardFieldsHead + "LEFT(c.description, 500), ''" + cardFieldsTail
+// numberedCards は item_pr_links を結合しない。PR リンクは 1 カード複数行なので、
+// 結合すると PR の数だけカードが重複する。PR URL は attachPRURL(s) で別クエリで付ける。
+// FOR UPDATE で使っても結合先の行までロックしない。
 const numberedCards = " FROM items c JOIN item_numbers n ON n.item_id=c.id"
 
 func loadCard(ctx context.Context, q interface {
