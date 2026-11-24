@@ -38,7 +38,7 @@ check_conf() {
     in_map && /\}/ { in_map=0 }
     in_map && /default[[:space:]]+"no-cache";/ && step==0 { step=1; next }
     in_map && /\^\/api\/[[:space:]]+"";/ && step==1 { step=2; next }
-    in_map && /js\|mjs\|css/ && /"public, max-age=31536000, immutable";/ && step==2 { step=3 }
+    in_map && step==2 && $0 ~ /^[[:space:]]*~\*\\\.\(\?:js\|mjs\|css\)\$[[:space:]]+"public, max-age=31536000, immutable";[[:space:]]*$/ { step=3 }
     END { exit step==3 ? 0 : 1 }
   ' || {
     echo "error: $label map \$uri \$static_cache_control must list, in order: default \"no-cache\"; ^/api/ \"\"; js|mjs|css immutable" >&2; return 1
@@ -105,6 +105,8 @@ CONF
   expect_fail cacheable-default 's/"no-cache"/"public"/'
   expect_fail no-immutable 's/, immutable//'
   expect_fail js-extension-changed '/map/,/^}/ s/js|mjs|css/png/'
+  expect_fail js-anchor-dropped '/map/,/^}/ s/css)\$/css)/'
+  expect_fail js-case-sensitive '/map/,/^}/ s/~\*/~/'
   expect_fail api-not-excluded '/\^\/api\//d'
   expect_fail commented-default 's/^\(    default .*\)$/    # \1/'
   # add_header moved into a location (awk, not sed: BSD sed has no \n in replacements)
