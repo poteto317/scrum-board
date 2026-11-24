@@ -128,6 +128,15 @@ func (m *memoryRepo) Columns(_ context.Context) ([]Column, error) {
 	return m.sortedColumns(), nil
 }
 
+// listShaped は一覧の応答用の形（cardListFields と同じ）にする。説明は先頭 listDescriptionRunes 文字、ソリューションは空。
+func listShaped(it Item) Item {
+	if r := []rune(it.Description); len(r) > listDescriptionRunes {
+		it.Description = string(r[:listDescriptionRunes])
+	}
+	it.Solution = ""
+	return it
+}
+
 func (m *memoryRepo) boardForScope(itemProjectID int64) (Board, error) {
 	cols := m.sortedColumns()
 	active := m.resolvedActive()
@@ -139,7 +148,7 @@ func (m *memoryRepo) boardForScope(itemProjectID int64) (Board, error) {
 	b := Board{Columns: cols, Items: []Item{}, Settings: settings}
 	for _, c := range m.cards {
 		if m.living(c) && c.ArchivedAt == nil && m.cardProjectID(c) == scope {
-			b.Items = append(b.Items, c)
+			b.Items = append(b.Items, listShaped(c))
 		}
 	}
 	slices.SortFunc(b.Items, func(a, b Item) int {
@@ -668,7 +677,7 @@ func (m *memoryRepo) backlogForScope(itemProjectID int64) ([]Item, error) {
 	cards := []Item{}
 	for _, c := range m.cards {
 		if m.living(c) && m.cardProjectID(c) == scope {
-			cards = append(cards, c)
+			cards = append(cards, listShaped(c))
 		}
 	}
 	slices.SortFunc(cards, func(a, b Item) int {
@@ -1423,5 +1432,55 @@ func TestByNumberWithoutProjectIDDoesNotReadWholeBoard(t *testing.T) {
 	}
 	if got := repo.boardCalls.Load() - boardBefore; got != 0 {
 		t.Fatalf("Board was read %d times", got)
+	}
+}
+
+func TestListResponsesTrimDescriptionAndDropSolution(t *testing.T) {
+	long := strings.Repeat("あ", listDescriptionRunes+50)
+	repo := fresh()
+	repo.cards[18] = Item{ID: 18, Number: 3, ColumnID: 1, Title: "long", Description: long, Solution: "sol"}
+	h := NewHandler(repo)
+	for _, path := range []string{"/api/board", "/api/backlog"} {
+		w := request(h, "GET", path, "")
+		if w.Code != 200 {
+			t.Fatalf("%s status=%d %s", path, w.Code, w.Body)
+		}
+		var resp struct {
+			Items []Item `json:"items"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatal(err)
+		}
+		items := resp.Items
+		var got *Item
+		for i := range items {
+			if items[i].ID == 18 {
+				got = &items[i]
+			}
+		}
+		if got == nil {
+			t.Fatalf("%s: item 18 missing", path)
+		}
+		if n := len([]rune(got.Description)); n != listDescriptionRunes {
+			t.Fatalf("%s: description runes=%d", path, n)
+		}
+		if got.Solution != "" {
+			t.Fatalf("%s: solution=%q", path, got.Solution)
+		}
+	}
+	w := request(h, "GET", "/api/items/by-number/3", "")
+	var full Item
+	if err := json.Unmarshal(w.Body.Bytes(), &full); err != nil {
+		t.Fatal(err)
+	}
+	if full.Description != long || full.Solution != "sol" {
+		t.Fatalf("detail is trimmed: desc runes=%d solution=%q", len([]rune(full.Description)), full.Solution)
+	}
+}
+
+func TestCardListFieldsDifferFromCardFieldsOnlyInDescriptionAndSolution(t *testing.T) {
+	want := strings.Replace(cardFields, "c.description, c.solution", fmt.Sprintf("LEFT(c.description, %d), ''", listDescriptionRunes), 1)
+	if cardListFields != want {
+		t.Fatalf("cardListFields drifted from cardFields:\n got=%s\nwant=%s", cardListFields, want)
 	}
 }

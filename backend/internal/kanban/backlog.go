@@ -194,7 +194,7 @@ func lockAllCards(ctx context.Context, tx *sql.Tx) ([]int64, error) {
 }
 
 func listBacklogCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT "+cardFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.backlog_position,c.id", projectID)
+	rows, err := tx.QueryContext(ctx, "SELECT "+cardListFields+numberedCards+" WHERE c.project_id=? AND c.deleted_at IS NULL AND c.archived_at IS NULL ORDER BY c.backlog_position,c.id", projectID)
 	if err != nil {
 		return nil, err
 	}
