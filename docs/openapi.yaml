@@ -870,7 +870,7 @@ paths:
             Vary:
               schema:
                 type: string
-              description: Cookie（別のセッションが前のキャッシュを使わない）
+              description: Cookie, Authorization（別のセッションが前のキャッシュを使わない）
           content:
             image/jpeg:
               schema:
@@ -902,7 +902,7 @@ paths:
             Vary:
               schema:
                 type: string
-              description: Cookie
+              description: Cookie, Authorization
         '401':
           description: 未ログインかつ非 public
           content:
