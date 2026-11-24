@@ -144,8 +144,9 @@ const attachmentCacheControl = "private, max-age=3600"
 func setAttachmentCacheHeaders(w http.ResponseWriter, etag string) {
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", attachmentCacheControl)
-	// A different session (another user on the same browser) must not reuse the cached copy.
-	w.Header().Add("Vary", "Cookie")
+	// A different session (another user on the same browser; the session may also come from an
+	// Authorization header) must not reuse the cached copy.
+	w.Header().Add("Vary", "Cookie, Authorization")
 }
 
 func attachmentETag(a Attachment) string {
