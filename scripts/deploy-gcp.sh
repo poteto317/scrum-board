@@ -178,7 +178,7 @@ echo "==> Configuring docker auth for ${GCP_REGION}-docker.pkg.dev"
 gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
 
 echo "==> Building image from deploy/Dockerfile (linux/amd64 for Cloud Run) tag=${IMAGE_TAG}"
-docker build --platform linux/amd64 -f deploy/Dockerfile -t "$IMAGE_URI" -t "$IMAGE_URI_LATEST" .
+docker buildx build --load --platform linux/amd64 -f deploy/Dockerfile -t "$IMAGE_URI" -t "$IMAGE_URI_LATEST" .
 
 echo "==> Pushing ${IMAGE_URI} and :latest"
 docker push "$IMAGE_URI"
