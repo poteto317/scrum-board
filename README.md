@@ -14,7 +14,7 @@
 - アイテムは列内に縦積み（列ごとの縦スクロールは無く、長い列はページを縦スクロール）。列が増えたらボード内で横スクロール
 - ボードは5秒ごとに最新の状態へ自動で更新（アイテムや列のドラッグ中・保存中・レイアウト切替中・追加モーダル表示中は更新しません）
 - プロダクトバックログ（全ステータスの優先順位リスト。ドラッグ／キーボードで並び替え、バックログからも新規追加・常に Todo）
-- Doneから10日経過したアイテムのプロジェクト別アーカイブ（ヘッダーの「アーカイブ」から参照、編集権限があればDoneへ解除）
+- Done・Closeから10日経過したアイテムのプロジェクト別アーカイブ（ヘッダーの「アーカイブ」から参照、編集権限があれば元の列へ解除）
 - MySQLへの永続化
 - APIで下書き（タイトル・説明）を渡すと、AI（Claude）が整えたTodoのアイテムを起票（任意。`ANTHROPIC_API_KEY`を設定したときだけで、料金が発生し、下書きがAnthropicへ送信されます。[OpenAPI: refined](docs/openapi.yaml)）
 
@@ -189,8 +189,8 @@ HTTP API の**契約正本**は [OpenAPI（`docs/openapi.yaml`）](docs/openapi.
 | PATCH | `/api/items/{id}` | アイテム部分更新 |
 | DELETE | `/api/items/{id}` | 削除 |
 | GET | `/api/archive?projectId={id}` | プロジェクト別アーカイブ一覧 |
-| POST | `/api/items/{id}/unarchive?projectId={id}` | アーカイブ解除してDoneへ戻す |
-| POST | `/api/archive/auto-archive` | Doneから10日経過したアイテムを自動アーカイブ（Scheduler token または管理者セッション） |
+| POST | `/api/items/{id}/unarchive?projectId={id}` | アーカイブ解除して元の列（Done または Close）へ戻す |
+| POST | `/api/archive/auto-archive` | Done・Closeから10日経過したアイテムを自動アーカイブ（Scheduler token または管理者セッション） |
 | GET | `/api/command-templates` | コマンドテンプレート一覧 |
 | POST | `/api/command-templates` | コマンドテンプレート追加 |
 | PATCH | `/api/command-templates/{id}` | コマンドテンプレート更新 |
