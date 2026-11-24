@@ -159,11 +159,11 @@ export class Api {
   ): Observable<ConditionalGetResult<BoardData>> {
     return getJSONConditional<BoardData>(this.http, '/api/board', { projectId, etag });
   }
-  /** 列と設定だけ（アイテム本体なし）。アイテムが要らない画面はこちらを使う。 */
+  /** Columns and settings only (no items). Use this when a screen does not need the items. */
   boardMeta() {
     return this.http.get<BoardMeta>('/api/board/meta');
   }
-  /** boardMeta() with If-None-Match: 304 is mapped to notModified (backlog polling). */
+  /** boardMeta() with If-None-Match: a 304 is mapped to notModified (backlog polling). */
   boardMetaConditional(etag?: string | null): Observable<ConditionalGetResult<BoardMeta>> {
     return getJSONConditional<BoardMeta>(this.http, '/api/board/meta', { etag });
   }

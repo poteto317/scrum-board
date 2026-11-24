@@ -73,7 +73,6 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
 export type NormalizedBoardData = BoardData & { settings: BoardSettings; items: Item[] };
 export type NormalizedBoardMeta = { columns: BoardMeta['columns']; settings: BoardSettings };
 
-/** API / poll 応答を FE 用に正規化。settings・offsetY 欠落時は pack / 0（要件 6）。 */
 function normalizeOptionalInt(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.trunc(value);
@@ -101,6 +100,7 @@ function normalizeBoardSettings(raw: Partial<BoardSettings> | null | undefined):
   return settingsRaw;
 }
 
+/** API / poll 応答を FE 用に正規化。settings・offsetY 欠落時は pack / 0（要件 6）。 */
 export function normalizeBoardData(raw: Partial<BoardData> | null | undefined): NormalizedBoardData {
   return {
     columns: raw?.columns ? [...raw.columns] : [],
