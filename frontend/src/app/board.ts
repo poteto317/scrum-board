@@ -176,12 +176,14 @@ export class Board implements OnInit {
   private readonly commandCopy = new CopyCommandFeedback(this.destroyRef, this.copyStatus);
   private autoScrollTimer: ReturnType<typeof setInterval> | null = null;
   private dragPointer: { x: number; y: number } | null = null;
+  private dragMovedSub: Subscription | null = null;
   private dragMovedSinceTick = false;
   private itemDragGrabOffsetY = 0;
   private readonly cardHeights = signal<ReadonlyMap<number, number>>(new Map());
-  private readonly stopAutoScrollOnDestroy = this.destroyRef.onDestroy(() =>
-    this.stopAutoScrollTimer(),
-  );
+  private readonly releaseDragOnDestroy = this.destroyRef.onDestroy(() => {
+    this.stopAutoScrollTimer();
+    this.stopDragMoved();
+  });
   readonly copyLinkAnnouncement = this.linkCopy.message;
   readonly copyCommandAnnouncement = this.commandCopy.message;
   readonly copyFeedback = this.copyStatus.message;
@@ -886,6 +888,10 @@ export class Board implements OnInit {
 
   onItemDragStarted(event: CdkDragStart<Item>, card: Item) {
     this.draggingItemId.set(card.id);
+    // Subscribed here, not as a (cdkDragMoved) output in the template: a template output marks the
+    // view dirty on every pointer move, and the whole board would be checked again each time.
+    this.stopDragMoved();
+    this.dragMovedSub = event.source.moved.subscribe((moved) => this.onItemDragMoved(moved));
     const pointerY = pointerClientY(event.event);
     const rect = event.source.element.nativeElement.getBoundingClientRect();
     this.itemDragGrabOffsetY = pointerY == null ? 0 : pointerY - rect.top;
@@ -906,8 +912,14 @@ export class Board implements OnInit {
   /** CDK emits this and then the drop, one straight after the other, so no poll can run in between. */
   onItemDragEnded() {
     this.draggingItemId.set(null);
+    this.stopDragMoved();
     this.stopAutoScrollTimer();
     this.dragPointer = null;
+  }
+
+  private stopDragMoved() {
+    this.dragMovedSub?.unsubscribe();
+    this.dragMovedSub = null;
   }
 
   private stopAutoScrollTimer() {

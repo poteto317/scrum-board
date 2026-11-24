@@ -100,7 +100,12 @@ function dropIntoDoing(component: Board) {
   );
 }
 
+/** The `moved` stream of the fake CdkDrag started by startItemDrag, per component. */
+const dragMoved = new WeakMap<Board, Subject<{ pointerPosition: { x: number; y: number } }>>();
+
 function startItemDrag(component: Board, item: Item) {
+  const moved = new Subject<{ pointerPosition: { x: number; y: number } }>();
+  dragMoved.set(component, moved);
   component.onItemDragStarted(
     {
       event: new MouseEvent('mousedown', { clientY: 100 }),
@@ -121,6 +126,7 @@ function startItemDrag(component: Board, item: Item) {
               }) as DOMRect,
           },
         },
+        moved,
       },
     } as never,
     item,
@@ -386,6 +392,27 @@ describe('Board card reorder state', () => {
     const down = page.scrollTop;
     move(200, 5); // the viewport's top edge
     expect(page.scrollTop).toBeLessThan(down);
+  });
+
+  it('takes the pointer from the drag it started (not from a template output), and stops listening when it ends', async () => {
+    const { f, component } = await setup(vi.fn());
+    const scroller = f.nativeElement.querySelector('.board-scroll') as HTMLElement;
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      right: 1000,
+      bottom: 600,
+      width: 1000,
+      height: 600,
+    } as DOMRect);
+    scroller.scrollLeft = 0;
+    startItemDrag(component, initialBoard().items[0]);
+    const moved = dragMoved.get(component)!;
+    expect(moved.observed).toBe(true);
+    moved.next({ pointerPosition: { x: 990, y: 300 } });
+    expect(scroller.scrollLeft).toBeGreaterThan(0);
+    component.onItemDragEnded();
+    expect(moved.observed).toBe(false);
   });
 
   // A column drag keeps scrolling while its pointer rests at an edge (dragover repeats); a card drag must too,
