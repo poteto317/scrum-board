@@ -1,7 +1,9 @@
 package kanban
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -80,5 +82,44 @@ func TestSprintDetailReadsItemsInOneGoWhateverTheSize(t *testing.T) {
 	}
 	if as != al || al > 1 {
 		t.Fatalf("ACL reads: small %d, large %d (want one, the same for both)", as, al)
+	}
+}
+
+// What the response says, not only how it was read: a member sees the open items, an admin all.
+func TestSprintListAndDetailCountOnlyWhatTheViewerMaySee(t *testing.T) {
+	repo, h, sess, ids := sprintBatchFixture(t, 2, 4) // per sprint: 2 open, 2 restricted
+	_ = repo
+	var list struct {
+		Sprints []Sprint `json:"sprints"`
+	}
+	w := requestWithCookie(h, "GET", "/api/sprints", "", sess)
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil || w.Code != 200 {
+		t.Fatalf("list %d %s %v", w.Code, w.Body, err)
+	}
+	if len(list.Sprints) != 2 {
+		t.Fatalf("sprints %+v", list.Sprints)
+	}
+	for _, s := range list.Sprints {
+		if s.ItemCount != 2 || len(s.Items) != 0 {
+			t.Fatalf("member's list: itemCount %d, items %d (want 2 visible, no items)", s.ItemCount, len(s.Items))
+		}
+	}
+	var detail Sprint
+	w = requestWithCookie(h, "GET", "/api/sprints/"+itoa(ids[0]), "", sess)
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil || w.Code != 200 {
+		t.Fatalf("detail %d %s %v", w.Code, w.Body, err)
+	}
+	if detail.ItemCount != 2 || len(detail.Items) != 2 {
+		t.Fatalf("member's detail: itemCount %d, items %d", detail.ItemCount, len(detail.Items))
+	}
+	w = request(h, "GET", "/api/sprints/"+itoa(ids[0]), "")
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil || w.Code != 200 {
+		t.Fatalf("admin detail %d %s %v", w.Code, w.Body, err)
+	}
+	if detail.ItemCount != 4 || len(detail.Items) != 4 {
+		t.Fatalf("admin's detail: itemCount %d, items %d (want all 4)", detail.ItemCount, len(detail.Items))
+	}
+	if body := w.Body.String(); strings.Contains(body, "viewAccess") || strings.Contains(body, "createdByUserId") {
+		t.Fatalf("the visibility columns must not reach the response: %s", body)
 	}
 }

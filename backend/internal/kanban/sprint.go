@@ -479,7 +479,9 @@ FROM items WHERE id IN (`+placeholders(len(chunk))+`) ORDER BY id FOR UPDATE`, i
 }
 
 // itemsInOtherOpenSprints returns which of ids are already in a planned or active sprint other
-// than sprintID, sprintBatchSize ids at a time.
+// than sprintID, sprintBatchSize ids at a time. It is a current (locking) read, not the snapshot the
+// transaction started with: a replacement that committed while this one waited for the item rows
+// must be seen, or the same item could end up in two sprints.
 func itemsInOtherOpenSprints(ctx context.Context, tx *sql.Tx, ids []int64, sprintID int64) (map[int64]struct{}, error) {
 	out := map[int64]struct{}{}
 	// Only the duplicates are dropped here (the order does not matter for a read).
@@ -488,7 +490,7 @@ func itemsInOtherOpenSprints(ctx context.Context, tx *sql.Tx, ids []int64, sprin
 		rows, err := tx.QueryContext(ctx, `
 SELECT DISTINCT si.item_id FROM sprint_items si
 JOIN sprints s ON s.id=si.sprint_id
-WHERE s.status IN (?,?) AND si.sprint_id<>? AND si.item_id IN (`+placeholders(len(chunk))+`)`, args...)
+WHERE s.status IN (?,?) AND si.sprint_id<>? AND si.item_id IN (`+placeholders(len(chunk))+`) FOR SHARE`, args...)
 		if err != nil {
 			return nil, err
 		}
