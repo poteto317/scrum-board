@@ -28,6 +28,9 @@
 5. GCS からの読み取りで、`Attrs` の呼び出しが無い（`NewReader` の 1 回だけ）。GCS のクライアントは単体テストで差し替えられないため、コードの確認で足りるとする。
 6. アップロードの `ChunkSize` が 256 KiB の倍数で、既定（16 MiB）より小さい（定数をテストで確認）。
 7. エラー応答（404 など）には、ETag と長いキャッシュの指定を付けない。
+8. 200 と 304 の `Vary` は `Cookie, Authorization`（200 は `TestAttachmentContentIsCachedForAnHourWithAnETag`、304 は `TestAttachmentContentAnswers304WithoutABodyWhenTheETagMatches`）。
+9. 配信の種類は、DB に保存した値を優先し、空のときだけ GCS の値にする（`TestMySQLOpenAttachmentContentPrefersTheStoredContentType`）。
+10. OpenAPI の 200 の content は、実際の画像の種類（jpeg / png / gif / webp）に直す（これまで `application/octet-stream` で、実際の応答とずれていた）。
 
 ## 実装プラン
 
