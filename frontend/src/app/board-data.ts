@@ -1,11 +1,12 @@
 import {
   BoardData,
+  BoardMeta,
   BoardSettings,
   CardLayout,
   Item,
 } from './models';
 
-export type { BoardData, BoardSettings, CardLayout, Item };
+export type { BoardData, BoardMeta, BoardSettings, CardLayout, Item };
 
 export function normalizeCardLayout(value: unknown): CardLayout {
   return value === 'free' ? 'free' : 'pack';
@@ -70,6 +71,7 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
 }
 
 export type NormalizedBoardData = BoardData & { settings: BoardSettings; items: Item[] };
+export type NormalizedBoardMeta = { columns: BoardMeta['columns']; settings: BoardSettings };
 
 /** API / poll 応答を FE 用に正規化。settings・offsetY 欠落時は pack / 0（要件 6）。 */
 function normalizeOptionalInt(value: unknown): number | undefined {
@@ -79,14 +81,15 @@ function normalizeOptionalInt(value: unknown): number | undefined {
   return undefined;
 }
 
-export function normalizeBoardData(raw: Partial<BoardData> | null | undefined): NormalizedBoardData {
+/** 設定の正規化（cardLayout の補完、id の整数化、未定義キーの削除）。normalizeBoardData と normalizeBoardMeta が共有する。 */
+function normalizeBoardSettings(raw: Partial<BoardSettings> | null | undefined): BoardSettings {
   const settingsRaw: BoardSettings =
-    raw?.settings && typeof raw.settings === 'object'
+    raw && typeof raw === 'object'
       ? {
-          ...raw.settings,
-          cardLayout: normalizeCardLayout(raw.settings.cardLayout),
-          mobileBoardColumnId: normalizeOptionalInt(raw.settings.mobileBoardColumnId),
-          activeProjectId: normalizeOptionalInt(raw.settings.activeProjectId),
+          ...raw,
+          cardLayout: normalizeCardLayout(raw.cardLayout),
+          mobileBoardColumnId: normalizeOptionalInt(raw.mobileBoardColumnId),
+          activeProjectId: normalizeOptionalInt(raw.activeProjectId),
         }
       : { cardLayout: 'pack' };
   if (settingsRaw.mobileBoardColumnId === undefined) {
@@ -95,9 +98,23 @@ export function normalizeBoardData(raw: Partial<BoardData> | null | undefined): 
   if (settingsRaw.activeProjectId === undefined) {
     delete settingsRaw.activeProjectId;
   }
+  return settingsRaw;
+}
+
+export function normalizeBoardData(raw: Partial<BoardData> | null | undefined): NormalizedBoardData {
   return {
     columns: raw?.columns ? [...raw.columns] : [],
     items: (raw?.items ?? []).map((item) => normalizeItem(item)),
-    settings: settingsRaw,
+    settings: normalizeBoardSettings(raw?.settings),
+  };
+}
+
+/** GET /api/board/meta の応答を FE 用に正規化（アイテム本体は持たない）。 */
+export function normalizeBoardMeta(
+  raw: Partial<BoardMeta> | null | undefined,
+): NormalizedBoardMeta {
+  return {
+    columns: raw?.columns ? [...raw.columns] : [],
+    settings: normalizeBoardSettings(raw?.settings),
   };
 }

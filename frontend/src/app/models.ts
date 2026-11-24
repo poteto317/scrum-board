@@ -80,6 +80,12 @@ export interface BoardData {
   /** 欠落時は pack（normalizeBoardData で補完）。 */
   settings?: BoardSettings;
 }
+/** GET /api/board/meta の応答: BoardData からアイテム本体を除いた列と設定。 */
+export interface BoardMeta {
+  columns: Column[];
+  /** 欠落時は pack（normalizeBoardMeta で補完）。 */
+  settings?: BoardSettings;
+}
 /** POST /api/items body — dueAt は create 非対応（PATCH のみ）。 */
 export type ItemInput = Pick<Item, 'title' | 'description' | 'columnId'> &
   Partial<Pick<Item, 'prUrls' | 'relatedItems' | 'assignee' | 'closeReason' | 'solution' | 'favorite' | 'projectId'>>;

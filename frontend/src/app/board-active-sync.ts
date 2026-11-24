@@ -1,11 +1,15 @@
-import type { NormalizedBoardData } from './board-data';
+import type { BoardSettings } from './models';
 import type { ProjectSession } from './project-session';
 
-/** Apply board payload after syncing active project from settings (single hydrate path). */
-export function applyBoardDataWithActiveSync(
+/**
+ * Apply a board (or board meta) payload after syncing active project from settings
+ * (single hydrate path). Accepts anything with normalized settings, so the items-free
+ * GET /api/board/meta result can use it too.
+ */
+export function applyBoardDataWithActiveSync<T extends { settings: BoardSettings }>(
   session: Pick<ProjectSession, 'syncActiveFromBoard'>,
-  board: NormalizedBoardData,
-  apply: (board: NormalizedBoardData) => void,
+  board: T,
+  apply: (board: T) => void,
 ): void {
   session.syncActiveFromBoard(board.settings.activeProjectId, false);
   apply(board);
