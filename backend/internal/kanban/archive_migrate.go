@@ -50,10 +50,11 @@ WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='items' AND COLUMN_NAME=?`, column.
 	return r.backfillDoneAt(ctx)
 }
 
+// The query lists the same columns as isFinishedColumnName; keep them in sync.
 func (r MySQLRepository) backfillDoneAt(ctx context.Context) error {
 	rows, err := r.DB.QueryContext(ctx, `SELECT i.id, i.updated_at
 FROM items i JOIN board_columns c ON c.id=i.column_id
-WHERE i.done_at IS NULL AND BINARY c.name=BINARY 'Done'
+WHERE i.done_at IS NULL AND (BINARY c.name=BINARY 'Done' OR BINARY c.name=BINARY 'Close')
 ORDER BY i.id`)
 	if err != nil {
 		return err
@@ -84,7 +85,7 @@ ORDER BY i.id`)
 		if err != nil {
 			return fmt.Errorf("read latest status history for item %d: %w", item.id, err)
 		}
-		if found && event.Note == "Done" {
+		if found && isFinishedColumnName(event.Note) {
 			at = event.OccurredAt.UTC()
 		}
 		if _, err = r.DB.ExecContext(ctx, `UPDATE items SET done_at=? WHERE id=? AND done_at IS NULL`, at, item.id); err != nil {

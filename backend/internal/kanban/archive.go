@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// archiveAfterDone is how long an item stays on the board after it became Done or Close.
 const archiveAfterDone = 10 * 24 * time.Hour
 const archiveBatchSize = 100
 
@@ -69,6 +70,7 @@ func (r MySQLRepository) ArchiveDoneItems(ctx context.Context) (int, error) {
 	cutoff := now.Add(-archiveAfterDone)
 	var archived int
 	var cursor int64
+	// The SQL below must list the same columns as isFinishedColumnName.
 	for {
 		tx, err := r.DB.BeginTx(ctx, nil)
 		if err != nil {
@@ -81,7 +83,7 @@ func (r MySQLRepository) ArchiveDoneItems(ctx context.Context) (int, error) {
 		rows, err := tx.QueryContext(ctx, `SELECT i.id, i.done_at
 FROM items i JOIN board_columns c ON c.id=i.column_id
 WHERE i.id>? AND i.deleted_at IS NULL AND i.archived_at IS NULL
-  AND BINARY c.name=BINARY 'Done'
+  AND (BINARY c.name=BINARY 'Done' OR BINARY c.name=BINARY 'Close')
   AND (i.done_at IS NULL OR i.done_at<=?)
 ORDER BY i.id LIMIT ? FOR UPDATE`, cursor, cutoff, archiveBatchSize)
 		if err != nil {
@@ -137,13 +139,13 @@ func archiveDoneCandidate(ctx context.Context, tx *sql.Tx, id int64, doneAt sql.
 		t := doneAt.Time
 		doneAtTime = &t
 	}
-	latestDoneAt, err := latestDoneTransitionAt(ctx, tx, id)
+	latestDoneAt, err := latestFinishedTransitionAt(ctx, tx, id)
 	if err != nil {
-		return false, fmt.Errorf("read Done transition history for item %d: %w", id, err)
+		return false, fmt.Errorf("read Done/Close transition history for item %d: %w", id, err)
 	}
 	effective := effectiveDoneAt(doneAtTime, latestDoneAt)
 	if effective == nil {
-		slog.WarnContext(ctx, "archive item has no effective Done time", "item_id", id)
+		slog.WarnContext(ctx, "archive item has no effective Done/Close time", "item_id", id)
 		return false, nil
 	}
 	if !isArchiveDue(effective, cutoff) {
@@ -173,7 +175,10 @@ func archiveDoneCandidate(ctx context.Context, tx *sql.Tx, id int64, doneAt sql.
 	return true, nil
 }
 
-func latestDoneTransitionAt(ctx context.Context, q interface {
+// latestFinishedTransitionAt is when the item last entered Done or Close from another column, from
+// its history. A Done<->Close move is not an entry: it keeps the finish time, so it must not restart
+// the archive timer.
+func latestFinishedTransitionAt(ctx context.Context, q interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, itemID int64) (*time.Time, error) {
 	rows, err := q.QueryContext(ctx, `SELECT occurred_at, changes
@@ -195,7 +200,7 @@ ORDER BY occurred_at DESC, id DESC`, itemID)
 			return nil, fmt.Errorf("decode item %d history changes: %w", itemID, err)
 		}
 		for _, change := range changes {
-			if change.Field == "status" && change.After == "Done" {
+			if change.Field == "status" && isFinishedColumnName(change.After) && !isFinishedColumnName(change.Before) {
 				at := occurredAt
 				return &at, nil
 			}
@@ -220,11 +225,11 @@ func (r MySQLRepository) RestoreArchivedItem(ctx context.Context, id, projectID 
 	if err != nil {
 		return Item{}, dbError(err)
 	}
-	doneColumn, err := findDoneColumn(ctx, tx)
+	restoreColumn, err := findRestoreColumn(ctx, tx, before.ColumnID)
 	if err != nil {
 		return Item{}, err
 	}
-	position, err := nextCardPosition(ctx, tx, doneColumn.ID, projectID)
+	position, err := nextCardPosition(ctx, tx, restoreColumn.ID, projectID)
 	if err != nil {
 		return Item{}, err
 	}
@@ -234,7 +239,7 @@ func (r MySQLRepository) RestoreArchivedItem(ctx context.Context, id, projectID 
 	}
 	offsetY := 0
 	if layout.CardLayout == CardLayoutFree {
-		offsetY, err = nextFreeOffsetY(ctx, tx, doneColumn.ID, projectID)
+		offsetY, err = nextFreeOffsetY(ctx, tx, restoreColumn.ID, projectID)
 		if err != nil {
 			return Item{}, err
 		}
@@ -242,7 +247,7 @@ func (r MySQLRepository) RestoreArchivedItem(ctx context.Context, id, projectID 
 	now := time.Now().UTC()
 	result, err := tx.ExecContext(ctx, `UPDATE items
 SET column_id=?, position=?, offset_y=?, archived_at=NULL, done_at=?
-WHERE id=? AND project_id=? AND deleted_at IS NULL AND archived_at IS NOT NULL`, doneColumn.ID, position, offsetY, now, id, projectID)
+WHERE id=? AND project_id=? AND deleted_at IS NULL AND archived_at IS NOT NULL`, restoreColumn.ID, position, offsetY, now, id, projectID)
 	if err != nil {
 		return Item{}, err
 	}
@@ -267,10 +272,17 @@ WHERE id=? AND project_id=? AND deleted_at IS NULL AND archived_at IS NOT NULL`,
 	return after, nil
 }
 
-func findDoneColumn(ctx context.Context, tx *sql.Tx) (Column, error) {
+// findRestoreColumn is the column an archived item goes back to: the one it was archived in (Done or
+// Close). An item whose column is no longer a finished one goes to Done, as before.
+func findRestoreColumn(ctx context.Context, tx *sql.Tx, itemColumnID int64) (Column, error) {
 	cols, err := listOrderedColumns(ctx, tx)
 	if err != nil {
 		return Column{}, err
+	}
+	for _, column := range cols {
+		if column.ID == itemColumnID && isFinishedColumnName(column.Name) {
+			return column, nil
+		}
 	}
 	for _, column := range cols {
 		if column.Name == "Done" {
