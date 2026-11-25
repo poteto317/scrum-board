@@ -72,6 +72,7 @@ export class RecurringSession {
         if (generation !== this.mutateGeneration) return;
         const cur = this.rules();
         if (cur) this.rules.set(withCreatedRule(cur, created));
+        else this.fetchList();
       }),
     );
   }
