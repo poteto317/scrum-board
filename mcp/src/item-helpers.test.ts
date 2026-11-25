@@ -39,6 +39,14 @@ describe('resolvedItemId', () => {
   it('returns null when projectId mismatches', () => {
     expect(resolvedItemId({ id: 99, number: 8, projectId: 2 }, 8, 1)).toBeNull();
   });
+
+  it('returns null for non-positive or non-integer ids', () => {
+    expect(resolvedItemId({ id: 0, number: 8, projectId: 1 }, 8, 1)).toBeNull();
+    expect(resolvedItemId({ id: -1, number: 8, projectId: 1 }, 8, 1)).toBeNull();
+    expect(resolvedItemId({ id: 1.5, number: 8, projectId: 1 }, 8, 1)).toBeNull();
+    expect(resolvedItemId({ id: Number.NaN, number: 8, projectId: 1 }, 8, 1)).toBeNull();
+    expect(resolvedItemId({ id: Number.POSITIVE_INFINITY, number: 8, projectId: 1 }, 8, 1)).toBeNull();
+  });
 });
 
 describe('patchedItemMatches', () => {
@@ -58,6 +66,14 @@ describe('findColumnId', () => {
   it('returns null when missing', () => {
     expect(findColumnId([{ id: 1, name: 'Todo' }], 'Review')).toBeNull();
     expect(findColumnId(undefined, 'Todo')).toBeNull();
+  });
+
+  it('ignores non-positive or non-integer column ids', () => {
+    expect(findColumnId([{ id: 0, name: 'Todo' }], 'Todo')).toBeNull();
+    expect(findColumnId([{ id: -1, name: 'Todo' }], 'Todo')).toBeNull();
+    expect(findColumnId([{ id: 1.5, name: 'Todo' }], 'Todo')).toBeNull();
+    expect(findColumnId([{ id: Number.NaN, name: 'Todo' }], 'Todo')).toBeNull();
+    expect(findColumnId([{ id: Number.POSITIVE_INFINITY, name: 'Todo' }], 'Todo')).toBeNull();
   });
 });
 

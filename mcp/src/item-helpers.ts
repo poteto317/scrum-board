@@ -12,6 +12,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function isPositiveIntId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
 /** Build PATCH body; `projectId` on args is lookup-only and never included. */
 export function collectUpdatePatch(args: UpdateItemArgs): Record<string, unknown> | null {
   const patch: Record<string, unknown> = {};
@@ -30,7 +34,7 @@ export function resolvedItemId(
 ): number | null {
   if (!isRecord(data)) return null;
   const id = data.id;
-  if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) return null;
+  if (!isPositiveIntId(id)) return null;
   if (data.number !== number) return null;
   if (projectId !== undefined && data.projectId !== projectId) return null;
   return id;
@@ -49,7 +53,9 @@ export function findColumnId(columns: unknown, columnName: string): number | nul
   if (!Array.isArray(columns)) return null;
   for (const c of columns) {
     if (!isRecord(c)) continue;
-    if (c.name === columnName && typeof c.id === 'number') return c.id;
+    if (c.name === columnName && isPositiveIntId(c.id)) {
+      return c.id;
+    }
   }
   return null;
 }
