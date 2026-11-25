@@ -60,7 +60,7 @@ Basic Auth が必要な場合は `env` に `SCRUM_BOARD_AUTH_USER` / `SCRUM_BOAR
 | `get_board` | 列・アイテム・settings（アイテムの説明は先頭 500 文字まで、`solution` は空文字。全文は `get_item`） | なし |
 | `set_active_project` | アクティブプロジェクト切替 | **必須** `activeProjectId` |
 | `get_item` | 番号で取得 | **必須** `number`；任意 `projectId` |
-| `create_item` | 作成（列名を board から id 解決） | **必須** `title`, `description`, `column`；任意 `projectId`, `assignee` |
+| `create_item` | 作成（列名を GET /api/board/meta から id 解決） | **必須** `title`, `description`, `column`；任意 `projectId`, `assignee` |
 | `update_status` | 列名で移動 | **必須** `number`, `status`；任意 `projectId` |
 | `update_assignee` | 担当者変更（空文字でクリア） | **必須** `number`, `assignee`；任意 `projectId` |
 | `update_item` | フィールド部分更新 | **必須** `number`；任意 `projectId`（**解決用のみ**）とパッチ（`title` / `description` / `dueAt` / `closeReason` / `prUrls`）のうち 1 つ以上 |

@@ -4,7 +4,7 @@ import type { HttpClient } from './http.js';
 import {
   collectUpdatePatch,
   patchedItemMatches,
-  resolveColumnIdFromBoard,
+  resolveColumnIdFromBoardMeta,
   resolvedItemId,
   type UpdateItemArgs,
 } from './item-helpers.js';
@@ -93,10 +93,10 @@ export function createToolHandlers(client: HttpClient) {
       projectId?: number;
       assignee?: string;
     }): Promise<ToolResult> {
-      const board = await client.request<unknown>('GET', '/api/board');
-      if (!board.ok) return errText(board.reason);
+      const meta = await client.request<unknown>('GET', '/api/board/meta');
+      if (!meta.ok) return errText(meta.reason);
 
-      const columnId = resolveColumnIdFromBoard(board.data, args.column);
+      const columnId = resolveColumnIdFromBoardMeta(meta.data, args.column);
       if (columnId === null) return errText('column_not_found');
 
       const body: Record<string, unknown> = {

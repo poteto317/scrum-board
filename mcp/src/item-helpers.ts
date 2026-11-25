@@ -60,8 +60,8 @@ export function findColumnId(columns: unknown, columnName: string): number | nul
   return null;
 }
 
-/** Resolve column id from a GET /api/board JSON body. */
-export function resolveColumnIdFromBoard(boardData: unknown, columnName: string): number | null {
-  if (!isRecord(boardData)) return null;
-  return findColumnId(boardData.columns, columnName);
+/** Resolve column id from a GET /api/board/meta JSON body. */
+export function resolveColumnIdFromBoardMeta(metaData: unknown, columnName: string): number | null {
+  if (!isRecord(metaData)) return null;
+  return findColumnId(metaData.columns, columnName);
 }

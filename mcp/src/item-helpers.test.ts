@@ -3,7 +3,7 @@ import {
   collectUpdatePatch,
   findColumnId,
   patchedItemMatches,
-  resolveColumnIdFromBoard,
+  resolveColumnIdFromBoardMeta,
   resolvedItemId,
 } from './item-helpers.js';
 
@@ -77,14 +77,14 @@ describe('findColumnId', () => {
   });
 });
 
-describe('resolveColumnIdFromBoard', () => {
-  it('reads columns from board body', () => {
+describe('resolveColumnIdFromBoardMeta', () => {
+  it('reads columns from board meta body', () => {
     expect(
-      resolveColumnIdFromBoard({ columns: [{ id: 2, name: 'Doing' }] }, 'Doing'),
+      resolveColumnIdFromBoardMeta({ columns: [{ id: 2, name: 'Doing' }] }, 'Doing'),
     ).toBe(2);
   });
 
-  it('returns null for null board', () => {
-    expect(resolveColumnIdFromBoard(null, 'Todo')).toBeNull();
+  it('returns null for null board meta', () => {
+    expect(resolveColumnIdFromBoardMeta(null, 'Todo')).toBeNull();
   });
 });
