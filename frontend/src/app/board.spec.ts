@@ -2671,4 +2671,110 @@ describe('Board layout styles', () => {
       restore();
     }
   });
+
+  async function mountBoardForLayout() {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: singleCardBoard,
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: {
+              board: { query: string; statusIds: number[] };
+              backlog: { query: string; statusIds: number[] };
+            }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    return f;
+  }
+
+  it('removes the hero heading section and uses h1.active-tab for the board heading', async () => {
+    const f = await mountBoardForLayout();
+    try {
+      const root: HTMLElement = f.nativeElement;
+      const text = root.textContent ?? '';
+      expect(text).not.toContain('YOUR WORK, ONE STEP AT A TIME');
+      expect(text).not.toContain('小さく始めて');
+      expect(text).not.toContain('前へ進める');
+      expect(text).not.toContain('アイデアをタスクに。ひとつずつ、着実に。');
+      expect(root.querySelector('.page-heading')).toBeNull();
+
+      const h1s = root.querySelectorAll('h1');
+      expect(h1s.length).toBe(1);
+      const tab = root.querySelector('h1.active-tab');
+      expect(tab).not.toBeNull();
+      expect(tab?.textContent).toContain('かんばんボード');
+    } finally {
+      f.destroy();
+    }
+  });
+
+  function scopedBoardCssText(scopeAttr: string): string {
+    return Array.from(document.querySelectorAll('style'))
+      .filter((el) => (el.textContent ?? '').includes(`[${scopeAttr}]`))
+      .map((el) => el.textContent ?? '')
+      .join('\n');
+  }
+
+  it('removes unused hero CSS and keeps compact .active-tab / toolbar contracts in board.css', async () => {
+    const f = await mountBoardForLayout();
+    try {
+      const main = f.nativeElement.querySelector('main.board-page') as HTMLElement | null;
+      expect(main).not.toBeNull();
+      const scopeAttr = main!.getAttributeNames().find((n) => n.startsWith('_ngcontent-'));
+      expect(scopeAttr).toMatch(/^_ngcontent-/);
+      const boardCss = scopedBoardCssText(scopeAttr!);
+      expect(boardCss).toContain('.board-toolbar');
+      expect(boardCss).not.toMatch(/(?:^|[},;\s])\.page-heading(?:[.#:[\s,{]|$)/);
+      expect(boardCss).not.toMatch(/(?:^|[},;\s])\.eyebrow(?:[.#:[\s,{]|$)/);
+      expect(boardCss).not.toMatch(/(?:^|[},;\s])\.heading-dot(?:[.#:[\s,{]|$)/);
+      expect(boardCss).not.toMatch(/(?:^|[},;\s])\.mobile-break(?:[.#:[\s,{]|$)/);
+      expect(boardCss).not.toMatch(/(?:^|[},;\s])h1(?:[.#:[\s,{]|$)/);
+
+      expect(boardCss).toMatch(/\.board-toolbar(?:\[[^\]]*\])?\s*\{[^}]*margin-top:\s*12px/s);
+      const activeTabMatch = boardCss.match(/\.active-tab(?:\[[^\]]*\])?\s*\{[^}]*\}/);
+      expect(activeTabMatch).not.toBeNull();
+      const activeTabRule = activeTabMatch![0];
+      expect(activeTabRule).toMatch(/font-size:\s*14px/);
+      expect(activeTabRule).toMatch(/margin:\s*0(?=[;}\s])/);
+      expect(activeTabRule).toMatch(/letter-spacing:\s*normal/);
+      expect(activeTabRule).toMatch(/line-height:\s*normal/);
+    } finally {
+      f.destroy();
+    }
+  });
+
+  it('keeps h1.active-tab compact against injected global h1 rules', async () => {
+    const tag = document.createElement('style');
+    tag.textContent =
+      'h1{font-size:36px;letter-spacing:-1px;line-height:1.4;font-weight:650;margin:24px 0}';
+    document.head.appendChild(tag);
+    try {
+      const f = await mountBoardForLayout();
+      try {
+        const h1 = f.nativeElement.querySelector('h1.active-tab') as HTMLElement;
+        expect(h1).not.toBeNull();
+        const style = getComputedStyle(h1);
+        expect(style.fontSize).toBe('14px');
+        expect(style.letterSpacing).toBe('normal');
+        expect(style.lineHeight).toBe('normal');
+        expect(style.marginTop).toBe('0px');
+        expect(style.marginBottom).toBe('0px');
+      } finally {
+        f.destroy();
+      }
+    } finally {
+      tag.remove();
+    }
+  });
 });

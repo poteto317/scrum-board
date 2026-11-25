@@ -1,16 +1,9 @@
 <main class="board-page" [class.board-mobile]="isBoardMobile()">
   <div class="breadcrumb">ワークスペース <span>/</span> <strong>かんばん</strong></div>
-  <section class="page-heading">
-    <div>
-      <div class="eyebrow">YOUR WORK, ONE STEP AT A TIME</div>
-      <h1>小さく始めて、<br class="mobile-break" />前へ進める<span class="heading-dot">.</span></h1>
-      <p>アイデアをタスクに。ひとつずつ、着実に。</p>
-    </div>
-  </section>
   <section class="board-toolbar" aria-label="ボードの概要">
-    <div class="active-tab">
+    <h1 class="active-tab">
       <span class="board-icon" aria-hidden="true">▥</span> かんばんボード
-    </div>
+    </h1>
     <span class="toolbar-count">{{ filteredItemCount() }} アイテム</span>
     @if (isBoardMobile()) {
       <label class="mobile-column-select">
