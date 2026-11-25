@@ -12,17 +12,39 @@ describe('header-menu pure helpers', () => {
   it('resolves pageKind from url', () => {
     expect(resolvePageKind('/')).toBe('board');
     expect(resolvePageKind('/backlog')).toBe('backlog');
-    expect(resolvePageKind('/trash')).toBeNull();
-    expect(resolvePageKind('/archive')).toBeNull();
-    expect(resolvePageKind('/users')).toBeNull();
-    expect(resolvePageKind('/projects')).toBeNull();
-    expect(resolvePageKind('/recurring')).toBeNull();
-    expect(resolvePageKind('/settings')).toBeNull();
+    expect(resolvePageKind('/trash')).toBe('board');
+    expect(resolvePageKind('/archive')).toBe('board');
+    expect(resolvePageKind('/users')).toBe('board');
+    expect(resolvePageKind('/projects')).toBe('board');
+    expect(resolvePageKind('/recurring')).toBe('board');
+    expect(resolvePageKind('/settings')).toBe('board');
+    expect(resolvePageKind('/login')).toBeNull();
     expect(resolvePageKind('/items/12')).toBe('itemDetail');
     expect(resolvePageKind('/items/12/solution')).toBe('itemDetail');
     expect(resolvePageKind('/items/12/solution?project=1')).toBe('itemDetail');
     expect(resolvePageKind('/unknown')).toBeNull();
     expect(resolvePageKind('/items/foo')).toBeNull();
+  });
+
+  it('secondary routes share board catalog visibility (L-060)', () => {
+    const boardIds = catalogIdsForPageKind('board');
+    const hiddenPrefs = { hiddenIds: ['open_projects'] };
+    for (const url of [
+      '/trash',
+      '/archive',
+      '/users',
+      '/projects',
+      '/recurring',
+      '/settings',
+    ]) {
+      const kind = resolvePageKind(url);
+      expect(kind).toBe('board');
+      expect(visibleMenuItemIds(kind!, { hiddenIds: [] })).toEqual(boardIds);
+      expect(visibleMenuItemIds(kind!, hiddenPrefs)).toEqual(
+        boardIds.filter((id) => id !== 'open_projects'),
+      );
+    }
+    expect(resolvePageKind('/login')).toBeNull();
   });
 
   it('lists catalog ids per pageKind without cross-kind leakage', () => {

@@ -459,8 +459,8 @@ describe('Header open_recurring', () => {
     expect(catalogLabel('open_recurring', 'itemDetail')).toBe('繰り返し');
   });
 
-  it('resolvePageKind(/recurring) is null', () => {
-    expect(resolvePageKind('/recurring')).toBeNull();
+  it('resolvePageKind(/recurring) is board (card142)', () => {
+    expect(resolvePageKind('/recurring')).toBe('board');
   });
 
   it('has /recurring route with authGuard', async () => {

@@ -1,10 +1,14 @@
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { App } from './app';
 import { HeaderMenu } from './header-menu.component';
+
+@Component({ standalone: true, template: '' })
+class BlankRoute {}
 
 const menuPrefs = {
   board: { hiddenIds: [] as string[] },
@@ -110,5 +114,40 @@ describe('HeaderMenu component', () => {
     const group = f.nativeElement.querySelector('[aria-label="メニュー設定"]');
     expect(group?.getAttribute('role')).toBe('group');
     expect(group?.querySelector('input[type="checkbox"]')).toBeTruthy();
+  });
+
+  it('on /trash shows board open_* items and settings select defaults to board (card142)', async () => {
+    const api = {
+      headerMenu: vi.fn(() => of(menuPrefs)),
+    };
+    TestBed.configureTestingModule({
+      imports: [HeaderMenu],
+      providers: [
+        provideRouter([{ path: 'trash', component: BlankRoute }]),
+        { provide: Api, useValue: api },
+      ],
+    });
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/trash');
+    const f = TestBed.createComponent(HeaderMenu);
+    f.detectChanges();
+    expect(f.componentInstance.pageKind()).toBe('board');
+
+    const btn = f.nativeElement.querySelector('#header-menu-trigger') as HTMLButtonElement;
+    btn.click();
+    f.detectChanges();
+    const projects = f.nativeElement.querySelector(
+      '#header-menu-item-open_projects',
+    ) as HTMLButtonElement;
+    expect(projects).toBeTruthy();
+    expect(projects.textContent?.trim()).toBe('プロジェクト');
+
+    const settingsBtn = [...f.nativeElement.querySelectorAll('[role="menuitem"]')].find(
+      (el) => el.textContent?.trim() === 'メニュー設定',
+    ) as HTMLButtonElement;
+    settingsBtn.click();
+    f.detectChanges();
+    const select = f.nativeElement.querySelector('#header-menu-page-kind') as HTMLSelectElement;
+    expect(select?.value).toBe('board');
   });
 });

@@ -57,15 +57,18 @@ export function resolvePageKind(url: string): PageKind | null {
     path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path === '' ? '/' : path;
   if (normalized === '/' || normalized === '') return 'board';
   if (normalized === '/backlog') return 'backlog';
+  // Secondary shell pages share the board open_* catalog + board.hiddenIds (card142).
   if (
     normalized === '/trash' ||
     normalized === '/archive' ||
     normalized === '/users' ||
     normalized === '/projects' ||
     normalized === '/recurring' ||
-    normalized === '/settings' ||
-    normalized === '/login'
+    normalized === '/settings'
   ) {
+    return 'board';
+  }
+  if (normalized === '/login') {
     return null;
   }
   if (/^\/items\/\d+$/.test(normalized)) return 'itemDetail';
