@@ -1012,7 +1012,7 @@ func (m *memoryRepo) ListLivingItems(_ context.Context) ([]Item, error) {
 	}
 	out := []Item{}
 	for _, c := range m.cards {
-		if m.living(c) {
+		if m.living(c) && c.ArchivedAt == nil {
 			out = append(out, c)
 		}
 	}
