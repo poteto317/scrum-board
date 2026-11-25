@@ -116,6 +116,68 @@ describe('HeaderMenu component', () => {
     expect(group?.querySelector('input[type="checkbox"]')).toBeTruthy();
   });
 
+  it('settings list CSS resets global form styles on labels and checkboxes (card143)', () => {
+    const { f } = setup();
+    trigger(f).click();
+    f.detectChanges();
+    const settingsBtn = [...f.nativeElement.querySelectorAll('[role="menuitem"]')].find(
+      (el) => el.textContent?.trim() === 'メニュー設定',
+    ) as HTMLButtonElement;
+    settingsBtn.click();
+    f.detectChanges();
+
+    const firstLabel = f.nativeElement.querySelector(
+      '.header-menu-settings-list label',
+    ) as HTMLLabelElement;
+    expect(firstLabel?.textContent ?? '').toContain('プロジェクト');
+
+    const css = [...document.styleSheets]
+      .flatMap((sheet) => {
+        try {
+          return [...sheet.cssRules].map((r) => r.cssText);
+        } catch {
+          return [];
+        }
+      })
+      .join('\n')
+      .replace(/\s+/g, ' ');
+
+    // Emulated encapsulation inserts [_ngcontent-…] between selectors.
+    const labelRule = css.match(
+      /\.header-menu-settings-list[^{]*\blabel[^{]*\{[^}]*\}/,
+    )?.[0];
+    expect(labelRule).toBeTruthy();
+    // CSSOM may serialize unitless 0 as 0px; border:none often becomes border:medium.
+    expect(labelRule).toMatch(/margin:\s*0(px)?/);
+
+    // Exclude :focus-visible — only the base checkbox reset rule.
+    const checkboxRule = css.match(
+      /\.header-menu-settings-list(?:\[[^\]]*\])?\s+input\[type=(['"]?)checkbox\1\](?:\[[^\]]*\])?\s*\{[^}]*\}/,
+    )?.[0];
+    expect(checkboxRule).toBeTruthy();
+    expect(checkboxRule).not.toMatch(/:focus-visible/);
+    for (const prop of [
+      /width:\s*auto/,
+      /height:\s*auto/,
+      /padding:\s*0(px)?/,
+      /margin:\s*0(px)?/,
+      /flex-shrink:\s*0/,
+      /border:\s*(none|medium)/,
+      /background:\s*transparent/,
+      /box-shadow:\s*none/,
+      /border-radius:\s*0(px)?/,
+    ]) {
+      expect(checkboxRule).toMatch(prop);
+    }
+
+    const focusRule = css.match(
+      /\.header-menu-settings-list(?:\[[^\]]*\])?\s+input\[type=(['"]?)checkbox\1\](?:\[[^\]]*\])?:focus-visible(?:\[[^\]]*\])?\s*\{[^}]*\}/,
+    )?.[0];
+    expect(focusRule).toBeTruthy();
+    expect(focusRule).toMatch(/outline:\s*2px/);
+    expect(focusRule).toMatch(/outline-offset:\s*2px/);
+  });
+
   it('on /trash shows board open_* items and settings select defaults to board (card142)', async () => {
     const api = {
       headerMenu: vi.fn(() => of(menuPrefs)),
