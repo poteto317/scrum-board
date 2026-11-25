@@ -99,7 +99,27 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 0;
   cursor: pointer;
+}
+
+/* Reset global form input { width:100%; padding:12px; … } for checkboxes (card143). */
+.header-menu-settings-list input[type='checkbox'] {
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* Global input:focus uses box-shadow; border/box-shadow:none would hide it — restore ring. */
+.header-menu-settings-list input[type='checkbox']:focus-visible {
+  outline: 2px solid #7e9b72;
+  outline-offset: 2px;
 }
 
 .header-menu-error {
