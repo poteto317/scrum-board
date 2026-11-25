@@ -182,6 +182,37 @@ describe('Recurring page', () => {
     f.destroy();
   });
 
+  it('merges a created rule onto an empty list after successful save', () => {
+    const { f } = setup({
+      listRecurringRules: vi.fn(() => of({ rules: [] })),
+      createRecurringRule: vi.fn(() =>
+        of(rule({ id: 99, name: '追加ルール', title: '追加タイトル' })),
+      ),
+    });
+    const addBtn = [...f.nativeElement.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('ルールを追加'),
+    ) as HTMLButtonElement;
+    addBtn.click();
+    f.detectChanges();
+    f.componentInstance.form.setValue({
+      name: '追加ルール',
+      title: '追加タイトル',
+      description: '',
+      cron: '0 9 * * 1',
+      timezone: 'Asia/Tokyo',
+      columnId: 1,
+      enabled: true,
+    });
+    f.componentInstance.save();
+    f.detectChanges();
+    const text = f.nativeElement.textContent as string;
+    expect(text).not.toContain('繰り返しルールはまだありません');
+    expect(text).toContain('追加ルール');
+    expect(text).toContain('追加タイトル');
+    expect(f.componentInstance.editorOpen()).toBe(false);
+    f.destroy();
+  });
+
   it('shows error and not empty copy when GET fails', () => {
     const { f } = setup({
       listRecurringRules: vi.fn(() => throwError(() => ({ status: 500 }))),

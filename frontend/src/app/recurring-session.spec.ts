@@ -138,4 +138,53 @@ describe('RecurringSession', () => {
     expect(settled).toBe(1);
     http.verify();
   });
+
+  it('refetches list when create succeeds while rules are null (L-001)', () => {
+    const { session, http } = setup();
+    expect(session.rules()).toBeNull();
+    const sub = session
+      .create({
+        name: 'a',
+        title: 't',
+        cron: '0 9 * * 1',
+        columnId: 1,
+      })
+      .subscribe();
+    try {
+      const createReq = http.expectOne('/api/recurring-rules');
+      expect(createReq.request.method).toBe('POST');
+      createReq.flush(sampleRule);
+      const listReq = http.expectOne('/api/recurring-rules');
+      expect(listReq.request.method).toBe('GET');
+      listReq.flush({ rules: [sampleRule] });
+      expect(session.rules()).toEqual([sampleRule]);
+      expect(session.loadError()).toBe('');
+    } finally {
+      sub.unsubscribe();
+      http.verify();
+    }
+  });
+
+  it('surfaces loadError when create succeeds but refetch fails', () => {
+    const { session, http } = setup();
+    const sub = session
+      .create({
+        name: 'a',
+        title: 't',
+        cron: '0 9 * * 1',
+        columnId: 1,
+      })
+      .subscribe();
+    try {
+      http.expectOne('/api/recurring-rules').flush(sampleRule);
+      http
+        .expectOne('/api/recurring-rules')
+        .flush({ message: 'fail' }, { status: 500, statusText: 'err' });
+      expect(session.rules()).toBeNull();
+      expect(session.loadError()).toBeTruthy();
+    } finally {
+      sub.unsubscribe();
+      http.verify();
+    }
+  });
 });
