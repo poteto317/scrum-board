@@ -10,6 +10,60 @@ servers:
 - url: http://127.0.0.1:4200
   description: ローカル（compose / フロント nginx 経由）。本番 Basic はゲートウェイ層。
 paths:
+  /api/admin/repair-doubled-text:
+    post:
+      summary: 説明・ソリューションの厳密二重本文を修復
+      operationId: post_api_admin_repair_doubled_text
+      description: >-
+        管理者のみ。生存アイテムの description / solution が rune 列でちょうど half+half のとき
+        半分に畳む。本番適用前に必ず `dryRun: true` で対象を確認する。
+        一覧取得失敗のみ 5xx。個別 Update 失敗は 200 と failedItemIds で部分成功を返す。
+        警告件数は warnings 配列の要素数。
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dryRun:
+                  type: boolean
+                  description: true なら DB を変更せず予定件数のみ返す。省略時は false（適用）。null は 400
+              additionalProperties: false
+      responses:
+        '200':
+          description: 走査完了（部分成功を含む）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoubledTextRepairResponse'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 管理者以外
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: 一覧取得など走査開始前の失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/auth/login:
     post:
       summary: ログイン（セッション Cookie 発行）
@@ -2861,6 +2915,61 @@ components:
         configured:
           type: boolean
           description: ANTHROPIC_API_KEY の有無
+      additionalProperties: false
+    DoubledTextRepairResponse:
+      type: object
+      required:
+      - dryRun
+      - scanned
+      - descriptionRepaired
+      - solutionRepaired
+      - itemIds
+      - repairs
+      - warnings
+      - failedItemIds
+      properties:
+        dryRun:
+          type: boolean
+        scanned:
+          type: integer
+          minimum: 0
+        descriptionRepaired:
+          type: integer
+          minimum: 0
+        solutionRepaired:
+          type: integer
+          minimum: 0
+        itemIds:
+          type: array
+          items:
+            type: integer
+          description: 修復（予定）したアイテム ID。repairs から導出・昇順
+        repairs:
+          type: array
+          items:
+            type: object
+            required:
+            - itemId
+            - field
+            properties:
+              itemId:
+                type: integer
+              field:
+                type: string
+                enum:
+                - description
+                - solution
+            additionalProperties: false
+        warnings:
+          type: array
+          items:
+            type: string
+          description: '警告。件数は配列長（例: fold limit reached）'
+        failedItemIds:
+          type: array
+          items:
+            type: integer
+          description: Update に失敗したアイテム ID（dry-run では通常空）
       additionalProperties: false
     JsonValue:
       description: 当該エンドポイントの JSON 応答。フィールド詳細は必要に応じて本スキーマを具体化する。
