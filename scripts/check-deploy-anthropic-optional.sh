@@ -30,6 +30,23 @@ grep -Fq 'OPT_SECRET_ENV=()' "$DEPLOY" || {
   echo "error: deploy-gcp.sh missing OPT_SECRET_ENV array" >&2
   exit 1
 }
+grep -Fq 'MOUNT_ANTHROPIC=0' "$DEPLOY" || {
+  echo "error: deploy-gcp.sh missing MOUNT_ANTHROPIC gate" >&2
+  exit 1
+}
+grep -Fq 'ANTHROPIC_API_KEY must be a secret reference after deploy' "$DEPLOY" || {
+  echo "error: deploy-gcp.sh missing secret assert message" >&2
+  exit 1
+}
+grep -Fq 'ANTHROPIC_API_KEY must be absent when unset' "$DEPLOY" || {
+  echo "error: deploy-gcp.sh missing absent assert message" >&2
+  exit 1
+}
+# Optional secrets append only via OPT loop (empty OPT → no ANTHROPIC in SET_SECRETS).
+grep -Fq 'SET_SECRETS+=",${OPT_SECRET_ENV[$i]}=${OPT_SECRET_ID[$i]}:latest"' "$DEPLOY" || {
+  echo "error: deploy-gcp.sh missing OPT SET_SECRETS append" >&2
+  exit 1
+}
 grep -Fq 'ACCESSOR_SECRETS=("${REQ_SECRET_ID[@]}")' "$DEPLOY" || {
   echo "error: deploy-gcp.sh missing safe ACCESSOR_SECRETS init" >&2
   exit 1
