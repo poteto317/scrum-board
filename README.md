@@ -406,7 +406,7 @@ gcloud sql users create scrum \
 
 リポジトリルートで `scripts/deploy-gcp.sh` を使います。必須環境変数（少なくとも `GCP_PROJECT`・`CLOUDSQL_INSTANCE`・DB/AUTH/ADMIN/SCHEDULER 系）が欠けると **即終了** します。`.env.example` の GCP 行は例示のみで、スクリプトの本番既定ではありません。
 
-**秘密の正本は Secret Manager です。** `export` した `DB_PASSWORD` / `AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD` はスクリプトが SM に載せる一時入力であり、Cloud Run の平文環境変数には残りません（`--set-secrets` + 平文の `--remove-env-vars`）。3 パスワードは **再デプロイでも毎回 require**（シード後もキーを残し、値はローテ可）。
+**秘密の正本は Secret Manager です。** `export` した `DB_PASSWORD` / `AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD`（および任意の `ANTHROPIC_API_KEY`）はスクリプトが SM に載せる一時入力であり、Cloud Run の平文環境変数には残りません（`--set-secrets` + 平文の `--remove-env-vars`）。3 パスワードは **再デプロイでも毎回 require**（シード後もキーを残し、値はローテ可）。`ANTHROPIC_API_KEY` は **任意**: 非空なら SM（既定 `scrum-board-anthropic-api-key`）へ載せてマウントし、空なら `--set-secrets` から除外して既存マウントも外れ AI は 503 のままです。
 
 ```sh
 export GCP_PROJECT=YOUR_GCP_PROJECT_ID   # 必須。自分のプロジェクト ID に置き換える
@@ -418,10 +418,13 @@ export DB_NAME=scrumboard
 export AUTH_USER=kanban
 export AUTH_PASSWORD='STRONG_AUTH_PASSWORD'   # nginx Basic。→ SM scrum-board-auth-password
 export ADMIN_INITIAL_PASSWORD='STRONG_ADMIN_INITIAL_PASSWORD'  # 初期 admin。AUTH と別値必須 → SM scrum-board-admin-initial-password
+# 任意: AI を有効にするときだけ。→ SM scrum-board-anthropic-api-key（平文 Cloud Run env には残さない）
+# export ANTHROPIC_API_KEY='YOUR_ANTHROPIC_API_KEY'
 # 任意: SM リソース名の上書き
 # export SECRET_ID_DB_PASSWORD=...
 # export SECRET_ID_AUTH_PASSWORD=...
 # export SECRET_ID_ADMIN_INITIAL_PASSWORD=...
+# export SECRET_ID_ANTHROPIC_API_KEY=...
 # 省略可: 未設定ならスクリプトが https://example.com で起動し、デプロイ後に実 URL へ自動更新する
 # export PUBLIC_ORIGIN='https://scrum-board-xxxxx.asia-northeast1.run.app'
 
@@ -431,7 +434,7 @@ gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 ./scripts/deploy-gcp.sh
 ```
 
-スクリプトは `secretmanager.googleapis.com` を有効化し、上記 3 秘密を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
+スクリプトは `secretmanager.googleapis.com` を有効化し、上記パスワード秘密（と非空なら Anthropic）を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
 
 アーカイブ・ゴミ箱 purge・recurring run の Cloud Scheduler ジョブは、デプロイ時には作成・実行されません。ゴミ箱 purge のジョブは、ゴミ箱の一覧が削除をしないため、実質必須です（#130）。ほかのジョブは必要なものだけ、デプロイ後に同じ `GCP_PROJECT` / `GCP_REGION` と Cloud Run の `SCHEDULER_JOB_TOKEN`、`PUBLIC_ORIGIN` を設定して個別スクリプトを実行してください。アーカイブは毎日 03:30（Asia/Tokyo）です。ゴミ箱 purge のジョブが無い環境では、保持期間（30 日）を過ぎた行は一覧に出なくなりますが、DB と添付の実体には残ります（ゴミ箱の一覧は読み取りだけで、削除しません）。
 
@@ -439,7 +442,7 @@ gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 SCHEDULER_JOB_TOKEN=... PUBLIC_ORIGIN="$SERVICE_URL" ./scripts/ensure-archive-scheduler.sh
 ```
 
-**イメージタグとハードニング:** `deploy/Dockerfile` のベースイメージは digest 固定、API プロセスはコンテナ内の非 root ユーザーで起動します。`deploy-gcp.sh` は **クリーンな git 作業ツリー** 上で `git rev-parse HEAD` を Artifact Registry のタグにし、Cloud Run デプロイもその **SHA タグ** を参照します（`:latest` は併記 push のみ）。デプロイ／nginx／ルート `.dockerignore`／Actions ピン／stylesheet onload／GCP_PROJECT フォールバック を直す前後で `./scripts/check-deploy-image-hardening.sh`・`./scripts/check-nginx-tls-headers.sh`・`./scripts/check-nginx-gzip.sh`・`./scripts/check-nginx-cache.sh`・`./scripts/check-root-dockerignore.sh`・`./scripts/check-workflow-action-pins.sh`・`./scripts/check-no-deferred-stylesheet-onload.sh`・`./scripts/check-no-gcp-project-fallback.sh` を実行してください（`secret-scan` workflow の `deploy-guards` job でも同セット＋該当 `--selftest` を実行。gzip は `./scripts/check-nginx-gzip.sh --selftest`、キャッシュ指定は `./scripts/check-nginx-cache.sh --selftest` も）。ロールバックは過去のコミット SHA タグを `--image` に指定して再デプロイします。
+**イメージタグとハードニング:** `deploy/Dockerfile` のベースイメージは digest 固定、API プロセスはコンテナ内の非 root ユーザーで起動します。`deploy-gcp.sh` は **クリーンな git 作業ツリー** 上で `git rev-parse HEAD` を Artifact Registry のタグにし、Cloud Run デプロイもその **SHA タグ** を参照します（`:latest` は併記 push のみ）。デプロイ／nginx／ルート `.dockerignore`／Actions ピン／stylesheet onload／GCP_PROJECT フォールバック／任意 Anthropic SM を直す前後で `./scripts/check-deploy-image-hardening.sh`・`./scripts/check-nginx-tls-headers.sh`・`./scripts/check-nginx-gzip.sh`・`./scripts/check-nginx-cache.sh`・`./scripts/check-root-dockerignore.sh`・`./scripts/check-workflow-action-pins.sh`・`./scripts/check-no-deferred-stylesheet-onload.sh`・`./scripts/check-no-gcp-project-fallback.sh`・`./scripts/check-deploy-anthropic-optional.sh` を実行してください（`secret-scan` workflow の `deploy-guards` job でも同セット＋該当 `--selftest` を実行。gzip は `./scripts/check-nginx-gzip.sh --selftest`、キャッシュ指定は `./scripts/check-nginx-cache.sh --selftest`、Anthropic 任意マウントは `./scripts/check-deploy-anthropic-optional.sh --selftest` も）。ロールバックは過去のコミット SHA タグを `--image` に指定して再デプロイします。
 
 **`PUBLIC_ORIGIN`:** entrypoint は `http://` / `https://` 必須（`placeholder.invalid` は拒否）。未指定時は一時値 `https://example.com` で起動し、`deploy-gcp.sh` がデプロイ後にサービス URL へ自動更新します。リンクコピーと `rewrite-origins` の置換先はこの値と一致させます。
 
@@ -452,9 +455,8 @@ gcloud run services describe scrum-board \
   --region="$GCP_REGION" --project="$GCP_PROJECT" \
   --format='yaml(spec.template.spec.containers[0].env)'
 # DB_PASSWORD / AUTH_PASSWORD / ADMIN_INITIAL_PASSWORD に value: 平文が無く、secret 参照であること
+# ANTHROPIC_API_KEY を渡してデプロイした場合も value: 平文が無く、secret 参照であること（空ならキー自体が無い）
 ```
-
-任意: `ANTHROPIC_API_KEY` を Cloud Run の環境変数に設定すると、本番でも AI 起票 API が有効になります（未設定なら 503 のまま。本手順の SM 化対象外）。
 
 ### 4. 動作確認
 
