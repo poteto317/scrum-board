@@ -240,6 +240,10 @@ REQ_SECRET_VAL=(
   "$ADMIN_INITIAL_PASSWORD"
   "$SCHEDULER_JOB_TOKEN"
 )
+if [[ "${#REQ_SECRET_ENV[@]}" -ne "${#REQ_SECRET_ID[@]}" || "${#REQ_SECRET_ENV[@]}" -ne "${#REQ_SECRET_VAL[@]}" ]]; then
+  echo "error: REQ_SECRET_* parallel arrays length mismatch" >&2
+  exit 1
+fi
 # Optional secrets (same shape); empty when ANTHROPIC_API_KEY unset.
 OPT_SECRET_ENV=()
 OPT_SECRET_ID=()
@@ -248,6 +252,10 @@ if [[ "$MOUNT_ANTHROPIC" -eq 1 ]]; then
   OPT_SECRET_ENV+=(ANTHROPIC_API_KEY)
   OPT_SECRET_ID+=("$SECRET_ID_ANTHROPIC_API_KEY")
   OPT_SECRET_VAL+=("$ANTHROPIC_API_KEY_TRIMMED")
+fi
+if [[ "${#OPT_SECRET_ENV[@]}" -ne "${#OPT_SECRET_ID[@]}" || "${#OPT_SECRET_ENV[@]}" -ne "${#OPT_SECRET_VAL[@]}" ]]; then
+  echo "error: OPT_SECRET_* parallel arrays length mismatch" >&2
+  exit 1
 fi
 
 for i in "${!REQ_SECRET_ID[@]}"; do
@@ -277,7 +285,8 @@ DB_SOCKET="/cloudsql/${CLOUDSQL_INSTANCE}"
 
 ENV_VARS_FILE="$(mktemp)"
 ENV_YAML_FILE="$(mktemp)"
-trap 'rm -f "$ENV_VARS_FILE" "$ENV_YAML_FILE"' EXIT
+KEYS_STATE_FILE=""
+trap 'rm -f "$ENV_VARS_FILE" "$ENV_YAML_FILE" ${KEYS_STATE_FILE:+"$KEYS_STATE_FILE"}' EXIT
 {
   echo "DB_USER: $(yaml_env_value "$DB_USER")"
   echo "DB_NAME: $(yaml_env_value "$DB_NAME")"

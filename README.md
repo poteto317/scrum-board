@@ -406,7 +406,7 @@ gcloud sql users create scrum \
 
 リポジトリルートで `scripts/deploy-gcp.sh` を使います。必須環境変数（少なくとも `GCP_PROJECT`・`CLOUDSQL_INSTANCE`・DB/AUTH/ADMIN/SCHEDULER 系）が欠けると **即終了** します。`.env.example` の GCP 行は例示のみで、スクリプトの本番既定ではありません。
 
-**秘密の正本は Secret Manager です。** `export` した `DB_PASSWORD` / `AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD`（および任意の `ANTHROPIC_API_KEY`）はスクリプトが SM に載せる一時入力であり、Cloud Run の平文環境変数には残りません（`--set-secrets` + 平文の `--remove-env-vars`）。3 パスワードは **再デプロイでも毎回 require**（シード後もキーを残し、値はローテ可）。`ANTHROPIC_API_KEY` は **任意**: 非空なら SM（既定 `scrum-board-anthropic-api-key`）へ載せてマウントし、空なら `--set-secrets` から除外して既存マウントも外れ AI は 503 のままです。
+**秘密の正本は Secret Manager です。** `export` した `DB_PASSWORD` / `AUTH_PASSWORD` / `ADMIN_INITIAL_PASSWORD` / `SCHEDULER_JOB_TOKEN`（および任意の `ANTHROPIC_API_KEY`）はスクリプトが SM に載せる一時入力であり、Cloud Run の平文環境変数には残りません（`--set-secrets` + 平文の `--remove-env-vars`）。必須 4 秘密は **再デプロイでも毎回 require**（シード後もキーを残し、値はローテ可）。`ANTHROPIC_API_KEY` は **任意**: 非空なら SM（既定 `scrum-board-anthropic-api-key`）へ載せてマウントし、空なら `--set-secrets` から除外して既存マウントも外れ AI は 503 のままです。
 
 ```sh
 export GCP_PROJECT=YOUR_GCP_PROJECT_ID   # 必須。自分のプロジェクト ID に置き換える
@@ -434,7 +434,7 @@ gcloud services enable secretmanager.googleapis.com --project="$GCP_PROJECT"
 ./scripts/deploy-gcp.sh
 ```
 
-スクリプトは `secretmanager.googleapis.com` を有効化し、上記パスワード秘密（と非空なら Anthropic）を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
+スクリプトは `secretmanager.googleapis.com` を有効化し、必須 4 秘密（DB / AUTH / ADMIN / SCHEDULER。と非空なら Anthropic）を create / versions add し、Cloud Run ランタイム SA に `secretAccessor` を付与したうえでイメージをビルド・push・デプロイします。Cloud SQL は **Unix ソケット** `DB_SOCKET=/cloudsql/INSTANCE_CONNECTION_NAME` で接続します。
 
 アーカイブ・ゴミ箱 purge・recurring run の Cloud Scheduler ジョブは、デプロイ時には作成・実行されません。ゴミ箱 purge のジョブは、ゴミ箱の一覧が削除をしないため、実質必須です（#130）。ほかのジョブは必要なものだけ、デプロイ後に同じ `GCP_PROJECT` / `GCP_REGION` と Cloud Run の `SCHEDULER_JOB_TOKEN`、`PUBLIC_ORIGIN` を設定して個別スクリプトを実行してください。アーカイブは毎日 03:30（Asia/Tokyo）です。ゴミ箱 purge のジョブが無い環境では、保持期間（30 日）を過ぎた行は一覧に出なくなりますが、DB と添付の実体には残ります（ゴミ箱の一覧は読み取りだけで、削除しません）。
 
