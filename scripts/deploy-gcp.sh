@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Build deploy/Dockerfile, push to Artifact Registry, deploy Cloud Run (+ Cloud SQL).
-# Passwords (AUTH_PASSWORD, ADMIN_INITIAL_PASSWORD, DB_PASSWORD) are written to Secret Manager
-# and mounted with --set-secrets — never left as plaintext Cloud Run env vars.
+# Passwords (AUTH_PASSWORD, ADMIN_INITIAL_PASSWORD, DB_PASSWORD) and optional
+# ANTHROPIC_API_KEY are written to Secret Manager and mounted with --set-secrets —
+# never left as plaintext Cloud Run env vars.
 # Non-secret config still uses --env-vars-file (avoids comma/= parsing issues in --set-env-vars).
 #
 # Required: GCP_PROJECT, CLOUDSQL_INSTANCE, DB_USER, DB_PASSWORD, DB_NAME,
 #   AUTH_USER, AUTH_PASSWORD, ADMIN_INITIAL_PASSWORD, SCHEDULER_JOB_TOKEN
-# Optional: GCP_REGION (default asia-northeast1), AR_REPO, SERVICE_NAME, PUBLIC_ORIGIN, SECRET_ID_*
+# Optional: GCP_REGION (default asia-northeast1), AR_REPO, SERVICE_NAME, PUBLIC_ORIGIN,
+#   ANTHROPIC_API_KEY (non-empty → SM mount; empty → omit from --set-secrets, clears prior mount),
+#   SECRET_ID_*
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,6 +32,13 @@ SECRET_ID_DB_PASSWORD="${SECRET_ID_DB_PASSWORD:-scrum-board-db-password}"
 SECRET_ID_AUTH_PASSWORD="${SECRET_ID_AUTH_PASSWORD:-scrum-board-auth-password}"
 SECRET_ID_ADMIN_INITIAL_PASSWORD="${SECRET_ID_ADMIN_INITIAL_PASSWORD:-scrum-board-admin-initial-password}"
 SECRET_ID_SCHEDULER_JOB_TOKEN="${SECRET_ID_SCHEDULER_JOB_TOKEN:-scrum-board-scheduler-job-token}"
+SECRET_ID_ANTHROPIC_API_KEY="${SECRET_ID_ANTHROPIC_API_KEY:-scrum-board-anthropic-api-key}"
+
+ANTHROPIC_API_KEY_TRIMMED="$(printf '%s' "${ANTHROPIC_API_KEY:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+MOUNT_ANTHROPIC=0
+if [[ -n "$ANTHROPIC_API_KEY_TRIMMED" ]]; then
+  MOUNT_ANTHROPIC=1
+fi
 
 require GCP_PROJECT
 require GCP_REGION
@@ -120,35 +130,65 @@ resolve_runtime_sa() {
   exit 1
 }
 
-# Classify password env entries in a Cloud Run env yaml file.
-# Prints: ok | plaintext | missing
-# Reads yaml from file path argv[1] (never via environment — may contain secrets).
-classify_password_env_yaml() {
+# Classify env keys in a Cloud Run env yaml (one file read).
+# Args: yaml_file key [key...]
+# Prints one line per key: KEY<TAB>secret|plain|missing
+# Reads yaml from file path (never via environment — may contain secrets).
+classify_env_keys_yaml() {
   local yaml_file="$1"
-  python3 - "$yaml_file" <<'PY'
+  shift
+  python3 - "$yaml_file" "$@" <<'PY'
 import re, sys
 path = sys.argv[1]
-text = open(path, encoding="utf-8").read()
-keys = ("DB_PASSWORD", "AUTH_PASSWORD", "ADMIN_INITIAL_PASSWORD")
+keys = sys.argv[2:]
+text = "\n" + open(path, encoding="utf-8").read()
 blocks = re.split(r"\n\s*- name: ", text)
-found = {k: None for k in keys}  # None | "secret" | "plain"
+states = {}
 for b in blocks:
     name = b.split("\n", 1)[0].strip()
-    if name not in keys:
+    if name not in keys or name in states:
         continue
     if "secretKeyRef" in b or "valueFrom:" in b:
-        found[name] = "secret"
+        states[name] = "secret"
     elif re.search(r"(?m)^\s*value:", b):
-        found[name] = "plain"
+        states[name] = "plain"
     else:
-        found[name] = "plain"  # unknown shape: treat as bad
-if any(v is None for v in found.values()):
-    print("missing")
-elif any(v == "plain" for v in found.values()):
-    print("plaintext")
-else:
-    print("ok")
+        states[name] = "plain"  # unknown shape: treat as bad
+for key in keys:
+    print(f"{key}\t{states.get(key, 'missing')}")
 PY
+}
+
+classify_env_key_yaml() {
+  local yaml_file="$1"
+  local key="$2"
+  classify_env_keys_yaml "$yaml_file" "$key" | cut -f2
+}
+
+# Aggregate password keys. Prints: ok | plaintext | missing
+# Writes classify output to a temp file so python failures propagate under set -e
+# (process substitution would swallow a non-zero exit).
+classify_password_env_yaml() {
+  local yaml_file="$1"
+  local key state
+  local any_missing=0 any_plain=0
+  local tmp
+  tmp="$(mktemp)"
+  classify_env_keys_yaml "$yaml_file" DB_PASSWORD AUTH_PASSWORD ADMIN_INITIAL_PASSWORD >"$tmp"
+  while IFS=$'\t' read -r key state; do
+    case "$state" in
+      missing) any_missing=1 ;;
+      plain) any_plain=1 ;;
+    esac
+  done <"$tmp"
+  rm -f "$tmp"
+  if [[ "$any_missing" -eq 1 ]]; then
+    echo "missing"
+  elif [[ "$any_plain" -eq 1 ]]; then
+    echo "plaintext"
+  else
+    echo "ok"
+  fi
 }
 
 yaml_env_value() {
@@ -186,18 +226,45 @@ docker push "$IMAGE_URI_LATEST"
 
 # Publish secret versions only after the image is ready to deploy (avoid advancing
 # secret versions while build/push can still fail).
-ensure_secret "$SECRET_ID_DB_PASSWORD" "$DB_PASSWORD"
-ensure_secret "$SECRET_ID_AUTH_PASSWORD" "$AUTH_PASSWORD"
-ensure_secret "$SECRET_ID_ADMIN_INITIAL_PASSWORD" "$ADMIN_INITIAL_PASSWORD"
-ensure_secret "$SECRET_ID_SCHEDULER_JOB_TOKEN" "$SCHEDULER_JOB_TOKEN"
+# Required secrets: env_name secret_id value (parallel arrays).
+REQ_SECRET_ENV=(DB_PASSWORD AUTH_PASSWORD ADMIN_INITIAL_PASSWORD SCHEDULER_JOB_TOKEN)
+REQ_SECRET_ID=(
+  "$SECRET_ID_DB_PASSWORD"
+  "$SECRET_ID_AUTH_PASSWORD"
+  "$SECRET_ID_ADMIN_INITIAL_PASSWORD"
+  "$SECRET_ID_SCHEDULER_JOB_TOKEN"
+)
+REQ_SECRET_VAL=(
+  "$DB_PASSWORD"
+  "$AUTH_PASSWORD"
+  "$ADMIN_INITIAL_PASSWORD"
+  "$SCHEDULER_JOB_TOKEN"
+)
+# Optional secrets (same shape); empty when ANTHROPIC_API_KEY unset.
+OPT_SECRET_ENV=()
+OPT_SECRET_ID=()
+OPT_SECRET_VAL=()
+if [[ "$MOUNT_ANTHROPIC" -eq 1 ]]; then
+  OPT_SECRET_ENV+=(ANTHROPIC_API_KEY)
+  OPT_SECRET_ID+=("$SECRET_ID_ANTHROPIC_API_KEY")
+  OPT_SECRET_VAL+=("$ANTHROPIC_API_KEY_TRIMMED")
+fi
+
+for i in "${!REQ_SECRET_ID[@]}"; do
+  ensure_secret "${REQ_SECRET_ID[$i]}" "${REQ_SECRET_VAL[$i]}"
+done
+for i in "${!OPT_SECRET_ID[@]}"; do
+  ensure_secret "${OPT_SECRET_ID[$i]}" "${OPT_SECRET_VAL[$i]}"
+done
 
 RUNTIME_SA="$(resolve_runtime_sa)"
 echo "==> Granting secretAccessor to runtime SA ${RUNTIME_SA}"
-for secret_id in \
-  "$SECRET_ID_DB_PASSWORD" \
-  "$SECRET_ID_AUTH_PASSWORD" \
-  "$SECRET_ID_ADMIN_INITIAL_PASSWORD" \
-  "$SECRET_ID_SCHEDULER_JOB_TOKEN"
+# bash 3.2 + set -u: empty OPT_SECRET_ID[@] is unbound if expanded beside REQ.
+ACCESSOR_SECRETS=("${REQ_SECRET_ID[@]}")
+if [[ "${#OPT_SECRET_ID[@]}" -gt 0 ]]; then
+  ACCESSOR_SECRETS+=("${OPT_SECRET_ID[@]}")
+fi
+for secret_id in "${ACCESSOR_SECRETS[@]}"
 do
   gcloud secrets add-iam-policy-binding "$secret_id" \
     --project="$GCP_PROJECT" \
@@ -219,14 +286,18 @@ trap 'rm -f "$ENV_VARS_FILE" "$ENV_YAML_FILE"' EXIT
   echo "AUTH_USER: $(yaml_env_value "$AUTH_USER")"
 } >"$ENV_VARS_FILE"
 
-SET_SECRETS="DB_PASSWORD=${SECRET_ID_DB_PASSWORD}:latest"
-SET_SECRETS+=",AUTH_PASSWORD=${SECRET_ID_AUTH_PASSWORD}:latest"
-SET_SECRETS+=",ADMIN_INITIAL_PASSWORD=${SECRET_ID_ADMIN_INITIAL_PASSWORD}:latest"
-SET_SECRETS+=",SCHEDULER_JOB_TOKEN=${SECRET_ID_SCHEDULER_JOB_TOKEN}:latest"
+SET_SECRETS=""
+for i in "${!REQ_SECRET_ENV[@]}"; do
+  [[ -n "$SET_SECRETS" ]] && SET_SECRETS+=","
+  SET_SECRETS+="${REQ_SECRET_ENV[$i]}=${REQ_SECRET_ID[$i]}:latest"
+done
+for i in "${!OPT_SECRET_ENV[@]}"; do
+  SET_SECRETS+=",${OPT_SECRET_ENV[$i]}=${OPT_SECRET_ID[$i]}:latest"
+done
 
 echo "==> Deploying Cloud Run service ${SERVICE_NAME} (secrets via Secret Manager)"
 # gcloud forbids combining --env-vars-file with --remove-env-vars on one invoke;
-# mount secrets here, then strip any leftover plaintext password env keys.
+# mount secrets here, then strip any leftover plaintext secret env keys in one update.
 gcloud run deploy "$SERVICE_NAME" \
   --image="$IMAGE_URI" \
   --region="$GCP_REGION" \
@@ -249,20 +320,37 @@ gcloud run services describe "$SERVICE_NAME" \
   --region="$GCP_REGION" \
   --project="$GCP_PROJECT" \
   --format='yaml(spec.template.spec.containers[0].env)' >"$ENV_YAML_FILE"
-case "$(classify_password_env_yaml "$ENV_YAML_FILE")" in
-  plaintext)
-    echo "==> Removing leftover plaintext password env vars"
-    gcloud run services update "$SERVICE_NAME" \
-      --region="$GCP_REGION" \
-      --project="$GCP_PROJECT" \
-      --remove-env-vars=DB_PASSWORD,AUTH_PASSWORD,ADMIN_INITIAL_PASSWORD \
-      --quiet
-    gcloud run services describe "$SERVICE_NAME" \
-      --region="$GCP_REGION" \
-      --project="$GCP_PROJECT" \
-      --format='yaml(spec.template.spec.containers[0].env)' >"$ENV_YAML_FILE"
-    ;;
-esac
+
+REMOVE_ENV_KEYS=()
+ANTHROPIC_STATE=missing
+KEYS_STATE_FILE="$(mktemp)"
+classify_env_keys_yaml "$ENV_YAML_FILE" \
+  DB_PASSWORD AUTH_PASSWORD ADMIN_INITIAL_PASSWORD ANTHROPIC_API_KEY >"$KEYS_STATE_FILE"
+while IFS=$'\t' read -r key state; do
+  if [[ "$state" == "plain" ]]; then
+    REMOVE_ENV_KEYS+=("$key")
+  fi
+  if [[ "$key" == "ANTHROPIC_API_KEY" ]]; then
+    ANTHROPIC_STATE="$state"
+  fi
+done <"$KEYS_STATE_FILE"
+rm -f "$KEYS_STATE_FILE"
+
+if [[ "${#REMOVE_ENV_KEYS[@]}" -gt 0 ]]; then
+  REMOVE_JOINED="$(IFS=,; echo "${REMOVE_ENV_KEYS[*]}")"
+  echo "==> Removing leftover plaintext env vars (${REMOVE_JOINED})"
+  gcloud run services update "$SERVICE_NAME" \
+    --region="$GCP_REGION" \
+    --project="$GCP_PROJECT" \
+    --remove-env-vars="$REMOVE_JOINED" \
+    --quiet
+  gcloud run services describe "$SERVICE_NAME" \
+    --region="$GCP_REGION" \
+    --project="$GCP_PROJECT" \
+    --format='yaml(spec.template.spec.containers[0].env)' >"$ENV_YAML_FILE"
+  ANTHROPIC_STATE="$(classify_env_key_yaml "$ENV_YAML_FILE" ANTHROPIC_API_KEY)"
+fi
+
 case "$(classify_password_env_yaml "$ENV_YAML_FILE")" in
   ok) echo "==> secret env assert ok" ;;
   *)
@@ -270,6 +358,20 @@ case "$(classify_password_env_yaml "$ENV_YAML_FILE")" in
     exit 1
     ;;
 esac
+
+if [[ "$MOUNT_ANTHROPIC" -eq 1 ]]; then
+  if [[ "$ANTHROPIC_STATE" != "secret" ]]; then
+    echo "error: ANTHROPIC_API_KEY must be a secret reference after deploy (got ${ANTHROPIC_STATE})" >&2
+    exit 1
+  fi
+  echo "==> ANTHROPIC_API_KEY secret env assert ok"
+else
+  if [[ "$ANTHROPIC_STATE" != "missing" ]]; then
+    echo "error: ANTHROPIC_API_KEY must be absent when unset (got ${ANTHROPIC_STATE})" >&2
+    exit 1
+  fi
+  echo "==> ANTHROPIC_API_KEY absent (AI unconfigured) assert ok"
+fi
 
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" \
   --region="$GCP_REGION" \
@@ -289,6 +391,11 @@ echo ""
 echo "Deployed: ${SERVICE_URL}"
 echo "PUBLIC_ORIGIN=${PUBLIC_ORIGIN}"
 echo "Secrets: ${SECRET_ID_DB_PASSWORD}, ${SECRET_ID_AUTH_PASSWORD}, ${SECRET_ID_ADMIN_INITIAL_PASSWORD} (values not shown)"
+if [[ "$MOUNT_ANTHROPIC" -eq 1 ]]; then
+  echo "Anthropic secret: ${SECRET_ID_ANTHROPIC_API_KEY} (value not shown)"
+else
+  echo "Anthropic: not mounted (ANTHROPIC_API_KEY empty)"
+fi
 echo ""
 echo "Smoke:"
 echo "  curl -sS -o /dev/null -w '%{http_code}\\n' '${SERVICE_URL}/health'   # expect 200"
