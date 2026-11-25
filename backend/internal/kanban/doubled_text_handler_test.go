@@ -169,6 +169,38 @@ func TestRepairDoubledTextListFail(t *testing.T) {
 	}
 }
 
+func TestRepairDoubledTextSkipsDeletedAndArchived(t *testing.T) {
+	repo := fresh()
+	now := time.Now().UTC()
+	repo.cards[1] = Item{
+		ID: 1, Number: 1, ColumnID: 1, ProjectID: 1, Title: "live",
+		Description: "abab", Solution: "",
+	}
+	repo.cards[2] = Item{
+		ID: 2, Number: 2, ColumnID: 1, ProjectID: 1, Title: "deleted",
+		Description: "cdcd", Solution: "", DeletedAt: &now,
+	}
+	repo.cards[3] = Item{
+		ID: 3, Number: 3, ColumnID: 1, ProjectID: 1, Title: "archived",
+		Description: "efef", Solution: "", ArchivedAt: &now,
+	}
+	h := NewHandler(repo)
+	w := request(h, "POST", "/api/admin/repair-doubled-text", `{"dryRun":false}`)
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var resp doubledRepairResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Scanned != 1 || resp.DescriptionRepaired != 1 || repo.cards[1].Description != "ab" {
+		t.Fatalf("live only: %+v card1=%q", resp, repo.cards[1].Description)
+	}
+	if repo.cards[2].Description != "cdcd" || repo.cards[3].Description != "efef" {
+		t.Fatalf("deleted/archived mutated: %q %q", repo.cards[2].Description, repo.cards[3].Description)
+	}
+}
+
 func TestRepairDoubledTextUpdateFailContinues(t *testing.T) {
 	repo := fresh()
 	repo.cards[1] = Item{
