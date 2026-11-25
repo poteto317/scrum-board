@@ -51,6 +51,9 @@ type memoryRepo struct {
 	aiMessages         map[int64]AIMessage
 	nextAIMessageID    int64
 	aiUsage            AIUsage
+	listLivingFail     error
+	updateItemFail     error
+	updateItemFailID   int64
 }
 
 func fresh() *memoryRepo {
@@ -377,6 +380,9 @@ func (m *memoryRepo) nextItemNumber(projectID int64) int64 {
 	return max + 1
 }
 func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Item, error) {
+	if m.updateItemFail != nil && (m.updateItemFailID == 0 || m.updateItemFailID == id) {
+		return Item{}, m.updateItemFail
+	}
 	c, err := m.GetItem(ctx, id)
 	if err != nil {
 		return c, err
@@ -1001,6 +1007,9 @@ func (m *memoryRepo) GetDeletedItem(_ context.Context, id, projectID int64) (Ite
 }
 
 func (m *memoryRepo) ListLivingItems(_ context.Context) ([]Item, error) {
+	if m.listLivingFail != nil {
+		return nil, m.listLivingFail
+	}
 	out := []Item{}
 	for _, c := range m.cards {
 		if m.living(c) {

@@ -146,6 +146,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("PUT /api/backlog/order", h.reorderBacklog)
 	mux.HandleFunc("GET /api/archive", h.listArchivedItems)
 	mux.HandleFunc("POST /api/archive/auto-archive", h.autoArchive)
+	mux.HandleFunc("POST /api/admin/repair-doubled-text", h.repairDoubledText)
 	mux.HandleFunc("GET /api/items/by-number/{number}/history", h.history)
 	mux.HandleFunc("GET /api/items/by-number/{number}/comments", h.listComments)
 	mux.HandleFunc("POST /api/items/by-number/{number}/comments", h.createComment)
