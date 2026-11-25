@@ -71,7 +71,8 @@ export class RecurringSession {
       tap((created) => {
         if (generation !== this.mutateGeneration) return;
         const cur = this.rules();
-        if (cur) this.rules.set(withCreatedRule(cur, created));
+        // create-only: [] merges locally; null refetches (patch/delete stay merge-only by design #141).
+        if (cur !== null) this.rules.set(withCreatedRule(cur, created));
         else this.fetchList();
       }),
     );
