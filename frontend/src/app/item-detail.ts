@@ -2,6 +2,7 @@ import { formatItemNumber } from './item-number';
 import { ItemHistory } from './item-history';
 import { ItemComments } from './item-comments';
 import { AiChatContext } from './ai-chat-context';
+import { detailChatAction } from './ai-chat-target';
 import { Modal } from './modal';
 import {
   Component,
@@ -303,28 +304,37 @@ export class ItemDetail implements OnInit {
     effect(() => {
       const card = this.item();
       const routeNum = this.routeNumber();
-      if (card && this.canEdit()) {
+      const action = detailChatAction(
+        card
+          ? { hasItem: true }
+          : {
+              hasItem: false,
+              pageKind: this.aiChat.pageKind(),
+              routeNumber: routeNum,
+              toldNumber: this.aiChat.routeTarget()?.number ?? null,
+              loading: this.loading(),
+            },
+      );
+      if (card && action === 'set') {
+        // 閲覧だけでもチャットは使える。反映のボタンは canEdit のときだけ出る
         this.aiChat.setDetail(
-          { number: card.number, projectId: card.projectId, itemId: card.id },
+          {
+            projectId: card.projectId,
+            item: {
+              number: card.number,
+              itemId: card.id,
+              title: card.title,
+              canEdit: this.canEdit(),
+            },
+          },
           {
             onDescriptionApplied: (updated) => this.autosave.applyDescriptionSave(updated),
             onCommentApplied: () => this.commentsPanel()?.reload(),
           },
         );
-        return;
-      }
-      if (card && !this.canEdit()) {
-        if (this.aiChat.pageKind() === 'detail') this.aiChat.clear();
-        return;
-      }
-      // item が一瞬 null（同一番号の reload）は残す。ルート番号が変わったら旧 target を捨てる
-      const target = this.aiChat.routeTarget();
-      if (
-        this.aiChat.pageKind() === 'detail' &&
-        target &&
-        routeNum > 0 &&
-        target.number !== routeNum
-      ) {
+      } else if (action === 'release') {
+        this.aiChat.releaseDetailItem();
+      } else if (action === 'clear') {
         this.aiChat.clear();
       }
     });

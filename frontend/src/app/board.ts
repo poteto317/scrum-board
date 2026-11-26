@@ -4,7 +4,6 @@ import {
   Component,
   computed,
   DestroyRef,
-  effect,
   ElementRef,
   HostListener,
   inject,
@@ -27,10 +26,8 @@ import {
 } from '@angular/cdk/drag-drop';
 import { Observable, Subscription, filter, finalize, firstValueFrom, map, tap } from 'rxjs';
 import { AiChatContext } from './ai-chat-context';
-import { toAiChatOptions } from './ai-chat-target';
 import { Api } from './api';
 import { errorMessage } from './api-error';
-import { AuthSession } from './auth-session';
 import { assigneeKind } from './assignee';
 import { itemAppPath, itemDetailUrl } from './item-link';
 import { normalizeBoardData, NormalizedBoardData, normalizeItem } from './board-data';
@@ -135,7 +132,6 @@ export class Board implements OnInit {
   readonly assigneeKind = assigneeKind;
   readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
-  private readonly auth = inject(AuthSession);
   private readonly aiChat = inject(AiChatContext);
   private readonly projectSession = inject(ProjectSession);
   private readonly projectBoardCache = inject(ProjectBoardCache);
@@ -318,12 +314,8 @@ export class Board implements OnInit {
     return this.grouped().get(id ?? -1)?.length ?? 0;
   });
 
-  private readonly publishAiChatCandidates = effect(() => {
-    const scoped = itemsForActiveProject(this.data().items, this.projectSession.activeId());
-    this.aiChat.setBoard(toAiChatOptions(scoped, this.auth.user()));
-  });
-
   ngOnInit() {
+    this.aiChat.setBoard();
     this.bindBoardMobileMedia();
     this.load({ useCache: true });
     this.listFilter.load();
@@ -666,8 +658,7 @@ export class Board implements OnInit {
         },
         error: (e) => {
           if (generation !== this.boardLoadGeneration) return;
-          // The error panel replaces the cached board; the AI chat candidates are built from data(),
-          // so nothing stale may stay in it.
+          // The error panel replaces the cached board, so nothing stale may stay in data().
           if (this.showingCached()) this.data.set(normalizeBoardData({ columns: [], items: [] }));
           this.error.set(errorMessage(e));
         },

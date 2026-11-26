@@ -45,19 +45,3 @@
   cursor: pointer;
   color: var(--muted);
 }
-
-.ai-chat-fab-picker {
-  display: grid;
-  gap: 0.25rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
-}
-
-.ai-chat-fab-picker select {
-  width: 100%;
-}
-
-.ai-chat-fab-hint {
-  margin: 0.5rem 0;
-  color: var(--muted);
-}

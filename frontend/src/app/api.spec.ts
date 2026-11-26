@@ -44,6 +44,45 @@ describe('Api', () => {
       body: { columns: [], settings: { cardLayout: 'pack' } },
     });
   });
+  it('lists the project AI chat history of the caller', () => {
+    let body: unknown;
+    api.listProjectAIChat(4).subscribe((b) => (body = b));
+    const req = http.expectOne('/api/projects/4/ai-chat');
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.keys()).toEqual([]);
+    const messages = [
+      { id: 1, projectId: 4, role: 'user', body: 'q', createdAt: '2026-11-26T00:00:00Z' },
+    ];
+    req.flush({ messages });
+    expect(body).toEqual(messages);
+  });
+  it('maps a missing project AI chat history to an empty list', () => {
+    let body: unknown;
+    api.listProjectAIChat(4).subscribe((b) => (body = b));
+    http.expectOne('/api/projects/4/ai-chat').flush({});
+    expect(body).toEqual([]);
+  });
+  it('posts a project AI chat message without focusItemNumber by default', () => {
+    api.postProjectAIChat(4, '期限が近いものは').subscribe();
+    const req = http.expectOne('/api/projects/4/ai-chat');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ message: '期限が近いものは' });
+    req.flush({ assistant: {}, messages: [] });
+  });
+  it('posts a project AI chat message with the open item number', () => {
+    api.postProjectAIChat(4, '要約して', 12).subscribe();
+    const req = http.expectOne('/api/projects/4/ai-chat');
+    expect(req.request.body).toEqual({ message: '要約して', focusItemNumber: 12 });
+    req.flush({ assistant: {}, messages: [] });
+  });
+  it('clears the project AI chat history of the caller', () => {
+    let done = false;
+    api.clearProjectAIChat(4).subscribe(() => (done = true));
+    const req = http.expectOne('/api/projects/4/ai-chat');
+    expect(req.request.method).toBe('DELETE');
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    expect(done).toBe(true);
+  });
   it('sends the selected status as columnId', () => {
     api.updateItem(7, { columnId: 3 }).subscribe();
     const req = http.expectOne('/api/items/7');

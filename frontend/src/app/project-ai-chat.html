@@ -33,7 +33,7 @@
         <li class="ai-chat-msg" [attr.data-role]="msg.role">
           <span class="ai-chat-role">{{ msg.role === 'user' ? 'あなた' : 'AI' }}</span>
           <pre class="ai-chat-body">{{ msg.body }}</pre>
-          @if (msg.role === 'assistant') {
+          @if (msg.role === 'assistant' && canApply()) {
             <div class="ai-chat-actions">
               <button
                 type="button"
@@ -55,9 +55,13 @@
           }
         </li>
       } @empty {
-        <li class="ai-chat-empty">このアイテムについて質問できます。</li>
+        <li class="ai-chat-empty">{{ emptyMessage }}</li>
       }
     </ul>
+
+    @if (sending()) {
+      <p class="ai-chat-status ai-chat-sending" role="status">{{ sendingMessage }}</p>
+    }
 
     @if (error()) {
       <p class="ai-chat-error" role="alert">{{ error() }}</p>
@@ -76,9 +80,7 @@
         placeholder="質問や依頼を入力…"
         (keydown.enter)="onComposeKeydown($event)"
       ></textarea>
-      <button type="submit" [attr.disabled]="composeInactive() ? true : null">
-        {{ sending() ? '送信中…' : '送信' }}
-      </button>
+      <button type="submit" [attr.disabled]="composeInactive() ? true : null">送信</button>
     </form>
   }
 </section>

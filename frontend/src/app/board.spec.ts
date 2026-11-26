@@ -3,6 +3,7 @@ import { ApplicationRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { AiChatContext } from './ai-chat-context';
 import { Api } from './api';
 import { Board } from './board';
 import { CommandTemplatesSession } from './command-templates-session';
@@ -2776,5 +2777,35 @@ describe('Board layout styles', () => {
     } finally {
       tag.remove();
     }
+  });
+});
+describe('Board AI chat context', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('tells the AI chat it is the board, and clears on destroy', async () => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => singleCardBoard(),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: unknown) => of(f),
+          },
+        },
+      ],
+    });
+    const ctx = TestBed.inject(AiChatContext);
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    expect(ctx.pageKind()).toBe('board');
+    expect(ctx.routeTarget()).toBeNull();
+    f.destroy();
+    expect(ctx.pageKind()).toBe('other');
   });
 });

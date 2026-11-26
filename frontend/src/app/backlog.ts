@@ -26,10 +26,8 @@ import {
   resolveBoardMetaConditional,
 } from './conditional-get';
 import { AiChatContext } from './ai-chat-context';
-import { toAiChatOptions } from './ai-chat-target';
 import { Api } from './api';
 import { errorMessage } from './api-error';
-import { AuthSession } from './auth-session';
 import { computeAutoScrollDelta, computeDropSlot, moveItem, targetIndex } from './backlog-order';
 import { applyBoardDataWithActiveSync } from './board-active-sync';
 import { normalizeBoardMeta } from './board-data';
@@ -81,7 +79,6 @@ export class Backlog implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
-  private readonly auth = inject(AuthSession);
   private readonly aiChat = inject(AiChatContext);
   private readonly projectSession = inject(ProjectSession);
   private readonly projectBoardCache = inject(ProjectBoardCache);
@@ -193,11 +190,8 @@ export class Backlog implements OnInit {
     description: new FormControl('', { nonNullable: true, validators: [textLimit(10000)] }),
   });
 
-  private readonly publishAiChatCandidates = effect(() => {
-    this.aiChat.setBacklog(toAiChatOptions(this.activeItems(), this.auth.user()));
-  });
-
   ngOnInit() {
+    this.aiChat.setBacklog();
     this.load({ useCache: true });
     this.listFilter.load();
     bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadAfterProjectSwitch());
@@ -306,8 +300,7 @@ export class Backlog implements OnInit {
         },
         error: (e) => {
           if (generation !== this.backlogLoadGeneration) return;
-          // The error panel replaces the cached backlog; the AI chat candidates are built from items(),
-          // so nothing stale may stay in it.
+          // The error panel replaces the cached backlog, so nothing stale may stay in items().
           if (this.showingCached()) {
             this.items.set([]);
             this.columns.set([]);

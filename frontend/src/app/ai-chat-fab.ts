@@ -15,16 +15,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
 import { AiChatContext } from './ai-chat-context';
-import {
-  isAiChatRoute,
-  optionKey,
-  resolveTarget,
-  selectableCandidates,
-  type AiChatTarget,
-} from './ai-chat-target';
+import { isAiChatRoute, resolveChatProjectId, toFocusItem } from './ai-chat-target';
 import { AuthSession } from './auth-session';
-import { ItemAiChat } from './item-ai-chat';
 import { Item } from './models';
+import { ProjectAiChat } from './project-ai-chat';
 import { ProjectSession } from './project-session';
 
 const OPEN_GUARD_MS = 300;
@@ -32,7 +26,7 @@ const CLOSE_GUARD_MS = 300;
 
 @Component({
   selector: 'app-ai-chat-fab',
-  imports: [ItemAiChat],
+  imports: [ProjectAiChat],
   templateUrl: './ai-chat-fab.html',
   styleUrl: './ai-chat-fab.css',
 })
@@ -48,38 +42,29 @@ export class AiChatFab implements OnInit {
   private readonly panelRef = viewChild<ElementRef<HTMLElement>>('panel');
 
   readonly open = signal(false);
-  readonly selected = signal<AiChatTarget | null>(null);
   private readonly routeUrl = signal(this.router.url);
   private openedAt = 0;
   private closedAt = 0;
   private lastActiveProjectId: number | null = null;
 
-  readonly pageKind = this.ctx.pageKind;
-  readonly candidates = this.ctx.candidates;
+  /** アイテム詳細ではそのアイテムのプロジェクト、ボード・バックログでは選択中のプロジェクト */
+  readonly projectId = computed(() =>
+    resolveChatProjectId({
+      pageKind: this.ctx.pageKind(),
+      detailProjectId: this.ctx.detailProjectId(),
+      activeProjectId: this.projects.activeId(),
+    }),
+  );
+
+  readonly focusItem = computed(() => toFocusItem(this.ctx.pageKind(), this.ctx.routeTarget()));
 
   readonly showEntry = computed(() => {
     if (!isAiChatRoute(this.routeUrl())) return false;
     if (this.auth.status() !== 'authenticated' || !this.auth.user() || this.auth.user()?.disabled) {
       return false;
     }
-    const kind = this.pageKind();
-    if (kind === 'detail') return this.ctx.routeTarget() != null;
-    if (kind === 'board' || kind === 'backlog') {
-      return selectableCandidates(this.candidates()).length >= 1;
-    }
-    return false;
+    return this.projectId() != null;
   });
-
-  readonly activeTarget = computed(() =>
-    resolveTarget({
-      pageKind: this.pageKind(),
-      routeTarget: this.ctx.routeTarget(),
-      selected: this.selected(),
-      candidates: this.candidates(),
-    }),
-  );
-
-  readonly optionKey = optionKey;
 
   constructor() {
     this.lastActiveProjectId = this.projects.activeId();
@@ -88,13 +73,6 @@ export class AiChatFab implements OnInit {
       if (activeId === this.lastActiveProjectId) return;
       this.lastActiveProjectId = activeId;
       this.closePanel({ restoreFocus: false });
-      this.selected.set(null);
-    });
-    effect(() => {
-      this.candidates();
-      this.ctx.routeTarget();
-      this.pageKind();
-      this.syncSelectionFromCandidates();
     });
 
     if (typeof document !== 'undefined') {
@@ -117,24 +95,8 @@ export class AiChatFab implements OnInit {
       });
   }
 
-  syncSelectionFromCandidates() {
-    this.selected.set(
-      resolveTarget({
-        pageKind: this.pageKind(),
-        routeTarget: this.ctx.routeTarget(),
-        selected: this.selected(),
-        candidates: this.candidates(),
-      }),
-    );
-  }
-
   onNavigation() {
-    if (!isAiChatRoute(this.routeUrl())) {
-      this.closePanel({ restoreFocus: false });
-      this.selected.set(null);
-      return;
-    }
-    this.syncSelectionFromCandidates();
+    if (!isAiChatRoute(this.routeUrl())) this.closePanel({ restoreFocus: false });
   }
 
   toggle() {
@@ -206,18 +168,6 @@ export class AiChatFab implements OnInit {
     event.preventDefault();
     this.closePanel({ restoreFocus: true });
   };
-
-  onSelectChange(key: string) {
-    const hit = this.candidates().find((c) => optionKey(c) === key && c.canEdit);
-    this.selected.set(
-      hit ? { number: hit.number, projectId: hit.projectId, itemId: hit.itemId } : null,
-    );
-  }
-
-  selectedKey(): string {
-    const t = this.activeTarget();
-    return t ? optionKey(t) : '';
-  }
 
   onDescriptionApplied(item: Item) {
     this.ctx.onDescriptionApplied()?.(item);

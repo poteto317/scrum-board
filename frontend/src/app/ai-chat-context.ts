@@ -1,60 +1,71 @@
 import { Injectable, signal } from '@angular/core';
 import type { Item } from './models';
-import { sameJson } from './live-refresh';
-import {
-  sameTarget,
-  type AiChatPageKind,
-  type AiChatTarget,
-  type AiChatTargetOption,
-} from './ai-chat-target';
+import { isUnchangedItem, type AiChatFocusItem, type AiChatPageKind } from './ai-chat-target';
 
 export type { AiChatPageKind };
 
 @Injectable({ providedIn: 'root' })
 export class AiChatContext {
   readonly pageKind = signal<AiChatPageKind>('other');
-  readonly candidates = signal<AiChatTargetOption[]>([]);
-  readonly routeTarget = signal<AiChatTarget | null>(null);
+  /** アイテム詳細で開いているアイテム。プロジェクトは持たない（detailProjectId が持つ） */
+  readonly routeTarget = signal<AiChatFocusItem | null>(null);
+  /**
+   * アイテム詳細のプロジェクト（ここだけが持つ）。詳細から詳細へ移って次のアイテムを
+   * 読み込んでいる間（routeTarget が null の間）も残る。詳細でなくなったら null。
+   */
+  readonly detailProjectId = signal<number | null>(null);
   readonly onDescriptionApplied = signal<((item: Item) => void) | null>(null);
   readonly onCommentApplied = signal<(() => void) | null>(null);
 
-  setBoard(candidates: AiChatTargetOption[]) {
-    this.setList('board', candidates);
+  setBoard() {
+    this.setList('board');
   }
 
-  setBacklog(candidates: AiChatTargetOption[]) {
-    this.setList('backlog', candidates);
+  setBacklog() {
+    this.setList('backlog');
   }
 
   setDetail(
-    target: AiChatTarget,
+    detail: { projectId: number; item: AiChatFocusItem },
     handlers: {
       onDescriptionApplied: (item: Item) => void;
       onCommentApplied: () => void;
     },
   ) {
     this.pageKind.set('detail');
-    if (this.candidates().length > 0) this.candidates.set([]);
-    if (!sameTarget(this.routeTarget(), target)) {
-      this.routeTarget.set(target);
+    this.detailProjectId.set(detail.projectId);
+    if (!isUnchangedItem(this.routeTarget(), detail.item)) {
+      this.routeTarget.set(detail.item);
     }
     this.onDescriptionApplied.set(handlers.onDescriptionApplied);
     this.onCommentApplied.set(handlers.onCommentApplied);
   }
 
-  clear() {
-    this.pageKind.set('other');
-    this.candidates.set([]);
-    this.routeTarget.set(null);
-    this.onDescriptionApplied.set(null);
-    this.onCommentApplied.set(null);
+  /**
+   * アイテム詳細の中で次のアイテムを読み込んでいる間に呼ぶ。開いているアイテムだけ外し、
+   * 画面の種類とプロジェクトは保つ（チャットを破棄せず、送信中の回答を失わない）。
+   */
+  releaseDetailItem() {
+    if (this.pageKind() !== 'detail') return;
+    this.releaseTarget();
   }
 
-  private setList(kind: 'board' | 'backlog', candidates: AiChatTargetOption[]) {
+  clear() {
+    this.pageKind.set('other');
+    this.resetDetail();
+  }
+
+  private setList(kind: 'board' | 'backlog') {
     this.pageKind.set(kind);
-    if (!sameJson(this.candidates(), candidates)) {
-      this.candidates.set(candidates);
-    }
+    this.resetDetail();
+  }
+
+  private resetDetail() {
+    this.detailProjectId.set(null);
+    this.releaseTarget();
+  }
+
+  private releaseTarget() {
     this.routeTarget.set(null);
     this.onDescriptionApplied.set(null);
     this.onCommentApplied.set(null);
