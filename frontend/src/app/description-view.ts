@@ -17,10 +17,20 @@ export type DescriptionViewBlock =
 
 const TASK_LABEL_FALLBACK = 'チェック項目';
 
-/** Readable name for a task checkbox: text, link labels and image alts, without markup. */
+/** Readable name for a task checkbox: plain text, link/file labels, image alts. */
 function taskLabel(segments: DescriptionSegment[]): string {
   const label = segments
-    .map((seg) => (seg.kind === 'text' ? seg.text : seg.kind === 'link' ? seg.label : seg.alt))
+    .map((seg) => {
+      switch (seg.kind) {
+        case 'text':
+          return seg.text;
+        case 'link':
+        case 'file':
+          return seg.label;
+        case 'image':
+          return seg.alt;
+      }
+    })
     .join('')
     .trim();
   return label || TASK_LABEL_FALLBACK;

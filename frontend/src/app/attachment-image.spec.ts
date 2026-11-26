@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ATTACHMENT_IMAGE_ACCEPT,
   ATTACHMENT_IMAGE_BATCH_HINT,
+  ATTACHMENT_IMAGE_BUSY_HINT,
   ATTACHMENT_IMAGE_HINT,
   ATTACHMENT_IMAGE_MAX_BYTES,
   imageUploadDoneMessage,
@@ -18,15 +19,15 @@ function file(name: string, type: string, size = 3): File {
 }
 
 describe('isAllowedImageFile', () => {
-  it('accepts the four image types up to 5 MiB', () => {
-    for (const type of ['image/jpeg', 'image/png', 'image/gif', 'image/webp']) {
+  it('accepts the four image types and PDF up to 5 MiB', () => {
+    for (const type of ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']) {
       expect(isAllowedImageFile(file('a', type))).toBe(true);
     }
     expect(isAllowedImageFile(file('a.png', 'image/png', ATTACHMENT_IMAGE_MAX_BYTES))).toBe(true);
   });
 
   it('rejects other types, empty files, and files over the limit', () => {
-    expect(isAllowedImageFile(file('a.pdf', 'application/pdf'))).toBe(false);
+    expect(isAllowedImageFile(file('a.html', 'text/html'))).toBe(false);
     expect(isAllowedImageFile(file('a.svg', 'image/svg+xml'))).toBe(false);
     expect(isAllowedImageFile(file('a.png', 'image/png', 0))).toBe(false);
     expect(isAllowedImageFile(file('a.png', 'image/png', ATTACHMENT_IMAGE_MAX_BYTES + 1))).toBe(
@@ -37,15 +38,24 @@ describe('isAllowedImageFile', () => {
 
 describe('ATTACHMENT_IMAGE_ACCEPT', () => {
   it('lists the allowed types for the file picker', () => {
-    expect(ATTACHMENT_IMAGE_ACCEPT).toBe('image/jpeg,image/png,image/gif,image/webp');
+    expect(ATTACHMENT_IMAGE_ACCEPT).toContain('application/pdf');
+    expect(ATTACHMENT_IMAGE_ACCEPT).toContain('image/png');
+  });
+});
+
+describe('hints', () => {
+  it('mentions PDF and busy attachments', () => {
+    expect(ATTACHMENT_IMAGE_HINT).toContain('PDF');
+    expect(ATTACHMENT_IMAGE_HINT).toContain('5MiB');
+    expect(ATTACHMENT_IMAGE_BUSY_HINT).toContain('添付');
   });
 });
 
 describe('planImageUpload', () => {
-  it('keeps allowed images in order and counts the rest', () => {
+  it('keeps allowed files in order and counts the rest', () => {
     const a = file('a.png', 'image/png');
-    const b = file('b.pdf', 'application/pdf');
-    const c = file('c.jpg', 'image/jpeg');
+    const b = file('b.html', 'text/html');
+    const c = file('c.pdf', 'application/pdf');
     const plan = planImageUpload([a, b, c]);
     expect(plan.accepted).toEqual([a, c]);
     expect(plan.rejected).toBe(1);
@@ -67,8 +77,8 @@ describe('planImageUpload', () => {
 });
 
 describe('imageUploadFailureMessage', () => {
-  it('mentions the count only when some images were added', () => {
-    expect(imageUploadFailureMessage(0, 3)).toBe('画像のアップロードに失敗しました。');
+  it('mentions the count only when some files were added', () => {
+    expect(imageUploadFailureMessage(0, 3)).toBe('添付のアップロードに失敗しました。');
     expect(imageUploadFailureMessage(2, 3)).toContain('3件中2件');
   });
 
@@ -79,19 +89,19 @@ describe('imageUploadFailureMessage', () => {
       '添付はアイテムあたり20枚までです（3件中2件を追加）。',
     );
     expect(imageUploadFailureMessage(0, 1, { error: { message: ' ' } })).toBe(
-      '画像のアップロードに失敗しました。',
+      '添付のアップロードに失敗しました。',
     );
-    expect(imageUploadFailureMessage(0, 1, new Error('x'))).toBe('画像のアップロードに失敗しました。');
+    expect(imageUploadFailureMessage(0, 1, new Error('x'))).toBe('添付のアップロードに失敗しました。');
   });
 });
 
 describe('imageUploadDoneMessage', () => {
   const clean = planImageUpload([file('a.png', 'image/png')]);
-  const mixed = planImageUpload([file('a.png', 'image/png'), file('a.pdf', 'application/pdf')]);
+  const mixed = planImageUpload([file('a.png', 'image/png'), file('a.html', 'text/html')]);
 
   it('prefers the failure, then the stop reason, then the notice about skipped files', () => {
     expect(imageUploadDoneMessage({ added: 0, total: 1, failed: true }, mixed, 'limit')).toBe(
-      '画像のアップロードに失敗しました。',
+      '添付のアップロードに失敗しました。',
     );
     expect(imageUploadDoneMessage({ added: 0, total: 1, failed: false }, mixed, 'limit')).toBe(
       'limit',

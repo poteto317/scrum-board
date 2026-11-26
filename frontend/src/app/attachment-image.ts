@@ -1,35 +1,52 @@
-/** 添付画像の規則（種類・サイズ・件数）と、利用者に出す文言。貼り付け・ドロップ・ファイル選択で共有する。 */
+/** 添付ファイルの規則（種類・サイズ・件数）と、利用者に出す文言。貼り付け・ドロップ・ファイル選択で共有する。 */
 
 import type { ImageUploadOutcome } from './upload-images-in-order';
 
-/** 添付できる画像の種類（サーバーの許可リストと同じ）。 */
+/** 画像としてインライン表示する種類（サーバーの画像許可集合と同じ）。 */
 const ATTACHMENT_IMAGE_TYPES: ReadonlySet<string> = new Set([
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
 ]);
+
+/** アップロード許可（画像 + PDF）。画像集合から導出する。 */
+const ATTACHMENT_FILE_TYPES: ReadonlySet<string> = new Set([
+  ...ATTACHMENT_IMAGE_TYPES,
+  'application/pdf',
+]);
+
 /** ファイル選択の `accept` に渡す並び。 */
-export const ATTACHMENT_IMAGE_ACCEPT = [...ATTACHMENT_IMAGE_TYPES].join(',');
+export const ATTACHMENT_IMAGE_ACCEPT = [...ATTACHMENT_FILE_TYPES].join(',');
 export const ATTACHMENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-/** 1 回の貼り付け・ドロップ・選択で追加できる画像の数。 */
+/** 1 回の貼り付け・ドロップ・選択で追加できる添付の数。 */
 const ATTACHMENT_IMAGE_BATCH_MAX = 10;
 
-export const ATTACHMENT_IMAGE_HINT = 'JPEG / PNG / GIF / WebP（5MiB以下）を選んでください。';
-export const ATTACHMENT_IMAGE_BATCH_HINT = `一度に追加できる画像は${ATTACHMENT_IMAGE_BATCH_MAX}件までです。`;
-/** アップロード・削除のどちらかが進んでいる間に、次の画像が来たとき。 */
-export const ATTACHMENT_IMAGE_BUSY_HINT = '画像の処理中です。終わってから追加してください。';
+export const ATTACHMENT_IMAGE_HINT = 'JPEG / PNG / GIF / WebP / PDF（5MiB以下）を選んでください。';
+export const ATTACHMENT_IMAGE_BATCH_HINT = `一度に追加できる添付は${ATTACHMENT_IMAGE_BATCH_MAX}件までです。`;
+/** アップロード・削除のどちらかが進んでいる間に、次の添付が来たとき。 */
+export const ATTACHMENT_IMAGE_BUSY_HINT = '添付の処理中です。終わってから追加してください。';
 
+export function isImageAttachmentType(contentType: string): boolean {
+  return ATTACHMENT_IMAGE_TYPES.has(contentType);
+}
+
+/** アップロード結果の Content-Type から本文記法の種別を決める。 */
+export function attachmentMarkupKind(contentType: string): 'image' | 'file' {
+  return isImageAttachmentType(contentType) ? 'image' : 'file';
+}
+
+/** 添付として許可するファイルか（関数名は互換のため image のまま）。 */
 export function isAllowedImageFile(file: File): boolean {
   return (
-    ATTACHMENT_IMAGE_TYPES.has(file.type) &&
+    ATTACHMENT_FILE_TYPES.has(file.type) &&
     file.size > 0 &&
     file.size <= ATTACHMENT_IMAGE_MAX_BYTES
   );
 }
 
 export type ImageUploadPlan = {
-  /** アップロードする画像（先頭から上限まで）。 */
+  /** アップロードする添付（先頭から上限まで）。 */
   accepted: File[];
   /** 種類・サイズが合わずに外した数。 */
   rejected: number;
@@ -66,7 +83,7 @@ export function imageUploadFailureMessage(added: number, total: number, error?: 
   const base =
     typeof reason === 'string' && reason.trim() !== ''
       ? reason.trim().replace(/。$/, '')
-      : '画像のアップロードに失敗しました';
+      : '添付のアップロードに失敗しました';
   return added > 0 ? `${base}（${total}件中${added}件を追加）。` : `${base}。`;
 }
 

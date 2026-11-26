@@ -1,5 +1,6 @@
 import {
   buildAttachmentMarkup,
+  buildFileAttachmentMarkup,
   formatDescriptionLink,
   insertDescriptionLink,
   normalizeDescriptionLinkLabel,
@@ -133,5 +134,20 @@ describe('parseDescriptionLinks', () => {
     expect(buildAttachmentMarkup(2, 9, 'a]b')).toBe(
       '![ab](/api/items/by-number/2/attachments/9/content)',
     );
+  });
+
+  it('builds and parses same-item file attachment links', () => {
+    expect(buildFileAttachmentMarkup(2, 9, 'a]b\nc')).toBe(
+      '[abc](/api/items/by-number/2/attachments/9/content)',
+    );
+    expect(buildFileAttachmentMarkup(2, 9, '  ')).toBe(
+      '[file](/api/items/by-number/2/attachments/9/content)',
+    );
+    const src = '/api/items/by-number/7/attachments/3/content';
+    expect(parseDescriptionLinks(`see [doc.pdf](${src}) now`, 7)).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'file', label: 'doc.pdf', src, attachmentId: 3 },
+      { kind: 'text', text: ' now' },
+    ]);
   });
 });
