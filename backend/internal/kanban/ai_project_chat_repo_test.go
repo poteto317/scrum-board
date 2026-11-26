@@ -252,6 +252,13 @@ func TestProjectAIMessagesDDLMatchesSchemaFile(t *testing.T) {
 	if !strings.Contains(text, squashSQL(projectAIConversationsDDL)+";") {
 		t.Fatal("database/init/001_schema.sql must contain the same project_ai_conversations DDL as projectAIConversationsDDL")
 	}
+	if !strings.Contains(text, squashSQL(projectAIProposalsDDL)+";") {
+		t.Fatal("database/init/001_schema.sql must contain the same project_ai_proposals DDL as projectAIProposalsDDL")
+	}
+	// 提案はメッセージを参照するので、メッセージより後に置く。
+	if p, m := strings.Index(text, "CREATE TABLE IF NOT EXISTS project_ai_proposals"), strings.Index(text, "CREATE TABLE IF NOT EXISTS project_ai_messages"); p < m {
+		t.Fatal("project_ai_proposals must come after project_ai_messages")
+	}
 	// users を参照するので、users より後に置く。メッセージは会話を参照するので、会話より後に置く。
 	users := strings.Index(text, "CREATE TABLE IF NOT EXISTS users")
 	conversations := strings.Index(text, "CREATE TABLE IF NOT EXISTS project_ai_conversations")
