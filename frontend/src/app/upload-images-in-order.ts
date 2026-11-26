@@ -2,6 +2,9 @@ import { Observable } from 'rxjs';
 
 export type ImageUploadStep = 'continue' | 'stop';
 
+/** 順に送った結果。`added` は本文に入った件数、`error` は失敗のときのサーバーの応答。 */
+export type ImageUploadOutcome = { added: number; total: number; failed: boolean; error?: unknown };
+
 /**
  * 画像を 1 件ずつ順にアップロードする。前の 1 件が終わるまで次を送らない。
  * 本文への挿入や「まだ同じアイテムか」の判断は `onUploaded` が行い、`stop` を返すと残りを送らない。
@@ -11,7 +14,7 @@ export function uploadImagesInOrder<T>(opts: {
   files: readonly File[];
   upload: (file: File) => Observable<T>;
   onUploaded: (result: T, file: File) => ImageUploadStep;
-  onDone: (outcome: { added: number; total: number; failed: boolean; error?: unknown }) => void;
+  onDone: (outcome: ImageUploadOutcome) => void;
 }): void {
   const total = opts.files.length;
   const step = (i: number) => {
