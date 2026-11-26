@@ -8,11 +8,17 @@ import (
 )
 
 func (h handler) loadItemACLState(ctx context.Context, item Item) (ItemACLState, error) {
+	return loadItemACLStateFrom(ctx, h.repo, item)
+}
+
+// loadItemACLStateFrom is the item's access state, with the allowlists read from repo only
+// when the item is restricted. The project chat's tools use it too (they have no handler).
+func loadItemACLStateFrom(ctx context.Context, repo Repository, item Item) (ItemACLState, error) {
 	st := aclStateFromItem(item)
 	if item.ViewAccess != ViewAccessRestricted && item.EditAccess != EditAccessRestricted {
 		return st, nil
 	}
-	m, err := h.repo.ListACLEntriesForItems(ctx, []int64{item.ID})
+	m, err := repo.ListACLEntriesForItems(ctx, []int64{item.ID})
 	if err != nil {
 		return st, err
 	}
