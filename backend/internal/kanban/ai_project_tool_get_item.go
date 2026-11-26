@@ -77,11 +77,21 @@ func getItemResult(item Item, comments []Comment, columns []Column, clip int) ge
 // fitGetItem keeps the JSON within limit characters: it first drops comments from the end
 // (the oldest), then clips the long fields harder. ok is false when nothing fits.
 func fitGetItem(item Item, comments []Comment, columns []Column, limit int) (string, bool) {
+	out, ok := fitGetItemOut(item, comments, columns, limit)
+	if !ok {
+		return "", false
+	}
+	return toolJSON(out), true
+}
+
+// fitGetItemOut is fitGetItem before encoding: the result that fits, so that the caller can
+// tell what it carries (getItemResultWithDescription).
+func fitGetItemOut(item Item, comments []Comment, columns []Column, limit int) (getItemOut, bool) {
 	out := getItemResult(item, comments, columns, maxAIChatContextFieldLen)
 	for {
 		text := toolJSON(out)
 		if utf8.RuneCountInString(text) <= limit {
-			return text, true
+			return out, true
 		}
 		if len(out.Comments) == 0 {
 			break
@@ -96,17 +106,26 @@ func fitGetItem(item Item, comments []Comment, columns []Column, limit int) (str
 			out.PRURLs = []string{}
 		}
 		if text := toolJSON(out); utf8.RuneCountInString(text) <= limit {
-			return text, true
+			return out, true
 		}
 	}
-	return "", false
+	return getItemOut{}, false
 }
 
 // getItemResultText is the result handed to the model: the item cut to limit characters, or
 // the fixed "answer with what you have" error when nothing fits.
 func getItemResultText(item Item, comments []Comment, columns []Column, limit int) string {
-	if text, ok := fitGetItem(item, comments, columns, limit); ok {
-		return text
+	text, _ := getItemResultWithDescription(item, comments, columns, limit)
+	return text
+}
+
+// getItemResultWithDescription is getItemResultText, and whether the result carries the
+// item's whole description (not clipped, not the budget error). A description edit replaces
+// the whole text, so it is only accepted after the model has read it whole.
+func getItemResultWithDescription(item Item, comments []Comment, columns []Column, limit int) (string, bool) {
+	out, ok := fitGetItemOut(item, comments, columns, limit)
+	if !ok {
+		return toolErrorResult(toolErrBudget), false
 	}
-	return toolErrorResult(toolErrBudget)
+	return toolJSON(out), out.Description == item.Description
 }

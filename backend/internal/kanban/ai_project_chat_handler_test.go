@@ -155,8 +155,8 @@ func TestProjectAIChatRunsToolsAndStoresOnlyTheFinalAnswer(t *testing.T) {
 	if len(stored) != 2 || stored[0].Body != "認証まわりで決めたことは？" || stored[1].Body != want {
 		t.Fatalf("stored=%+v", stored)
 	}
-	// モデルの呼び出しは最大 4 回、ツールは 2 つ。
-	if chatter.maxCalls[0] != 4 || maxProjectChatModelCalls != 4 || len(chatter.tools) != 2 {
+	// モデルの呼び出しは最大 4 回、ツールは 5 つ（読み取り 2 つと提案 3 つ）。
+	if chatter.maxCalls[0] != 4 || maxProjectChatModelCalls != 4 || len(chatter.tools) != 5 {
 		t.Fatalf("maxCalls=%v tools=%d", chatter.maxCalls, len(chatter.tools))
 	}
 	usage, _ := f.repo.GetAIUsage(context.Background())

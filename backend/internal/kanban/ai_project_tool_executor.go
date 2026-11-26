@@ -19,11 +19,20 @@ type projectToolExecutor struct {
 	columns   []Column
 	budget    toolResultBudget
 	failed    error // first failure that must stop the loop
+	// proposals are the proposals accepted so far (at most maxProposalsPerQuestion).
+	proposals []ProjectAIProposalDraft
+	// readDescriptions are the descriptions get_item handed over whole in this question, by
+	// item number. A description edit replaces the whole text, so it is only accepted for an
+	// item whose whole current description the model has read (a clipped one would cut it).
+	readDescriptions map[int64]string
 }
 
 func newProjectToolExecutor(repo Repository, projectID int64, user *User, columns []Column) *projectToolExecutor {
 	return &projectToolExecutor{repo: repo, projectID: projectID, user: user, columns: columns, budget: newToolResultBudget()}
 }
+
+// Proposals are the proposals the tools accepted, to store with the answer.
+func (e *projectToolExecutor) Proposals() []ProjectAIProposalDraft { return e.proposals }
 
 // failure is the error that stopped the tool loop, if any.
 func (e *projectToolExecutor) failure() error { return e.failed }
@@ -47,6 +56,8 @@ func (e *projectToolExecutor) Run(ctx context.Context, call ToolCall) (string, e
 		result, err = e.searchItems(ctx, call.Input, min(maxSearchItemsResultChars, room))
 	case toolGetItem:
 		result, err = e.getItem(ctx, call.Input, min(maxGetItemResultChars, room))
+	case toolProposeStatusChange, toolProposeDescriptionEdit, toolProposeItemCreate:
+		result, err = e.propose(ctx, call.Name, call.Input)
 	default:
 		result = toolErrorResult(toolErrUnknownTool)
 	}
@@ -117,5 +128,17 @@ func (e *projectToolExecutor) getItem(ctx context.Context, raw json.RawMessage, 
 	if err != nil {
 		return "", err
 	}
-	return getItemResultText(item, comments, e.columns, limit), nil
+	text, whole := getItemResultWithDescription(item, comments, e.columns, limit)
+	if whole {
+		e.rememberReadDescription(item)
+	}
+	return text, nil
+}
+
+// rememberReadDescription notes the item's description as read whole in this question.
+func (e *projectToolExecutor) rememberReadDescription(item Item) {
+	if e.readDescriptions == nil {
+		e.readDescriptions = map[int64]string{}
+	}
+	e.readDescriptions[item.Number] = item.Description
 }

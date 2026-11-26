@@ -22,6 +22,17 @@ const (
 	toolErrItemNotFound = "アイテムが見つかりません。"
 	toolErrDateFormat   = "日付は YYYY-MM-DD の形式で指定してください。"
 	toolErrBudget       = "これ以上は調べられません。ここまでの結果で答えてください。"
+
+	toolErrProposalLimit   = "これ以上は提案できません。ここまでの提案で答えてください。"
+	toolErrNotEditable     = "このアイテムは編集できないため、提案できません。"
+	toolErrArchived        = "アーカイブ済みのアイテムには提案できません。"
+	toolErrUnknownStatus   = "その列はありません。"
+	toolErrSameStatus      = "すでにその列にあります。"
+	toolErrSameDescription = "説明が今と変わりません。"
+	toolErrNoTodoColumn    = "Todo の列が無いため、作成を提案できません。"
+	toolErrProposalText    = "タイトルは1〜200文字、説明は10000文字以内にしてください。"
+	// The model must have read the whole current description: get_item clips long ones.
+	toolErrDescriptionNotRead = "説明の全文を読んでいないため、提案できません。先に get_item で今の説明を読んでください。説明が長くて全文を読めないアイテムには、説明の編集を提案できません。"
 )
 
 // toolJSON encodes a tool result. HTML characters are kept as they are: the text goes to the model, not to a page.
