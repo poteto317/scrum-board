@@ -15,6 +15,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
 import { AiChatContext } from './ai-chat-context';
+import { isEditableFocusTarget } from './ai-chat-focus-target';
 import { isAiChatRoute, resolveChatProjectId, toFocusItem } from './ai-chat-target';
 import { AuthSession } from './auth-session';
 import { Item } from './models';
@@ -42,6 +43,7 @@ export class AiChatFab implements OnInit {
   private readonly panelRef = viewChild<ElementRef<HTMLElement>>('panel');
 
   readonly open = signal(false);
+  readonly expanding = signal(false);
   private readonly routeUrl = signal(this.router.url);
   private openedAt = 0;
   private closedAt = 0;
@@ -165,9 +167,33 @@ export class AiChatFab implements OnInit {
     if (event.isComposing || event.keyCode === 229 || event.repeat) return;
     if (Date.now() - this.openedAt < OPEN_GUARD_MS) return;
     if (document.querySelector('dialog[open]')) return;
+    const active = document.activeElement;
+    const panel = this.panelRef()?.nativeElement;
+    if (panel && active instanceof Node && panel.contains(active) && isEditableFocusTarget(active)) {
+      return;
+    }
     event.preventDefault();
     this.closePanel({ restoreFocus: true });
   };
+
+  async expandToPage() {
+    if (!this.open() || this.expanding()) return;
+    this.expanding.set(true);
+    try {
+      const id = this.projectId();
+      const ok = await this.router.navigate(
+        ['/ai-chat'],
+        id != null ? { queryParams: { project: id } } : {},
+      );
+      if (ok) {
+        this.closePanel({ restoreFocus: false });
+      }
+    } catch {
+      // navigate 失敗時はドックを開いたまま（L-001）
+    } finally {
+      this.expanding.set(false);
+    }
+  }
 
   onDescriptionApplied(item: Item) {
     this.ctx.onDescriptionApplied()?.(item);

@@ -47,6 +47,8 @@ export class ProjectAiChat implements OnChanges {
   readonly projectId = input.required<number>();
   /** 開いているアイテム（アイテム詳細だけ）。送信の文脈と、反映の対象になる */
   readonly focusItem = input<AiChatFocusItem | null>(null);
+  /** fab=従来の高さ制限、dock/page=一覧を伸ばす */
+  readonly layout = input<'fab' | 'dock' | 'page'>('fab');
   readonly descriptionApplied = output<Item>();
   readonly commentApplied = output<void>();
 
@@ -71,7 +73,9 @@ export class ProjectAiChat implements OnChanges {
   readonly error = signal('');
   readonly loadError = signal('');
 
-  readonly canApply = computed(() => this.focusItem()?.canEdit === true);
+  readonly canApply = computed(
+    () => this.layout() !== 'page' && this.focusItem()?.canEdit === true,
+  );
   readonly composeBlocked = computed(() => isComposeBlocked(this.credits()));
   readonly lowRemaining = computed(() => isLowRemaining(this.credits()));
   readonly blockReason = computed(() => blockedReason(this.credits()));

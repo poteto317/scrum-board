@@ -68,6 +68,8 @@ export class App implements OnInit {
   });
 
   readonly showAiChatFab = computed(() => isAiChatRoute(this.routeUrl()));
+  private readonly aiChatFab = viewChild(AiChatFab);
+  readonly dockOpen = computed(() => this.aiChatFab()?.open() === true);
 
   /** Sidebar rail vs expanded. Read once from localStorage; showChrome changes do not re-read. */
   readonly collapsed = signal(readSidebarCollapsed());

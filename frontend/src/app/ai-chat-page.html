@@ -1,0 +1,36 @@
+<section class="ai-chat-page" aria-labelledby="ai-chat-page-heading">
+  <header class="ai-chat-page-header">
+    <button
+      #backBtn
+      type="button"
+      class="ai-chat-page-back"
+      (click)="goBack()"
+    >
+      戻る
+    </button>
+    <h1 #heading id="ai-chat-page-heading" tabindex="-1">AIに聞く</h1>
+  </header>
+
+  @switch (view()) {
+    @case ('waiting') {
+      <p class="ai-chat-page-status" role="status">読み込み中…</p>
+    }
+    @case ('empty') {
+      <p class="ai-chat-page-empty" role="status">
+        プロジェクトを選ぶと、この画面で AI チャットを使えます。
+      </p>
+    }
+    @case ('invalid') {
+      <p class="ai-chat-page-invalid" role="alert">
+        プロジェクトの指定が正しくありません。
+      </p>
+    }
+    @case ('chat') {
+      @if (projectId(); as id) {
+        <div class="ai-chat-page-body">
+          <app-project-ai-chat [projectId]="id" [layout]="'page'" />
+        </div>
+      }
+    }
+  }
+</section>

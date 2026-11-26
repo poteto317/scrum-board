@@ -497,5 +497,78 @@ describe('AiChatFab', () => {
       expect(document.activeElement).not.toBe(btn);
       dialog.remove();
     });
+
+    it('renders a full-height dock panel with expand control', () => {
+      const { f, ctx } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      const panel = f.nativeElement.querySelector('#ai-chat-fab-panel') as HTMLElement;
+      expect(panel).toBeTruthy();
+      expect(panel.querySelector('.ai-chat-fab-expand')).toBeTruthy();
+      expect(panel.querySelector('.ai-chat--dock')).toBeTruthy();
+    });
+
+    it('does not close on Esc while a textarea is focused (L-522)', () => {
+      const { f, ctx } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      vi.advanceTimersByTime(300);
+      const ta = f.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+      expect(ta).toBeTruthy();
+      ta.focus();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      f.detectChanges();
+      expect(f.componentInstance.open()).toBe(true);
+    });
+
+    it('closes the dock only after a successful navigate to /ai-chat', async () => {
+      const { f, ctx, router } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      f.detectChanges();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], { queryParams: { project: 1 } });
+      expect(f.componentInstance.open()).toBe(false);
+      expect(f.componentInstance.expanding()).toBe(false);
+    });
+
+    it('passes the detail project id when it differs from activeId', async () => {
+      const { f, ctx, router, activeId } = setup({ activeId: 1 });
+      activeId.set(1);
+      ctx.setDetail(detailTarget({ projectId: 7 }), handlers);
+      f.detectChanges();
+      openPanel(f);
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], { queryParams: { project: 7 } });
+    });
+
+    it('keeps the dock open when navigate fails', async () => {
+      const { f, ctx, router } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      vi.spyOn(router, 'navigate').mockResolvedValue(false);
+      await f.componentInstance.expandToPage();
+      f.detectChanges();
+      expect(f.componentInstance.open()).toBe(true);
+      expect(f.componentInstance.expanding()).toBe(false);
+    });
+
+    it('keeps the dock open when navigate rejects', async () => {
+      const { f, ctx, router } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      vi.spyOn(router, 'navigate').mockRejectedValue(new Error('nav failed'));
+      await f.componentInstance.expandToPage();
+      f.detectChanges();
+      expect(f.componentInstance.open()).toBe(true);
+      expect(f.componentInstance.expanding()).toBe(false);
+    });
   });
 });

@@ -11,17 +11,31 @@
       >
         <header class="ai-chat-fab-header">
           <strong>AIに聞く</strong>
-          <button type="button" class="ai-chat-fab-close" (click)="closePanel({ restoreFocus: true })">
-            閉じる
-          </button>
+          <div class="ai-chat-fab-header-actions">
+            <button
+              type="button"
+              class="ai-chat-fab-expand"
+              (click)="expandToPage()"
+              [disabled]="expanding()"
+              aria-label="AIチャットを全画面で開く"
+            >
+              全画面
+            </button>
+            <button type="button" class="ai-chat-fab-close" (click)="closePanel({ restoreFocus: true })">
+              閉じる
+            </button>
+          </div>
         </header>
         @if (projectId(); as chatProjectId) {
-          <app-project-ai-chat
-            [projectId]="chatProjectId"
-            [focusItem]="focusItem()"
-            (descriptionApplied)="onDescriptionApplied($event)"
-            (commentApplied)="onCommentApplied()"
-          />
+          <div class="ai-chat-fab-body">
+            <app-project-ai-chat
+              [projectId]="chatProjectId"
+              [focusItem]="focusItem()"
+              [layout]="'dock'"
+              (descriptionApplied)="onDescriptionApplied($event)"
+              (commentApplied)="onCommentApplied()"
+            />
+          </div>
         }
       </div>
     }

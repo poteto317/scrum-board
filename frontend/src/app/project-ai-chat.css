@@ -3,6 +3,23 @@
   padding-top: 1rem;
   border-top: 1px solid var(--line);
 }
+.ai-chat--dock,
+.ai-chat--page {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+}
+.ai-chat--dock .ai-chat-list,
+.ai-chat--page .ai-chat-list {
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+}
 .ai-chat-head {
   display: flex;
   justify-content: space-between;

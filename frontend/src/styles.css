@@ -1,4 +1,6 @@
 :root {
+  --app-header-height: 67px;
+  --ai-chat-dock-width: min(28rem, 40vw);
   --bg: #f8f9f5;
   --paper: #fffefa;
   --ink: #283529;
@@ -20,6 +22,11 @@
   color: var(--ink);
   background: var(--bg);
   font-synthesis: none;
+}
+@media (max-width: 639px) {
+  :root {
+    --ai-chat-dock-width: min(100vw, 28rem);
+  }
 }
 * {
   box-sizing: border-box;
