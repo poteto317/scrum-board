@@ -56,7 +56,7 @@ export class AiChatFab implements OnInit {
     }),
   );
 
-  readonly focusItem = computed(() => toFocusItem(this.ctx.pageKind(), this.ctx.routeTarget()));
+  readonly focusItem = computed(() => toFocusItem(this.ctx.pageKind(), this.ctx.focusItem()));
 
   readonly showEntry = computed(() => {
     if (!isAiChatRoute(this.routeUrl())) return false;

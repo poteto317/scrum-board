@@ -170,7 +170,7 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     const ctx = TestBed.inject(AiChatContext);
     expect(ctx.pageKind()).toBe('detail');
-    expect(ctx.routeTarget()).toEqual({
+    expect(ctx.focusItem()).toEqual({
       number: card.number,
       itemId: card.id,
       title: card.title,
@@ -186,8 +186,8 @@ describe('ItemDetail autosave', () => {
     const ctx = TestBed.inject(AiChatContext);
     expect(f.componentInstance.canEdit()).toBe(false);
     expect(ctx.pageKind()).toBe('detail');
-    expect(ctx.routeTarget()?.number).toBe(card.number);
-    expect(ctx.routeTarget()?.canEdit).toBe(false);
+    expect(ctx.focusItem()?.number).toBe(card.number);
+    expect(ctx.focusItem()?.canEdit).toBe(false);
   });
   it('keeps the AI chat entry on an archived item and passes canEdit false', async () => {
     api.itemByNumber.mockReturnValue(
@@ -198,7 +198,7 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     const ctx = TestBed.inject(AiChatContext);
     expect(ctx.pageKind()).toBe('detail');
-    expect(ctx.routeTarget()?.canEdit).toBe(false);
+    expect(ctx.focusItem()?.canEdit).toBe(false);
   });
   it('clears AiChatContext when the detail page is destroyed', async () => {
     const f = create();
@@ -207,7 +207,7 @@ describe('ItemDetail autosave', () => {
     const ctx = TestBed.inject(AiChatContext);
     f.destroy();
     expect(ctx.pageKind()).toBe('other');
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
   });
   it('keeps archived details read-only and offers restore to editors', async () => {
     api.itemByNumber.mockReturnValue(
@@ -232,7 +232,7 @@ describe('ItemDetail autosave', () => {
     f.detectChanges();
     const ctx = TestBed.inject(AiChatContext);
     expect(ctx.pageKind()).toBe('detail');
-    expect(ctx.routeTarget()?.number).toBe(3);
+    expect(ctx.focusItem()?.number).toBe(3);
     expect(ctx.detailProjectId()).toBe(2);
     // 実際の遷移: 同じ部品のままルート番号が変わり、次のアイテムを読み込む
     const next = new Subject<Item>();
@@ -240,14 +240,14 @@ describe('ItemDetail autosave', () => {
     params.next(new Map([['number', '99']]));
     f.detectChanges();
     expect(ctx.pageKind()).toBe('detail');
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
     expect(ctx.detailProjectId()).toBe(2);
     expect(ctx.onDescriptionApplied()).toBeNull();
     next.next({ ...card, projectId: 2, id: 990, number: 99, title: '次' });
     next.complete();
     f.detectChanges();
     expect(ctx.pageKind()).toBe('detail');
-    expect(ctx.routeTarget()?.number).toBe(99);
+    expect(ctx.focusItem()?.number).toBe(99);
     expect(ctx.detailProjectId()).toBe(2);
     f.destroy();
     expect(ctx.pageKind()).toBe('other');
@@ -267,7 +267,7 @@ describe('ItemDetail autosave', () => {
     next.error(new Error('not found'));
     f.detectChanges();
     expect(ctx.pageKind()).toBe('other');
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
     expect(ctx.detailProjectId()).toBeNull();
   });
   it('keeps the focus item while the same number is reloaded', async () => {
@@ -278,7 +278,7 @@ describe('ItemDetail autosave', () => {
     f.componentInstance.autosave.reset(null);
     f.detectChanges();
     expect(ctx.pageKind()).toBe('detail');
-    expect(ctx.routeTarget()?.number).toBe(3);
+    expect(ctx.focusItem()?.number).toBe(3);
   });
   it('shows solution property link (empty label) without form field', async () => {
     const f = create();

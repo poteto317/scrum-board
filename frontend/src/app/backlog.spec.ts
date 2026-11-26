@@ -1455,7 +1455,7 @@ describe('Backlog AI chat context', () => {
     f.detectChanges();
     await f.whenStable();
     expect(ctx.pageKind()).toBe('backlog');
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
     f.destroy();
     expect(ctx.pageKind()).toBe('other');
   });

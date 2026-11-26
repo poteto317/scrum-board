@@ -55,9 +55,9 @@ export function resolveChatProjectId(args: {
 /** チャットに渡す「開いているアイテム」。アイテム詳細のときだけある */
 export function toFocusItem(
   pageKind: AiChatPageKind,
-  routeTarget: AiChatFocusItem | null,
+  focusItem: AiChatFocusItem | null,
 ): AiChatFocusItem | null {
-  return pageKind === 'detail' ? routeTarget : null;
+  return pageKind === 'detail' ? focusItem : null;
 }
 
 /** アイテム詳細が、チャットに伝えている内容をどうするか */
@@ -83,13 +83,13 @@ export function detailChatAction(
         /** ルートのアイテム番号（決まっていなければ 0 以下） */
         routeNumber: number;
         /** チャットに伝えてあるアイテムの番号。伝えていなければ null */
-        toldNumber: number | null;
+        focusNumber: number | null;
         loading: boolean;
       },
 ): DetailChatAction {
   if (state.hasItem) return 'set';
   if (state.pageKind !== 'detail') return 'keep';
-  if (state.toldNumber == null) return state.loading ? 'keep' : 'clear';
-  if (!(state.routeNumber > 0) || state.toldNumber === state.routeNumber) return 'keep';
+  if (state.focusNumber == null) return state.loading ? 'keep' : 'clear';
+  if (!(state.routeNumber > 0) || state.focusNumber === state.routeNumber) return 'keep';
   return state.loading ? 'release' : 'clear';
 }
