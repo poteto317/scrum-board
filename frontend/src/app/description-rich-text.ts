@@ -39,7 +39,7 @@ import { buildDescriptionView } from './description-view';
           </span>
         } @else if (seg.kind === 'file') {
           <span class="rich-file">
-            <a [href]="seg.src" [attr.download]="seg.label">{{ seg.label }}</a>
+            <a [href]="seg.src">{{ seg.label }}</a>
             @if (canDelete()) {
               <button
                 type="button"

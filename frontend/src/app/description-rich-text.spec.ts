@@ -68,7 +68,7 @@ describe('DescriptionRichText', () => {
     const f = mount({ text: markup, itemNumber: 7, canDelete: true });
     const link = f.nativeElement.querySelector('a[href*="/attachments/3/content"]') as HTMLAnchorElement;
     expect(link.textContent).toBe('doc.pdf');
-    expect(link.getAttribute('download')).toBe('doc.pdf');
+    expect(link.getAttribute('href')).toContain('/attachments/3/content');
     expect(f.nativeElement.querySelector('button[aria-label="ファイルを削除: doc.pdf"]')).toBeTruthy();
   });
 
