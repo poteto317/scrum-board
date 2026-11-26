@@ -30,6 +30,7 @@ import {
   insertMarkupAt,
   parseDescriptionLinks,
 } from './description-link';
+import { hasDescriptionBlockSyntax } from './description-markdown';
 import { DescriptionRichText } from './description-rich-text';
 import {
   ATTACHMENT_IMAGE_ACCEPT,
@@ -98,14 +99,19 @@ export class DescriptionBlocksEditor {
     return Array.from({ length: n + 1 }, (_, i) => i);
   });
 
+  /** Headings, lists, tasks, quotes, code and rules are rendered for the description only. */
+  readonly blockSyntax = computed(() => this.attachmentField() === 'description');
+
   /**
-   * Rich preview under the textareas. Only when links/images need rendering —
-   * plain text alone looked like a second, non-editable duplicate block.
+   * Rich preview under the textareas. Only when links/images (or, for the description,
+   * block markup) need rendering — plain text alone looked like a second, non-editable
+   * duplicate block.
    */
   readonly showRichPreview = computed(() => {
     const number = this.itemNumber();
     const text = this.value();
     if (number <= 0 || text === '') return false;
+    if (this.blockSyntax() && hasDescriptionBlockSyntax(text)) return true;
     return parseDescriptionLinks(text, number).some(
       (seg) => seg.kind === 'link' || seg.kind === 'image',
     );

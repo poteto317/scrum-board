@@ -96,6 +96,7 @@
       <app-description-rich-text
         [text]="value()"
         [itemNumber]="itemNumber()"
+        [blockSyntax]="blockSyntax()"
         [canDelete]="imagesEnabled()"
         [draggableImages]="attachmentField() === 'description'"
         (deleteImage)="requestDeleteImage($event)"
