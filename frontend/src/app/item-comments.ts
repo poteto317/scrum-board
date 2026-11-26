@@ -392,16 +392,12 @@ export class ItemComments implements OnChanges {
     const generation = this.generation;
     let caret = at;
     let stopError = '';
-    let stale = false;
     uploadImagesInOrder({
       files: plan.accepted,
       upload: (file) => this.api.uploadAttachment(number, file, 'comment', projectId),
       onUploaded: (att, file) => {
         // 待っている間にアイテムが切り替わった・再読み込みされたら、下書きには入れない。
-        if (!this.stillCurrent(generation, number, projectId)) {
-          stale = true;
-          return 'stop';
-        }
+        if (!this.stillCurrent(generation, number, projectId)) return 'stop';
         const body = this.draftBody();
         const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
         const inserted = insertMarkupAt(
@@ -423,7 +419,7 @@ export class ItemComments implements OnChanges {
         // 忙しい状態は、切り替えの後でも必ず解く。文言は今のアイテムのものだけ出す。
         this.uploadGuard = false;
         this.imageBusy.set(false);
-        if (stale || !this.stillCurrent(generation, number, projectId)) return;
+        if (!this.stillCurrent(generation, number, projectId)) return;
         this.actionError.set(imageUploadDoneMessage(outcome, plan, stopError));
       },
     });
