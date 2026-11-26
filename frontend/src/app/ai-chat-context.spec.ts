@@ -18,17 +18,17 @@ describe('AiChatContext', () => {
     const ctx = create();
     ctx.setBoard();
     expect(ctx.pageKind()).toBe('board');
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
     ctx.setBacklog();
     expect(ctx.pageKind()).toBe('backlog');
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
   });
 
   it('drops the detail target and handlers when moving to a list page', () => {
     const ctx = create();
     ctx.setDetail(target, handlers);
     ctx.setBoard();
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
     expect(ctx.onDescriptionApplied()).toBeNull();
     expect(ctx.onCommentApplied()).toBeNull();
   });
@@ -39,7 +39,7 @@ describe('AiChatContext', () => {
     const onCommentApplied = vi.fn();
     ctx.setDetail(target, { onDescriptionApplied, onCommentApplied });
     expect(ctx.pageKind()).toBe('detail');
-    expect(ctx.routeTarget()).toEqual(item);
+    expect(ctx.focusItem()).toEqual(item);
     expect(ctx.detailProjectId()).toBe(1);
     ctx.onDescriptionApplied()?.({} as never);
     ctx.onCommentApplied()?.();
@@ -52,7 +52,7 @@ describe('AiChatContext', () => {
     ctx.setDetail(target, handlers);
     ctx.clear();
     expect(ctx.pageKind()).toBe('other');
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
     expect(ctx.onDescriptionApplied()).toBeNull();
   });
 
@@ -74,7 +74,7 @@ describe('AiChatContext', () => {
     ctx.releaseDetailItem();
     expect(ctx.pageKind()).toBe('detail');
     expect(ctx.detailProjectId()).toBe(7);
-    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.focusItem()).toBeNull();
     expect(ctx.onDescriptionApplied()).toBeNull();
     expect(ctx.onCommentApplied()).toBeNull();
     // 次のアイテムが別のプロジェクトなら、そこで切り替わる
@@ -90,20 +90,20 @@ describe('AiChatContext', () => {
     expect(ctx.detailProjectId()).toBeNull();
   });
 
-  it('skips routeTarget set when detail target is unchanged', () => {
+  it('skips focusItem set when detail target is unchanged', () => {
     const ctx = create();
     ctx.setDetail(target, handlers);
-    const first = ctx.routeTarget();
+    const first = ctx.focusItem();
     ctx.setDetail({ projectId: 1, item: { ...item } }, handlers);
-    expect(ctx.routeTarget()).toBe(first);
+    expect(ctx.focusItem()).toBe(first);
   });
 
-  it('updates routeTarget when canEdit or title changes', () => {
+  it('updates focusItem when canEdit or title changes', () => {
     const ctx = create();
     ctx.setDetail(target, handlers);
     ctx.setDetail({ projectId: 1, item: { ...item, canEdit: false } }, handlers);
-    expect(ctx.routeTarget()?.canEdit).toBe(false);
+    expect(ctx.focusItem()?.canEdit).toBe(false);
     ctx.setDetail({ projectId: 1, item: { ...item, canEdit: false, title: 'renamed' } }, handlers);
-    expect(ctx.routeTarget()?.title).toBe('renamed');
+    expect(ctx.focusItem()?.title).toBe('renamed');
   });
 });

@@ -311,7 +311,7 @@ export class ItemDetail implements OnInit {
               hasItem: false,
               pageKind: this.aiChat.pageKind(),
               routeNumber: routeNum,
-              toldNumber: this.aiChat.routeTarget()?.number ?? null,
+              focusNumber: this.aiChat.focusItem()?.number ?? null,
               loading: this.loading(),
             },
       );

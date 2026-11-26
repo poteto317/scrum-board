@@ -8,10 +8,10 @@ export type { AiChatPageKind };
 export class AiChatContext {
   readonly pageKind = signal<AiChatPageKind>('other');
   /** アイテム詳細で開いているアイテム。プロジェクトは持たない（detailProjectId が持つ） */
-  readonly routeTarget = signal<AiChatFocusItem | null>(null);
+  readonly focusItem = signal<AiChatFocusItem | null>(null);
   /**
    * アイテム詳細のプロジェクト（ここだけが持つ）。詳細から詳細へ移って次のアイテムを
-   * 読み込んでいる間（routeTarget が null の間）も残る。詳細でなくなったら null。
+   * 読み込んでいる間（focusItem が null の間）も残る。詳細でなくなったら null。
    */
   readonly detailProjectId = signal<number | null>(null);
   readonly onDescriptionApplied = signal<((item: Item) => void) | null>(null);
@@ -34,8 +34,8 @@ export class AiChatContext {
   ) {
     this.pageKind.set('detail');
     this.detailProjectId.set(detail.projectId);
-    if (!isUnchangedItem(this.routeTarget(), detail.item)) {
-      this.routeTarget.set(detail.item);
+    if (!isUnchangedItem(this.focusItem(), detail.item)) {
+      this.focusItem.set(detail.item);
     }
     this.onDescriptionApplied.set(handlers.onDescriptionApplied);
     this.onCommentApplied.set(handlers.onCommentApplied);
@@ -66,7 +66,7 @@ export class AiChatContext {
   }
 
   private releaseTarget() {
-    this.routeTarget.set(null);
+    this.focusItem.set(null);
     this.onDescriptionApplied.set(null);
     this.onCommentApplied.set(null);
   }

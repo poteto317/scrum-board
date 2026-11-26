@@ -106,7 +106,7 @@ describe('ai-chat-target', () => {
       hasItem: false as const,
       pageKind: 'detail' as const,
       routeNumber: 3,
-      toldNumber: 3 as number | null,
+      focusNumber: 3 as number | null,
       loading: false,
     };
 
@@ -119,7 +119,7 @@ describe('ai-chat-target', () => {
         expect(detailChatAction({ ...noItem, pageKind, routeNumber: 4, loading: true })).toBe(
           'keep',
         );
-        expect(detailChatAction({ ...noItem, pageKind, toldNumber: null })).toBe('keep');
+        expect(detailChatAction({ ...noItem, pageKind, focusNumber: null })).toBe('keep');
       }
     });
 
@@ -131,7 +131,7 @@ describe('ai-chat-target', () => {
     });
 
     it('keep: nothing is told yet and the next item is still loading', () => {
-      expect(detailChatAction({ ...noItem, toldNumber: null, loading: true })).toBe('keep');
+      expect(detailChatAction({ ...noItem, focusNumber: null, loading: true })).toBe('keep');
     });
 
     it('release: moved to another item that is loading', () => {
@@ -143,7 +143,7 @@ describe('ai-chat-target', () => {
     });
 
     it('clear: the next item ended without loading', () => {
-      expect(detailChatAction({ ...noItem, toldNumber: null, loading: false })).toBe('clear');
+      expect(detailChatAction({ ...noItem, focusNumber: null, loading: false })).toBe('clear');
     });
   });
 });
