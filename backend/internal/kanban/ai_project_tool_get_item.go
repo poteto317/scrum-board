@@ -74,18 +74,9 @@ func getItemResult(item Item, comments []Comment, columns []Column, clip int) ge
 	return out
 }
 
-// fitGetItem keeps the JSON within limit characters: it first drops comments from the end
-// (the oldest), then clips the long fields harder. ok is false when nothing fits.
-func fitGetItem(item Item, comments []Comment, columns []Column, limit int) (string, bool) {
-	out, ok := fitGetItemOut(item, comments, columns, limit)
-	if !ok {
-		return "", false
-	}
-	return toolJSON(out), true
-}
-
-// fitGetItemOut is fitGetItem before encoding: the result that fits, so that the caller can
-// tell what it carries (getItemResultWithDescription).
+// fitGetItemOut keeps the result within limit characters of JSON: it first drops comments
+// from the end (the oldest), then clips the long fields harder. ok is false when nothing fits.
+// It returns the result before encoding, so that the caller can tell what it carries.
 func fitGetItemOut(item Item, comments []Comment, columns []Column, limit int) (getItemOut, bool) {
 	out := getItemResult(item, comments, columns, maxAIChatContextFieldLen)
 	for {
@@ -112,16 +103,10 @@ func fitGetItemOut(item Item, comments []Comment, columns []Column, limit int) (
 	return getItemOut{}, false
 }
 
-// getItemResultText is the result handed to the model: the item cut to limit characters, or
-// the fixed "answer with what you have" error when nothing fits.
-func getItemResultText(item Item, comments []Comment, columns []Column, limit int) string {
-	text, _ := getItemResultWithDescription(item, comments, columns, limit)
-	return text
-}
-
-// getItemResultWithDescription is getItemResultText, and whether the result carries the
-// item's whole description (not clipped, not the budget error). A description edit replaces
-// the whole text, so it is only accepted after the model has read it whole.
+// getItemResultWithDescription is the result handed to the model (the item cut to limit
+// characters, or the fixed "answer with what you have" error when nothing fits), and whether
+// it carries the item's whole description (not clipped, not the budget error). A description
+// edit replaces the whole text, so it is only accepted after the model has read it whole.
 func getItemResultWithDescription(item Item, comments []Comment, columns []Column, limit int) (string, bool) {
 	out, ok := fitGetItemOut(item, comments, columns, limit)
 	if !ok {
