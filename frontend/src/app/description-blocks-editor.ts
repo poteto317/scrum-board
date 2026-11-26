@@ -114,7 +114,7 @@ export class DescriptionBlocksEditor {
     if (number <= 0 || text === '') return false;
     if (this.blockSyntax() && hasDescriptionBlockSyntax(text)) return true;
     return parseDescriptionLinks(text, number).some(
-      (seg) => seg.kind === 'link' || seg.kind === 'image',
+      (seg) => seg.kind === 'link' || seg.kind === 'image' || seg.kind === 'file',
     );
   });
 

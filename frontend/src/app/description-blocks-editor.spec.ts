@@ -559,6 +559,19 @@ describe('DescriptionBlocksEditor', () => {
     expect(f.nativeElement.querySelector('.blocks-preview')).not.toBeNull();
   });
 
+  it('shows rich preview when text has a same-item file attachment link', () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput(
+      'value',
+      '[doc.pdf](/api/items/by-number/140/attachments/9/content)',
+    );
+    f.componentRef.setInput('itemNumber', 140);
+    f.componentRef.setInput('attachmentField', 'description');
+    f.detectChanges();
+    expect(f.componentInstance.showRichPreview()).toBe(true);
+    expect(f.nativeElement.querySelector('.blocks-preview')).not.toBeNull();
+  });
+
   function mountPreview(value: string, itemNumber: number, field: 'description' | 'solution') {
     const f = TestBed.createComponent(DescriptionBlocksEditor);
     f.componentRef.setInput('value', value);
