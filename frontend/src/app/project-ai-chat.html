@@ -1,4 +1,9 @@
-<section class="ai-chat" aria-labelledby="ai-chat-heading">
+<section
+  class="ai-chat"
+  [class.ai-chat--dock]="layout() === 'dock'"
+  [class.ai-chat--page]="layout() === 'page'"
+  aria-labelledby="ai-chat-heading"
+>
   <div class="ai-chat-head">
     <h2 id="ai-chat-heading">AI</h2>
     <button

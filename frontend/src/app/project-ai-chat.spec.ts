@@ -60,7 +60,11 @@ function setup(
     createComment?: ReturnType<typeof vi.fn>;
     getAICredits?: ReturnType<typeof vi.fn>;
   } = {},
-  opts: { focusItem?: AiChatFocusItem | null; user?: User | null } = {},
+  opts: {
+    focusItem?: AiChatFocusItem | null;
+    user?: User | null;
+    layout?: 'fab' | 'dock' | 'page';
+  } = {},
 ) {
   const user = signal<User | null>(opts.user === undefined ? userOf(1) : opts.user);
   const stubs = {
@@ -83,6 +87,7 @@ function setup(
   const f = TestBed.createComponent(ProjectAiChat);
   f.componentRef.setInput('projectId', 1);
   f.componentRef.setInput('focusItem', opts.focusItem === undefined ? focus : opts.focusItem);
+  if (opts.layout) f.componentRef.setInput('layout', opts.layout);
   f.detectChanges();
   return { f, c: f.componentInstance, user, api: stubs };
 }
@@ -97,6 +102,35 @@ describe('ProjectAiChat', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
+  });
+
+  describe('layout', () => {
+    it('does not add dock or page modifiers for the default fab layout', () => {
+      const { f } = setup({}, { focusItem: null });
+      const section = f.nativeElement.querySelector('.ai-chat') as HTMLElement;
+      expect(section.classList.contains('ai-chat--dock')).toBe(false);
+      expect(section.classList.contains('ai-chat--page')).toBe(false);
+    });
+
+    it('marks dock layout', () => {
+      const { f } = setup({}, { focusItem: null, layout: 'dock' });
+      expect(f.nativeElement.querySelector('.ai-chat')?.classList.contains('ai-chat--dock')).toBe(
+        true,
+      );
+    });
+
+    it('marks page layout without focus apply buttons', () => {
+      const { f } = setup({}, { focusItem: null, layout: 'page' });
+      expect(f.nativeElement.querySelector('.ai-chat')?.classList.contains('ai-chat--page')).toBe(
+        true,
+      );
+      expect(applyButtons(f)).toEqual([]);
+    });
+
+    it('hides apply buttons on page layout even when focusItem is editable', () => {
+      const { f } = setup({}, { focusItem: focus, layout: 'page' });
+      expect(applyButtons(f)).toEqual([]);
+    });
   });
 
   describe('history', () => {
