@@ -10,12 +10,6 @@ import (
 // each one needs. What may be viewed (ai_project_tool_view.go) and how much result text is
 // left (ai_project_tool_budget.go) are decided without I/O.
 
-const (
-	// Size limits of one result, in characters of the JSON text handed to the model.
-	maxSearchItemsResultChars = 8000
-	maxGetItemResultChars     = 16000
-)
-
 // projectToolExecutor runs the tools of one user message for one user in one project.
 // It is used by one request only, one call at a time.
 type projectToolExecutor struct {

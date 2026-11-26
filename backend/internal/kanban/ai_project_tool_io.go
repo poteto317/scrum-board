@@ -70,3 +70,12 @@ func clampWhole(v *float64, fallback, low, high int) (int, bool) {
 	}
 	return int(min(max(n, int64(low)), int64(high))), true
 }
+
+// columnNameByID gives the status name the tool results show for a column id.
+func columnNameByID(columns []Column) map[int64]string {
+	names := make(map[int64]string, len(columns))
+	for _, c := range columns {
+		names[c.ID] = c.Name
+	}
+	return names
+}

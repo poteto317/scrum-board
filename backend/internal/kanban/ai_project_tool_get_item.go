@@ -5,6 +5,9 @@ import (
 	"unicode/utf8"
 )
 
+// maxGetItemResultChars is the size limit of one result, in characters of the JSON text handed to the model.
+const maxGetItemResultChars = 16000
+
 // get_item: reading its input (the item number), and building its result (the item with its
 // newest comments, cut to a size limit). No I/O here; the executor loads the item.
 
