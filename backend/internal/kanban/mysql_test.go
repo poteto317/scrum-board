@@ -48,6 +48,7 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"workspace_list_filter",
 		"item_attachments",
 		"item_ai_messages",
+		"project_ai_proposals",
 		"project_ai_messages",
 		"project_ai_conversations",
 		"ai_usage",

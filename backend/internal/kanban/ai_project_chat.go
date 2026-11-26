@@ -18,6 +18,8 @@ type ProjectAIMessage struct {
 	InputTokens    *int      `json:"inputTokens,omitempty"`
 	OutputTokens   *int      `json:"outputTokens,omitempty"`
 	CreatedAt      time.Time `json:"createdAt"`
+	// Proposals are the answer's proposals (assistant messages only), oldest first.
+	Proposals []ProjectAIProposal `json:"proposals,omitempty"`
 }
 
 // tokenCountPtr stores a token count only when the provider reported one.
@@ -34,6 +36,19 @@ func tokenCountPtr(n int64) *int {
 // A message without a conversation (written by an older server during a rollout) is in no
 // conversation until the next start adopts it.
 func (r MySQLRepository) ListProjectAIMessages(ctx context.Context, projectID, userID, conversationID int64) ([]ProjectAIMessage, error) {
+	out, err := r.scanProjectAIMessages(ctx, projectID, userID, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	// Read after the messages' rows are closed: the proposals are a second query.
+	if err := r.attachProjectAIProposals(ctx, projectID, userID, conversationID, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// scanProjectAIMessages reads the conversation's messages (without their proposals).
+func (r MySQLRepository) scanProjectAIMessages(ctx context.Context, projectID, userID, conversationID int64) ([]ProjectAIMessage, error) {
 	rows, err := r.DB.QueryContext(ctx, `SELECT id, project_id, conversation_id, role, body, input_tokens, output_tokens, created_at
  FROM project_ai_messages WHERE conversation_id=? AND project_id=? AND user_id=? ORDER BY created_at ASC, id ASC`, conversationID, projectID, userID)
 	if err != nil {

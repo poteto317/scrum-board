@@ -13,6 +13,8 @@ import (
 func dropUsersTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	mustExec(t, db, `DROP TABLE IF EXISTS item_acl_entries`)
+	// project_ai_proposals references project_ai_messages: it has to go before it.
+	mustExec(t, db, `DROP TABLE IF EXISTS project_ai_proposals`)
 	// project_ai_messages references users (fk_project_ai_message_user): it has to go first.
 	mustExec(t, db, `DROP TABLE IF EXISTS project_ai_messages`)
 	// project_ai_conversations references users too, and project_ai_messages references it.

@@ -19,6 +19,8 @@ type ProjectAITurn struct {
 	AssistantBody string
 	InputTokens   int64
 	OutputTokens  int64
+	// Proposals are stored with the answer, in the same transaction.
+	Proposals []ProjectAIProposalDraft
 }
 
 // AppendProjectAITurn stores one exchange (the user's message and the final answer) in one
@@ -83,11 +85,19 @@ func insertProjectAITurnMessages(ctx context.Context, tx *sql.Tx, projectID, use
 		projectID, userID, conversationID, AIRoleUser, turn.UserBody); err != nil {
 		return fmt.Errorf("append user project ai message: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO project_ai_messages(project_id, user_id, conversation_id, role, body, input_tokens, output_tokens) VALUES (?,?,?,?,?,?,?)`,
-		projectID, userID, conversationID, AIRoleAssistant, turn.AssistantBody, tokenCountPtr(turn.InputTokens), tokenCountPtr(turn.OutputTokens)); err != nil {
+	res, err := tx.ExecContext(ctx, `INSERT INTO project_ai_messages(project_id, user_id, conversation_id, role, body, input_tokens, output_tokens) VALUES (?,?,?,?,?,?,?)`,
+		projectID, userID, conversationID, AIRoleAssistant, turn.AssistantBody, tokenCountPtr(turn.InputTokens), tokenCountPtr(turn.OutputTokens))
+	if err != nil {
 		return fmt.Errorf("append assistant project ai message: %w", err)
 	}
-	return nil
+	if len(turn.Proposals) == 0 {
+		return nil
+	}
+	assistantID, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("append assistant project ai message: %w", err)
+	}
+	return insertProjectAIProposals(ctx, tx, projectID, userID, assistantID, turn.Proposals)
 }
 
 // touchProjectAIConversation sets updated_at to now and returns the conversation as stored.

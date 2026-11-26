@@ -56,6 +56,8 @@ type memoryRepo struct {
 	projectAIConversations      map[int64]memoryProjectAIConversation
 	nextProjectAIConversationID int64
 	projectAIClock              time.Time
+	projectAIProposals          map[int64]memoryProjectAIProposal
+	nextProjectAIProposalID     int64
 	listLivingFail              error
 	updateItemFail              error
 	updateItemFailID            int64
