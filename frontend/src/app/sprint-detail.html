@@ -3,6 +3,7 @@
     <a routerLink="/">ボード</a><span>/</span><a routerLink="/sprints">スプリント</a
     ><span>/</span><strong>詳細</strong>
   </nav>
+  <app-active-project-name />
 
   @if (loading()) {
     <div class="state-panel" role="status">読み込み中…</div>

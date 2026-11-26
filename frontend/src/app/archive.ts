@@ -1,3 +1,4 @@
+import { ActiveProjectName } from './active-project-name';
 import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -11,7 +12,7 @@ import { bindProjectSwitchReload } from './project-switch-reload';
 
 @Component({
   selector: 'app-archive',
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, ActiveProjectName],
   templateUrl: './archive.html',
   styleUrl: './archive.css',
 })

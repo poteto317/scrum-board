@@ -1,3 +1,4 @@
+import { ActiveProjectName } from './active-project-name';
 import {
   Component,
   DestroyRef,
@@ -21,7 +22,7 @@ import { RecurringSession } from './recurring-session';
 
 @Component({
   selector: 'app-recurring',
-  imports: [RouterLink, ReactiveFormsModule, Modal],
+  imports: [RouterLink, ReactiveFormsModule, Modal, ActiveProjectName],
   templateUrl: './recurring.html',
   styleUrl: './recurring.css',
 })
