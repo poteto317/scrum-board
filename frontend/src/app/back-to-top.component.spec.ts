@@ -152,6 +152,20 @@ describe('BackToTop', () => {
     expect(button(f)).toBe(b);
   });
 
+  for (const end of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
+    it(`keeps keyboard focus after a press that ended with ${end} without focus or click`, () => {
+      setScroll(1000);
+      const f = create();
+      const b = button(f)!;
+      b.dispatchEvent(new Event('pointerdown'));
+      b.dispatchEvent(new Event(end));
+      b.dispatchEvent(new FocusEvent('focus'));
+      setScroll(0);
+      fire(f, 'scroll');
+      expect(button(f)).toBe(b);
+    });
+  }
+
   it('removes the same window listeners it added on destroy', () => {
     const add = vi.spyOn(window, 'addEventListener');
     const remove = vi.spyOn(window, 'removeEventListener');
