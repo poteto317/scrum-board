@@ -60,11 +60,3 @@ func projectChatTools() []ChatTool {
 		},
 	}
 }
-
-func columnNameByID(columns []Column) map[int64]string {
-	names := make(map[int64]string, len(columns))
-	for _, c := range columns {
-		names[c.ID] = c.Name
-	}
-	return names
-}

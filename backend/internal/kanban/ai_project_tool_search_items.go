@@ -6,6 +6,9 @@ import (
 	"unicode/utf8"
 )
 
+// maxSearchItemsResultChars is the size limit of one result, in characters of the JSON text handed to the model.
+const maxSearchItemsResultChars = 8000
+
 // search_items: reading its input into a search plan, and building its result (one page of
 // the viewable matches, cut to a size limit). No I/O here; the executor runs the search.
 
