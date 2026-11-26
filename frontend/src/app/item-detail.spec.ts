@@ -405,6 +405,41 @@ describe('ItemDetail autosave', () => {
     expect(api.updateItem).toHaveBeenCalledWith(18, { title: '編集中' });
     f.destroy();
   });
+  it('lists restricted users under each heading in a scrollable list inside properties', async () => {
+    api.listUsers.mockReturnValue(
+      of([
+        { id: 2, displayName: 'Mem', disabled: false },
+        { id: 3, displayName: 'とても長い名前のユーザー', disabled: false },
+      ]),
+    );
+    const f = create();
+    await Promise.resolve();
+    f.componentInstance.acl.viewAccess.set('restricted');
+    f.detectChanges();
+    const acl = (f.nativeElement as HTMLElement).querySelector(
+      '.properties-list fieldset.acl-fieldset',
+    )!;
+    const heading = acl.querySelector('.acl-user-lists .acl-list-label')!;
+    expect(heading.textContent).toContain('閲覧可');
+    const list = heading.nextElementSibling!;
+    expect(list.classList.contains('acl-user-list')).toBe(true);
+    const rows = list.querySelectorAll('label.acl-user');
+    expect(rows.length).toBe(2);
+    rows.forEach((row) => expect(row.querySelector('input[type="checkbox"]')).toBeTruthy());
+    f.destroy();
+  });
+  it('disables the access fieldset in properties while the access is saving', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    f.componentInstance.acl.saving.set(true);
+    f.detectChanges();
+    const acl = (f.nativeElement as HTMLElement).querySelector(
+      '.properties-list fieldset.acl-fieldset',
+    ) as HTMLFieldSetElement;
+    expect(acl.disabled).toBe(true);
+    f.destroy();
+  });
   it('places comments above history', () => {
     const f = create();
     const comments = f.nativeElement.querySelector('app-item-comments');
