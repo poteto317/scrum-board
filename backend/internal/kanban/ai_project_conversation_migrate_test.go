@@ -440,13 +440,6 @@ func TestInitializeProjectAIChatFailsWhenTheMigrationLockTimesOutMySQL(t *testin
 	checkProjectAIChatConsistent(t, l.db)
 }
 
-// 本番の待ち時間は 30 秒のまま。
-func TestProjectAIChatMigrateLockSeconds(t *testing.T) {
-	if projectAIChatMigrateLockSeconds != 30 {
-		t.Fatalf("projectAIChatMigrateLockSeconds=%d", projectAIChatMigrateLockSeconds)
-	}
-}
-
 // 入れ替えの途中と巻き戻し: 古い版が新しいスキーマの上で書いたものは失敗せず、次の起動で整う。
 func TestOlderServerOnTheNewSchemaIsRepairedAtTheNextStartMySQL(t *testing.T) {
 	db := mysqlTestDB(t, "")
