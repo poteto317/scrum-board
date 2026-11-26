@@ -3,6 +3,7 @@ import { provideRouter, Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, it, expect, vi } from 'vitest';
+import { AiChatContext } from './ai-chat-context';
 import { Api } from './api';
 import { Backlog } from './backlog';
 import {
@@ -1424,5 +1425,38 @@ describe('Backlog list filter', () => {
     f.detectChanges();
     expect(f.componentInstance.filteredItems().length).toBe(4);
     expect(f.componentInstance.canReorder()).toBe(true);
+  });
+});
+describe('Backlog AI chat context', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('tells the AI chat it is the backlog, and clears on destroy', async () => {
+    const cards = makeCards();
+    const columns = makeColumns();
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards, settings: { cardLayout: 'pack' } }),
+            reorderBacklog: () => of({ items: cards }),
+            listCommandTemplates: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: unknown) => of(f),
+          },
+        },
+      ],
+    });
+    const ctx = TestBed.inject(AiChatContext);
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    expect(ctx.pageKind()).toBe('backlog');
+    expect(ctx.routeTarget()).toBeNull();
+    f.destroy();
+    expect(ctx.pageKind()).toBe('other');
   });
 });

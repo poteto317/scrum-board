@@ -15,33 +15,13 @@
             閉じる
           </button>
         </header>
-        @if (pageKind() === 'board' || pageKind() === 'backlog') {
-          <label class="ai-chat-fab-picker">
-            対象アイテム
-            <select
-              [value]="selectedKey()"
-              (change)="onSelectChange($any($event.target).value)"
-              aria-label="対象アイテム"
-            >
-              <option value="">選択してください</option>
-              @for (c of candidates(); track optionKey(c)) {
-                <option [value]="optionKey(c)" [disabled]="!c.canEdit">
-                  #{{ c.number }} {{ c.title }}
-                </option>
-              }
-            </select>
-          </label>
-        }
-        @if (open() && activeTarget(); as target) {
-          <app-item-ai-chat
-            [number]="target.number"
-            [projectId]="target.projectId"
-            [itemId]="target.itemId"
+        @if (projectId(); as chatProjectId) {
+          <app-project-ai-chat
+            [projectId]="chatProjectId"
+            [focusItem]="focusItem()"
             (descriptionApplied)="onDescriptionApplied($event)"
             (commentApplied)="onCommentApplied()"
           />
-        } @else if (pageKind() === 'board' || pageKind() === 'backlog') {
-          <p class="ai-chat-fab-hint" role="status">アイテムを選ぶとチャットできます。</p>
         }
       </div>
     }

@@ -72,7 +72,6 @@ describe('ItemDetail autosave', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
-    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     restoreArchivedItem: ReturnType<typeof vi.fn>;
@@ -115,7 +114,6 @@ describe('ItemDetail autosave', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
-      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -164,7 +162,52 @@ describe('ItemDetail autosave', () => {
     const f = create();
     await Promise.resolve();
     f.detectChanges();
-    expect(f.nativeElement.querySelector('app-item-ai-chat')).toBeNull();
+    expect(f.nativeElement.querySelector('app-project-ai-chat')).toBeNull();
+  });
+  it('tells the AI chat the open item with its title and canEdit', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const ctx = TestBed.inject(AiChatContext);
+    expect(ctx.pageKind()).toBe('detail');
+    expect(ctx.routeTarget()).toEqual({
+      number: card.number,
+      itemId: card.id,
+      title: card.title,
+      canEdit: true,
+    });
+    expect(ctx.detailProjectId()).toBe(card.projectId);
+  });
+  it('keeps the AI chat entry on a read-only item and passes canEdit false', async () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, canEdit: false }));
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const ctx = TestBed.inject(AiChatContext);
+    expect(f.componentInstance.canEdit()).toBe(false);
+    expect(ctx.pageKind()).toBe('detail');
+    expect(ctx.routeTarget()?.number).toBe(card.number);
+    expect(ctx.routeTarget()?.canEdit).toBe(false);
+  });
+  it('keeps the AI chat entry on an archived item and passes canEdit false', async () => {
+    api.itemByNumber.mockReturnValue(
+      of({ ...card, archivedAt: '2026-11-12T12:00:00.000Z', canEdit: true }),
+    );
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const ctx = TestBed.inject(AiChatContext);
+    expect(ctx.pageKind()).toBe('detail');
+    expect(ctx.routeTarget()?.canEdit).toBe(false);
+  });
+  it('clears AiChatContext when the detail page is destroyed', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const ctx = TestBed.inject(AiChatContext);
+    f.destroy();
+    expect(ctx.pageKind()).toBe('other');
+    expect(ctx.routeTarget()).toBeNull();
   });
   it('keeps archived details read-only and offers restore to editors', async () => {
     api.itemByNumber.mockReturnValue(
@@ -182,21 +225,60 @@ describe('ItemDetail autosave', () => {
     expect(f.nativeElement.textContent).toContain('元の列へ戻す');
     f.destroy();
   });
-  it('clears AiChatContext when route number changes while item is null', async () => {
+  it('keeps the detail page kind and project, without a focus item, while the next item loads', async () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, projectId: 2 }));
     const f = create();
     await Promise.resolve();
     f.detectChanges();
     const ctx = TestBed.inject(AiChatContext);
     expect(ctx.pageKind()).toBe('detail');
     expect(ctx.routeTarget()?.number).toBe(3);
-    // Simulate navigation to another number before the new card arrives
-    (f.componentInstance as unknown as { routeNumber: { set: (n: number) => void } }).routeNumber.set(
-      99,
-    );
-    f.componentInstance.autosave.reset(null);
+    expect(ctx.detailProjectId()).toBe(2);
+    // 実際の遷移: 同じ部品のままルート番号が変わり、次のアイテムを読み込む
+    const next = new Subject<Item>();
+    api.itemByNumber.mockReturnValue(next);
+    params.next(new Map([['number', '99']]));
+    f.detectChanges();
+    expect(ctx.pageKind()).toBe('detail');
+    expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.detailProjectId()).toBe(2);
+    expect(ctx.onDescriptionApplied()).toBeNull();
+    next.next({ ...card, projectId: 2, id: 990, number: 99, title: '次' });
+    next.complete();
+    f.detectChanges();
+    expect(ctx.pageKind()).toBe('detail');
+    expect(ctx.routeTarget()?.number).toBe(99);
+    expect(ctx.detailProjectId()).toBe(2);
+    f.destroy();
+    expect(ctx.pageKind()).toBe('other');
+    expect(ctx.detailProjectId()).toBeNull();
+  });
+  it('clears AiChatContext when the next item fails to load', async () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, projectId: 2 }));
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const ctx = TestBed.inject(AiChatContext);
+    const next = new Subject<Item>();
+    api.itemByNumber.mockReturnValue(next);
+    params.next(new Map([['number', '99']]));
+    f.detectChanges();
+    expect(ctx.pageKind()).toBe('detail');
+    next.error(new Error('not found'));
     f.detectChanges();
     expect(ctx.pageKind()).toBe('other');
     expect(ctx.routeTarget()).toBeNull();
+    expect(ctx.detailProjectId()).toBeNull();
+  });
+  it('keeps the focus item while the same number is reloaded', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const ctx = TestBed.inject(AiChatContext);
+    f.componentInstance.autosave.reset(null);
+    f.detectChanges();
+    expect(ctx.pageKind()).toBe('detail');
+    expect(ctx.routeTarget()?.number).toBe(3);
   });
   it('shows solution property link (empty label) without form field', async () => {
     const f = create();
@@ -816,7 +898,6 @@ describe('ItemDetail copy card link', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
-    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -834,7 +915,6 @@ describe('ItemDetail copy card link', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
-      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [{ id: 1, name: 'Todo', position: 0 }],
@@ -996,7 +1076,6 @@ describe('ItemDetail copy command menu and management', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
-      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
       itemByNumber: vi.fn(() => of(card)),
       updateItem: vi.fn(),
@@ -1430,7 +1509,6 @@ describe('ItemDetail IME response handling', () => {
               listUsers: () => of([]),
               history: () => of({ events: [], nextBefore: 0 }),
               listComments: () => of([]),
-              listAIChat: () => of([]),
               listAttachments: () => of([]),
               uploadAttachment: () => of({ id: 1, originalName: 'x.png' }),
               deleteAttachment: () => of(undefined),
@@ -1480,7 +1558,6 @@ describe('ItemDetail live refresh', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
-    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1501,7 +1578,6 @@ describe('ItemDetail live refresh', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
-      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1611,7 +1687,6 @@ describe('ItemDetail board meta wiring (#118)', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
-      listAIChat: vi.fn(() => of([])),
       // The full board must never be requested: items are not needed here (L-060: assert wiring).
       board: vi.fn(() => {
         throw new Error('GET /api/board must not be used by item detail');
@@ -1676,7 +1751,6 @@ describe('ItemDetail Close reason', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
-    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1713,7 +1787,6 @@ describe('ItemDetail Close reason', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
-      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -1880,7 +1953,6 @@ describe('ItemDetail description text links', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
-    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -1921,7 +1993,6 @@ describe('ItemDetail description text links', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
-      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [
@@ -2150,7 +2221,6 @@ describe('ItemDetail dueAt picker', () => {
   let api: {
     history: ReturnType<typeof vi.fn>;
     listComments: ReturnType<typeof vi.fn>;
-    listAIChat: ReturnType<typeof vi.fn>;
     board: ReturnType<typeof vi.fn>;
     itemByNumber: ReturnType<typeof vi.fn>;
     updateItem: ReturnType<typeof vi.fn>;
@@ -2170,7 +2240,6 @@ describe('ItemDetail dueAt picker', () => {
       listUsers: vi.fn(() => of([])),
       history: vi.fn(() => of({ events: [], nextBefore: 0 })),
       listComments: vi.fn(() => of([])),
-      listAIChat: vi.fn(() => of([])),
       board: vi.fn(() =>
         of({
           columns: [

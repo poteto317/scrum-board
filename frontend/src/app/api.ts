@@ -88,15 +88,19 @@ export type RecurringRulePatch = {
   enabled?: boolean;
 };
 
-export type AIChatMessage = {
+export type ProjectAIMessage = {
   id: number;
+  projectId: number;
   role: 'user' | 'assistant';
   body: string;
+  inputTokens?: number;
+  outputTokens?: number;
   createdAt: string;
 };
 
-export type AIChatPostResponse = {
-  messages: AIChatMessage[];
+export type ProjectAIChatPostResponse = {
+  assistant: ProjectAIMessage;
+  messages: ProjectAIMessage[];
 };
 
 export type AIUsage = {
@@ -253,29 +257,20 @@ export class Api {
       params ? { params } : {},
     );
   }
-  listAIChat(number: number, projectId?: number) {
-    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
+  /** 呼び出したユーザー自身の、そのプロジェクトでの履歴（古い順） */
+  listProjectAIChat(projectId: number) {
     return this.http
-      .get<{ messages: AIChatMessage[] }>(
-        `/api/items/by-number/${number}/ai-chat`,
-        params ? { params } : {},
-      )
+      .get<{ messages: ProjectAIMessage[] }>(`/api/projects/${projectId}/ai-chat`)
       .pipe(map((res) => res.messages ?? []));
   }
-  postAIChat(number: number, message: string, projectId?: number) {
-    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
-    return this.http.post<AIChatPostResponse>(
-      `/api/items/by-number/${number}/ai-chat`,
-      { message },
-      params ? { params } : {},
-    );
+  /** focusItemNumber はアイテム詳細から送るときだけ付ける */
+  postProjectAIChat(projectId: number, message: string, focusItemNumber?: number) {
+    const body =
+      focusItemNumber != null && focusItemNumber > 0 ? { message, focusItemNumber } : { message };
+    return this.http.post<ProjectAIChatPostResponse>(`/api/projects/${projectId}/ai-chat`, body);
   }
-  clearAIChat(number: number, projectId?: number) {
-    const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
-    return this.http.delete<void>(
-      `/api/items/by-number/${number}/ai-chat`,
-      params ? { params } : {},
-    );
+  clearProjectAIChat(projectId: number) {
+    return this.http.delete<void>(`/api/projects/${projectId}/ai-chat`);
   }
   getAIUsage() {
     return this.http.get<AIUsage>('/api/ai/usage');
