@@ -878,3 +878,32 @@ func TestProjectAIChatStoresTheAnswerEvenWhenTheClientIsGone(t *testing.T) {
 		t.Fatalf("the paid answer must be stored although the client is gone: status=%d %+v", w.Code, list)
 	}
 }
+
+func TestProjectAIChatKeepsAskingAfterTheClientIsGone(t *testing.T) {
+	repo := &appendCtxRepo{memoryRepo: fresh()}
+	ctx, cancel := context.WithCancel(context.Background())
+	chatter := &fakeProjectChatter{fn: func(chatCtx context.Context, _ string, _ []ChatTurn, _ ToolRunner) (string, int64, int64, error) {
+		cancel() // the user closes the panel while the model is still working
+		if err := chatCtx.Err(); err != nil {
+			return "", 0, 0, chatFail{kind: "timeout"}
+		}
+		if _, ok := chatCtx.Deadline(); !ok {
+			return "", 0, 0, errors.New("the model call must keep its time limit")
+		}
+		return "回答", 100, 10, nil
+	}}
+	h := NewHandler(repo, WithAIChat(chatter))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", projectChatPath(1), strings.NewReader(`{"message":"q"}`)).WithContext(ctx)
+	r.Header.Set("Content-Type", "application/json")
+	r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
+	h.ServeHTTP(w, r)
+	list, err := repo.memoryRepo.ListProjectAIMessages(context.Background(), 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 閉じても質問は捨てない。開き直せば、質問と回答が履歴にある。
+	if len(list) != 2 || list[1].Body != "回答" {
+		t.Fatalf("closing the panel must not drop the question: status=%d %+v", w.Code, list)
+	}
+}

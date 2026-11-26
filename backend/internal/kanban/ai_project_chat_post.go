@@ -254,7 +254,10 @@ func projectChatContext(ctx context.Context) (context.Context, context.CancelFun
 		}
 		limit = min(limit, left)
 	}
-	chatCtx, cancel := context.WithTimeout(ctx, limit)
+	// The time limit is kept, but the client going away does not stop the chat: closing the
+	// panel while the model is working must not drop the question (it is counted either way,
+	// and the answer shows up when the chat is opened again).
+	chatCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), limit)
 	return chatCtx, cancel, true
 }
 
