@@ -35,6 +35,8 @@ func newFormatter(getenv func(string) string, opts ...option.RequestOption) kanb
 }
 
 // newChatter returns the Claude-backed chat client, or a nil interface when ANTHROPIC_API_KEY is empty.
+// The returned value also implements kanban.ProjectChatter (the tool loop); kanban.WithAIChat
+// checks for that and then enables the project chat as well, so one client serves both chats.
 func newChatter(getenv func(string) string, maxTokens int64, opts ...option.RequestOption) kanban.ItemChatter {
 	key, model := anthropicKeyAndModel(getenv)
 	if key == "" {
@@ -61,17 +63,26 @@ func buildHandler(repo kanban.Repository, getenv func(string) string, opts ...op
 		kanban.WithPRTitleResolver(kanban.NewPRTitleResolver(nil, getenv("GITHUB_TOKEN"))),
 	)
 	handlerOpts = append(handlerOpts, kanban.WithBlobStorage(kanban.NewBlobStorageFromEnv(context.Background(), getenv)))
-	inner := kanban.NewHandler(repo, handlerOpts...)
+	return withRouteTimeouts(kanban.NewHandler(repo, handlerOpts...))
+}
+
+// withRouteTimeouts limits every request by its route. Attachment upload/content may transfer
+// up to 5 MiB, and the project chat calls the model several times with tool runs in between;
+// other routes keep the AI-safe RequestTimeout.
+func withRouteTimeouts(inner http.Handler) http.Handler {
 	const timeoutMsg = `{"message":"処理がタイムアウトしました。"}`
-	// Attachment upload/content may transfer up to 5 MiB; other routes keep the AI-safe RequestTimeout.
 	defaultTO := http.TimeoutHandler(inner, kanban.RequestTimeout, timeoutMsg)
 	attachmentTO := http.TimeoutHandler(inner, 60*time.Second, timeoutMsg)
+	projectChatTO := http.TimeoutHandler(inner, kanban.ProjectChatRequestTimeout, timeoutMsg)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isAttachmentHeavyPath(r) {
+		switch {
+		case isAttachmentHeavyPath(r):
 			attachmentTO.ServeHTTP(w, r)
-			return
+		case isProjectAIChatPost(r):
+			projectChatTO.ServeHTTP(w, r)
+		default:
+			defaultTO.ServeHTTP(w, r)
 		}
-		defaultTO.ServeHTTP(w, r)
 	})
 }
 
@@ -81,4 +92,18 @@ func isAttachmentHeavyPath(r *http.Request) bool {
 		return false
 	}
 	return r.Method == http.MethodPost || r.Method == http.MethodGet || r.Method == http.MethodDelete
+}
+
+// isProjectAIChatPost matches POST /api/projects/{id}/ai-chat only: reading and clearing the
+// history do not call the model and keep the default limit.
+func isProjectAIChatPost(r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	rest, ok := strings.CutPrefix(r.URL.Path, "/api/projects/")
+	if !ok {
+		return false
+	}
+	id, ok := strings.CutSuffix(rest, "/ai-chat")
+	return ok && id != "" && !strings.Contains(id, "/")
 }

@@ -129,6 +129,10 @@ func run() error {
 		err = repo.InitializeUsers(migrationCtx)
 	}
 	if err == nil {
+		// project_ai_messages references users: it cannot be part of InitializeAIChat, which runs before InitializeUsers.
+		err = repo.InitializeProjectAIChat(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeSessions(migrationCtx)
 	}
 	if err == nil {
