@@ -524,4 +524,38 @@ describe('DescriptionBlocksEditor', () => {
     f.detectChanges();
     expect(apiStub.deleteAttachment).toHaveBeenCalledWith(3, 4, undefined);
   });
+
+  it('hides rich preview for plain text so it does not look like a second block', () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', 'サーバー側で保持をして、動作できるようにする。');
+    f.componentRef.setInput('itemNumber', 140);
+    f.componentRef.setInput('attachmentField', 'description');
+    f.detectChanges();
+    expect(f.componentInstance.showRichPreview()).toBe(false);
+    expect(f.nativeElement.querySelector('.blocks-preview')).toBeNull();
+    expect(f.nativeElement.querySelectorAll('textarea.block-input').length).toBe(1);
+  });
+
+  it('shows rich preview when text has a link', () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', 'see [docs](https://example.com)');
+    f.componentRef.setInput('itemNumber', 140);
+    f.componentRef.setInput('attachmentField', 'description');
+    f.detectChanges();
+    expect(f.componentInstance.showRichPreview()).toBe(true);
+    expect(f.nativeElement.querySelector('.blocks-preview')).not.toBeNull();
+  });
+
+  it('shows rich preview when text has a same-item attachment image', () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput(
+      'value',
+      '![shot](/api/items/by-number/140/attachments/9/content)',
+    );
+    f.componentRef.setInput('itemNumber', 140);
+    f.componentRef.setInput('attachmentField', 'description');
+    f.detectChanges();
+    expect(f.componentInstance.showRichPreview()).toBe(true);
+    expect(f.nativeElement.querySelector('.blocks-preview')).not.toBeNull();
+  });
 });

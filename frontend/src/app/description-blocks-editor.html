@@ -88,7 +88,7 @@
   @if (imageError()) {
     <p class="form-error" role="alert">{{ imageError() }}</p>
   }
-  @if (itemNumber() > 0 && value()) {
+  @if (showRichPreview()) {
     <div class="blocks-preview" aria-label="説明のプレビュー">
       <app-description-rich-text
         [text]="value()"
