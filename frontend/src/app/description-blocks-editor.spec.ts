@@ -803,6 +803,19 @@ describe('DescriptionBlocksEditor', () => {
       expect(editor.imageBusy()).toBe(false);
     });
 
+    it('does not show a failure on another item when the upload fails after a switch', () => {
+      const pending = new Subject<ReturnType<typeof attachment>>();
+      apiStub.uploadAttachment.mockReturnValueOnce(pending);
+      const { f, editor } = mountWithImages('one');
+      editor.uploadImages([png('a.png')]);
+      f.componentRef.setInput('itemNumber', 4);
+      f.componentRef.setInput('value', 'other');
+      f.detectChanges();
+      pending.error({ error: { message: '添付はアイテムあたり20枚までです。' } });
+      expect(editor.imageError()).toBe('');
+      expect(editor.imageBusy()).toBe(false);
+    });
+
     it('stops at the description limit and keeps what fit', () => {
       apiStub.uploadAttachment
         .mockReturnValueOnce(of(attachment(1, 'a.png')))

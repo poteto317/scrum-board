@@ -421,21 +421,17 @@ export class DescriptionBlocksEditor {
     const end = el?.selectionEnd ?? start;
     let caret = { start, end };
     let stopError = '';
-    let stale = false;
+    // 待っている間に別のアイテムへ切り替わった・画面を離れたら、その本文にも文言にも触れない。
+    const stillSameItem = () =>
+      !this.destroyed &&
+      this.itemNumber() === number &&
+      this.attachmentField() === field &&
+      this.projectId() === projectId;
     uploadImagesInOrder({
       files: plan.accepted,
       upload: (file) => this.api.uploadAttachment(number, file, field, projectId),
       onUploaded: (att, file) => {
-        // 待っている間に別のアイテムへ切り替わった・画面を離れたら、その本文には入れない。
-        if (
-          this.destroyed ||
-          this.itemNumber() !== number ||
-          this.attachmentField() !== field ||
-          this.projectId() !== projectId
-        ) {
-          stale = true;
-          return 'stop';
-        }
+        if (!stillSameItem()) return 'stop';
         this.reloadAttachments();
         const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
         const inserted = this.insertIntoBlock(index, caret.start, caret.end, markup);
@@ -447,10 +443,11 @@ export class DescriptionBlocksEditor {
         return 'continue';
       },
       onDone: (outcome) => {
-        // 忙しい状態は、切り替えの後でも必ず解く。文言は、始めたときのアイテムのままのときだけ出す。
+        // 忙しい状態は、切り替えの後でも必ず解く。文言は、始めたときのアイテムのままのときだけ出す
+        // （失敗のときは onUploaded を通らないので、ここで見直す）。
         this.uploadGuard = false;
         this.imageBusy.set(false);
-        if (stale) return;
+        if (!stillSameItem()) return;
         this.imageError.set(imageUploadDoneMessage(outcome, plan, stopError));
       },
     });
