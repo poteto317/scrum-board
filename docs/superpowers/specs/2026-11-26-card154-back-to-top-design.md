@@ -12,7 +12,7 @@
 ## 変更
 
 1. `frontend/src/app/back-to-top.ts`（新規、純粋な関数）
-   - `isBackToTopVisible({ scrollY, viewportHeight, focused }): boolean` — `focused` なら `true`。それ以外は、`viewportHeight > 0` かつ `scrollY > viewportHeight / 2`（画面の半分より下へスクロールした）のとき `true`。一番上付近（半画面以内）では出さない。
+   - `isBackToTopVisible({ scrollY, viewportHeight, focused }): boolean` — `focused`（キーボードのフォーカスがある）なら `true`。それ以外は、`viewportHeight > 0` かつ `scrollY > viewportHeight / 2`（画面の半分より下へスクロールした）のとき `true`。一番上付近（半画面以内）では出さない。
    - `backToTopScrollBehavior(reducedMotion: boolean): ScrollBehavior` — `reducedMotion` なら `'auto'`（即座に移動）、そうでなければ `'smooth'`。
 2. `frontend/src/app/back-to-top.component.ts`（新規、部品は 1 つだけ）
    - セレクタ `app-back-to-top`。`window` の `scroll`・`resize` を受けて（`passive: true`、破棄時に外す）、`scrollY` と `innerHeight` を signal に入れ、`isBackToTopVisible` で表示を決める。ボタンの `blur` でも `scrollY` と `innerHeight` を読み直す（次の `scroll` を待たずに、その場で表示を決め直す）。
@@ -30,7 +30,7 @@
 
 - 出すしきい値は「画面の高さの半分より下」。固定の px より、画面の大きさに合う。
 - 出すページは、画面の枠を持つすべてのページ（部品を `App` に 1 回置くため）。短いページではスクロールしないので出ない。
-- 押した後のフォーカスはボタンのまま。先頭の見出しへは移さない。キーボードでフォーカスがある間はボタンを消さない（body に落とさない）。マウス・タッチで押して入ったフォーカス（`pointerdown` の直後の `focus`）は保たず、先頭に戻ったら消える（先頭なのにボタンが残り続けるのを避ける）。押してもフォーカスが入らないブラウザ（Safari）のために、押したとき（`click`）にも印を戻す。
+- 押した後のフォーカスはボタンのまま。先頭の見出しへは移さない。キーボードでフォーカスがある間はボタンを消さない（body に落とさない）。マウス・タッチで押して入ったフォーカス（`pointerdown` の直後の `focus`）は保たず、先頭に戻ったら消える（先頭なのにボタンが残り続けるのを避ける）。押し終わり（`pointerup`・`pointercancel`・`pointerleave`）で印を戻す。押してもフォーカスが入らないブラウザ（Safari）や、指を外へずらして離した・タッチが取り消された場合にも印が残らず、後のキーボードのフォーカスを取り違えない。
 - 出る・消えるときの読み上げの通知はしない（`aria-live` なし）。
 - バックログの `.backlog-scroll` など、内側のスクロール領域は対象外（通常は文書がスクロールするため）。
 
@@ -43,7 +43,7 @@
 ## テスト
 
 - `back-to-top.spec.ts`: `isBackToTopVisible` の境界（0、半画面ちょうど、半画面を超える、`viewportHeight` 0、`focused`）と、`backToTopScrollBehavior` の 2 値。
-- `back-to-top.component.spec.ts`: 先頭ではボタンが無い。`scrollY` を半画面より下にして `scroll` を送るとボタンが出て、`type="button"`・文字「トップに戻る」・`aria-live` なし。押すと `window.scrollTo` が `{ top: 0, behavior: 'smooth' }`（reduced なら `'auto'`）で呼ばれる。フォーカス中は先頭へ戻っても消えず、blur でその場で消える。入力 `aiChatFab`・`dockOpen` に応じて、ホストに `with-ai-chat-fab`・`dock-open` が付く。
+- `back-to-top.component.spec.ts`: 先頭ではボタンが無い。`scrollY` を半画面より下にして `scroll` を送るとボタンが出て、`type="button"`・文字「トップに戻る」・`aria-live` なし。押すと `window.scrollTo` が `{ top: 0, behavior: 'smooth' }`（reduced なら `'auto'`）で呼ばれる。キーボードのフォーカス中は先頭へ戻っても消えず、blur でその場で消える。`pointerdown` の直後の `focus` は保たない。押し終わり（`pointerup`・`pointercancel`・`pointerleave`）の後のキーボードの `focus` は保つ。入力 `aiChatFab`・`dockOpen` に応じて、ホストに `with-ai-chat-fab`・`dock-open` が付く。
 - `app.spec.ts`: 枠のあるページに `app-back-to-top` が 1 つある。
 
 ## 範囲外
