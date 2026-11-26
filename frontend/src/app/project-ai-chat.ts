@@ -26,6 +26,7 @@ import {
   ProjectAIChatPostResponse,
   ProjectAIConversation,
   ProjectAIMessage,
+  ProjectAIProposal,
 } from './api';
 import { errorMessage, isNotFound } from './api-error';
 import { AuthSession } from './auth-session';
@@ -52,6 +53,8 @@ import {
   type ChatScope,
 } from './project-ai-chat-rules';
 import { ProjectAiConversationList } from './project-ai-conversation-list';
+import { ProjectAiProposalCard } from './project-ai-proposal-card';
+import { replaceProposal } from './project-ai-proposal-rules';
 import {
   CONVERSATION_LIST_PINNED_QUERY,
   conversationActionsLocked,
@@ -70,7 +73,7 @@ import {
 
 @Component({
   selector: 'app-project-ai-chat',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, ProjectAiProposalCard],
   templateUrl: './project-ai-chat.html',
   styleUrl: './project-ai-chat.css',
 })
@@ -87,6 +90,8 @@ export class ProjectAiChat implements OnChanges {
   /** 表示中の会話が変わるたび（最初の読み込みが終わってから） */
   readonly conversationChange = output<ConversationRef>();
   readonly sendingChange = output<boolean>();
+  /** 提案の適用でアイテムが変わった */
+  readonly itemsChanged = output<void>();
 
   private readonly api = inject(Api);
   private readonly injector = inject(Injector);
@@ -512,6 +517,11 @@ export class ProjectAiChat implements OnChanges {
           this.error.set(errorMessage(err));
         },
       });
+  }
+
+  /** 提案の状態が変わった（カードがサーバーから受け取った提案）。表示中のメッセージを置き換える */
+  onProposalChanged(proposal: ProjectAIProposal) {
+    this.messages.update((list) => replaceProposal(list, proposal));
   }
 
   applyToDescription(body: string) {
