@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildAttachmentMarkup, parseDescriptionLinks } from './description-link';
+import {
+  buildAttachmentMarkup,
+  buildFileAttachmentMarkup,
+  parseDescriptionLinks,
+} from './description-link';
 import { buildDescriptionView } from './description-view';
 
 describe('buildDescriptionView', () => {
@@ -61,5 +65,17 @@ describe('buildDescriptionView', () => {
   it('names task checkboxes by image alt text instead of markup', () => {
     const view = buildDescriptionView('- [ ] ' + buildAttachmentMarkup(7, 3, 'pic'), 7, true);
     expect(view[0]).toMatchObject({ kind: 'task-list', items: [{ checked: false, label: 'pic' }] });
+  });
+
+  it('names task checkboxes by file attachment labels', () => {
+    const view = buildDescriptionView(
+      '- [ ] ' + buildFileAttachmentMarkup(7, 3, 'doc.pdf'),
+      7,
+      true,
+    );
+    expect(view[0]).toMatchObject({
+      kind: 'task-list',
+      items: [{ checked: false, label: 'doc.pdf' }],
+    });
   });
 });

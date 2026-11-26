@@ -37,6 +37,20 @@ import { buildDescriptionView } from './description-view';
               </button>
             }
           </span>
+        } @else if (seg.kind === 'file') {
+          <span class="rich-file">
+            <a [href]="seg.src" [attr.download]="seg.label">{{ seg.label }}</a>
+            @if (canDelete()) {
+              <button
+                type="button"
+                class="secondary rich-attachment-delete"
+                [attr.aria-label]="'ファイルを削除: ' + seg.label"
+                (click)="onDelete(seg.attachmentId, $event)"
+              >
+                削除
+              </button>
+            }
+          </span>
         }
       }
     </ng-template>

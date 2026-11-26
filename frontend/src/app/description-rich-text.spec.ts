@@ -4,7 +4,7 @@ import {
   SCRUM_ATTACHMENT_MIME,
   encodeAttachmentDragPayload,
 } from './attachment-dnd';
-import { buildAttachmentMarkup } from './description-link';
+import { buildAttachmentMarkup, buildFileAttachmentMarkup } from './description-link';
 import { DescriptionRichText } from './description-rich-text';
 
 describe('DescriptionRichText', () => {
@@ -61,6 +61,15 @@ describe('DescriptionRichText', () => {
     const img = f.nativeElement.querySelector('img') as HTMLImageElement;
     expect(img.getAttribute('loading')).toBe('lazy');
     expect(img.getAttribute('decoding')).toBe('async');
+  });
+
+  it('renders same-item file attachments as download links', () => {
+    const markup = buildFileAttachmentMarkup(7, 3, 'doc.pdf');
+    const f = mount({ text: markup, itemNumber: 7, canDelete: true });
+    const link = f.nativeElement.querySelector('a[href*="/attachments/3/content"]') as HTMLAnchorElement;
+    expect(link.textContent).toBe('doc.pdf');
+    expect(link.getAttribute('download')).toBe('doc.pdf');
+    expect(f.nativeElement.querySelector('button[aria-label="ファイルを削除: doc.pdf"]')).toBeTruthy();
   });
 
   it('sets custom MIME on image dragstart when draggableImages', () => {

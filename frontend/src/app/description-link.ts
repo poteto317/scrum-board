@@ -1,7 +1,8 @@
 export type DescriptionSegment =
   | { kind: 'text'; text: string }
   | { kind: 'link'; label: string; url: string }
-  | { kind: 'image'; alt: string; src: string; attachmentId: number };
+  | { kind: 'image'; alt: string; src: string; attachmentId: number }
+  | { kind: 'file'; label: string; src: string; attachmentId: number };
 
 const MAX_URL_LEN = 2048;
 /** Max Unicode length for description after link insert (matches form textLimit). */
@@ -35,11 +36,15 @@ export function normalizeDescriptionLinkLabel(value: string): string | null {
   return text;
 }
 
-export function sanitizeAttachmentAlt(name: string): string {
+export function sanitizeAttachmentName(name: string, fallback: string): string {
   let text = name.replace(/]/g, '').replace(/[\r\n]/g, '').trim();
-  if (!text) text = 'image';
+  if (!text) text = fallback || 'file';
   if ([...text].length > 200) text = [...text].slice(0, 200).join('');
   return text;
+}
+
+export function sanitizeAttachmentAlt(name: string): string {
+  return sanitizeAttachmentName(name, 'image');
 }
 
 export function attachmentContentPath(itemNumber: number, attachmentId: number): string {
@@ -63,7 +68,27 @@ export function buildAttachmentMarkup(
   attachmentId: number,
   alt: string,
 ): string {
-  return `![${sanitizeAttachmentAlt(alt)}](${attachmentContentPath(itemNumber, attachmentId)})`;
+  return `![${sanitizeAttachmentName(alt, 'image')}](${attachmentContentPath(itemNumber, attachmentId)})`;
+}
+
+export function buildFileAttachmentMarkup(
+  itemNumber: number,
+  attachmentId: number,
+  name: string,
+): string {
+  return `[${sanitizeAttachmentName(name, 'file')}](${attachmentContentPath(itemNumber, attachmentId)})`;
+}
+
+/** 画像記法とファイル記法の選択（許可 MIME の判定は呼び出し側）。 */
+export function buildAttachmentMarkupForKind(
+  kind: 'image' | 'file',
+  itemNumber: number,
+  attachmentId: number,
+  name: string,
+): string {
+  return kind === 'image'
+    ? buildAttachmentMarkup(itemNumber, attachmentId, name)
+    : buildFileAttachmentMarkup(itemNumber, attachmentId, name);
 }
 
 export function formatDescriptionLink(label: string, url: string): string | null {
@@ -102,8 +127,8 @@ export function insertMarkupAt(
 
 /**
  * Parse description/solution/comment text into display segments.
- * Image markdown `![alt](path)` is recognized before normal links; only same-item
- * attachment content paths become images. External image URLs stay as text.
+ * Same-item `![alt](path)` → image; same-item `[label](path)` → file download link;
+ * `https://` links → link. External image URLs and other-item paths stay as text.
  */
 export function parseDescriptionLinks(
   text: string,
@@ -175,6 +200,25 @@ export function parseDescriptionLinks(
     }
     const label = text.slice(i + 1, labelEnd);
     const url = text.slice(labelEnd + 2, urlEnd);
+    const attachmentId =
+      itemNumber != null && itemNumber > 0 ? isAttachmentContentPath(url, itemNumber) : null;
+    if (
+      attachmentId != null &&
+      !label.includes(']') &&
+      !label.includes('\n') &&
+      !label.includes('\r')
+    ) {
+      pushText(i);
+      segments.push({
+        kind: 'file',
+        label: label || 'file',
+        src: url,
+        attachmentId,
+      });
+      i = urlEnd + 1;
+      textStart = i;
+      continue;
+    }
     const normalizedUrl = normalizeDescriptionLinkUrl(url);
     const normalizedLabel = normalizeDescriptionLinkLabel(label);
     if (normalizedUrl && normalizedLabel && label === normalizedLabel && url === normalizedUrl) {
