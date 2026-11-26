@@ -88,9 +88,18 @@ export type RecurringRulePatch = {
   enabled?: boolean;
 };
 
+export type ProjectAIConversation = {
+  id: number;
+  projectId: number;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ProjectAIMessage = {
   id: number;
   projectId: number;
+  conversationId: number;
   role: 'user' | 'assistant';
   body: string;
   inputTokens?: number;
@@ -98,7 +107,22 @@ export type ProjectAIMessage = {
   createdAt: string;
 };
 
+/** 会話の指定。保存済みは ID、まだ保存されていない新しい会話は 'new' */
+export type ConversationRef = number | 'new';
+
+/** いちばん新しい会話とそのやりとり。会話が 1 つも無ければ conversation は null */
+export type ProjectAIChatView = {
+  conversation: ProjectAIConversation | null;
+  messages: ProjectAIMessage[];
+};
+
+export type ProjectAIConversationView = {
+  conversation: ProjectAIConversation;
+  messages: ProjectAIMessage[];
+};
+
 export type ProjectAIChatPostResponse = {
+  conversation: ProjectAIConversation;
   assistant: ProjectAIMessage;
   messages: ProjectAIMessage[];
 };
@@ -257,20 +281,48 @@ export class Api {
       params ? { params } : {},
     );
   }
-  /** 呼び出したユーザー自身の、そのプロジェクトでの履歴（古い順） */
-  listProjectAIChat(projectId: number) {
+  /** 呼び出したユーザー自身の、そのプロジェクトでいちばん新しい会話（メッセージは古い順） */
+  getLatestProjectAIChat(projectId: number) {
+    return this.http.get<Partial<ProjectAIChatView>>(`/api/projects/${projectId}/ai-chat`).pipe(
+      map((res): ProjectAIChatView => {
+        const conversation = res.conversation ?? null;
+        // 会話の無いメッセージは、どの会話のものとも言えないので出さない
+        return { conversation, messages: conversation ? (res.messages ?? []) : [] };
+      }),
+    );
+  }
+  /** 呼び出したユーザー自身の、そのプロジェクトの会話（更新の新しい順） */
+  listProjectAIConversations(projectId: number) {
     return this.http
-      .get<{ messages: ProjectAIMessage[] }>(`/api/projects/${projectId}/ai-chat`)
-      .pipe(map((res) => res.messages ?? []));
+      .get<{ conversations?: ProjectAIConversation[] }>(
+        `/api/projects/${projectId}/ai-conversations`,
+      )
+      .pipe(map((res) => res.conversations ?? []));
   }
-  /** focusItemNumber はアイテム詳細から送るときだけ付ける */
-  postProjectAIChat(projectId: number, message: string, focusItemNumber?: number) {
-    const body =
-      focusItemNumber != null && focusItemNumber > 0 ? { message, focusItemNumber } : { message };
+  getProjectAIConversation(projectId: number, conversationId: number) {
+    return this.http.get<ProjectAIConversationView>(
+      `/api/projects/${projectId}/ai-conversations/${conversationId}`,
+    );
+  }
+  deleteProjectAIConversation(projectId: number, conversationId: number) {
+    return this.http.delete<void>(`/api/projects/${projectId}/ai-conversations/${conversationId}`);
+  }
+  /**
+   * conversation は続ける会話の ID か、新しい会話を作る 'new'。
+   * focusItemNumber はアイテム詳細から送るときだけ付ける
+   */
+  postProjectAIChat(
+    projectId: number,
+    message: string,
+    conversation: ConversationRef,
+    focusItemNumber?: number,
+  ) {
+    const body = {
+      message,
+      ...(focusItemNumber != null && focusItemNumber > 0 ? { focusItemNumber } : {}),
+      ...(conversation === 'new' ? { newConversation: true } : { conversationId: conversation }),
+    };
     return this.http.post<ProjectAIChatPostResponse>(`/api/projects/${projectId}/ai-chat`, body);
-  }
-  clearProjectAIChat(projectId: number) {
-    return this.http.delete<void>(`/api/projects/${projectId}/ai-chat`);
   }
   getAIUsage() {
     return this.http.get<AIUsage>('/api/ai/usage');

@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   OnChanges,
   SimpleChanges,
   computed,
@@ -10,21 +11,33 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { isSameItem, type AiChatFocusItem } from './ai-chat-target';
-import { Api, AICredits, ProjectAIMessage } from './api';
-import { errorMessage } from './api-error';
+import {
+  Api,
+  AICredits,
+  ConversationRef,
+  ProjectAIChatPostResponse,
+  ProjectAIConversation,
+  ProjectAIMessage,
+} from './api';
+import { errorMessage, isNotFound } from './api-error';
 import { AuthSession } from './auth-session';
 import { blockedReason, isComposeBlocked, isLowRemaining } from './ai-credits-state';
 import { AI_LOW_REMAINING_MESSAGE } from './ai-unavailable-copy';
 import { Item } from './models';
 import {
-  PROJECT_AI_CHAT_CLEAR_CONFIRM,
   PROJECT_AI_CHAT_EMPTY_MESSAGE,
   PROJECT_AI_CHAT_SENDING_MESSAGE,
+  PROJECT_AI_CONVERSATIONS_EMPTY_MESSAGE,
+  PROJECT_AI_CONVERSATION_DELETE_CONFIRM,
+  PROJECT_AI_CONVERSATION_GONE_ON_SEND,
+  PROJECT_AI_CONVERSATION_NOT_FOUND,
+  PROJECT_AI_NEW_CONVERSATION_LABEL,
   applyCommentConfirm,
   applyDescriptionConfirm,
 } from './project-ai-chat-copy';
@@ -36,6 +49,22 @@ import {
   sameChatScope,
   type ChatScope,
 } from './project-ai-chat-rules';
+import { ProjectAiConversationList } from './project-ai-conversation-list';
+import {
+  CONVERSATION_LIST_PINNED_QUERY,
+  conversationActionsLocked,
+  conversationListView,
+  conversationRef,
+  conversationUpdatedLabel,
+  deleteConversationLabel,
+  initialConversationTarget,
+  isConversationGoneOnSend,
+  isConversationSettled,
+  removeConversation,
+  sameConversation,
+  storedInSentConversation,
+  upsertConversationFirst,
+} from './project-ai-conversations';
 
 @Component({
   selector: 'app-project-ai-chat',
@@ -49,29 +78,52 @@ export class ProjectAiChat implements OnChanges {
   readonly focusItem = input<AiChatFocusItem | null>(null);
   /** fab=従来の高さ制限、dock/page=一覧を伸ばす */
   readonly layout = input<'fab' | 'dock' | 'page'>('fab');
+  /** 最初の読み込みだけで使う、開く会話の指定（ID、'new'=空の新しい会話、null=いちばん新しい会話） */
+  readonly initialConversationId = input<ConversationRef | null>(null);
   readonly descriptionApplied = output<Item>();
   readonly commentApplied = output<void>();
+  /** 表示中の会話が変わるたび（最初の読み込みが終わってから） */
+  readonly conversationChange = output<ConversationRef>();
+  readonly sendingChange = output<boolean>();
 
   private readonly api = inject(Api);
   private readonly auth = inject(AuthSession);
+  private readonly inputRef = viewChild<ElementRef<HTMLTextAreaElement>>('messageInput');
   private generation = 0;
+  /** 会話の一覧（読み込みと、送信・削除の後の書き換え） */
+  private readonly conversationList = new ProjectAiConversationList(this.api);
   private userId = this.currentUserId();
-  private listRequest?: Subscription;
+  /** 最初の読み込みで開く会話。読めたとき、projectId・ユーザーが変わったときに外す */
+  private initialTarget: ConversationRef | null = null;
+  /** conversationChange で最後に伝えた会話。まだ伝えていなければ null */
+  private announced: ConversationRef | null = null;
+  private shownRequest?: Subscription;
   private creditsRequest?: Subscription;
   private sendRequest?: Subscription;
-  private clearRequest?: Subscription;
+  private switchRequest?: Subscription;
+  private deleteRequest?: Subscription;
   private applyRequest?: Subscription;
 
   readonly messages = signal<ProjectAIMessage[]>([]);
+  /** 表示中の会話。null は、まだ保存されていない新しい会話 */
+  readonly conversationId = signal<number | null>(null);
+  readonly conversations = this.conversationList.conversations.asReadonly();
+  readonly listState = this.conversationList.state.asReadonly();
+  readonly listError = this.conversationList.error.asReadonly();
+  readonly historyOpen = signal(false);
   readonly draft = signal('');
+  /** 最初の読み込み（表示する会話を決める）の途中 */
   readonly loading = signal(false);
+  readonly switching = signal(false);
+  readonly deleting = signal(false);
   readonly credits = signal<AICredits | null>(null);
   readonly creditsLoading = signal(false);
   readonly sending = signal(false);
-  readonly clearing = signal(false);
   readonly applying = signal(false);
   readonly error = signal('');
+  /** 最初の読み込みの失敗だけ（入力欄ごと隠す） */
   readonly loadError = signal('');
+  private readonly wide = signal(false);
 
   readonly canApply = computed(
     () => this.layout() !== 'page' && this.focusItem()?.canEdit === true,
@@ -79,14 +131,47 @@ export class ProjectAiChat implements OnChanges {
   readonly composeBlocked = computed(() => isComposeBlocked(this.credits()));
   readonly lowRemaining = computed(() => isLowRemaining(this.credits()));
   readonly blockReason = computed(() => blockedReason(this.credits()));
+  /** 表示中の会話が決まっているか（決まるまでは送れない） */
+  readonly settled = computed(() =>
+    isConversationSettled({
+      loading: this.loading(),
+      loadFailed: this.loadError() !== '',
+      switching: this.switching(),
+    }),
+  );
   readonly composeInactive = computed(
-    () => this.sending() || this.applying() || this.creditsLoading() || this.composeBlocked(),
+    () =>
+      !this.settled() ||
+      this.sending() ||
+      this.deleting() ||
+      this.applying() ||
+      this.creditsLoading() ||
+      this.composeBlocked(),
+  );
+  readonly actionsLocked = computed(() =>
+    conversationActionsLocked({
+      settled: this.settled(),
+      sending: this.sending(),
+      deleting: this.deleting(),
+    }),
+  );
+  readonly canDeleteShown = computed(() => !this.actionsLocked() && this.conversationId() != null);
+  readonly listView = computed(() =>
+    conversationListView({
+      layout: this.layout(),
+      wide: this.wide(),
+      historyOpen: this.historyOpen(),
+    }),
   );
   readonly blockedMessage = computed(() => blockedReasonMessage(this.blockReason()));
 
   readonly lowRemainingMessage = AI_LOW_REMAINING_MESSAGE;
   readonly emptyMessage = PROJECT_AI_CHAT_EMPTY_MESSAGE;
   readonly sendingMessage = PROJECT_AI_CHAT_SENDING_MESSAGE;
+  readonly conversationsEmptyMessage = PROJECT_AI_CONVERSATIONS_EMPTY_MESSAGE;
+  readonly newConversationLabel = PROJECT_AI_NEW_CONVERSATION_LABEL;
+  readonly conversationUpdatedLabel = conversationUpdatedLabel;
+  readonly deleteConversationLabel = deleteConversationLabel;
 
   constructor() {
     // 履歴はユーザーごと。ユーザーが変わったら、前のユーザーの履歴と応答を出さない
@@ -94,16 +179,25 @@ export class ProjectAiChat implements OnChanges {
       const userId = this.currentUserId();
       if (userId === this.userId) return;
       this.userId = userId;
+      this.initialTarget = null;
       untracked(() => this.resetScope());
     });
-    inject(DestroyRef).onDestroy(() => {
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => {
       this.cancelScopedRequests();
       this.applyRequest?.unsubscribe();
     });
+    this.bindWideMedia(destroyRef);
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    if (changes['projectId']) this.resetScope();
+    const project = changes['projectId'];
+    if (project) {
+      this.initialTarget = project.firstChange
+        ? initialConversationTarget(this.initialConversationId())
+        : null;
+      this.resetScope();
+    }
     const focus = changes['focusItem'];
     if (focus && !focus.firstChange && !isSameItem(focus.previousValue, focus.currentValue)) {
       // 反映の応答は別のアイテムのものになったので捨てる（履歴はプロジェクトのものなので残す）
@@ -113,7 +207,8 @@ export class ProjectAiChat implements OnChanges {
 
   reload() {
     const scope = this.scope(++this.generation);
-    this.loadHistory(scope);
+    this.loadShownConversation(scope);
+    this.loadConversations();
     this.loadCredits(scope);
   }
 
@@ -121,12 +216,17 @@ export class ProjectAiChat implements OnChanges {
   private resetScope() {
     this.cancelScopedRequests();
     this.messages.set([]);
+    this.conversationId.set(null);
+    this.announced = null;
+    this.conversationList.reset();
+    this.historyOpen.set(false);
     this.draft.set('');
     this.error.set('');
     this.loadError.set('');
     this.loading.set(false);
-    this.sending.set(false);
-    this.clearing.set(false);
+    this.switching.set(false);
+    this.deleting.set(false);
+    this.setSending(false);
     this.credits.set(null);
     this.creditsLoading.set(false);
     if (this.currentUserId() == null) {
@@ -138,28 +238,88 @@ export class ProjectAiChat implements OnChanges {
   }
 
   private cancelScopedRequests() {
-    this.listRequest?.unsubscribe();
+    this.shownRequest?.unsubscribe();
+    this.conversationList.cancel();
     this.creditsRequest?.unsubscribe();
     this.sendRequest?.unsubscribe();
-    this.clearRequest?.unsubscribe();
+    this.switchRequest?.unsubscribe();
+    this.deleteRequest?.unsubscribe();
   }
 
-  private loadHistory(scope: ChatScope) {
-    this.listRequest?.unsubscribe();
+  /** 最初に表示する会話を決める: 指定の会話、空の新しい会話、いちばん新しい会話のどれか */
+  private loadShownConversation(scope: ChatScope) {
+    this.shownRequest?.unsubscribe();
     this.loading.set(true);
     this.loadError.set('');
-    this.listRequest = this.api.listProjectAIChat(scope.projectId).subscribe({
-      next: (messages) => {
+    const target = this.initialTarget;
+    if (target === 'new') {
+      this.showLoaded(null, []);
+      return;
+    }
+    if (target == null) {
+      this.loadLatestConversation(scope);
+      return;
+    }
+    this.shownRequest = this.api.getProjectAIConversation(scope.projectId, target).subscribe({
+      next: (view) => {
         if (!this.stillCurrent(scope)) return;
-        this.messages.set(messages);
-        this.loading.set(false);
+        this.showLoaded(view.conversation.id, view.messages);
       },
       error: (err) => {
         if (!this.stillCurrent(scope)) return;
-        this.loadError.set(errorMessage(err));
-        this.loading.set(false);
+        if (!isNotFound(err)) {
+          this.failLoad(err);
+          return;
+        }
+        // 指定の会話はもう無い。いちばん新しい会話に落ちる
+        this.initialTarget = null;
+        this.loadLatestConversation(scope);
       },
     });
+  }
+
+  private loadLatestConversation(scope: ChatScope) {
+    this.shownRequest = this.api.getLatestProjectAIChat(scope.projectId).subscribe({
+      next: (view) => {
+        if (!this.stillCurrent(scope)) return;
+        this.showLoaded(view.conversation?.id ?? null, view.messages);
+      },
+      error: (err) => {
+        if (!this.stillCurrent(scope)) return;
+        this.failLoad(err);
+      },
+    });
+  }
+
+  private showLoaded(conversationId: number | null, messages: ProjectAIMessage[]) {
+    this.initialTarget = null;
+    this.messages.set(messages);
+    this.loading.set(false);
+    this.showConversation(conversationId);
+  }
+
+  private failLoad(err: unknown) {
+    this.loadError.set(errorMessage(err));
+    this.loading.set(false);
+  }
+
+  /** 表示中の会話を切り替え、変わっていれば外へ伝える */
+  private showConversation(conversationId: number | null) {
+    this.conversationId.set(conversationId);
+    const ref = conversationRef(conversationId);
+    if (ref === this.announced) return;
+    this.announced = ref;
+    this.conversationChange.emit(ref);
+  }
+
+  loadConversations() {
+    const scope = this.scope();
+    this.conversationList.load(scope.projectId, () => this.stillCurrent(scope));
+  }
+
+  /** 送信・削除の結果を一覧に反映する。一覧をまだ読めていなければ、読み直す */
+  private patchConversations(update: (list: ProjectAIConversation[]) => ProjectAIConversation[]) {
+    if (!this.conversationList.patch(update)) this.loadConversations();
   }
 
   /** Workspace credits（プロジェクト非依存）。読み直しのたびに取り直す */
@@ -181,6 +341,54 @@ export class ProjectAiChat implements OnChanges {
     });
   }
 
+  toggleHistory() {
+    this.historyOpen.update((open) => !open);
+  }
+
+  /** 空の新しい会話にする。サーバーには、最初に送ったときに作られる */
+  startNew() {
+    if (this.actionsLocked()) return;
+    this.messages.set([]);
+    this.error.set('');
+    this.historyOpen.set(false);
+    this.showConversation(null);
+    this.inputRef()?.nativeElement.focus();
+  }
+
+  selectConversation(conversationId: number) {
+    if (this.actionsLocked()) return;
+    if (sameConversation(conversationId, this.conversationId())) {
+      this.historyOpen.set(false);
+      return;
+    }
+    this.switchRequest?.unsubscribe();
+    const scope = this.scope();
+    this.switching.set(true);
+    this.error.set('');
+    this.switchRequest = this.api
+      .getProjectAIConversation(scope.projectId, conversationId)
+      .subscribe({
+        next: (view) => {
+          if (!this.stillCurrent(scope)) return;
+          this.messages.set(view.messages);
+          this.switching.set(false);
+          this.historyOpen.set(false);
+          this.showConversation(view.conversation.id);
+        },
+        error: (err) => {
+          if (!this.stillCurrent(scope)) return;
+          // 前の会話を表示したままにする
+          this.switching.set(false);
+          if (isNotFound(err)) {
+            this.loadConversations();
+            this.error.set(PROJECT_AI_CONVERSATION_NOT_FOUND);
+            return;
+          }
+          this.error.set(errorMessage(err));
+        },
+      });
+  }
+
   onComposeKeydown(event: Event) {
     const e = event as KeyboardEvent;
     if (!isSendKey(e)) return;
@@ -199,45 +407,90 @@ export class ProjectAiChat implements OnChanges {
     const text = draft.text;
     this.sendRequest?.unsubscribe();
     const scope = this.scope();
-    this.sending.set(true);
+    const sentTo = this.conversationId();
+    this.setSending(true);
     this.error.set('');
     // 送信中に別のアイテムへ移っても、同じプロジェクトなら回答は表示する（focusItem は比べない）
     this.sendRequest = this.api
-      .postProjectAIChat(scope.projectId, text, this.focusItem()?.number)
+      .postProjectAIChat(scope.projectId, text, conversationRef(sentTo), this.focusItem()?.number)
       .subscribe({
         next: (res) => {
-          if (!this.stillCurrent(scope)) return;
-          this.messages.set(res.messages);
-          this.draft.set('');
-          this.sending.set(false);
+          if (this.stillCurrent(scope)) this.onSent(sentTo, res);
         },
         error: (err) => {
-          if (!this.stillCurrent(scope)) return;
-          this.error.set(errorMessage(err));
-          this.sending.set(false);
+          if (this.stillCurrent(scope)) this.onSendFailed(sentTo, err);
         },
       });
   }
 
-  clear() {
-    if (this.clearing() || this.sending()) return;
-    if (!window.confirm(PROJECT_AI_CHAT_CLEAR_CONFIRM)) return;
-    this.clearRequest?.unsubscribe();
+  /** 回答が保存された。一覧に反映し、送った先がまだ表示中なら、やりとりも出す */
+  private onSent(sentTo: number | null, res: ProjectAIChatPostResponse) {
+    this.setSending(false);
+    if (storedInSentConversation(sentTo, res.conversation.id)) {
+      this.patchConversations((list) => upsertConversationFirst(list, res.conversation));
+    } else {
+      // サーバーが会話を作った。刈り込まれた会話や、消された送り先を手元に残さない
+      this.loadConversations();
+    }
+    // 表示中の会話が送ったときと違えば、回答は別の会話のものなので表示しない
+    if (!sameConversation(sentTo, this.conversationId())) return;
+    this.messages.set(res.messages);
+    this.draft.set('');
+    this.showConversation(res.conversation.id);
+  }
+
+  /** 送信が失敗した。送った先がまだ表示中なら、理由を出す */
+  private onSendFailed(sentTo: number | null, err: unknown) {
+    this.setSending(false);
+    if (!sameConversation(sentTo, this.conversationId())) return;
+    if (isConversationGoneOnSend(sentTo, err)) {
+      // 表示中の会話が外で消えていた。下書きを残して、新しい会話として送り直せるようにする
+      this.loadConversations();
+      this.messages.set([]);
+      this.showConversation(null);
+      this.error.set(PROJECT_AI_CONVERSATION_GONE_ON_SEND);
+      return;
+    }
+    this.error.set(errorMessage(err));
+  }
+
+  deleteShownConversation() {
+    const conversationId = this.conversationId();
+    if (conversationId != null) this.deleteConversation(conversationId);
+  }
+
+  deleteConversation(conversationId: number) {
+    if (this.actionsLocked()) return;
+    if (!window.confirm(PROJECT_AI_CONVERSATION_DELETE_CONFIRM)) return;
+    this.deleteRequest?.unsubscribe();
     const scope = this.scope();
-    this.clearing.set(true);
+    this.deleting.set(true);
     this.error.set('');
-    this.clearRequest = this.api.clearProjectAIChat(scope.projectId).subscribe({
-      next: () => {
-        if (!this.stillCurrent(scope)) return;
-        this.messages.set([]);
-        this.clearing.set(false);
-      },
-      error: (err) => {
-        if (!this.stillCurrent(scope)) return;
-        this.error.set(errorMessage(err));
-        this.clearing.set(false);
-      },
-    });
+    const deleted = () => {
+      this.deleting.set(false);
+      this.patchConversations((list) => removeConversation(list, conversationId));
+      if (!sameConversation(conversationId, this.conversationId())) return;
+      this.messages.set([]);
+      this.showConversation(null);
+    };
+    this.deleteRequest = this.api
+      .deleteProjectAIConversation(scope.projectId, conversationId)
+      .subscribe({
+        next: () => {
+          if (!this.stillCurrent(scope)) return;
+          deleted();
+        },
+        error: (err) => {
+          if (!this.stillCurrent(scope)) return;
+          // 404 は、別のタブなどで既に消えていた。消えたことに変わりはない
+          if (isNotFound(err)) {
+            deleted();
+            return;
+          }
+          this.deleting.set(false);
+          this.error.set(errorMessage(err));
+        },
+      });
   }
 
   applyToDescription(body: string) {
@@ -299,6 +552,21 @@ export class ProjectAiChat implements OnChanges {
   /** 押したときのアイテムがまだ開いているか */
   private stillFocused(focus: AiChatFocusItem) {
     return isSameItem(this.focusItem(), focus);
+  }
+
+  private setSending(sending: boolean) {
+    if (this.sending() === sending) return;
+    this.sending.set(sending);
+    this.sendingChange.emit(sending);
+  }
+
+  private bindWideMedia(destroyRef: DestroyRef) {
+    if (typeof matchMedia !== 'function') return;
+    const mq = matchMedia(CONVERSATION_LIST_PINNED_QUERY);
+    const sync = () => this.wide.set(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    destroyRef.onDestroy(() => mq.removeEventListener('change', sync));
   }
 
   private currentUserId(): number | null {

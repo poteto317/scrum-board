@@ -44,44 +44,97 @@ describe('Api', () => {
       body: { columns: [], settings: { cardLayout: 'pack' } },
     });
   });
-  it('lists the project AI chat history of the caller', () => {
+  it('gets the latest project AI conversation of the caller with its messages', () => {
     let body: unknown;
-    api.listProjectAIChat(4).subscribe((b) => (body = b));
+    api.getLatestProjectAIChat(4).subscribe((b) => (body = b));
     const req = http.expectOne('/api/projects/4/ai-chat');
     expect(req.request.method).toBe('GET');
     expect(req.request.params.keys()).toEqual([]);
-    const messages = [
-      { id: 1, projectId: 4, role: 'user', body: 'q', createdAt: '2026-11-26T00:00:00Z' },
-    ];
-    req.flush({ messages });
-    expect(body).toEqual(messages);
+    const view = {
+      conversation: {
+        id: 9,
+        projectId: 4,
+        title: 'q',
+        createdAt: '2026-11-26T00:00:00Z',
+        updatedAt: '2026-11-26T00:00:00Z',
+      },
+      messages: [
+        {
+          id: 1,
+          projectId: 4,
+          conversationId: 9,
+          role: 'user',
+          body: 'q',
+          createdAt: '2026-11-26T00:00:00Z',
+        },
+      ],
+    };
+    req.flush(view);
+    expect(body).toEqual(view);
   });
-  it('maps a missing project AI chat history to an empty list', () => {
+  it('maps no project AI conversation to null and an empty list', () => {
     let body: unknown;
-    api.listProjectAIChat(4).subscribe((b) => (body = b));
-    http.expectOne('/api/projects/4/ai-chat').flush({});
+    api.getLatestProjectAIChat(4).subscribe((b) => (body = b));
+    http.expectOne('/api/projects/4/ai-chat').flush({ conversation: null, messages: [] });
+    expect(body).toEqual({ conversation: null, messages: [] });
+  });
+  it('does not show messages that belong to no conversation', () => {
+    let body: unknown;
+    api.getLatestProjectAIChat(4).subscribe((b) => (body = b));
+    http.expectOne('/api/projects/4/ai-chat').flush({ messages: [{ id: 1, body: 'q' }] });
+    expect(body).toEqual({ conversation: null, messages: [] });
+  });
+  it('lists the project AI conversations of the caller', () => {
+    let body: unknown;
+    api.listProjectAIConversations(4).subscribe((b) => (body = b));
+    const req = http.expectOne('/api/projects/4/ai-conversations');
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.keys()).toEqual([]);
+    const conversations = [{ id: 9, projectId: 4, title: 'q', createdAt: 't', updatedAt: 't' }];
+    req.flush({ conversations });
+    expect(body).toEqual(conversations);
+  });
+  it('maps a missing project AI conversation list to an empty list', () => {
+    let body: unknown;
+    api.listProjectAIConversations(4).subscribe((b) => (body = b));
+    http.expectOne('/api/projects/4/ai-conversations').flush({});
     expect(body).toEqual([]);
   });
-  it('posts a project AI chat message without focusItemNumber by default', () => {
-    api.postProjectAIChat(4, '期限が近いものは').subscribe();
-    const req = http.expectOne('/api/projects/4/ai-chat');
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ message: '期限が近いものは' });
-    req.flush({ assistant: {}, messages: [] });
+  it('gets one project AI conversation with its messages', () => {
+    let body: unknown;
+    api.getProjectAIConversation(4, 9).subscribe((b) => (body = b));
+    const req = http.expectOne('/api/projects/4/ai-conversations/9');
+    expect(req.request.method).toBe('GET');
+    const view = { conversation: { id: 9 }, messages: [] };
+    req.flush(view);
+    expect(body).toEqual(view);
   });
-  it('posts a project AI chat message with the open item number', () => {
-    api.postProjectAIChat(4, '要約して', 12).subscribe();
-    const req = http.expectOne('/api/projects/4/ai-chat');
-    expect(req.request.body).toEqual({ message: '要約して', focusItemNumber: 12 });
-    req.flush({ assistant: {}, messages: [] });
-  });
-  it('clears the project AI chat history of the caller', () => {
+  it('deletes one project AI conversation', () => {
     let done = false;
-    api.clearProjectAIChat(4).subscribe(() => (done = true));
-    const req = http.expectOne('/api/projects/4/ai-chat');
+    api.deleteProjectAIConversation(4, 9).subscribe(() => (done = true));
+    const req = http.expectOne('/api/projects/4/ai-conversations/9');
     expect(req.request.method).toBe('DELETE');
     req.flush(null, { status: 204, statusText: 'No Content' });
     expect(done).toBe(true);
+  });
+  it('posts a project AI chat message to an existing conversation', () => {
+    api.postProjectAIChat(4, '期限が近いものは', 9).subscribe();
+    const req = http.expectOne('/api/projects/4/ai-chat');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ message: '期限が近いものは', conversationId: 9 });
+    req.flush({ conversation: {}, assistant: {}, messages: [] });
+  });
+  it('posts a project AI chat message as a new conversation', () => {
+    api.postProjectAIChat(4, '期限が近いものは', 'new').subscribe();
+    const req = http.expectOne('/api/projects/4/ai-chat');
+    expect(req.request.body).toEqual({ message: '期限が近いものは', newConversation: true });
+    req.flush({ conversation: {}, assistant: {}, messages: [] });
+  });
+  it('posts a project AI chat message with the open item number', () => {
+    api.postProjectAIChat(4, '要約して', 9, 12).subscribe();
+    const req = http.expectOne('/api/projects/4/ai-chat');
+    expect(req.request.body).toEqual({ message: '要約して', focusItemNumber: 12, conversationId: 9 });
+    req.flush({ conversation: {}, assistant: {}, messages: [] });
   });
   it('sends the selected status as columnId', () => {
     api.updateItem(7, { columnId: 3 }).subscribe();

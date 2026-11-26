@@ -14,18 +14,102 @@
   flex: 1;
   height: 100%;
 }
+.ai-chat--dock .ai-chat-main,
+.ai-chat--page .ai-chat-main,
+.ai-chat--dock .ai-chat-thread,
+.ai-chat--page .ai-chat-thread {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.ai-chat--dock .ai-chat-thread--compose-only,
+.ai-chat--page .ai-chat-thread--compose-only {
+  flex: none;
+}
 .ai-chat--dock .ai-chat-list,
-.ai-chat--page .ai-chat-list {
+.ai-chat--page .ai-chat-list,
+.ai-chat--dock .ai-chat-conversations,
+.ai-chat--page .ai-chat-conversations {
   max-height: none;
   flex: 1;
   min-height: 0;
 }
+/* 専用画面で幅があるとき: 一覧を左の列に常に出す */
+.ai-chat--page .ai-chat-main--split {
+  flex-direction: row;
+  gap: 1rem;
+}
+.ai-chat--page .ai-chat-main--split .ai-chat-conversations {
+  flex: 0 0 16rem;
+  margin-bottom: 0;
+  padding-right: 1rem;
+  border-right: 1px solid var(--line);
+}
 .ai-chat-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
   margin-bottom: 0.75rem;
+}
+.ai-chat-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.ai-chat-conversations {
+  margin-bottom: 0.75rem;
+  max-height: 28rem;
+  overflow: auto;
+}
+.ai-chat-conversation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.ai-chat-conversation {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.ai-chat-conversation-open {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ai-chat-conversation-open:focus-visible {
+  /* 一覧はスクロールの枠で切られるので、枠線を内側に出す */
+  outline-offset: -2px;
+}
+.ai-chat-conversation-open:disabled {
+  cursor: wait;
+}
+.ai-chat-conversation-open[aria-current='true'] {
+  border-color: var(--line);
+  background: var(--paper);
+  font-weight: 600;
+}
+.ai-chat-conversation-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-chat-conversation-time {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
 }
 .ai-chat-head h2 {
   margin: 0;

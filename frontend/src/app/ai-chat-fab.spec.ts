@@ -59,9 +59,17 @@ const detailTarget = (
     item: { number: 3, itemId: 30, title: 'ログインの修正', canEdit: true, ...item },
   };
 };
+const conversation = {
+  id: 5,
+  projectId: 1,
+  title: '質問',
+  createdAt: '2026-11-26T00:00:00Z',
+  updatedAt: '2026-11-26T00:00:00Z',
+};
 const answer = {
   id: 2,
   projectId: 1,
+  conversationId: 5,
   role: 'assistant',
   body: '回答',
   createdAt: '2026-11-26T00:00:00Z',
@@ -72,14 +80,16 @@ function setup(opts: {
   url?: string;
   activeId?: number | null;
   getAICredits?: ReturnType<typeof vi.fn>;
-  listProjectAIChat?: ReturnType<typeof vi.fn>;
+  getLatestProjectAIChat?: ReturnType<typeof vi.fn>;
 } = {}) {
   const auth = opts.auth ?? authStub();
   const activeId = signal<number | null>(opts.activeId === undefined ? 1 : opts.activeId);
   const api = {
-    listProjectAIChat: opts.listProjectAIChat ?? vi.fn(() => of([answer])),
-    postProjectAIChat: vi.fn(() => of({ assistant: answer, messages: [answer] })),
-    clearProjectAIChat: vi.fn(() => of(undefined)),
+    getLatestProjectAIChat: opts.getLatestProjectAIChat ?? vi.fn(() => of({ conversation, messages: [answer] })),
+    listProjectAIConversations: vi.fn(() => of([conversation])),
+    getProjectAIConversation: vi.fn(() => of({ conversation, messages: [answer] })),
+    deleteProjectAIConversation: vi.fn(() => of(undefined)),
+    postProjectAIChat: vi.fn(() => of({ conversation, assistant: answer, messages: [answer] })),
     updateItem: vi.fn(() => of({ id: 10 })),
     createComment: vi.fn(() => of({ id: 1 })),
     getAICredits: opts.getAICredits ?? vi.fn(() => of(okCredits)),
@@ -121,8 +131,12 @@ function openPanel(f: Fab) {
   entry(f)!.click();
   f.detectChanges();
 }
+const chatPanel = (f: Fab) =>
+  f.debugElement.query(By.directive(ProjectAiChat)).componentInstance as ProjectAiChat;
+const expandButton = (f: Fab) =>
+  f.nativeElement.querySelector('.ai-chat-fab-expand') as HTMLButtonElement;
 function ask(f: Fab, message: string) {
-  const panel = f.debugElement.query(By.directive(ProjectAiChat)).componentInstance as ProjectAiChat;
+  const panel = chatPanel(f);
   panel.draft.set(message);
   panel.send();
   f.detectChanges();
@@ -209,7 +223,7 @@ describe('AiChatFab', () => {
       ctx.setBoard();
       f.detectChanges();
       expect(chat(f)).toBeNull();
-      expect(api.listProjectAIChat).not.toHaveBeenCalled();
+      expect(api.getLatestProjectAIChat).not.toHaveBeenCalled();
       expect(api.getAICredits).not.toHaveBeenCalled();
     });
 
@@ -231,9 +245,9 @@ describe('AiChatFab', () => {
       openPanel(f);
       expect(f.nativeElement.querySelector('select')).toBeNull();
       expect(chat(f)).toBeTruthy();
-      expect(api.listProjectAIChat).toHaveBeenCalledWith(4);
+      expect(api.getLatestProjectAIChat).toHaveBeenCalledWith(4);
       ask(f, '期限が近いものは');
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(4, '期限が近いものは', undefined);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(4, '期限が近いものは', 5, undefined);
     });
 
     it('asks about the active project without picking an item on backlog', () => {
@@ -243,7 +257,7 @@ describe('AiChatFab', () => {
       openPanel(f);
       expect(f.nativeElement.querySelector('select')).toBeNull();
       ask(f, 'Doing は');
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(4, 'Doing は', undefined);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(4, 'Doing は', 5, undefined);
     });
 
     it('shows no apply buttons on board', () => {
@@ -262,9 +276,9 @@ describe('AiChatFab', () => {
       ctx.setDetail(detailTarget({ projectId: 7 }), handlers);
       f.detectChanges();
       openPanel(f);
-      expect(api.listProjectAIChat).toHaveBeenCalledWith(7);
+      expect(api.getLatestProjectAIChat).toHaveBeenCalledWith(7);
       ask(f, '要約して');
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(7, '要約して', 3);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(7, '要約して', 5, 3);
     });
 
     it('shows apply buttons only when the open item is editable', () => {
@@ -301,9 +315,9 @@ describe('AiChatFab', () => {
       ctx.setDetail(detailTarget({ number: 4, itemId: 40, title: '別' }), handlers);
       f.detectChanges();
       expect(chat(f)).toBe(first);
-      expect(api.listProjectAIChat).toHaveBeenCalledTimes(1);
+      expect(api.getLatestProjectAIChat).toHaveBeenCalledTimes(1);
       ask(f, 'これは');
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'これは', 4);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'これは', 5, 4);
     });
 
     it('keeps the chat and shows the in-flight answer when moving from one item detail to another', () => {
@@ -313,7 +327,11 @@ describe('AiChatFab', () => {
       openPanel(f);
       const firstEl = chat(f);
       const firstInstance = f.debugElement.query(By.directive(ProjectAiChat)).componentInstance;
-      const pending = new Subject<{ assistant: typeof answer; messages: (typeof answer)[] }>();
+      const pending = new Subject<{
+        conversation: typeof conversation;
+        assistant: typeof answer;
+        messages: (typeof answer)[];
+      }>();
       api.postProjectAIChat.mockReturnValue(pending);
       ask(f, '長い質問');
       // 実物の遷移順: 次のアイテムを読み込む間は開いているアイテムだけ外れ、読み込めたら setDetail
@@ -327,11 +345,11 @@ describe('AiChatFab', () => {
       expect(chat(f)).toBe(firstEl);
       expect(f.debugElement.query(By.directive(ProjectAiChat)).componentInstance).toBe(firstInstance);
       const late = { ...answer, id: 9, body: '移動の後に届いた回答' };
-      pending.next({ assistant: late, messages: [answer, late] });
+      pending.next({ conversation, assistant: late, messages: [answer, late] });
       pending.complete();
       f.detectChanges();
       expect(chat(f)!.textContent).toContain('移動の後に届いた回答');
-      expect(api.listProjectAIChat).toHaveBeenCalledTimes(1);
+      expect(api.getLatestProjectAIChat).toHaveBeenCalledTimes(1);
     });
 
     it('reloads the history when the next item detail belongs to another project', () => {
@@ -344,7 +362,7 @@ describe('AiChatFab', () => {
       ctx.setDetail(detailTarget({ number: 4, itemId: 40, projectId: 7 }), handlers);
       f.detectChanges();
       expect(chat(f)).toBeTruthy();
-      expect(api.listProjectAIChat).toHaveBeenLastCalledWith(7);
+      expect(api.getLatestProjectAIChat).toHaveBeenLastCalledWith(7);
     });
 
     it('forwards descriptionApplied and commentApplied to context handlers', () => {
@@ -363,8 +381,10 @@ describe('AiChatFab', () => {
   describe('project switch', () => {
     it('closes the panel, then shows the history of the new project when reopened', () => {
       const other = { ...answer, id: 9, projectId: 2, body: '別のプロジェクトの回答' };
-      const listProjectAIChat = vi.fn((projectId: number) => of(projectId === 2 ? [other] : [answer]));
-      const { f, ctx, activeId } = setup({ listProjectAIChat });
+      const getLatestProjectAIChat = vi.fn((projectId: number) =>
+        of({ conversation, messages: projectId === 2 ? [other] : [answer] }),
+      );
+      const { f, ctx, activeId } = setup({ getLatestProjectAIChat });
       ctx.setBoard();
       f.detectChanges();
       openPanel(f);
@@ -374,7 +394,7 @@ describe('AiChatFab', () => {
       expect(f.componentInstance.open()).toBe(false);
       expect(chat(f)).toBeNull();
       openPanel(f);
-      expect(listProjectAIChat).toHaveBeenLastCalledWith(2);
+      expect(getLatestProjectAIChat).toHaveBeenLastCalledWith(2);
       expect(f.nativeElement.textContent).toContain('別のプロジェクトの回答');
       expect(f.nativeElement.querySelectorAll('.ai-chat-msg')).toHaveLength(1);
     });
@@ -383,15 +403,18 @@ describe('AiChatFab', () => {
   describe('user switch', () => {
     it('shows the history of the new user, not the previous one', () => {
       const mine = { ...answer, id: 9, body: '次のユーザーの回答' };
-      const listProjectAIChat = vi.fn().mockReturnValueOnce(of([answer])).mockReturnValueOnce(of([mine]));
-      const { f, ctx, auth } = setup({ listProjectAIChat });
+      const getLatestProjectAIChat = vi
+        .fn()
+        .mockReturnValueOnce(of({ conversation, messages: [answer] }))
+        .mockReturnValueOnce(of({ conversation, messages: [mine] }));
+      const { f, ctx, auth } = setup({ getLatestProjectAIChat });
       ctx.setBoard();
       f.detectChanges();
       openPanel(f);
       auth.user.set({ id: 2, loginName: 'v', displayName: 'V', role: 'member', disabled: false });
       f.detectChanges();
       f.detectChanges();
-      expect(listProjectAIChat).toHaveBeenCalledTimes(2);
+      expect(getLatestProjectAIChat).toHaveBeenCalledTimes(2);
       const bodies = Array.from(f.nativeElement.querySelectorAll('.ai-chat-body')).map(
         (el) => (el as HTMLElement).textContent,
       );
@@ -531,9 +554,150 @@ describe('AiChatFab', () => {
       const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
       await f.componentInstance.expandToPage();
       f.detectChanges();
-      expect(nav).toHaveBeenCalledWith(['/ai-chat'], { queryParams: { project: 1 } });
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], {
+        queryParams: { project: 1, conversation: 5 },
+      });
       expect(f.componentInstance.open()).toBe(false);
       expect(f.componentInstance.expanding()).toBe(false);
+    });
+
+    it('hands the conversation picked in the dock over to the page', async () => {
+      const { f, ctx, router, api } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      const picked = { ...conversation, id: 8 };
+      api.getProjectAIConversation.mockReturnValue(of({ conversation: picked, messages: [] }));
+      chatPanel(f).selectConversation(8);
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], {
+        queryParams: { project: 1, conversation: 8 },
+      });
+    });
+
+    it('hands an unsaved new conversation over as conversation=new', async () => {
+      const { f, ctx, router } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      chatPanel(f).startNew();
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], {
+        queryParams: { project: 1, conversation: 'new' },
+      });
+    });
+
+    it('opens the page without a conversation while the dock has not settled one yet', async () => {
+      const { f, ctx, router } = setup({ getLatestProjectAIChat: vi.fn(() => new Subject()) });
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], { queryParams: { project: 1 } });
+    });
+
+    it('does not carry the conversation of a closed dock over to the next one', async () => {
+      const { f, ctx, router, api } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      f.componentInstance.closePanel({ restoreFocus: false });
+      f.detectChanges();
+      api.getLatestProjectAIChat.mockReturnValue(new Subject());
+      openPanel(f);
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], { queryParams: { project: 1 } });
+    });
+
+    it('cannot expand while the dock is sending, and can again after the answer', async () => {
+      const { f, ctx, router, api } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      const pending = new Subject<unknown>();
+      api.postProjectAIChat.mockReturnValue(pending as never);
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      ask(f, '長い質問');
+      expect(expandButton(f).disabled).toBe(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).not.toHaveBeenCalled();
+      expect(f.componentInstance.open()).toBe(true);
+      pending.next({ conversation, assistant: answer, messages: [answer] });
+      f.detectChanges();
+      expect(expandButton(f).disabled).toBe(false);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledTimes(1);
+    });
+
+    it('can expand after a dock that was closed while sending is opened again', () => {
+      const { f, ctx, api } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      api.postProjectAIChat.mockReturnValue(new Subject() as never);
+      ask(f, '長い質問');
+      expect(expandButton(f).disabled).toBe(true);
+      f.componentInstance.closePanel({ restoreFocus: false });
+      f.detectChanges();
+      openPanel(f);
+      expect(expandButton(f).disabled).toBe(false);
+    });
+
+    it('can expand, without the previous conversation, after moving from the board to an item detail while sending', async () => {
+      const { f, ctx, router, api } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      api.postProjectAIChat.mockReturnValue(new Subject() as never);
+      ask(f, '長い質問');
+      expect(expandButton(f).disabled).toBe(true);
+      // ボードが破棄され、詳細が自分を伝える。パネルは開いたまま、チャットは作り直される
+      ctx.clear();
+      f.detectChanges();
+      api.getLatestProjectAIChat.mockReturnValue(new Subject());
+      ctx.setDetail(detailTarget(), handlers);
+      f.detectChanges();
+      expect(f.componentInstance.open()).toBe(true);
+      expect(chat(f)).toBeTruthy();
+      expect(expandButton(f).disabled).toBe(false);
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], { queryParams: { project: 1 } });
+    });
+
+    it('does not hand the conversation of the previous project over while the next one is loading', async () => {
+      const { f, ctx, router, api } = setup({ url: '/items/3' });
+      ctx.setDetail(detailTarget(), handlers);
+      f.detectChanges();
+      openPanel(f);
+      ctx.releaseDetailItem();
+      f.detectChanges();
+      api.getLatestProjectAIChat.mockReturnValue(new Subject());
+      ctx.setDetail(detailTarget({ number: 4, itemId: 40, projectId: 7 }), handlers);
+      f.detectChanges();
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], { queryParams: { project: 7 } });
+    });
+
+    it('keeps the conversation the new chat reports right after it is made again', async () => {
+      const { f, ctx, router } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      ctx.clear();
+      f.detectChanges();
+      ctx.setDetail(detailTarget(), handlers);
+      f.detectChanges();
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      await f.componentInstance.expandToPage();
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], {
+        queryParams: { project: 1, conversation: 5 },
+      });
     });
 
     it('passes the detail project id when it differs from activeId', async () => {
@@ -544,7 +708,9 @@ describe('AiChatFab', () => {
       openPanel(f);
       const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
       await f.componentInstance.expandToPage();
-      expect(nav).toHaveBeenCalledWith(['/ai-chat'], { queryParams: { project: 7 } });
+      expect(nav).toHaveBeenCalledWith(['/ai-chat'], {
+        queryParams: { project: 7, conversation: 5 },
+      });
     });
 
     it('keeps the dock open when navigate fails', async () => {

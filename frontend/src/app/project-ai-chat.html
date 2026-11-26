@@ -6,14 +6,35 @@
 >
   <div class="ai-chat-head">
     <h2 id="ai-chat-heading">AI</h2>
-    <button
-      type="button"
-      class="secondary"
-      (click)="clear()"
-      [disabled]="clearing() || sending() || messages().length === 0"
-    >
-      履歴をクリア
-    </button>
+    <div class="ai-chat-head-actions">
+      <button
+        type="button"
+        class="secondary ai-chat-new"
+        (click)="startNew()"
+        [disabled]="actionsLocked()"
+      >
+        {{ newConversationLabel }}
+      </button>
+      @if (!listView().pinned) {
+        <button
+          type="button"
+          class="secondary ai-chat-history-toggle"
+          (click)="toggleHistory()"
+          [attr.aria-expanded]="historyOpen() ? 'true' : 'false'"
+          aria-controls="ai-chat-conversations"
+        >
+          履歴
+        </button>
+      }
+      <button
+        type="button"
+        class="secondary ai-chat-delete-shown"
+        (click)="deleteShownConversation()"
+        [disabled]="!canDeleteShown()"
+      >
+        この会話を削除
+      </button>
+    </div>
   </div>
 
   @if (blockReason()) {
@@ -25,67 +46,129 @@
     <p class="ai-chat-status" role="status">{{ lowRemainingMessage }}</p>
   }
 
-  @if (loading()) {
-    <p class="ai-chat-status" role="status">読み込み中…</p>
-  } @else if (loadError()) {
-    <div class="ai-chat-error" role="alert">
-      <p>{{ loadError() }}</p>
-      <button type="button" class="secondary" (click)="reload()">再読み込み</button>
-    </div>
-  } @else {
-    <ul class="ai-chat-list" aria-label="AIチャット履歴">
-      @for (msg of messages(); track msg.id) {
-        <li class="ai-chat-msg" [attr.data-role]="msg.role">
-          <span class="ai-chat-role">{{ msg.role === 'user' ? 'あなた' : 'AI' }}</span>
-          <pre class="ai-chat-body">{{ msg.body }}</pre>
-          @if (msg.role === 'assistant' && canApply()) {
-            <div class="ai-chat-actions">
-              <button
-                type="button"
-                class="secondary"
-                (click)="applyToDescription(msg.body)"
-                [disabled]="applying() || sending()"
-              >
-                説明に反映
-              </button>
-              <button
-                type="button"
-                class="secondary"
-                (click)="applyAsComment(msg.body)"
-                [disabled]="applying() || sending()"
-              >
-                コメント追加
+  <div class="ai-chat-main" [class.ai-chat-main--split]="listView().pinned">
+    @if (listView().showList) {
+      <nav id="ai-chat-conversations" class="ai-chat-conversations" aria-label="会話の履歴">
+        @switch (listState()) {
+          @case ('loading') {
+            <p class="ai-chat-status" role="status">読み込み中…</p>
+          }
+          @case ('error') {
+            <div class="ai-chat-error" role="alert">
+              <p>{{ listError() }}</p>
+              <button type="button" class="secondary" (click)="loadConversations()">
+                再読み込み
               </button>
             </div>
           }
-        </li>
-      } @empty {
-        <li class="ai-chat-empty">{{ emptyMessage }}</li>
+          @case ('ready') {
+            @if (conversations().length === 0) {
+              <p class="ai-chat-empty">{{ conversationsEmptyMessage }}</p>
+            } @else {
+              <ul class="ai-chat-conversation-list">
+                @for (conversation of conversations(); track conversation.id) {
+                  <li class="ai-chat-conversation">
+                    <button
+                      type="button"
+                      class="ai-chat-conversation-open"
+                      (click)="selectConversation(conversation.id)"
+                      [disabled]="actionsLocked()"
+                      [attr.aria-current]="conversation.id === conversationId() ? 'true' : null"
+                    >
+                      <span class="ai-chat-conversation-title">{{ conversation.title }}</span>
+                      <time class="ai-chat-conversation-time" [attr.datetime]="conversation.updatedAt">{{
+                        conversationUpdatedLabel(conversation.updatedAt)
+                      }}</time>
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary ai-chat-conversation-delete"
+                      (click)="deleteConversation(conversation.id)"
+                      [disabled]="actionsLocked()"
+                      [attr.aria-label]="deleteConversationLabel(conversation)"
+                    >
+                      削除
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          }
+        }
+      </nav>
+    }
+
+    <div class="ai-chat-thread" [class.ai-chat-thread--compose-only]="!listView().showThread">
+      @if (listView().showThread) {
+        @if (loading()) {
+          <p class="ai-chat-status" role="status">読み込み中…</p>
+        } @else if (loadError()) {
+          <div class="ai-chat-error" role="alert">
+            <p>{{ loadError() }}</p>
+            <button type="button" class="secondary" (click)="reload()">再読み込み</button>
+          </div>
+        } @else {
+          <ul class="ai-chat-list" aria-label="やりとり">
+            @for (msg of messages(); track msg.id) {
+              <li class="ai-chat-msg" [attr.data-role]="msg.role">
+                <span class="ai-chat-role">{{ msg.role === 'user' ? 'あなた' : 'AI' }}</span>
+                <pre class="ai-chat-body">{{ msg.body }}</pre>
+                @if (msg.role === 'assistant' && canApply()) {
+                  <div class="ai-chat-actions">
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="applyToDescription(msg.body)"
+                      [disabled]="applying() || sending()"
+                    >
+                      説明に反映
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="applyAsComment(msg.body)"
+                      [disabled]="applying() || sending()"
+                    >
+                      コメント追加
+                    </button>
+                  </div>
+                }
+              </li>
+            } @empty {
+              <li class="ai-chat-empty">{{ emptyMessage }}</li>
+            }
+          </ul>
+        }
       }
-    </ul>
 
-    @if (sending()) {
-      <p class="ai-chat-status ai-chat-sending" role="status">{{ sendingMessage }}</p>
-    }
+      @if (!loading() && !loadError()) {
+        @if (sending()) {
+          <p class="ai-chat-status ai-chat-sending" role="status">{{ sendingMessage }}</p>
+        } @else if (switching()) {
+          <p class="ai-chat-status" role="status">読み込み中…</p>
+        }
 
-    @if (error()) {
-      <p class="ai-chat-error" role="alert">{{ error() }}</p>
-    }
+        @if (error()) {
+          <p class="ai-chat-error" role="alert">{{ error() }}</p>
+        }
 
-    <form class="ai-chat-compose" (ngSubmit)="send()">
-      <label class="sr-only" for="ai-chat-input">メッセージ</label>
-      <textarea
-        id="ai-chat-input"
-        name="message"
-        rows="3"
-        [ngModel]="draft()"
-        (ngModelChange)="draft.set($event)"
-        [attr.disabled]="composeInactive() ? true : null"
-        maxlength="4000"
-        placeholder="質問や依頼を入力…"
-        (keydown.enter)="onComposeKeydown($event)"
-      ></textarea>
-      <button type="submit" [attr.disabled]="composeInactive() ? true : null">送信</button>
-    </form>
-  }
+        <form class="ai-chat-compose" (ngSubmit)="send()">
+          <label class="sr-only" for="ai-chat-input">メッセージ</label>
+          <textarea
+            #messageInput
+            id="ai-chat-input"
+            name="message"
+            rows="3"
+            [ngModel]="draft()"
+            (ngModelChange)="draft.set($event)"
+            [attr.disabled]="composeInactive() ? true : null"
+            maxlength="4000"
+            placeholder="質問や依頼を入力…"
+            (keydown.enter)="onComposeKeydown($event)"
+          ></textarea>
+          <button type="submit" [attr.disabled]="composeInactive() ? true : null">送信</button>
+        </form>
+      }
+    </div>
+  </div>
 </section>

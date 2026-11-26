@@ -1,3 +1,6 @@
+import type { ConversationRef } from './api';
+import { initialConversationTarget } from './project-ai-conversations';
+
 /**
  * 開いているアイテム（アイテム詳細から聞くときだけある）。
  * プロジェクトは持たない: 詳細のプロジェクトは AiChatContext.detailProjectId だけが持つ。
@@ -18,6 +21,44 @@ export function isAiChatRoute(url: string): boolean {
   if (path === '/backlog') return true;
   if (/^\/items\/\d+$/.test(path)) return true;
   return false;
+}
+
+/**
+ * 専用画面の URL の、会話の約束: クエリ `conversation` は、保存済みの会話の ID か、
+ * 保存されていない新しい会話の `new`。無ければ「指定なし」（いちばん新しい会話が開く）。
+ * 読み（parseConversationQueryParam）と書き（conversationQueryParams）は、ここだけに置く。
+ */
+export const CONVERSATION_QUERY_PARAM = 'conversation';
+
+/** クエリ `conversation` の解釈。ID・`new`・指定なし（無い、不正、重複）を分ける */
+export function parseConversationQueryParam(values: readonly string[]): ConversationRef | null {
+  if (values.length !== 1) return null;
+  const raw = values[0];
+  if (raw === 'new') return 'new';
+  if (!/^[1-9]\d*$/.test(raw)) return null;
+  return initialConversationTarget(Number(raw));
+}
+
+/** クエリ `conversation` に書く値。指定なし（null）なら付けない */
+export function conversationQueryParams(conversation: ConversationRef | null): {
+  conversation?: ConversationRef;
+} {
+  return conversation != null ? { [CONVERSATION_QUERY_PARAM]: conversation } : {};
+}
+
+/**
+ * ドックから専用画面へ移るときのクエリ。表示中の会話を引き継ぐ: 保存済みは ID、
+ * 保存されていない新しい会話は 'new'（付けないと「指定なし」になり、いちばん新しい会話が開く）。
+ * 会話がまだ決まっていなければ（最初の読み込みの途中）付けない。
+ */
+export function aiChatPageQueryParams(
+  projectId: number | null,
+  conversation: ConversationRef | null,
+): { project?: number; conversation?: ConversationRef } {
+  return {
+    ...(projectId != null ? { project: projectId } : {}),
+    ...conversationQueryParams(conversation),
+  };
 }
 
 /** 同じアイテムか（番号と ID が同じ。タイトルや権限の変化は別のアイテムとみなさない） */

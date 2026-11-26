@@ -14,6 +14,12 @@ import { Location } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
+import {
+  CONVERSATION_QUERY_PARAM,
+  conversationQueryParams,
+  parseConversationQueryParam,
+} from './ai-chat-target';
+import type { ConversationRef } from './api';
 import { ProjectAiChat } from './project-ai-chat';
 import { parseProjectQueryParam } from './project-query';
 import { ProjectSession } from './project-session';
@@ -41,6 +47,18 @@ export class AiChatPage {
   private readonly queryParse = toSignal(
     this.route.queryParamMap.pipe(map((q) => parseProjectQueryParam(q.get('project')))),
     { initialValue: parseProjectQueryParam(this.route.snapshot.queryParamMap.get('project')) },
+  );
+
+  /** クエリ `conversation`（ID、'new'）。無い・不正なら null（いちばん新しい会話を開く） */
+  readonly conversation = toSignal(
+    this.route.queryParamMap.pipe(
+      map((q) => parseConversationQueryParam(q.getAll(CONVERSATION_QUERY_PARAM))),
+    ),
+    {
+      initialValue: parseConversationQueryParam(
+        this.route.snapshot.queryParamMap.getAll(CONVERSATION_QUERY_PARAM),
+      ),
+    },
   );
 
   readonly projectId = computed(() => {
@@ -85,6 +103,17 @@ export class AiChatPage {
         },
         { injector: this.injector },
       );
+    });
+  }
+
+  /** 表示中の会話を URL に残す（再読み込みしても同じ会話が開く）。履歴は増やさない */
+  onConversationChange(conversation: ConversationRef) {
+    if (conversation === this.conversation()) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: conversationQueryParams(conversation),
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
     });
   }
 

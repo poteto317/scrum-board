@@ -28,7 +28,12 @@
     @case ('chat') {
       @if (projectId(); as id) {
         <div class="ai-chat-page-body">
-          <app-project-ai-chat [projectId]="id" [layout]="'page'" />
+          <app-project-ai-chat
+            [projectId]="id"
+            [layout]="'page'"
+            [initialConversationId]="conversation()"
+            (conversationChange)="onConversationChange($event)"
+          />
         </div>
       }
     }

@@ -9,6 +9,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -16,10 +17,16 @@ import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
 import { AiChatContext } from './ai-chat-context';
 import { isEditableFocusTarget } from './ai-chat-focus-target';
-import { isAiChatRoute, resolveChatProjectId, toFocusItem } from './ai-chat-target';
+import {
+  aiChatPageQueryParams,
+  isAiChatRoute,
+  resolveChatProjectId,
+  toFocusItem,
+} from './ai-chat-target';
 import { AuthSession } from './auth-session';
 import { Item } from './models';
 import { ProjectAiChat } from './project-ai-chat';
+import type { ConversationRef } from './api';
 import { ProjectSession } from './project-session';
 
 const OPEN_GUARD_MS = 300;
@@ -44,6 +51,10 @@ export class AiChatFab implements OnInit {
 
   readonly open = signal(false);
   readonly expanding = signal(false);
+  /** ドックのチャットが送信中か。送信中に専用画面へ移ると、応答が捨てられる */
+  readonly chatSending = signal(false);
+  /** ドックのチャットが表示中の会話。最初の読み込みが終わるまでは null */
+  private readonly chatConversation = signal<ConversationRef | null>(null);
   private readonly routeUrl = signal(this.router.url);
   private openedAt = 0;
   private closedAt = 0;
@@ -77,6 +88,17 @@ export class AiChatFab implements OnInit {
       this.closePanel({ restoreFocus: false });
     });
 
+    // チャットの部品は、入口が出ていてプロジェクトがある間だけある。無くなったとき（パネルは
+    // 開いたままでも）と、プロジェクトが変わって読み直すときは、前のチャットの状態を捨てる。
+    // 破棄された部品は sendingChange(false) を出さず、作り直された部品は最初から false なので
+    // 出さない。この effect は、この部品のテンプレート（チャットの生成と入力の更新）より前に
+    // 走るので、新しいチャットが伝える値は消さない。
+    effect(() => {
+      this.showEntry();
+      this.projectId();
+      untracked(() => this.resetChatState());
+    });
+
     if (typeof document !== 'undefined') {
       document.addEventListener('keydown', this.onDocumentKeydown);
       this.destroyRef.onDestroy(() =>
@@ -108,6 +130,7 @@ export class AiChatFab implements OnInit {
 
   openPanel() {
     if (!this.showEntry()) return;
+    this.resetChatState();
     this.open.set(true);
     this.openedAt = Date.now();
     afterNextRender(
@@ -177,14 +200,12 @@ export class AiChatFab implements OnInit {
   };
 
   async expandToPage() {
-    if (!this.open() || this.expanding()) return;
+    if (!this.open() || this.expanding() || this.chatSending()) return;
     this.expanding.set(true);
     try {
-      const id = this.projectId();
-      const ok = await this.router.navigate(
-        ['/ai-chat'],
-        id != null ? { queryParams: { project: id } } : {},
-      );
+      const ok = await this.router.navigate(['/ai-chat'], {
+        queryParams: aiChatPageQueryParams(this.projectId(), this.chatConversation()),
+      });
       if (ok) {
         this.closePanel({ restoreFocus: false });
       }
@@ -193,6 +214,16 @@ export class AiChatFab implements OnInit {
     } finally {
       this.expanding.set(false);
     }
+  }
+
+  onConversationChange(conversation: ConversationRef) {
+    this.chatConversation.set(conversation);
+  }
+
+  /** チャットは、閉じるか入口が消えると破棄される。開くたび・破棄のたびに、前のチャットの状態を捨てる */
+  private resetChatState() {
+    this.chatSending.set(false);
+    this.chatConversation.set(null);
   }
 
   onDescriptionApplied(item: Item) {

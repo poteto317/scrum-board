@@ -16,7 +16,7 @@
               type="button"
               class="ai-chat-fab-expand"
               (click)="expandToPage()"
-              [disabled]="expanding()"
+              [disabled]="expanding() || chatSending()"
               aria-label="AIチャットを全画面で開く"
             >
               全画面
@@ -32,6 +32,8 @@
               [projectId]="chatProjectId"
               [focusItem]="focusItem()"
               [layout]="'dock'"
+              (conversationChange)="onConversationChange($event)"
+              (sendingChange)="chatSending.set($event)"
               (descriptionApplied)="onDescriptionApplied($event)"
               (commentApplied)="onCommentApplied()"
             />
