@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  aiChatPageQueryParams,
+  conversationQueryParams,
   detailChatAction,
   isAiChatRoute,
   isSameItem,
   isUnchangedItem,
+  parseConversationQueryParam,
   resolveChatProjectId,
   toFocusItem,
   type AiChatFocusItem,
@@ -18,6 +21,60 @@ const t = (n: number, partial: Partial<AiChatFocusItem> = {}): AiChatFocusItem =
 });
 
 describe('ai-chat-target', () => {
+  describe('parseConversationQueryParam', () => {
+    it('reads an id', () => {
+      expect(parseConversationQueryParam(['12'])).toBe(12);
+    });
+
+    it('reads new', () => {
+      expect(parseConversationQueryParam(['new'])).toBe('new');
+    });
+
+    it('is not given when the query is absent', () => {
+      expect(parseConversationQueryParam([])).toBeNull();
+    });
+
+    it('treats invalid values as not given', () => {
+      for (const raw of ['', '0', '-1', '01', '1.5', 'abc', 'NEW', ' 3', '99999999999999999999']) {
+        expect(parseConversationQueryParam([raw])).toBeNull();
+      }
+    });
+
+    it('treats a repeated query as not given', () => {
+      expect(parseConversationQueryParam(['1', '2'])).toBeNull();
+    });
+  });
+
+  describe('conversationQueryParams', () => {
+    it('writes an id or new, and nothing when not given', () => {
+      expect(conversationQueryParams(12)).toEqual({ conversation: 12 });
+      expect(conversationQueryParams('new')).toEqual({ conversation: 'new' });
+      expect(conversationQueryParams(null)).toEqual({});
+    });
+
+    it('writes what parseConversationQueryParam reads back', () => {
+      for (const ref of [12, 'new'] as const) {
+        const written = conversationQueryParams(ref).conversation;
+        expect(parseConversationQueryParam([String(written)])).toBe(ref);
+      }
+    });
+  });
+
+  describe('aiChatPageQueryParams', () => {
+    it('carries the project and the saved conversation', () => {
+      expect(aiChatPageQueryParams(7, 12)).toEqual({ project: 7, conversation: 12 });
+    });
+
+    it('carries an unsaved new conversation as new, apart from not given', () => {
+      expect(aiChatPageQueryParams(7, 'new')).toEqual({ project: 7, conversation: 'new' });
+      expect(aiChatPageQueryParams(7, null)).toEqual({ project: 7 });
+    });
+
+    it('leaves out the project when there is none', () => {
+      expect(aiChatPageQueryParams(null, null)).toEqual({});
+    });
+  });
+
   it('detects board backlog and item detail routes', () => {
     expect(isAiChatRoute('/')).toBe(true);
     expect(isAiChatRoute('/?project=1')).toBe(true);
