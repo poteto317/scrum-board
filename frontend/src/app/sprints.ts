@@ -1,4 +1,4 @@
-import { ActiveProjectName } from './active-project-name';
+import { ActiveProjectContext } from './active-project-context';
 import {
   Component,
   DestroyRef,
@@ -25,7 +25,7 @@ import { validateSprintMetaForSave } from './sprint-meta';
 
 @Component({
   selector: 'app-sprints',
-  imports: [RouterLink, ReactiveFormsModule, Modal, ActiveProjectName],
+  imports: [RouterLink, ReactiveFormsModule, Modal, ActiveProjectContext],
   templateUrl: './sprints.html',
   styleUrl: './sprints.css',
 })

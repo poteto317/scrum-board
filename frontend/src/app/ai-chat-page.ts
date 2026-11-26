@@ -1,4 +1,4 @@
-import { ActiveProjectName } from './active-project-name';
+import { ActiveProjectContext } from './active-project-context';
 import {
   afterNextRender,
   Component,
@@ -29,7 +29,7 @@ type PageView = 'waiting' | 'empty' | 'invalid' | 'chat';
 
 @Component({
   selector: 'app-ai-chat-page',
-  imports: [ProjectAiChat, ActiveProjectName],
+  imports: [ProjectAiChat, ActiveProjectContext],
   templateUrl: './ai-chat-page.html',
   styleUrl: './ai-chat-page.css',
 })

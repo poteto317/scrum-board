@@ -2,12 +2,12 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Api } from './api';
-import { ActiveProjectName } from './active-project-name';
+import { ActiveProjectContext } from './active-project-context';
 import { ProjectSession } from './project-session';
 
 @Component({
-  imports: [ActiveProjectName],
-  template: `<app-active-project-name [projectId]="id()" />`,
+  imports: [ActiveProjectContext],
+  template: `<app-active-project-context [projectId]="id()" />`,
 })
 class Host {
   readonly id = signal<number | null | undefined>(undefined);
@@ -37,7 +37,7 @@ function setup() {
   return { text, set, session, f };
 }
 
-describe('ActiveProjectName', () => {
+describe('ActiveProjectContext', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('shows the active project name when projectId is undefined', () => {
