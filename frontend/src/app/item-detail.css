@@ -501,7 +501,7 @@ h1 {
 .acl-fieldset legend {
   padding: 0;
   font-size: 13px;
-  color: var(--muted);
+  font-weight: 550;
 }
 .acl-fieldset label {
   margin: 8px 0;
