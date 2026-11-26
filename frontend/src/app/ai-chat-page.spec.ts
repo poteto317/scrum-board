@@ -69,7 +69,13 @@ function setup(opts: {
       provideRouter([]),
       {
         provide: ProjectSession,
-        useValue: { bootstrapped, switching, activeId, projects: signal(projectList) },
+        useValue: {
+          bootstrapped,
+          switching,
+          activeId,
+          projects: signal(projectList),
+          error: signal(''),
+        },
       },
       { provide: Api, useValue: api },
       { provide: AuthSession, useValue: authStub() },
@@ -95,6 +101,7 @@ async function setupAt(url: string, projects = projectList) {
           switching: signal(false),
           activeId: signal<number | null>(1),
           projects: signal(projects),
+          error: signal(''),
         },
       },
       { provide: Api, useValue: api },
@@ -148,6 +155,11 @@ describe('AiChatPage', () => {
     expect(f.componentInstance.view()).toBe('invalid');
     expect(f.nativeElement.textContent).toContain('正しくありません');
     expect(f.nativeElement.querySelector('app-project-ai-chat')).toBeNull();
+  });
+
+  it('shows the name of the ?project= project, not the active one', async () => {
+    const { f } = await setupAt('/ai-chat?project=7');
+    expect(f.nativeElement.querySelector('.active-project-name')?.textContent).toContain('P7');
   });
 
   it('prefers ?project= over activeId so dock expand keeps the chat project', async () => {

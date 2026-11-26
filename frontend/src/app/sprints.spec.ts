@@ -133,6 +133,14 @@ describe('Sprints page', () => {
     f.destroy();
   });
 
+  it('shows the active project name', () => {
+    const { f, session } = setup();
+    session.projects.set([{ id: 1, name: 'メイン', position: 0 }]);
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.active-project-name')?.textContent).toContain('メイン');
+    f.destroy();
+  });
+
   it('reloads when project switches', () => {
     const { f, session, listSprints } = setup();
     listSprints.mockReturnValueOnce(
