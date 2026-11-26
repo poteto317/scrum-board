@@ -559,6 +559,37 @@ describe('DescriptionBlocksEditor', () => {
     expect(f.nativeElement.querySelector('.blocks-preview')).not.toBeNull();
   });
 
+  function mountPreview(value: string, itemNumber: number, field: 'description' | 'solution') {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    f.componentRef.setInput('value', value);
+    f.componentRef.setInput('itemNumber', itemNumber);
+    f.componentRef.setInput('attachmentField', field);
+    f.detectChanges();
+    return f;
+  }
+
+  it('shows rich preview with block syntax for description-only markup', () => {
+    const f = mountPreview('# 見出し\n- [x] 済み', 140, 'description');
+    const preview = f.nativeElement.querySelector('.blocks-preview') as HTMLElement;
+    expect(preview).not.toBeNull();
+    expect(preview.querySelector('h2')!.textContent!.trim()).toBe('見出し');
+    expect(preview.querySelector('input[type="checkbox"]')).not.toBeNull();
+  });
+
+  it('keeps block markup as plain text for solutions', () => {
+    const f = mountPreview('# 見出し', 140, 'solution');
+    expect(f.nativeElement.querySelector('.blocks-preview')).toBeNull();
+    const linked = mountPreview('# 見出し [l](https://example.com)', 140, 'solution');
+    const preview = linked.nativeElement.querySelector('.blocks-preview') as HTMLElement;
+    expect(preview.querySelector('h2')).toBeNull();
+    expect(preview.textContent).toContain('# 見出し');
+  });
+
+  it('hides rich preview for block markup without an item number', () => {
+    const f = mountPreview('# 見出し', 0, 'description');
+    expect(f.nativeElement.querySelector('.blocks-preview')).toBeNull();
+  });
+
   describe('paste and multiple images', () => {
     const png = (name: string, type = 'image/png') => {
       const file = new File([new Uint8Array([1, 2, 3])], name, { type });
