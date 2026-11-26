@@ -83,13 +83,3 @@ func proposalTransitionAllowed(current ProjectAIProposal, change ProjectAIPropos
 	}
 	return false
 }
-
-// applyProposalChange is the proposal after an allowed change (state and, when given, the number).
-func applyProposalChange(p ProjectAIProposal, change ProjectAIProposalChange) ProjectAIProposal {
-	p.State = change.State
-	if change.CreatedItemNumber != nil {
-		n := *change.CreatedItemNumber
-		p.CreatedItemNumber = &n
-	}
-	return p
-}
