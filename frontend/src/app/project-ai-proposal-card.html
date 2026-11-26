@@ -1,0 +1,62 @@
+<section class="ai-proposal" [attr.data-kind]="proposal().kind" [attr.data-state]="proposal().state" [attr.aria-label]="heading()">
+  <p class="ai-proposal-heading">{{ heading() }}</p>
+
+  @if (proposal().kind === 'description_edit') {
+    <ul class="ai-proposal-diff" aria-label="説明の差分（- は削除、+ は追加）">
+      @for (line of diff(); track $index) {
+        <li class="ai-proposal-diff-line" [attr.data-kind]="line.kind">
+          <span class="ai-proposal-diff-mark" aria-hidden="true">{{
+            line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '
+          }}</span>
+          <span class="sr-only">{{ line.kind === 'add' ? '追加:' : line.kind === 'del' ? '削除:' : '' }}</span>
+          <span class="ai-proposal-diff-text">{{ line.text }}</span>
+        </li>
+      } @empty {
+        <li class="ai-proposal-diff-line" data-kind="same">（説明は空になります）</li>
+      }
+    </ul>
+  } @else if (proposal().kind === 'item_create' && proposal().description) {
+    <pre class="ai-proposal-body">{{ proposal().description }}</pre>
+  }
+
+  @if (pending() || busy()) {
+    <div class="ai-proposal-actions">
+      <button
+        type="button"
+        class="ai-proposal-apply"
+        (click)="apply()"
+        [disabled]="busy() || !!blockReason() || stale()"
+        [attr.aria-label]="applyLabel()"
+      >
+        適用
+      </button>
+      <button
+        type="button"
+        class="secondary ai-proposal-dismiss"
+        (click)="dismiss()"
+        [disabled]="busy()"
+        [attr.aria-label]="dismissLabel()"
+      >
+        破棄
+      </button>
+    </div>
+  }
+
+  <p class="ai-proposal-status" role="status" aria-live="polite">
+    @if (busy() || status()) {
+      {{ status() }}
+    } @else {
+      @if (proposal().state === 'applied' && proposal().createdItemNumber) {
+        <a [routerLink]="['/items', proposal().createdItemNumber]" [queryParams]="{ project: projectId() }"
+          >#{{ proposal().createdItemNumber }}</a
+        >
+      }
+      {{ resultMessage() }}
+    }
+  </p>
+  @if (failure()) {
+    <p class="ai-proposal-error" role="alert">{{ failure() }}</p>
+  } @else if (blockReason()) {
+    <p class="ai-proposal-error">{{ blockReason() }}</p>
+  }
+</section>
