@@ -71,3 +71,16 @@ export function withProjectQueryParam(
 ): Record<string, string | string[] | undefined | null> {
   return { ...queryParams, project: String(id) };
 }
+
+/** URL のパス（クエリとフラグメントを除く）。 */
+export function urlPathOf(url: string): string {
+  return url.split('#')[0].split('?')[0];
+}
+
+/**
+ * 切り替えの完了時に `?project=` を書き換えてよいか。
+ * 選んだ時点と同じパスにいるときだけ書き換える（完了前に別のページへ移ったら、移動先を書き換えない）。
+ */
+export function shouldSyncProjectQuery(startUrl: string, currentUrl: string): boolean {
+  return urlPathOf(startUrl) === urlPathOf(currentUrl);
+}

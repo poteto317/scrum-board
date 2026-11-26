@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   isBoardPath,
+  shouldSyncProjectQuery,
+  urlPathOf,
   parseProjectQueryParam,
   PROJECT_QUERY_NOT_FOUND,
   resolveProjectDeepLinkAction,
@@ -93,5 +95,25 @@ describe('resolveProjectDeepLinkAction', () => {
 describe('withProjectQueryParam', () => {
   it('merges project id as string', () => {
     expect(withProjectQueryParam({ foo: '1' }, 2)).toEqual({ foo: '1', project: '2' });
+  });
+});
+
+describe('urlPathOf', () => {
+  it('drops query and fragment', () => {
+    expect(urlPathOf('/backlog?project=2#x')).toBe('/backlog');
+    expect(urlPathOf('/?project=1')).toBe('/');
+    expect(urlPathOf('/items/3#c')).toBe('/items/3');
+  });
+});
+
+describe('shouldSyncProjectQuery', () => {
+  it('syncs when the path is unchanged even if the query differs', () => {
+    expect(shouldSyncProjectQuery('/backlog?project=1', '/backlog?project=1&q=a')).toBe(true);
+    expect(shouldSyncProjectQuery('/', '/?project=2')).toBe(true);
+  });
+
+  it('does not sync after moving to another page before completion', () => {
+    expect(shouldSyncProjectQuery('/backlog', '/sprints')).toBe(false);
+    expect(shouldSyncProjectQuery('/', '/ai-chat?project=1')).toBe(false);
   });
 });
