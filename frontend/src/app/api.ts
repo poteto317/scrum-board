@@ -105,6 +105,34 @@ export type ProjectAIMessage = {
   inputTokens?: number;
   outputTokens?: number;
   createdAt: string;
+  /** 回答の提案（assistant だけ。無ければ省略） */
+  proposals?: ProjectAIProposal[];
+};
+
+export type ProjectAIProposalKind = 'status_change' | 'description_edit' | 'item_create';
+export type ProjectAIProposalState = 'pending' | 'applied' | 'dismissed';
+
+/** AI の提案。適用は、利用者がボタンを押したときに、既存のアイテムの API で行う */
+export type ProjectAIProposal = {
+  id: number;
+  messageId: number;
+  kind: ProjectAIProposalKind;
+  state: ProjectAIProposalState;
+  itemNumber?: number;
+  itemTitle?: string;
+  columnId?: number;
+  columnName?: string;
+  title?: string;
+  description?: string;
+  baseDescription?: string;
+  createdItemNumber?: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProjectAIProposalUpdate = {
+  state: ProjectAIProposalState;
+  createdItemNumber?: number;
 };
 
 /** 会話の指定。保存済みは ID、まだ保存されていない新しい会話は 'new' */
@@ -306,6 +334,13 @@ export class Api {
   }
   deleteProjectAIConversation(projectId: number, conversationId: number) {
     return this.http.delete<void>(`/api/projects/${projectId}/ai-conversations/${conversationId}`);
+  }
+  /** 提案の状態だけを変える（確保・破棄・解放・作成の結果の記録）。409 は本文に現在の提案 */
+  updateProjectAIProposal(projectId: number, proposalId: number, body: ProjectAIProposalUpdate) {
+    return this.http.patch<ProjectAIProposal>(
+      `/api/projects/${projectId}/ai-proposals/${proposalId}`,
+      body,
+    );
   }
   /**
    * conversation は続ける会話の ID か、新しい会話を作る 'new'。
