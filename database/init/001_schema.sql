@@ -188,6 +188,31 @@ CREATE TABLE IF NOT EXISTS project_ai_messages (
  INDEX project_ai_messages_conversation (conversation_id, created_at, id),
  CONSTRAINT fk_project_ai_message_conversation FOREIGN KEY (conversation_id) REFERENCES project_ai_conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- Keep in sync with backend/internal/kanban/ai_project_proposal_repo.go (projectAIProposalsDDL).
+-- References project_ai_messages: must stay after that table.
+CREATE TABLE IF NOT EXISTS project_ai_proposals (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ message_id BIGINT NOT NULL,
+ project_id BIGINT NOT NULL,
+ user_id BIGINT NOT NULL,
+ kind VARCHAR(32) NOT NULL,
+ item_number BIGINT NULL,
+ item_title VARCHAR(200) NULL,
+ column_id BIGINT NULL,
+ column_name VARCHAR(60) NULL,
+ title VARCHAR(200) NULL,
+ description TEXT NULL,
+ base_description TEXT NULL,
+ state VARCHAR(16) NOT NULL DEFAULT 'pending',
+ created_item_number BIGINT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ CONSTRAINT fk_project_ai_proposal_message FOREIGN KEY (message_id) REFERENCES project_ai_messages(id) ON DELETE CASCADE,
+ CONSTRAINT chk_project_ai_proposal_kind CHECK (kind IN ('status_change', 'description_edit', 'item_create')),
+ CONSTRAINT chk_project_ai_proposal_state CHECK (state IN ('pending', 'applied', 'dismissed')),
+ INDEX project_ai_proposals_message (message_id, id),
+ INDEX project_ai_proposals_scope (project_id, user_id, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 CREATE TABLE IF NOT EXISTS ai_usage (
  id TINYINT NOT NULL PRIMARY KEY,
  request_count BIGINT NOT NULL DEFAULT 0,

@@ -52,11 +52,12 @@ func scalar[T any](t *testing.T, db *sql.DB, query string, args ...any) T {
 }
 
 // projectAIChatShapes are the shapes of both tables.
-type projectAIChatShapes struct{ conversations, messages string }
+type projectAIChatShapes struct{ conversations, messages, proposals string }
 
 func projectAIChatShapesOf(t *testing.T, db *sql.DB) projectAIChatShapes {
 	t.Helper()
-	return projectAIChatShapes{conversations: tableShape(t, db, "project_ai_conversations"), messages: tableShape(t, db, "project_ai_messages")}
+	return projectAIChatShapes{conversations: tableShape(t, db, "project_ai_conversations"), messages: tableShape(t, db, "project_ai_messages"),
+		proposals: tableShape(t, db, "project_ai_proposals")}
 }
 
 type legacyProjectAIChat struct {
@@ -80,6 +81,8 @@ func legacyProjectAIChatDB(t *testing.T) legacyProjectAIChat {
 	}
 	member, other := mysqlSecondUserAndProject(t, repo)
 	l := legacyProjectAIChat{db: db, repo: repo, admin: admin, member: member, other: other, fresh: projectAIChatShapesOf(t, db)}
+	// The proposals (#150) came after the conversations: a database from before has none.
+	mustExec(t, db, `DROP TABLE project_ai_proposals`)
 	mustExec(t, db, `DROP TABLE project_ai_messages`)
 	mustExec(t, db, `DROP TABLE project_ai_conversations`)
 	mustExec(t, db, legacyProjectAIMessagesDDL)
@@ -253,6 +256,9 @@ func TestInitializeProjectAIChatUpgradesAnExistingDatabaseMySQL(t *testing.T) {
 func TestInitializeProjectAIChatCreatesTheSchemaFileShapeMySQL(t *testing.T) {
 	l := legacyProjectAIChatDB(t)
 	mustExec(t, l.db, `DROP TABLE project_ai_messages`)
+	if strings.Contains(l.fresh.proposals, "fk_project_ai_proposal_message") == false {
+		t.Fatalf("schema file lacks the proposals' foreign key:\n%s", l.fresh.proposals)
+	}
 	for range 2 {
 		if err := l.repo.InitializeProjectAIChat(t.Context()); err != nil {
 			t.Fatal(err)

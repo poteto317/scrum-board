@@ -75,6 +75,16 @@ func (m *memoryRepo) ListProjectAIMessages(_ context.Context, projectID, userID,
 	}
 	// Ids grow in insertion order; the clock may give two appends the same instant.
 	slices.SortFunc(out, func(a, b ProjectAIMessage) int { return cmp.Compare(a.ID, b.ID) })
+	byMessage := map[int64][]ProjectAIProposal{}
+	for _, p := range m.projectAIProposals {
+		if p.projectID == projectID && p.userID == userID {
+			byMessage[p.MessageID] = append(byMessage[p.MessageID], p.ProjectAIProposal)
+		}
+	}
+	for id := range byMessage {
+		slices.SortFunc(byMessage[id], func(a, b ProjectAIProposal) int { return cmp.Compare(a.ID, b.ID) })
+	}
+	attachProposalsToMessages(out, byMessage)
 	return out, nil
 }
 
@@ -108,6 +118,7 @@ func (m *memoryRepo) AppendProjectAITurn(ctx context.Context, projectID, userID 
 	existing, _ := m.ListProjectAIMessages(ctx, projectID, userID, conversation.ID)
 	for i := range projectAIMessagesOverLimit(len(existing), projectAITurnMessages) {
 		delete(m.projectAIMessages, existing[i].ID)
+		m.dropProjectAIProposalsOf(existing[i].ID)
 	}
 	now := m.projectAINow()
 	uid := m.nextAIMessageID
@@ -120,6 +131,7 @@ func (m *memoryRepo) AppendProjectAITurn(ctx context.Context, projectID, userID 
 		ID: aid, ProjectID: projectID, ConversationID: conversation.ID, Role: AIRoleAssistant, Body: turn.AssistantBody, CreatedAt: now.Add(time.Nanosecond),
 		InputTokens: tokenCountPtr(turn.InputTokens), OutputTokens: tokenCountPtr(turn.OutputTokens),
 	}}
+	m.storeProjectAIProposals(projectID, userID, aid, now, turn.Proposals)
 	conversation.UpdatedAt = m.projectAINow()
 	m.projectAIConversations[conversation.ID] = conversation
 	return conversation.ProjectAIConversation, nil
@@ -159,6 +171,7 @@ func (m *memoryRepo) dropProjectAIConversation(conversationID int64) {
 	for id, msg := range m.projectAIMessages {
 		if msg.ConversationID == conversationID {
 			delete(m.projectAIMessages, id)
+			m.dropProjectAIProposalsOf(id)
 		}
 	}
 }
@@ -180,6 +193,7 @@ func (m *memoryRepo) ClearProjectAIConversations(_ context.Context, projectID, u
 	for id, msg := range m.projectAIMessages {
 		if msg.ProjectID == projectID && msg.userID == userID {
 			delete(m.projectAIMessages, id)
+			m.dropProjectAIProposalsOf(id)
 		}
 	}
 	return nil
@@ -194,6 +208,7 @@ func (m *memoryRepo) dropProjectAIMessages(projectID int64) {
 	for id, msg := range m.projectAIMessages {
 		if msg.ProjectID == projectID {
 			delete(m.projectAIMessages, id)
+			m.dropProjectAIProposalsOf(id)
 		}
 	}
 }
@@ -281,4 +296,48 @@ func (m *memoryRepo) matchesAllTerms(card Item, terms []string) bool {
 		}
 	}
 	return true
+}
+
+// memoryProjectAIProposal keeps the owner next to the proposal, like the message.
+type memoryProjectAIProposal struct {
+	ProjectAIProposal
+	projectID, userID int64
+}
+
+// storeProjectAIProposals mirrors insertProjectAIProposals.
+func (m *memoryRepo) storeProjectAIProposals(projectID, userID, messageID int64, now time.Time, drafts []ProjectAIProposalDraft) {
+	if m.projectAIProposals == nil {
+		m.projectAIProposals = map[int64]memoryProjectAIProposal{}
+	}
+	for _, d := range drafts {
+		m.nextProjectAIProposalID++
+		m.projectAIProposals[m.nextProjectAIProposalID] = memoryProjectAIProposal{projectID: projectID, userID: userID, ProjectAIProposal: ProjectAIProposal{
+			ID: m.nextProjectAIProposalID, MessageID: messageID, Kind: d.Kind, State: ProposalStatePending,
+			ItemNumber: d.ItemNumber, ItemTitle: d.ItemTitle, ColumnID: d.ColumnID, ColumnName: d.ColumnName,
+			Title: d.Title, Description: d.Description, BaseDescription: d.BaseDescription, CreatedAt: now, UpdatedAt: now,
+		}}
+	}
+}
+
+// dropProjectAIProposalsOf deletes the proposals of a deleted message (ON DELETE CASCADE).
+func (m *memoryRepo) dropProjectAIProposalsOf(messageID int64) {
+	for id, p := range m.projectAIProposals {
+		if p.MessageID == messageID {
+			delete(m.projectAIProposals, id)
+		}
+	}
+}
+
+func (m *memoryRepo) UpdateProjectAIProposal(_ context.Context, projectID, userID, proposalID int64, change ProjectAIProposalChange) (ProjectAIProposal, error) {
+	p, ok := m.projectAIProposals[proposalID]
+	if !ok || p.projectID != projectID || p.userID != userID {
+		return ProjectAIProposal{}, ErrNotFound
+	}
+	if !proposalTransitionAllowed(p.ProjectAIProposal, change) {
+		return p.ProjectAIProposal, ErrProposalConflict
+	}
+	p.ProjectAIProposal = applyProposalChange(p.ProjectAIProposal, change)
+	p.UpdatedAt = m.projectAINow()
+	m.projectAIProposals[proposalID] = p
+	return p.ProjectAIProposal, nil
 }

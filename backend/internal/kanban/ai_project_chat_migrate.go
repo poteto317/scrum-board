@@ -72,6 +72,11 @@ func (r MySQLRepository) initializeProjectAIChat(ctx context.Context, lockWaitSe
 	if _, err = conn.ExecContext(ctx, projectAIMessagesDDL); err != nil {
 		return fmt.Errorf("create project_ai_messages: %w", err)
 	}
+	// The proposals reference the messages. An older server does not know this table: it
+	// neither reads nor writes it, and the messages it deletes take their proposals along.
+	if _, err = conn.ExecContext(ctx, projectAIProposalsDDL); err != nil {
+		return fmt.Errorf("create project_ai_proposals: %w", err)
+	}
 	// 3. – 5. a table from before the conversations gets the column, the index and the foreign key.
 	if err = migrateProjectAIMessages(ctx, conn); err != nil {
 		return err

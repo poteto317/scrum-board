@@ -294,6 +294,10 @@ type Repository interface {
 	DeleteProjectAIConversation(ctx context.Context, projectID, userID, conversationID int64) error
 	// ClearProjectAIConversations deletes all of the user's conversations in the project.
 	ClearProjectAIConversations(ctx context.Context, projectID, userID int64) error
+	// UpdateProjectAIProposal changes a proposal's state (proposalTransitionAllowed). ErrNotFound
+	// when it is missing, another user's or another project's; ErrProposalConflict (with the
+	// current proposal) when the current state does not allow the change.
+	UpdateProjectAIProposal(ctx context.Context, projectID, userID, proposalID int64, change ProjectAIProposalChange) (ProjectAIProposal, error)
 	// SearchProjectItems filters and orders the project's items (trash excluded, archive included) that
 	// search.Viewer may view (same meaning as CanView), and returns at most 201.
 	SearchProjectItems(ctx context.Context, projectID int64, search ItemSearch) ([]Item, error)
