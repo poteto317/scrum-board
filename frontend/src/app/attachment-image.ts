@@ -13,7 +13,8 @@ export const ATTACHMENT_IMAGE_BATCH_MAX = 10;
 
 export const ATTACHMENT_IMAGE_HINT = 'JPEG / PNG / GIF / WebP（5MiB以下）を選んでください。';
 export const ATTACHMENT_IMAGE_BATCH_HINT = `一度に追加できる画像は${ATTACHMENT_IMAGE_BATCH_MAX}件までです。`;
-export const ATTACHMENT_IMAGE_BUSY_HINT = 'アップロード中です。終わってから追加してください。';
+/** アップロード・削除のどちらかが進んでいる間に、次の画像が来たとき。 */
+export const ATTACHMENT_IMAGE_BUSY_HINT = '画像の処理中です。終わってから追加してください。';
 
 export function isAllowedImageFile(file: File): boolean {
   return (
