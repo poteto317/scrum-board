@@ -18,6 +18,7 @@ describe('DescriptionRichText', () => {
     itemNumber: number;
     draggableImages?: boolean;
     canDelete?: boolean;
+    blockSyntax?: boolean;
   }) {
     TestBed.configureTestingModule({ imports: [DescriptionRichText] });
     const f = TestBed.createComponent(DescriptionRichText);
@@ -25,32 +26,33 @@ describe('DescriptionRichText', () => {
     f.componentRef.setInput('itemNumber', opts.itemNumber);
     f.componentRef.setInput('draggableImages', opts.draggableImages ?? false);
     f.componentRef.setInput('canDelete', opts.canDelete ?? false);
+    f.componentRef.setInput('blockSyntax', opts.blockSyntax ?? false);
     f.detectChanges();
     return f;
   }
 
   it('reuses parsed segments across change detection and unrelated input changes', () => {
     const f = mount({ text: '[see](https://example.com)', itemNumber: 7 });
-    const segments = f.componentInstance.segments();
+    const blocks = f.componentInstance.blocks();
     f.detectChanges();
     f.componentRef.setInput('canDelete', true);
     f.componentRef.setInput('draggableImages', true);
     f.detectChanges();
-    expect(f.componentInstance.segments()).toBe(segments);
+    expect(f.componentInstance.blocks()).toBe(blocks);
     expect(f.nativeElement.querySelector('a').href).toBe('https://example.com/');
   });
 
   it('reparses and updates the display when text or item number changes', () => {
     const f = mount({ text: 'before', itemNumber: 7 });
-    const before = f.componentInstance.segments();
+    const before = f.componentInstance.blocks();
     f.componentRef.setInput('text', buildAttachmentMarkup(7, 3, 'pic'));
     f.detectChanges();
-    const image = f.componentInstance.segments();
+    const image = f.componentInstance.blocks();
     expect(image).not.toBe(before);
     expect(f.nativeElement.querySelector('img')).toBeTruthy();
     f.componentRef.setInput('itemNumber', 8);
     f.detectChanges();
-    expect(f.componentInstance.segments()).not.toBe(image);
+    expect(f.componentInstance.blocks()).not.toBe(image);
     expect(f.nativeElement.querySelector('img')).toBeNull();
   });
 
@@ -103,5 +105,70 @@ describe('DescriptionRichText', () => {
     const btn = f.nativeElement.querySelector('.rich-image-delete') as HTMLButtonElement;
     expect(btn).toBeTruthy();
     expect(btn.getAttribute('draggable')).toBeNull();
+  });
+
+  describe('block syntax', () => {
+    const all = [
+      '# A',
+      '## B',
+      '### C',
+      '- x',
+      '2. y',
+      '- [x] done',
+      '- [ ] todo',
+      '> q',
+      '---',
+      '```',
+      '<b>z</b>',
+      '```',
+    ].join('\n');
+
+    it('renders headings, lists, tasks, quotes, rules and code as elements', () => {
+      const f = mount({ text: all, itemNumber: 7, blockSyntax: true });
+      const el = f.nativeElement as HTMLElement;
+      expect(el.querySelector('h2')!.textContent).toBe('A');
+      expect(el.querySelector('h3')!.textContent).toBe('B');
+      expect(el.querySelector('h4')!.textContent).toBe('C');
+      expect(el.querySelector('ul:not(.rich-task-list) li')!.textContent).toBe('x');
+      const ol = el.querySelector('ol')!;
+      expect(ol.getAttribute('start')).toBe('2');
+      expect(ol.querySelector('li')!.textContent).toBe('y');
+      const checks = el.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+      expect(checks.length).toBe(2);
+      expect([...checks].map((c) => c.disabled)).toEqual([true, true]);
+      expect([...checks].map((c) => c.checked)).toEqual([true, false]);
+      expect([...checks].map((c) => c.getAttribute('aria-label'))).toEqual(['done', 'todo']);
+      expect(el.querySelector('blockquote')!.textContent).toBe('q');
+      expect([...el.querySelectorAll('.rich-task-text')].map((t) => t.textContent)).toEqual(['done', 'todo']);
+      expect(el.querySelector('hr')).toBeTruthy();
+      expect(el.querySelector('pre > code')!.textContent).toBe('<b>z</b>');
+      expect(el.querySelector('b')).toBeNull();
+    });
+
+    it('does not interpret HTML in paragraphs', () => {
+      const f = mount({ text: 'a <b>x</b> <img src=x>', itemNumber: 7, blockSyntax: true });
+      const el = f.nativeElement as HTMLElement;
+      expect(el.querySelector('b')).toBeNull();
+      expect(el.querySelector('img')).toBeNull();
+      expect(el.querySelector('.rich-paragraph')!.textContent).toBe('a <b>x</b> <img src=x>');
+    });
+
+    it('keeps markup as plain text when block syntax is off (comments, solutions)', () => {
+      const f = mount({ text: '# A\n- x\n---', itemNumber: 7 });
+      const el = f.nativeElement as HTMLElement;
+      expect(el.querySelector('h2, ul, hr')).toBeNull();
+      expect(el.querySelector('.rich-paragraph')!.textContent).toBe('# A\n- x\n---');
+    });
+
+    it('does not render images inside code but does inside list items', () => {
+      const img = buildAttachmentMarkup(7, 3, 'pic');
+      const code = mount({ text: '```\n' + img + '\n```', itemNumber: 7, blockSyntax: true });
+      expect(code.nativeElement.querySelector('img')).toBeNull();
+      expect(code.nativeElement.querySelector('pre code').textContent).toBe(img);
+      TestBed.resetTestingModule();
+      const list = mount({ text: '- ' + img, itemNumber: 7, blockSyntax: true, canDelete: true });
+      expect(list.nativeElement.querySelector('li img')).toBeTruthy();
+      expect(list.nativeElement.querySelector('li .rich-image-delete')).toBeTruthy();
+    });
   });
 });
