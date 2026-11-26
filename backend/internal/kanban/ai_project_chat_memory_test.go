@@ -341,3 +341,14 @@ func (m *memoryRepo) UpdateProjectAIProposal(_ context.Context, projectID, userI
 	m.projectAIProposals[proposalID] = p
 	return p.ProjectAIProposal, nil
 }
+
+// applyProposalChange is the proposal after an allowed change, as UpdateProjectAIProposal
+// writes it (the state, and COALESCE for the number) (state and, when given, the number).
+func applyProposalChange(p ProjectAIProposal, change ProjectAIProposalChange) ProjectAIProposal {
+	p.State = change.State
+	if change.CreatedItemNumber != nil {
+		n := *change.CreatedItemNumber
+		p.CreatedItemNumber = &n
+	}
+	return p
+}
