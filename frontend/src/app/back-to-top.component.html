@@ -1,0 +1,12 @@
+@if (visible()) {
+  <button
+    type="button"
+    class="secondary back-to-top"
+    (click)="scrollToTop()"
+    (pointerdown)="onPointerDown()"
+    (focus)="onFocus()"
+    (blur)="onBlur()"
+  >
+    トップに戻る
+  </button>
+}
