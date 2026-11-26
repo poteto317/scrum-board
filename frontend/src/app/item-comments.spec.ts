@@ -745,7 +745,7 @@ describe('ItemComments', () => {
       f.componentInstance.uploadDraftImages([png('a.png')]);
       f.componentInstance.uploadDraftImages([png('b.png')]);
       expect(upload).toHaveBeenCalledTimes(1);
-      expect(f.componentInstance.actionError()).toContain('アップロード中');
+      expect(f.componentInstance.actionError()).toContain('画像の処理中');
     });
 
     it('stops at the comment limit and keeps what fit', () => {

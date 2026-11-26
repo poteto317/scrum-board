@@ -769,7 +769,7 @@ describe('DescriptionBlocksEditor', () => {
       const ev = paste(area, clipboard({ files: [png('b.png')] }));
       expect(ev.defaultPrevented).toBe(true);
       expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
-      expect(editor.imageError()).toContain('アップロード中');
+      expect(editor.imageError()).toContain('画像の処理中');
       pending.next(attachment(1, 'a.png'));
       pending.complete();
       expect(editor.imageError()).toBe('');

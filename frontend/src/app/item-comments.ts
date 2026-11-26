@@ -375,7 +375,8 @@ export class ItemComments implements OnChanges {
     // 投稿の応答を待つ間に入れると、投稿の成功で空になった下書きへ画像だけが入る。
     if (this.readOnly || this.posting() || this.number <= 0) return;
     if (this.imageBusy() || this.uploadGuard) {
-      if (this.uploadGuard) this.actionError.set(ATTACHMENT_IMAGE_BUSY_HINT);
+      // 黙って捨てない（アップロード・削除のどちらの間でも伝える）。
+      this.actionError.set(ATTACHMENT_IMAGE_BUSY_HINT);
       return;
     }
     const plan = planImageUpload(files);

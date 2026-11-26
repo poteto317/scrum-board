@@ -393,7 +393,7 @@ export class DescriptionBlocksEditor {
     if (!this.imagesEnabled()) return;
     if (this.imageBusy() || this.uploadGuard) {
       // 黙って捨てない（貼り付け・ドロップは既定の動作を止めているので、何も起きないように見える）。
-      if (this.uploadGuard) this.imageError.set(ATTACHMENT_IMAGE_BUSY_HINT);
+      this.imageError.set(ATTACHMENT_IMAGE_BUSY_HINT);
       return;
     }
     const plan = planImageUpload(files);
