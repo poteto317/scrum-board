@@ -181,6 +181,7 @@ HTTP API の**契約正本**は [OpenAPI（`docs/openapi.yaml`）](docs/openapi.
 | PUT | `/api/items/order` | アイテム並び替え・列間移動 |
 | PATCH | `/api/board/settings` | ボード設定の部分更新 |
 | POST | `/api/items/refined` | AI 整形して Todo 起票 |
+| GET/POST/DELETE | `/api/projects/{id}/ai-chat` | プロジェクト単位の AI チャット（自分の履歴の取得・質問・クリア。AI はそのプロジェクトのアイテムを検索して答える） |
 | GET | `/api/items/{id}` | アイテム詳細（内部 ID） |
 | GET | `/api/items/by-number/{number}/history` | 変更履歴 |
 | GET | `/api/items/by-number/{number}` | アイテム詳細（公開番号） |

@@ -1130,9 +1130,11 @@ paths:
                   maxLength: 4000
   /api/items/by-number/{number}/ai-chat:
     get:
-      summary: アイテム AI チャット履歴
+      summary: アイテム AI チャット履歴（非推奨）
+      deprecated: true
       operationId: get_api_items_by_number_number_ai_chat
       description: |
+        非推奨。画面はプロジェクト単位の `/api/projects/{id}/ai-chat` を使う。この API と `item_ai_messages` の履歴は、外部のクライアントのために残してあり、動きは変えていない。
         セッション＋編集可が必要。ANTHROPIC_API_KEY 未設定でも履歴は返す。
         古い順。この API は description／comments を変更しない。
       responses:
@@ -1184,9 +1186,11 @@ paths:
       - cookieAuth: []
       - basicAuth: []
     post:
-      summary: アイテム AI チャット送信
+      summary: アイテム AI チャット送信（非推奨）
+      deprecated: true
       operationId: post_api_items_by_number_number_ai_chat
       description: |
+        非推奨。画面はプロジェクト単位の `/api/projects/{id}/ai-chat` を使う。この API と `item_ai_messages` の履歴は、外部のクライアントのために残してあり、動きは変えていない。
         セッション＋編集可。キー未設定は 503。同時実行は refined と共有（超過 429 `ai_busy`）。
         アプリ内トークン上限到達時も 429（`ai_credit_limit`）。
         利用者別レート制限が有効なとき超過は 429（`ai_rate_limit`）。既定ではレート制限オフ。
@@ -1289,9 +1293,12 @@ paths:
                     1〜N Unicode 文字（既定 N=4000。サーバーの `AI_CHAT_MESSAGE_MAX` で上書き可）。
               additionalProperties: false
     delete:
-      summary: アイテム AI チャット履歴クリア
+      summary: アイテム AI チャット履歴クリア（非推奨）
+      deprecated: true
       operationId: delete_api_items_by_number_number_ai_chat
-      description: セッション＋編集可。キー未設定でも可。
+      description: |
+        非推奨。画面はプロジェクト単位の `/api/projects/{id}/ai-chat` を使う。この API と `item_ai_messages` の履歴は、外部のクライアントのために残してあり、動きは変えていない。
+        セッション＋編集可。キー未設定でも可。
       responses:
         '204':
           description: クリア成功
@@ -2186,6 +2193,220 @@ paths:
       security:
       - cookieAuth: []
       - basicAuth: []
+  /api/projects/{id}/ai-chat:
+    get:
+      summary: プロジェクト AI チャット履歴
+      operationId: get_api_projects_id_ai_chat
+      description: |
+        ログインが必要。呼び出したユーザー自身の、そのプロジェクトでの履歴を古い順に返す
+        （履歴は「プロジェクト × ユーザー」ごと。ほかのユーザーの履歴は返らない）。
+        ANTHROPIC_API_KEY 未設定でも返す。
+      responses:
+        '200':
+          description: 履歴
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - messages
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectAIMessage'
+                additionalProperties: false
+        '400':
+          description: プロジェクト ID が不正（「プロジェクトIDが不正です。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: プロジェクトなし（「プロジェクトが見つかりません。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: プロジェクト ID
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+    post:
+      summary: プロジェクト AI チャット送信
+      operationId: post_api_projects_id_ai_chat
+      description: |
+        ログインが必要。プロジェクトの中身について質問する。モデルは、サーバーが実行する読み取り専用のツール
+        （`search_items`: アイテムの検索、`get_item`: アイテムを開く）で調べてから答える。ツールの対象は URL のプロジェクトに限り、
+        呼び出したユーザーが閲覧できるアイテムだけを返す（ゴミ箱は対象外、アーカイブ済みは含む）。
+        保存するのは、ユーザーのメッセージと最後の回答だけ。失敗したときは履歴に足さない。アイテムは書き換えない。
+
+        `focusItemNumber` は、アイテム詳細から送るときに付ける。そのプロジェクトの番号で引けて、呼び出したユーザーが閲覧できるときだけ、
+        タイトル・説明・コメントを文脈に入れる。見つからない・閲覧できない・ゴミ箱にあるときは、エラーにせず文脈なしで続ける。
+
+        モデルの呼び出しは 1 メッセージにつき最大 4 回。このリクエストだけ、サーバーの制限時間は 50 秒
+        （モデルとツールで最大 40 秒。ほかの経路は 15 秒）。
+
+        エラーの順序: 401 → 415 → 400（本文）→ 400／404（プロジェクト）→ 503 → 429 `ai_credit_limit` →
+        429 `ai_busy`（同じユーザーのプロジェクトチャットが実行中）→ 429 `ai_rate_limit` → 429 `ai_busy`（同時実行の枠なし）→ 502／500。
+        `code` が付くのは 415・429・502 と、500 のうち `server_error`（回答の保存の失敗、ツールの中のデータベースの失敗）、
+        503 のうち `ai_not_configured`。モデルを呼ぶ前のデータベースの失敗の 500 と、50 秒の制限時間に達したときの 503
+        （「処理がタイムアウトしました。」）は `message` だけ。400・401・404 も `message` だけ。
+      responses:
+        '200':
+          description: 回答と、更新後の自分の履歴
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - assistant
+                - messages
+                properties:
+                  assistant:
+                    $ref: '#/components/schemas/ProjectAIMessage'
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectAIMessage'
+                additionalProperties: false
+        '400':
+          description: 本文が不正（JSON でない、未知のフィールド、メッセージが空・長すぎる・制御文字、focusItemNumber が整数でない・0 以下）、またはプロジェクト ID が不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: プロジェクトなし（「プロジェクトが見つかりません。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type が application/json でない（code=unsupported_media_type）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIError'
+        '429':
+          description: |
+            アプリ内トークン上限到達（code=ai_credit_limit）、
+            利用者別レート制限超過（code=ai_rate_limit。ユーザーのメッセージ 1 件につき 1 回分）、
+            または混雑（code=ai_busy。同じユーザーのプロジェクトチャットが実行中、もしくは全機能で共有する同時実行の枠が無い）。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIError'
+        '500':
+          description: |
+            保存の失敗、またはツールの中のデータベースの失敗（code=server_error）。履歴には足さない。
+            モデルを呼ぶ前のデータベースの失敗（プロジェクト・列・開いているアイテム・履歴の読み込みなど）は、`code` の無い `message` だけの応答。
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/AIError'
+                - $ref: '#/components/schemas/Error'
+        '502':
+          description: モデルの失敗・時間切れ（code=ai_failed）。上流の文言は含めない。履歴には足さない。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIError'
+        '503':
+          description: |
+            AI 未設定（code=ai_not_configured）。
+            50 秒の制限時間に達したときは、`code` の無い `{"message":"処理がタイムアウトしました。"}`。
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/AIError'
+                - $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: プロジェクト ID
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - message
+              properties:
+                message:
+                  type: string
+                  description: |
+                    1〜N Unicode 文字（既定 N=4000。サーバーの `AI_CHAT_MESSAGE_MAX` で上書き可）。前後の空白は除く。
+                focusItemNumber:
+                  type: integer
+                  minimum: 1
+                  description: 開いているアイテムの番号（アイテム詳細から送るときだけ）。省略・null は「なし」。
+              additionalProperties: false
+    delete:
+      summary: プロジェクト AI チャット履歴クリア
+      operationId: delete_api_projects_id_ai_chat
+      description: ログインが必要。呼び出したユーザー自身の、そのプロジェクトでの履歴だけを消す。キー未設定でも可。
+      responses:
+        '204':
+          description: クリア成功（本文なし）
+        '400':
+          description: プロジェクト ID が不正（「プロジェクトIDが不正です。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: プロジェクトなし（「プロジェクトが見つかりません。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: プロジェクト ID
+      security:
+      - cookieAuth: []
+      - basicAuth: []
   /api/public-config:
     get:
       summary: 公開設定（ログイン不要）
@@ -2878,6 +3099,56 @@ components:
         createdAt:
           type: string
           format: date-time
+      additionalProperties: false
+    ProjectAIMessage:
+      type: object
+      description: プロジェクト AI チャットの 1 メッセージ。常に呼び出したユーザー自身のもので、ユーザー ID は含めない。
+      required:
+      - id
+      - projectId
+      - role
+      - body
+      - createdAt
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        role:
+          type: string
+          enum:
+          - user
+          - assistant
+        body:
+          type: string
+        inputTokens:
+          type: integer
+          description: 回答にだけ付く。その回答のためのモデル呼び出し全部の合計。
+        outputTokens:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    AIError:
+      type: object
+      description: AI 関連の、code 付きのエラー。
+      required:
+      - message
+      - code
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+          enum:
+          - unsupported_media_type
+          - ai_not_configured
+          - ai_credit_limit
+          - ai_rate_limit
+          - ai_busy
+          - ai_failed
+          - server_error
       additionalProperties: false
     AICredits:
       type: object
