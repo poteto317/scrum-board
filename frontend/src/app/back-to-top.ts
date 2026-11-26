@@ -4,7 +4,10 @@ export type BackToTopVisibilityInput = {
   scrollY: number;
   /** Viewport height (window.innerHeight). */
   viewportHeight: number;
-  /** True while the button itself has focus; keeps it mounted so focus is not dropped to body. */
+  /**
+   * True while the button has keyboard focus (not focus from a pointer press); keeps it mounted
+   * so focus is not dropped to body.
+   */
   focused: boolean;
 };
 
