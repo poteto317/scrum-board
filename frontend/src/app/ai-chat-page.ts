@@ -109,6 +109,8 @@ export class AiChatPage {
   /** 表示中の会話を URL に残す（再読み込みしても同じ会話が開く）。履歴は増やさない */
   onConversationChange(conversation: ConversationRef) {
     if (conversation === this.conversation()) return;
+    // 別の画面へ移っている途中なら書き換えない（書き換えると、その移動が取り消される）
+    if (this.router.currentNavigation()) return;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: conversationQueryParams(conversation),

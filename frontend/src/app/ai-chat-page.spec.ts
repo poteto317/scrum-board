@@ -212,6 +212,16 @@ describe('AiChatPage', () => {
       expect(api.getLatestProjectAIChat).not.toHaveBeenCalled();
     });
 
+    it('does not rewrite the URL while another navigation is on its way', async () => {
+      const { f, router, navigate } = await setupAt('/ai-chat?project=7&conversation=5');
+      navigate.mockClear();
+      // 別の画面へ移っている途中に会話が変わっても、その移動を取り消さない
+      vi.spyOn(router, 'currentNavigation').mockReturnValue({} as never);
+      chatOf(f).selectConversation(8);
+      await f.whenStable();
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
     it('writes conversation=new when a new conversation is started', async () => {
       const { f, router } = await setupAt('/ai-chat?project=7&conversation=5');
       chatOf(f).startNew();
