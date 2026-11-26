@@ -156,6 +156,7 @@
       <router-outlet />
     </div>
   </div>
+  <app-back-to-top [aiChatFab]="showAiChatFab()" [dockOpen]="dockOpen()" />
   @if (showAiChatFab()) {
     <app-ai-chat-fab />
   }

@@ -11,6 +11,7 @@ import {
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AiChatFab } from './ai-chat-fab';
+import { BackToTop } from './back-to-top.component';
 import { isAiChatRoute } from './ai-chat-target';
 import { AuthSession } from './auth-session';
 import { FavoritesSession, displayFavoriteTitle } from './favorites-session';
@@ -22,7 +23,7 @@ import { readSidebarCollapsed, writeSidebarCollapsed } from './sidebar-collapse-
 
 @Component({
   selector: 'app-root',
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, HeaderMenu, AiChatFab],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, HeaderMenu, AiChatFab, BackToTop],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
