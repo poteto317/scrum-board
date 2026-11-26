@@ -78,8 +78,8 @@
 
 ファイル: `description-rich-text.ts`、`description-rich-text.spec.ts`
 
-1. spec: 本文に `buildFileAttachmentMarkup(7, 3, 'doc.pdf')` を入れたとき、`a[href*="/attachments/3/content"]` があり、`download` 属性とラベル `doc.pdf` が出る。`canDelete=true` なら削除ボタン。画像ケースは回帰で `img` のまま。
-2. テンプレートに `@else if (seg.kind === 'file')` を追加。`<a [href]="seg.src" [attr.download]="seg.label">{{ seg.label }}</a>`。削除は画像と同様 `onDelete`。
+1. spec: 本文に `buildFileAttachmentMarkup(7, 3, 'doc.pdf')` を入れたとき、`a[href*="/attachments/3/content"]` がありラベル `doc.pdf` が出る（`download` 属性は付けない。保存名は Content-Disposition）。`canDelete=true` なら削除ボタン。画像ケースは回帰で `img` のまま。
+2. テンプレートに `@else if (seg.kind === 'file')` を追加。`<a [href]="seg.src">{{ seg.label }}</a>`。削除は画像と同様 `onDelete`。
 3. テストを通す。
 
 ## タスク 5: フロント — エディタ／コメントの挿入分岐

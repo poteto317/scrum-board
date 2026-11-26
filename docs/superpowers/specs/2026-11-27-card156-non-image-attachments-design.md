@@ -22,7 +22,7 @@
 | 枚数・同時実行・プロジェクト枠 | **変更しない**（20 / 4 / 100 MiB） | 非画像も同じ行・同じスロットを使う |
 | MIME 検証 | **サーバー**: 宣言 Content-Type ∈ 許可集合かつマジックバイト一致。不一致・空・読めない先頭は拒否（L-022 / L-023 / L-044）。**フロント**: 許可 MIME 集合とサイズだけ（`file.type`）。マジックはサーバーのみ | FE/BE で揃えるのは許可 MIME 集合。画像と同じ二層はサーバー側。PDF マジックは先頭 `%PDF` |
 | 本文マークアップ | 画像は従来どおり `![name](path)`。**非画像は `[name](path)`**（`!` 無し） | 表示をリンクにするため。path は既存の同一アイテム content URL |
-| 表示 | 同一アイテムの非画像 path を **ファイルリンク**として描画（新しい segment `file`）。`<a href=path download>` 相当。外部 `https:` リンクとは別扱い | ダウンロード意図を明示。他アイテム path はこれまでどおりプレーンテキスト |
+| 表示 | 同一アイテムの非画像 path を **ファイルリンク**として描画（新しい segment `file`）。`<a href=path>`（`download` 属性は付けない。保存名は content GET の Content-Disposition に任せる）。外部 `https:` リンクとは別扱い | 拡張子スプーフを避けつつダウンロードをサーバー方針に揃える。他アイテム path はこれまでどおりプレーンテキスト |
 | Content-Disposition | **画像許可 MIME（jpeg/png/gif/webp）: 付けない**。**それ以外（本設計では `application/pdf`）: `attachment`** + `filename` / `filename*` | 付与条件は「保存 MIME が画像許可集合の外」で統一（PDF 専用分岐を増やさない）。ブラウザが PDF をインライン実行せず保存寄りにする。ファイル名は DB の `originalName` をヘッダ安全に符号化 |
 | ファイル名サニタイズ | 既存 `sanitizeAttachmentAlt` をリンクラベルにも流用。空なら画像は `image`、非画像は **`file`** | `]` / 改行除去は共通（L-018） |
 | 削除時の本文掃除 | `stripAttachmentMarkup` が **`![…](path)` と `[…](path)` の両方**を除去 | 非画像リンクが本文に残らないようにする |
