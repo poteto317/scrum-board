@@ -648,4 +648,208 @@ describe('ItemComments', () => {
     expect(f.componentInstance.editBody()).toBe('keep');
     expect(f.componentInstance.actionError()).toContain('参照');
   });
+
+  describe('paste and multiple images', () => {
+    const png = (name: string, type = 'image/png') => {
+      const file = new File([new Uint8Array([1, 2, 3])], name, { type });
+      Object.defineProperty(file, 'size', { value: 3 });
+      return file;
+    };
+    const pasteEvent = (
+      el: Partial<HTMLTextAreaElement>,
+      opts: { text?: string; files?: File[] },
+    ) => {
+      const ev = new Event('paste', { cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(ev, 'clipboardData', {
+        value: mockDataTransfer({
+          data: opts.text != null ? { 'text/plain': opts.text } : {},
+          files: opts.files,
+        }),
+      });
+      Object.defineProperty(ev, 'target', { value: el });
+      return ev;
+    };
+    const area = (value: string, start: number, end: number) =>
+      ({
+        value,
+        selectionStart: start,
+        selectionEnd: end,
+        isConnected: true,
+        setSelectionRange: vi.fn(),
+      }) as unknown as HTMLTextAreaElement;
+
+    it('uploads pasted images in order and inserts them at the caret of the draft', () => {
+      const first = new Subject<{ id: number; originalName: string }>();
+      const second = new Subject<{ id: number; originalName: string }>();
+      const upload = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+      const f = setup({ listComments: vi.fn(() => of([])), uploadAttachment: upload });
+      f.componentInstance.draftBody.set('ab');
+      const ev = pasteEvent(area('ab', 1, 1), { files: [png('a.png'), png('b.png')] });
+      f.componentInstance.onDraftPaste(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(f.componentInstance.imageBusy()).toBe(true);
+      first.next({ id: 1, originalName: 'a.png' });
+      expect(upload).toHaveBeenCalledTimes(2);
+      second.next({ id: 2, originalName: 'b.png' });
+      expect(f.componentInstance.draftBody()).toBe(
+        `a${buildAttachmentMarkup(3, 1, 'a.png')}${buildAttachmentMarkup(3, 2, 'b.png')}b`,
+      );
+      expect(f.componentInstance.imageBusy()).toBe(false);
+    });
+
+    it('reports how many images were added when a later upload fails', () => {
+      const upload = vi
+        .fn()
+        .mockReturnValueOnce(of({ id: 1, originalName: 'a.png' }))
+        .mockReturnValueOnce(throwError(() => new Error('fail')));
+      const f = setup({ listComments: vi.fn(() => of([])), uploadAttachment: upload });
+      f.componentInstance.uploadDraftImages([png('a.png'), png('b.png')]);
+      expect(f.componentInstance.draftBody()).toBe(buildAttachmentMarkup(3, 1, 'a.png'));
+      expect(f.componentInstance.actionError()).toContain('2件中1件');
+      expect(f.componentInstance.imageBusy()).toBe(false);
+    });
+
+    it('releases the busy state when the item changes during an upload', () => {
+      const pending = new Subject<{ id: number; originalName: string }>();
+      const upload = vi.fn(() => pending);
+      const f = setup({ listComments: vi.fn(() => of([])), uploadAttachment: upload });
+      f.componentInstance.uploadDraftImages([png('a.png'), png('b.png')]);
+      f.componentRef.setInput('number', 4);
+      f.detectChanges();
+      pending.next({ id: 1, originalName: 'a.png' });
+      expect(f.componentInstance.draftBody()).toBe('');
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(f.componentInstance.imageBusy()).toBe(false);
+    });
+
+    it('does not upload while a comment is being posted', () => {
+      const posting = new Subject<ItemComment>();
+      const upload = vi.fn(() => of({ id: 1, originalName: 'a.png' }));
+      const f = setup({
+        listComments: vi.fn(() => of([])),
+        createComment: vi.fn(() => posting),
+        uploadAttachment: upload,
+      });
+      f.componentInstance.draftBody.set('hello');
+      f.componentInstance.submit();
+      expect(f.componentInstance.posting()).toBe(true);
+      f.componentInstance.uploadDraftImages([png('a.png')]);
+      expect(upload).not.toHaveBeenCalled();
+    });
+
+    it('says so when more images arrive during an upload', () => {
+      const pending = new Subject<{ id: number; originalName: string }>();
+      const upload = vi.fn(() => pending);
+      const f = setup({ listComments: vi.fn(() => of([])), uploadAttachment: upload });
+      f.componentInstance.uploadDraftImages([png('a.png')]);
+      f.componentInstance.uploadDraftImages([png('b.png')]);
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(f.componentInstance.actionError()).toContain('アップロード中');
+    });
+
+    it('stops at the comment limit and keeps what fit', () => {
+      const upload = vi
+        .fn()
+        .mockReturnValueOnce(of({ id: 1, originalName: 'a.png' }))
+        .mockReturnValueOnce(of({ id: 2, originalName: 'b.png' }));
+      const f = setup({ listComments: vi.fn(() => of([])), uploadAttachment: upload });
+      const first = buildAttachmentMarkup(3, 1, 'a.png');
+      f.componentInstance.draftBody.set('x'.repeat(COMMENT_BODY_MAX - first.length));
+      f.componentInstance.uploadDraftImages([png('a.png'), png('b.png'), png('c.png')]);
+      expect(upload).toHaveBeenCalledTimes(2);
+      expect(f.componentInstance.draftBody().endsWith(first)).toBe(true);
+      expect(f.componentInstance.actionError()).toContain('4000');
+      expect(f.componentInstance.imageBusy()).toBe(false);
+    });
+
+    it('rejects pasted files that are not allowed images', () => {
+      const f = setup({ listComments: vi.fn(() => of([])) });
+      const api = TestBed.inject(Api) as unknown as { uploadAttachment: ReturnType<typeof vi.fn> };
+      const ev = pasteEvent(area('', 0, 0), { files: [png('a.pdf', 'application/pdf')] });
+      f.componentInstance.onDraftPaste(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(api.uploadAttachment).not.toHaveBeenCalled();
+      expect(f.componentInstance.actionError()).toContain('JPEG');
+    });
+
+    it('turns the selection of the draft into a link when a URL is pasted', () => {
+      const f = setup({ listComments: vi.fn(() => of([])) });
+      f.componentInstance.draftBody.set('see docs');
+      const ev = pasteEvent(area('see docs', 4, 8), { text: 'https://example.com' });
+      f.componentInstance.onDraftPaste(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(f.componentInstance.draftBody()).toBe('see [docs](https://example.com)');
+    });
+
+    it('turns the selection of an edited comment into a link, without uploading images', () => {
+      const f = setup({ listComments: vi.fn(() => of([c1])) });
+      const api = TestBed.inject(Api) as unknown as { uploadAttachment: ReturnType<typeof vi.fn> };
+      f.componentInstance.startEdit(c1);
+      const link = pasteEvent(area('hello', 0, 5), { text: 'https://example.com' });
+      f.componentInstance.onEditPaste(link);
+      expect(link.defaultPrevented).toBe(true);
+      expect(f.componentInstance.editBody()).toBe('[hello](https://example.com)');
+      const image = pasteEvent(area(f.componentInstance.editBody(), 0, 0), {
+        files: [png('a.png')],
+      });
+      f.componentInstance.onEditPaste(image);
+      expect(image.defaultPrevented).toBe(false);
+      expect(api.uploadAttachment).not.toHaveBeenCalled();
+    });
+
+    it('leaves ordinary pastes to the browser', () => {
+      const f = setup({ listComments: vi.fn(() => of([])) });
+      f.componentInstance.draftBody.set('see docs');
+      const noSelection = pasteEvent(area('see docs', 3, 3), { text: 'https://example.com' });
+      f.componentInstance.onDraftPaste(noSelection);
+      const plain = pasteEvent(area('see docs', 4, 8), { text: 'plain' });
+      f.componentInstance.onDraftPaste(plain);
+      const stale = pasteEvent(area('see docs!', 4, 8), { text: 'https://example.com' });
+      f.componentInstance.onDraftPaste(stale);
+      expect(noSelection.defaultPrevented).toBe(false);
+      expect(plain.defaultPrevented).toBe(false);
+      expect(stale.defaultPrevented).toBe(false);
+      expect(f.componentInstance.draftBody()).toBe('see docs');
+    });
+
+    it('refuses a pasted link over the comment limit', () => {
+      const f = setup({ listComments: vi.fn(() => of([])) });
+      const body = 'a' + 'x'.repeat(COMMENT_BODY_MAX - 1);
+      f.componentInstance.draftBody.set(body);
+      const ev = pasteEvent(area(body, 0, 1), { text: 'https://example.com' });
+      f.componentInstance.onDraftPaste(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(f.componentInstance.draftBody()).toBe(body);
+      expect(f.componentInstance.actionError()).toContain('4000');
+    });
+
+    it('ignores paste when readOnly', () => {
+      const f = setup({ listComments: vi.fn(() => of([])) });
+      const api = TestBed.inject(Api) as unknown as { uploadAttachment: ReturnType<typeof vi.fn> };
+      f.componentRef.setInput('readOnly', true);
+      f.detectChanges();
+      const ev = pasteEvent(area('', 0, 0), { files: [png('a.png')] });
+      f.componentInstance.onDraftPaste(ev);
+      expect(ev.defaultPrevented).toBe(false);
+      expect(api.uploadAttachment).not.toHaveBeenCalled();
+    });
+
+    it('uploads every dropped image and appends them to the draft', () => {
+      const upload = vi
+        .fn()
+        .mockReturnValueOnce(of({ id: 1, originalName: 'a.png' }))
+        .mockReturnValueOnce(of({ id: 2, originalName: 'b.png' }));
+      const f = setup({ listComments: vi.fn(() => of([])), uploadAttachment: upload });
+      f.componentInstance.draftBody.set('x');
+      const ev = new Event('drop') as DragEvent;
+      Object.defineProperty(ev, 'dataTransfer', {
+        value: mockDataTransfer({ types: ['Files'], files: [png('a.png'), png('b.png')] }),
+      });
+      f.componentInstance.onDraftDrop(ev);
+      expect(f.componentInstance.draftBody()).toBe(
+        `x${buildAttachmentMarkup(3, 1, 'a.png')}${buildAttachmentMarkup(3, 2, 'b.png')}`,
+      );
+    });
+  });
 });

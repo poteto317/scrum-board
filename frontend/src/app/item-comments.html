@@ -28,6 +28,7 @@
                   rows="3"
                   [ngModel]="editBody()"
                   (ngModelChange)="editBody.set($event)"
+                  (paste)="onEditPaste($event)"
                   [disabled]="savingId() === c.id"
                 ></textarea>
               </label>
@@ -99,6 +100,7 @@
             rows="3"
             [ngModel]="draftBody()"
             (ngModelChange)="draftBody.set($event)"
+            (paste)="onDraftPaste($event)"
             name="draftBody"
             [disabled]="posting() || imageBusy()"
             required
@@ -117,6 +119,7 @@
             #draftImage
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
+            multiple
             hidden
             (change)="onDraftImageChange($event)"
           />
