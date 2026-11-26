@@ -72,14 +72,14 @@ export function withProjectQueryParam(
   return { ...queryParams, project: String(id) };
 }
 
-/** URL のパス（クエリとフラグメントを除く）。 */
+/** URL path without query and fragment. */
 export function urlPathOf(url: string): string {
   return url.split('#')[0].split('?')[0];
 }
 
 /**
- * 切り替えの完了時に `?project=` を書き換えてよいか。
- * 選んだ時点と同じパスにいるときだけ書き換える（完了前に別のページへ移ったら、移動先を書き換えない）。
+ * Whether to write ?project= after a switch completes: only while still on the path where it started
+ * (the switcher is destroyed with its page, so a finished switch must not rewrite another page's URL).
  */
 export function shouldSyncProjectQuery(startUrl: string, currentUrl: string): boolean {
   return urlPathOf(startUrl) === urlPathOf(currentUrl);
