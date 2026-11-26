@@ -54,6 +54,7 @@ const DEFAULT_LENGTH_ERROR = `説明は${DESCRIPTION_MAX_LEN}文字以内で入�
 })
 export class DescriptionBlocksEditor {
   private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly api = inject(Api);
   private readonly areas = viewChildren<ElementRef<HTMLTextAreaElement>>('blockArea');
@@ -89,7 +90,6 @@ export class DescriptionBlocksEditor {
   readonly insertMenuIndex = signal<number | null>(null);
   private uploadGuard = false;
   private deleteGuard = false;
-  private destroyed = false;
   /** Gap slots: 0..blocks.length inclusive. */
   readonly gapIndexes = computed(() => {
     const n = this.blocks().length;
@@ -115,9 +115,6 @@ export class DescriptionBlocksEditor {
   private composing = false;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => {
-      this.destroyed = true;
-    });
     effect(() => {
       const next = this.value();
       if (this.pendingEcho !== null && next === this.pendingEcho) {
@@ -423,7 +420,7 @@ export class DescriptionBlocksEditor {
     let stopError = '';
     // 待っている間に別のアイテムへ切り替わった・画面を離れたら、その本文にも文言にも触れない。
     const stillSameItem = () =>
-      !this.destroyed &&
+      !this.destroyRef.destroyed &&
       this.itemNumber() === number &&
       this.attachmentField() === field &&
       this.projectId() === projectId;
