@@ -165,6 +165,29 @@ describe('Board create requests', () => {
     expect(createItem).not.toHaveBeenCalled();
     expect(board.formError()).toBe(TODO_COLUMN_MISSING);
   });
+  it('renders the project switcher inside the page topbar', async () => {
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () =>
+              of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.querySelector('.page-topbar app-project-switcher')).toBeTruthy();
+  });
+
   it('omits the status select from the card modal', async () => {
     TestBed.configureTestingModule({
       imports: [Board],

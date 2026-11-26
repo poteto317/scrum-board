@@ -1,3 +1,4 @@
+import { ProjectSwitcher } from './project-switcher';
 import { Modal } from './modal';
 import {
   afterNextRender,
@@ -71,7 +72,7 @@ type RowSnapshot = { elements: HTMLElement[]; bounds: RowBounds[]; scrollOffset:
 
 @Component({
   selector: 'app-backlog',
-  imports: [ReactiveFormsModule, RouterLink, Modal, ListFilterBar, CopyFeedbackBanner, NgStyle],
+  imports: [ReactiveFormsModule, RouterLink, Modal, ListFilterBar, CopyFeedbackBanner, NgStyle, ProjectSwitcher],
   templateUrl: './backlog.html',
   styleUrl: './backlog.css',
 })

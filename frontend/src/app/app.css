@@ -42,11 +42,6 @@
 .brand-mark i:nth-child(3) {
   height: 10px;
 }
-.header-divider {
-  height: 21px;
-  width: 1px;
-  background: var(--line);
-}
 .app-body {
   display: flex;
   align-items: stretch;
@@ -160,89 +155,6 @@
 .sidebar-favorite-list a:hover {
   background: #eef1ea;
 }
-.project-switcher {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.project-select-trigger {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 14px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 8px;
-  text-align: left;
-  cursor: pointer;
-}
-.project-select-trigger:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-.project-select-list {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 20;
-  margin: 4px 0 0;
-  padding: 4px 0;
-  min-width: 100%;
-  max-width: min(280px, 80vw);
-  max-height: min(280px, 50vh);
-  overflow-y: auto;
-  list-style: none;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-}
-.project-select-list [role='option'] {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  font-size: 14px;
-  color: var(--ink);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.project-select-list .project-status-dots {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  flex-shrink: 0;
-}
-.project-select-list .project-option-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.project-select-list [role='option'].is-highlighted,
-.project-select-list [role='option']:hover {
-  background: #eef1ea;
-}
-.project-select-list [role='option'].is-active {
-  font-weight: 650;
-}
-.project-switcher .secondary {
-  padding: 4px 8px;
-  font-size: 12px;
-}
-.project-error {
-  color: var(--feedback-error-ink);
-  font-size: 12px;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .header-end {
   display: flex;
   align-items: center;
@@ -273,11 +185,7 @@
     padding: 0 20px;
     height: 59px;
   }
-  .header-divider,
   .header-end {
-    display: none;
-  }
-  .project-switcher .project-error {
     display: none;
   }
   .app-nav {

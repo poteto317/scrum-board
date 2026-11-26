@@ -172,6 +172,30 @@ function mockRowRects(root: HTMLElement, bounds: { top: number; height: number }
 }
 
 describe('Backlog reordering', () => {
+  it('renders the project switcher inside the page topbar', async () => {
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: makeCards() }),
+            board: () => of({ columns: makeColumns(), items: makeCards(), settings: { cardLayout: 'pack' } }),
+            reorderBacklog: () => of({ items: makeCards() }),
+            listCommandTemplates: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.querySelector('.page-topbar app-project-switcher')).toBeTruthy();
+  });
+
   it('does not show comment UI on backlog rows', async () => {
     const cards = makeCards();
     const columns = makeColumns();

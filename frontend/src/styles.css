@@ -185,6 +185,22 @@ select {
   margin-top: 28px;
 }
 /* Shared page chrome (was only in some component CSS → other pages looked unstyled). */
+.page-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.page-topbar > app-project-switcher {
+  margin-left: auto;
+}
+/* ProjectSession.error の文言（ProjectSwitcher と ActiveProjectName で共有）。 */
+.project-error {
+  color: var(--feedback-error-ink);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .breadcrumb {
   color: var(--muted);
   font-size: 12px;
