@@ -12,6 +12,7 @@ import {
   ProjectAIConversation,
   ProjectAIConversationView,
   ProjectAIMessage,
+  ProjectAIProposal,
 } from './api';
 import {
   AI_EXHAUSTED_MESSAGE,
@@ -1710,6 +1711,27 @@ describe('ProjectAiChat', () => {
       f.destroy();
       expect(remove.observed).toBe(false);
       expect(apply.observed).toBe(false);
+    });
+  });
+
+  describe('proposals', () => {
+    it('shows the proposals under the answer and keeps their new state', async () => {
+      const proposal: ProjectAIProposal = {
+        id: 31, messageId: 2, kind: 'item_create', state: 'pending', title: '作る', columnId: 1, columnName: 'Todo',
+        description: '', createdAt: '', updatedAt: '',
+      };
+      const withProposal: ProjectAIChatView = { conversation: c5, messages: [m1, { ...m2, proposals: [proposal] }] };
+      const { f, c } = setup({ getLatestProjectAIChat: vi.fn(() => of(withProposal)) });
+      f.detectChanges();
+      const card = f.nativeElement.querySelector('app-project-ai-proposal-card');
+      expect(card?.textContent).toContain('アイテムの作成（Todo）: 作る');
+      let changedItems = 0;
+      c.itemsChanged.subscribe(() => changedItems++);
+      c.onProposalChanged({ ...proposal, state: 'dismissed' });
+      f.detectChanges();
+      expect(c.messages()[1].proposals![0].state).toBe('dismissed');
+      expect(text(f)).toContain('破棄しました。');
+      expect(changedItems).toBe(0);
     });
   });
 });

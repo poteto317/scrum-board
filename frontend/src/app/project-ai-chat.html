@@ -113,6 +113,14 @@
               <li class="ai-chat-msg" [attr.data-role]="msg.role">
                 <span class="ai-chat-role">{{ msg.role === 'user' ? 'あなた' : 'AI' }}</span>
                 <pre class="ai-chat-body">{{ msg.body }}</pre>
+                @for (proposal of msg.proposals ?? []; track proposal.id) {
+                  <app-project-ai-proposal-card
+                    [proposal]="proposal"
+                    [projectId]="projectId()"
+                    (changed)="onProposalChanged($event)"
+                    (itemsChanged)="itemsChanged.emit()"
+                  />
+                }
                 @if (msg.role === 'assistant' && canApply()) {
                   <div class="ai-chat-actions">
                     <button
