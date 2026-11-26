@@ -3,15 +3,17 @@
 import type { ImageUploadOutcome } from './upload-images-in-order';
 
 /** 添付できる画像の種類（サーバーの許可リストと同じ）。 */
-export const ATTACHMENT_IMAGE_TYPES: ReadonlySet<string> = new Set([
+const ATTACHMENT_IMAGE_TYPES: ReadonlySet<string> = new Set([
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
 ]);
+/** ファイル選択の `accept` に渡す並び。 */
+export const ATTACHMENT_IMAGE_ACCEPT = [...ATTACHMENT_IMAGE_TYPES].join(',');
 export const ATTACHMENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 /** 1 回の貼り付け・ドロップ・選択で追加できる画像の数。 */
-export const ATTACHMENT_IMAGE_BATCH_MAX = 10;
+const ATTACHMENT_IMAGE_BATCH_MAX = 10;
 
 export const ATTACHMENT_IMAGE_HINT = 'JPEG / PNG / GIF / WebP（5MiB以下）を選んでください。';
 export const ATTACHMENT_IMAGE_BATCH_HINT = `一度に追加できる画像は${ATTACHMENT_IMAGE_BATCH_MAX}件までです。`;
