@@ -647,6 +647,31 @@ describe('ProjectAiChat', () => {
       expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '続き', 4, 3);
     });
 
+    it('moves focus to the input when the picked row disappears with the list (dock)', async () => {
+      const { f, c } = setup({}, { layout: 'dock' });
+      c.toggleHistory();
+      f.detectChanges();
+      rows(f)[1].focus();
+      rows(f)[1].click();
+      f.detectChanges();
+      await f.whenStable();
+      // 一覧ごと消えるので、フォーカスを body に落とさない
+      expect(c.historyOpen()).toBe(false);
+      expect(document.activeElement).toBe(input(f));
+    });
+
+    it('moves focus to the input when a deleted row disappears', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const { f, c } = setup({}, { layout: 'page', wide: true });
+      const del = f.nativeElement.querySelectorAll('.ai-chat-conversation-delete')[1] as HTMLButtonElement;
+      del.focus();
+      del.click();
+      f.detectChanges();
+      await f.whenStable();
+      expect(c.conversations().length).toBe(1);
+      expect(document.activeElement).toBe(input(f));
+    });
+
     it('cannot send while the conversation is being switched', () => {
       const pending = new Subject<ProjectAIConversationView>();
       const { f, c, api } = setup({ getProjectAIConversation: vi.fn(() => pending) });

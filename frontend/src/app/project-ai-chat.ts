@@ -2,6 +2,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
   OnChanges,
   SimpleChanges,
   computed,
@@ -12,6 +13,7 @@ import {
   signal,
   untracked,
   viewChild,
+  afterNextRender,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -87,6 +89,7 @@ export class ProjectAiChat implements OnChanges {
   readonly sendingChange = output<boolean>();
 
   private readonly api = inject(Api);
+  private readonly injector = inject(Injector);
   private readonly auth = inject(AuthSession);
   private readonly inputRef = viewChild<ElementRef<HTMLTextAreaElement>>('messageInput');
   private generation = 0;
@@ -341,6 +344,21 @@ export class ProjectAiChat implements OnChanges {
     });
   }
 
+  /**
+   * 押した行が一覧ごと消えた・削除で消えたとき、フォーカスを body に落とさずに入力欄へ移す。
+   * ほかの場所へ移っていたら、奪わない。
+   */
+  private focusInputIfLost() {
+    afterNextRender(
+      () => {
+        const active = document.activeElement;
+        if (active && active !== document.body && active.isConnected) return;
+        this.inputRef()?.nativeElement.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
   toggleHistory() {
     this.historyOpen.update((open) => !open);
   }
@@ -359,6 +377,7 @@ export class ProjectAiChat implements OnChanges {
     if (this.actionsLocked()) return;
     if (sameConversation(conversationId, this.conversationId())) {
       this.historyOpen.set(false);
+      this.focusInputIfLost();
       return;
     }
     this.switchRequest?.unsubscribe();
@@ -374,6 +393,7 @@ export class ProjectAiChat implements OnChanges {
           this.switching.set(false);
           this.historyOpen.set(false);
           this.showConversation(view.conversation.id);
+          this.focusInputIfLost();
         },
         error: (err) => {
           if (!this.stillCurrent(scope)) return;
@@ -469,6 +489,7 @@ export class ProjectAiChat implements OnChanges {
     const deleted = () => {
       this.deleting.set(false);
       this.patchConversations((list) => removeConversation(list, conversationId));
+      this.focusInputIfLost();
       if (!sameConversation(conversationId, this.conversationId())) return;
       this.messages.set([]);
       this.showConversation(null);
