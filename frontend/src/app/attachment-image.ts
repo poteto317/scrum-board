@@ -1,5 +1,7 @@
 /** 添付画像の規則（種類・サイズ・件数）と、利用者に出す文言。貼り付け・ドロップ・ファイル選択で共有する。 */
 
+import type { ImageUploadOutcome } from './upload-images-in-order';
+
 /** 添付できる画像の種類（サーバーの許可リストと同じ）。 */
 export const ATTACHMENT_IMAGE_TYPES: ReadonlySet<string> = new Set([
   'image/jpeg',
@@ -71,7 +73,7 @@ export function imageUploadFailureMessage(added: number, total: number, error?: 
  * 失敗 → 途中で止めた理由（上限など）→ 外したファイルの案内、の順に選ぶ。
  */
 export function imageUploadDoneMessage(
-  outcome: { added: number; total: number; failed: boolean; error?: unknown },
+  outcome: ImageUploadOutcome,
   plan: ImageUploadPlan,
   stopReason = '',
 ): string {
