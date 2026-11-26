@@ -27,6 +27,8 @@ func projectChatTools() []ChatTool {
 				"total が items の件数より多いときは offset で続きを取れる。truncated が true のときは、全件は見ていない。本文やコメントを読むには get_item を使う。",
 			InputSchema: map[string]any{
 				"type": "object",
+				// Unknown fields are an input error (decodeToolInput); say so in the schema too.
+				"additionalProperties": false,
 				"properties": map[string]any{
 					"query":    str("検索語。空白区切りはすべて含むもの（AND）。タイトル・説明・ソリューション・コメントの部分一致。#12 のような語は番号にも一致する。省略すると絞り込まない。"),
 					"status":   str("列の名前（例: Todo、Doing、Done）で絞り込む。"),
@@ -48,7 +50,8 @@ func projectChatTools() []ChatTool {
 			Name:        toolGetItem,
 			Description: "このプロジェクトのアイテム 1 件を番号で開き、タイトル・説明・ソリューション・状態・担当・期限・コメント（新しい 30 件）を返す。",
 			InputSchema: map[string]any{
-				"type": "object",
+				"type":                 "object",
+				"additionalProperties": false,
 				"properties": map[string]any{
 					"number": map[string]any{"type": "integer", "description": "アイテムの番号（#12 なら 12）。"},
 				},
