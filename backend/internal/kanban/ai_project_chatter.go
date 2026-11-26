@@ -35,6 +35,10 @@ type ToolRunner func(ctx context.Context, call ToolCall) (result string, err err
 // The handler also passes its own estimateInput when it records the usage
 // (recordProjectChatUsage), but that is only the fallback for an implementation that returns
 // a failure with zero tokens; it does not replace the estimate here.
+//
+// An implementation must also run at most MaxToolCallsPerResponse tool calls of one response
+// and answer the rest with ToolResultTooManyCalls(): the tool result budget
+// (toolResultBudget) reserves room for exactly that many refusals per round.
 type ProjectChatter interface {
 	ChatWithTools(ctx context.Context, system string, messages []ChatTurn, tools []ChatTool, run ToolRunner, maxModelCalls int) (text string, inTok, outTok int64, err error)
 }
