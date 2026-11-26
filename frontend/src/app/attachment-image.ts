@@ -28,7 +28,7 @@ export const ATTACHMENT_IMAGE_BATCH_HINT = `一度に追加できる添付は${A
 export const ATTACHMENT_IMAGE_BUSY_HINT = '添付の処理中です。終わってから追加してください。';
 
 export function isImageAttachmentType(contentType: string): boolean {
-  return ATTACHMENT_IMAGE_TYPES.has(contentType);
+  return ATTACHMENT_IMAGE_TYPES.has(contentType.trim().toLowerCase());
 }
 
 /** アップロード結果の Content-Type から本文記法の種別を決める。 */

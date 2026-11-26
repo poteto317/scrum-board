@@ -32,7 +32,7 @@ var (
 	ErrAttachmentQuota   = errors.New("attachment project quota")
 )
 
-// Attachment is the JSON meta for an uploaded image.
+// Attachment is the JSON meta for an uploaded attachment (image or PDF).
 type Attachment struct {
 	ID           int64     `json:"id"`
 	ItemID       int64     `json:"itemId"`
