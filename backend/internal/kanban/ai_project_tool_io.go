@@ -41,7 +41,15 @@ func decodeToolInput(raw json.RawMessage, v any) bool {
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
 		return true
 	}
-	return json.Unmarshal(trimmed, v) == nil
+	// Unknown fields are refused: a misspelled filter (due_to, assignee_name) silently
+	// ignored would search without it and give a wrong answer. The model gets the fixed
+	// input error and can call again.
+	dec := json.NewDecoder(bytes.NewReader(trimmed))
+	dec.DisallowUnknownFields()
+	if dec.Decode(v) != nil {
+		return false
+	}
+	return !dec.More()
 }
 
 // wholeNumber reads a JSON number that must be an integer (10 and 10.0 are; 1.5 is not).
