@@ -660,3 +660,21 @@ func TestProjectChatToolDefinitions(t *testing.T) {
 		t.Fatalf("get_item required=%v", required)
 	}
 }
+
+func TestToolInputWithUnknownFieldsIsRejected(t *testing.T) {
+	// 項目名の間違い（due_to など）を黙って無視すると、絞り込みなしの検索になる。
+	for _, raw := range []string{`{"due_to":"2026-12-01"}`, `{"query":"a","assignee_name":"x"}`} {
+		if _, problem := parseSearchItemsInput(json.RawMessage(raw), nil); problem == "" {
+			t.Fatalf("search_items must reject unknown fields: %s", raw)
+		}
+	}
+	var in struct {
+		Number *float64 `json:"number"`
+	}
+	if decodeToolInput(json.RawMessage(`{"number":1,"id":2}`), &in) {
+		t.Fatal("unknown fields must be rejected")
+	}
+	if !decodeToolInput(json.RawMessage(`{"number":1}`), &in) || !decodeToolInput(nil, &in) {
+		t.Fatal("known fields and empty input stay valid")
+	}
+}
