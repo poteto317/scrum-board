@@ -22,7 +22,7 @@
         (mousedown)="$event.preventDefault()"
         (click)="pickImage()"
       >
-        画像
+        添付
       </button>
       <input
         #imageFile
@@ -132,8 +132,8 @@
     (cancel)="$event.preventDefault(); !imageBusy() && cancelDeleteImage()"
   >
     <form method="dialog" class="modal" (submit)="$event.preventDefault()">
-      <h2 id="attachment-delete-title">画像を削除しますか？</h2>
-      <p>本文からもこの画像の参照が取り除かれます。</p>
+      <h2 id="attachment-delete-title">添付を削除しますか？</h2>
+      <p>本文からもこの添付の参照が取り除かれます。</p>
       <div class="form-actions">
         <button type="button" class="secondary" [disabled]="imageBusy()" (click)="cancelDeleteImage()">
           キャンセル

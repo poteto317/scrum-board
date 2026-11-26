@@ -745,7 +745,7 @@ describe('ItemComments', () => {
       f.componentInstance.uploadDraftImages([png('a.png')]);
       f.componentInstance.uploadDraftImages([png('b.png')]);
       expect(upload).toHaveBeenCalledTimes(1);
-      expect(f.componentInstance.actionError()).toContain('画像の処理中');
+      expect(f.componentInstance.actionError()).toContain('添付の処理中');
     });
 
     it('stops at the comment limit and keeps what fit', () => {
@@ -763,14 +763,38 @@ describe('ItemComments', () => {
       expect(f.componentInstance.imageBusy()).toBe(false);
     });
 
-    it('rejects pasted files that are not allowed images', () => {
+    it('rejects pasted files that are not allowed', () => {
       const f = setup({ listComments: vi.fn(() => of([])) });
       const api = TestBed.inject(Api) as unknown as { uploadAttachment: ReturnType<typeof vi.fn> };
-      const ev = pasteEvent(area('', 0, 0), { files: [png('a.pdf', 'application/pdf')] });
+      const ev = pasteEvent(area('', 0, 0), { files: [png('a.html', 'text/html')] });
       f.componentInstance.onDraftPaste(ev);
       expect(ev.defaultPrevented).toBe(true);
       expect(api.uploadAttachment).not.toHaveBeenCalled();
       expect(f.componentInstance.actionError()).toContain('JPEG');
+    });
+
+    it('pastes a PDF into file markup on the draft', () => {
+      const upload = vi.fn(() =>
+        of({ id: 9, originalName: 'doc.pdf', contentType: 'application/pdf' }),
+      );
+      const f = setup({ listComments: vi.fn(() => of([])), uploadAttachment: upload });
+      const ev = pasteEvent(area('hello', 5, 5), {
+        files: [png('doc.pdf', 'application/pdf')],
+      });
+      f.componentInstance.onDraftPaste(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(f.componentInstance.draftBody()).toContain(
+        '[doc.pdf](/api/items/by-number/3/attachments/9/content)',
+      );
+    });
+
+    it('does not change the draft when a PDF upload fails', () => {
+      const upload = vi.fn(() => throwError(() => new Error('fail')));
+      const f = setup({ listComments: vi.fn(() => of([])), uploadAttachment: upload });
+      f.componentInstance.draftBody.set('hello');
+      f.componentInstance.uploadDraftImages([png('doc.pdf', 'application/pdf')]);
+      expect(f.componentInstance.draftBody()).toBe('hello');
+      expect(f.componentInstance.actionError()).toContain('失敗');
     });
 
     it('turns the selection of the draft into a link when a URL is pasted', () => {

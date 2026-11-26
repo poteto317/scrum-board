@@ -609,11 +609,11 @@ describe('DescriptionBlocksEditor', () => {
       area.dispatchEvent(ev);
       return ev;
     };
-    const attachment = (id: number, originalName: string) => ({
+    const attachment = (id: number, originalName: string, contentType = 'image/png') => ({
       id,
       itemId: 1,
       field: 'description',
-      contentType: 'image/png',
+      contentType,
       byteSize: 3,
       originalName,
       createdAt: '',
@@ -681,18 +681,47 @@ describe('DescriptionBlocksEditor', () => {
       expect(editor.imageBusy()).toBe(false);
     });
 
-    it('skips files that are not allowed images and says so', () => {
+    it('skips files that are not allowed and says so', () => {
       apiStub.uploadAttachment.mockReturnValueOnce(of(attachment(1, 'a.png')));
       const { editor } = mountWithImages('');
-      editor.uploadImages([png('a.pdf', 'application/pdf'), png('a.png')]);
+      editor.uploadImages([png('a.html', 'text/html'), png('a.png')]);
       expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
       expect(editor.blocks()[0]).toContain('/attachments/1/content');
       expect(editor.imageError()).toContain('JPEG');
     });
 
-    it('uploads nothing when no pasted file is an allowed image', () => {
+    it('inserts file markup for a successful PDF upload', () => {
+      apiStub.uploadAttachment.mockReturnValueOnce(
+        of(attachment(9, 'doc.pdf', 'application/pdf')),
+      );
+      const { editor } = mountWithImages('');
+      editor.uploadImages([png('doc.pdf', 'application/pdf')]);
+      expect(editor.blocks()[0]).toBe(
+        '[doc.pdf](/api/items/by-number/3/attachments/9/content)',
+      );
+    });
+
+    it('pastes a PDF into file markup', () => {
+      apiStub.uploadAttachment.mockReturnValueOnce(
+        of(attachment(9, 'doc.pdf', 'application/pdf')),
+      );
       const { editor, area } = mountWithImages('hello');
-      const ev = paste(area, clipboard({ files: [png('a.pdf', 'application/pdf')] }));
+      const ev = paste(area, clipboard({ files: [png('doc.pdf', 'application/pdf')] }));
+      expect(ev.defaultPrevented).toBe(true);
+      expect(editor.blocks()[0]).toContain('[doc.pdf](/api/items/by-number/3/attachments/9/content)');
+    });
+
+    it('does not change the body when an allowed PDF upload fails', () => {
+      apiStub.uploadAttachment.mockReturnValueOnce(throwError(() => new Error('fail')));
+      const { editor } = mountWithImages('hello');
+      editor.uploadImages([png('doc.pdf', 'application/pdf')]);
+      expect(editor.blocks()).toEqual(['hello']);
+      expect(editor.imageError()).toContain('失敗');
+    });
+
+    it('uploads nothing when no pasted file is allowed', () => {
+      const { editor, area } = mountWithImages('hello');
+      const ev = paste(area, clipboard({ files: [png('a.html', 'text/html')] }));
       expect(ev.defaultPrevented).toBe(true);
       expect(apiStub.uploadAttachment).not.toHaveBeenCalled();
       expect(editor.imageError()).toContain('JPEG');
@@ -800,7 +829,7 @@ describe('DescriptionBlocksEditor', () => {
       const ev = paste(area, clipboard({ files: [png('b.png')] }));
       expect(ev.defaultPrevented).toBe(true);
       expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
-      expect(editor.imageError()).toContain('画像の処理中');
+      expect(editor.imageError()).toContain('添付の処理中');
       pending.next(attachment(1, 'a.png'));
       pending.complete();
       expect(editor.imageError()).toBe('');

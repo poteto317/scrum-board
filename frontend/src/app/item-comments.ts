@@ -20,7 +20,11 @@ import {
   dataTransferHasAttachmentMime,
   decodeAttachmentDragPayload,
 } from './attachment-dnd';
-import { buildAttachmentMarkup, insertMarkupAt } from './description-link';
+import {
+  buildAttachmentMarkup,
+  buildAttachmentMarkupForKind,
+  insertMarkupAt,
+} from './description-link';
 import { DescriptionRichText } from './description-rich-text';
 import { ItemComment } from './models';
 import {
@@ -28,6 +32,7 @@ import {
   ATTACHMENT_IMAGE_BUSY_HINT,
   imageUploadDoneMessage,
   imageUploadPlanNotice,
+  attachmentMarkupKind,
   planImageUpload,
 } from './attachment-image';
 import {
@@ -401,7 +406,12 @@ export class ItemComments implements OnChanges {
         // 待っている間にアイテムが切り替わった・再読み込みされたら、下書きには入れない。
         if (!this.stillCurrent(generation, number, projectId)) return 'stop';
         const body = this.draftBody();
-        const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
+        const markup = buildAttachmentMarkupForKind(
+          attachmentMarkupKind(att.contentType || file.type),
+          number,
+          att.id,
+          att.originalName || file.name,
+        );
         const inserted = insertMarkupAt(
           body,
           caret?.start ?? body.length,
@@ -461,7 +471,7 @@ export class ItemComments implements OnChanges {
         this.deleteGuard = false;
         this.imageBusy.set(false);
         this.confirmAttachmentId.set(null);
-        this.actionError.set('画像の削除に失敗しました。');
+        this.actionError.set('添付の削除に失敗しました。');
       },
     });
   }

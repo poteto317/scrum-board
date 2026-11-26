@@ -113,7 +113,7 @@
             [disabled]="posting() || imageBusy()"
             (click)="pickDraftImage()"
           >
-            画像
+            添付
           </button>
           <input
             #draftImage
@@ -144,8 +144,8 @@
     (cancel)="$event.preventDefault(); !imageBusy() && cancelAttachmentDelete()"
   >
     <form method="dialog" class="modal" (submit)="$event.preventDefault()">
-      <h2 id="comment-attachment-delete-title">画像を削除しますか？</h2>
-      <p>コメント本文からもこの画像の参照が取り除かれます。</p>
+      <h2 id="comment-attachment-delete-title">添付を削除しますか？</h2>
+      <p>コメント本文からもこの添付の参照が取り除かれます。</p>
       <div class="form-actions">
         <button type="button" class="secondary" [disabled]="imageBusy()" (click)="cancelAttachmentDelete()">
           キャンセル

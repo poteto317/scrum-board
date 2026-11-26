@@ -26,7 +26,7 @@ import {
   splitDescriptionBlock,
 } from './description-blocks';
 import {
-  buildAttachmentMarkup,
+  buildAttachmentMarkupForKind,
   insertMarkupAt,
   parseDescriptionLinks,
 } from './description-link';
@@ -37,6 +37,7 @@ import {
   ATTACHMENT_IMAGE_BUSY_HINT,
   imageUploadDoneMessage,
   imageUploadPlanNotice,
+  attachmentMarkupKind,
   planImageUpload,
 } from './attachment-image';
 import {
@@ -434,7 +435,12 @@ export class DescriptionBlocksEditor {
       onUploaded: (att, file) => {
         if (!stillSameItem()) return 'stop';
         this.reloadAttachments();
-        const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
+        const markup = buildAttachmentMarkupForKind(
+          attachmentMarkupKind(att.contentType || file.type),
+          number,
+          att.id,
+          att.originalName || file.name,
+        );
         const inserted = this.insertIntoBlock(index, caret.start, caret.end, markup);
         if (!inserted) {
           stopError = this.lengthErrorMessage();
@@ -515,7 +521,7 @@ export class DescriptionBlocksEditor {
       error: () => {
         this.deleteGuard = false;
         this.imageBusy.set(false);
-        this.imageError.set('画像の削除に失敗しました。');
+        this.imageError.set('添付の削除に失敗しました。');
         this.confirmDeleteId.set(null);
       },
     });
