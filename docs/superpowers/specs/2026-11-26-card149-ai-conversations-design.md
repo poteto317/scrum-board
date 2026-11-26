@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS project_ai_conversations (
   - **送信中は「全画面」を押せなくする**（`AiChatFab` が `sendingChange` を見る）。送信中に移ると、ドックが破棄されて応答が捨てられ、専用画面に回答の無い会話や別の会話が出るため。`AiChatFab` が持つ「送信中」と「表示中の会話」は、チャットの部品が無くなったとき（パネルを閉じたときだけでなく、開いたまま入口が消えたとき）と、プロジェクトが変わったときに捨てる。
   - `initialConversationId` が `'new'` なら、**最初の読み込みだけ**、会話は読まずに空の新しい会話にする（一覧は読む）。正の整数なら、**最初の読み込みだけ**、`GET …/ai-chat` の代わりに `GET …/ai-conversations/{cid}` を読む。404 なら `GET …/ai-chat`（いちばん新しい会話）に落ちる。それ以外の失敗（500、通信の失敗）は、既存の読み込みの失敗（`loadError` と「再読み込み」）と同じ扱い。不正な値（数値でない、0 以下）は、無いものとして扱う。
   - `projectId`・ユーザーが変わった後の読み直しでは、`initialConversationId` を使わない（いちばん新しい会話を読む）。
-  - 専用画面は、`conversationChange` を受けたら、URL の `conversation` を書き換える（`replaceUrl`、`queryParamsHandling: 'merge'` で `project` を保つ。新しい会話では `conversation=new`）。再読み込みしても、同じ会話が開く。
+  - 専用画面は、`conversationChange` を受けたら、進行中の別の画面への移動が無いときだけ（`router.currentNavigation()` が null のとき）、URL の `conversation` を書き換える（書き換えは移動の一種で、進行中の移動を取り消してしまうため。`replaceUrl`、`queryParamsHandling: 'merge'` で `project` を保つ。新しい会話では `conversation=new`）。再読み込みしても、同じ会話が開く。
 - `Api`: `listProjectAIConversations(projectId)`、`getProjectAIConversation(projectId, conversationId)`、`deleteProjectAIConversation(projectId, conversationId)` を足す。`getLatestProjectAIChat` は `{conversation, messages}` を返す形に、`postProjectAIChat` は `conversationId` を受け取り `conversation` を返す形にする。`clearProjectAIChat` は、画面から使わなくなるので消す。
 - 判定（一覧の更新、タイトルと日時の表示、押せるかどうか）は、純粋な関数（`project-ai-chat-rules.ts` か新しい `project-ai-conversations.ts`）に置き、部品はイベントと API の呼び出しだけを持つ。
 
@@ -164,6 +164,9 @@ CREATE TABLE IF NOT EXISTS project_ai_conversations (
 - **画面: いちばん新しい会話を読む `Api` の関数は、`getLatestProjectAIChat` という名前にする（#146 のときの名前は `listProjectAIChat`）。** 返すのは一覧ではなく、いちばん新しい会話 1 件とそのやりとりで、`listProjectAIConversations`（会話の一覧）と紛らわしいため。経路（`GET …/ai-chat`）と返す形は、上の「画面」の節のとおり。
 - **画面: 一覧の読み込み・世代・手元の書き換えは `ProjectAiConversationList` が持ち、スコープ（projectId・ユーザー）の検査は呼び出す側が渡す。** `ProjectAiChat` は、応答を反映してよいか（読み込みを始めたときと同じプロジェクト・ユーザーか）を判定する関数を渡すだけで、一覧の状態は持たない。
 - **`DELETE …/ai-chat` のリポジトリの関数は、`ClearProjectAIConversations` という名前にする（#146 のときの名前は `ClearProjectAIMessages`）。** 消すのはメッセージだけでなく、会話の全部であるため。
+
+- **画面: 押した行が消えたら、フォーカスを入力欄へ移す。** ドックと幅の狭い専用画面では、会話を選ぶと一覧ごと DOM から消え、一覧の「削除」では押した行が消える。描画の後で、フォーカスの行き先が無くなっていたら（`body`、または DOM から外れた要素）、入力欄へ移す。ほかの場所へ移っていたら奪わない（`focusInputIfLost`）。
+- **画面: 専用画面は、別の画面へ移っている途中には URL を書き換えない。** 会話の応答が、チャンクの読み込み中の移動を取り消して、利用者を `/ai-chat` に残すのを防ぐ。
 
 ## 受け入れ条件
 
