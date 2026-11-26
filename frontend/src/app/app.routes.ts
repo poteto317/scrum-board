@@ -57,6 +57,11 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'ai-chat',
+    loadComponent: () => import('./ai-chat-page').then((m) => m.AiChatPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'items/:number/solution',
     loadComponent: () => import('./item-solution').then((m) => m.ItemSolution),
     canActivate: [authGuard],

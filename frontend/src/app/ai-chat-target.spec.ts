@@ -24,6 +24,7 @@ describe('ai-chat-target', () => {
     expect(isAiChatRoute('/backlog')).toBe(true);
     expect(isAiChatRoute('/items/12')).toBe(true);
     expect(isAiChatRoute('/items/12/solution')).toBe(false);
+    expect(isAiChatRoute('/ai-chat')).toBe(false);
     expect(isAiChatRoute('/settings')).toBe(false);
     expect(isAiChatRoute('/sprints')).toBe(false);
   });

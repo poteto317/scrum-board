@@ -92,7 +92,7 @@
   @if (auth.loadError()) {
     <div class="state-panel" role="alert">{{ auth.loadError() }}</div>
   }
-  <div class="app-body">
+  <div class="app-body" [class.ai-chat-dock-open]="dockOpen()">
     <aside
       id="app-sidebar"
       class="app-sidebar"

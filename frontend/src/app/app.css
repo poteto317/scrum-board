@@ -52,6 +52,9 @@
   align-items: stretch;
   min-height: calc(100vh - 67px);
 }
+.app-body.ai-chat-dock-open .app-main {
+  padding-right: var(--ai-chat-dock-width);
+}
 .app-sidebar {
   width: 220px;
   flex-shrink: 0;
