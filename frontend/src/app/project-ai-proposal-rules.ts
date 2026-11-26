@@ -122,9 +122,9 @@ export function checkBlockReason(p: ProjectAIProposal, check: ItemCheck): string
 /** 作成の結果の文言のうち、番号の後ろ（画面は番号をリンクにする） */
 export const createdSuffix = ' を作成しました。';
 
-/** 作成の結果の文言 */
-export function createdMessage(number: number, recorded: boolean): string {
-  return recorded ? `#${number}${createdSuffix}` : `#${number} を作成しました（結果の記録に失敗しました）。`;
+/** 作成はできたが、結果（番号）の記録に失敗したときの文言 */
+export function createdUnrecordedMessage(number: number): string {
+  return `#${number} を作成しました（結果の記録に失敗しました）。`;
 }
 
 /** messages の中の同じ ID の提案を置き換えた新しい配列（無ければそのまま） */

@@ -10,7 +10,7 @@ import { diffLines } from './project-ai-proposal-diff';
 import {
   applyLabel,
   checkBlockReason,
-  createdMessage,
+  createdUnrecordedMessage,
   createdSuffix,
   diffBase,
   dismissLabel,
@@ -199,7 +199,7 @@ export class ProjectAiProposalCard {
         this.changed.emit(recorded);
       } catch {
         this.ensureCurrent(scope);
-        this.status.set(createdMessage(created.number, false));
+        this.status.set(createdUnrecordedMessage(created.number));
       }
     }
   }
