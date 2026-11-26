@@ -1,16 +1,21 @@
 .ai-chat-fab-root {
   position: fixed;
-  right: 1.25rem;
-  bottom: 1.25rem;
-  z-index: 12;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  z-index: 13;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.5rem;
-  max-width: min(24rem, calc(100vw - 2rem));
+  pointer-events: none;
 }
 
 .ai-chat-fab-entry {
+  pointer-events: auto;
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 13;
   border-radius: 999px;
   padding: 0.65rem 1.1rem;
   border: 1px solid var(--line);
@@ -21,13 +26,20 @@
 }
 
 .ai-chat-fab-panel {
-  width: min(24rem, calc(100vw - 2rem));
-  max-height: min(70vh, 36rem);
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  pointer-events: auto;
+  position: fixed;
+  top: var(--app-header-height);
+  right: 0;
+  bottom: 0;
+  width: var(--ai-chat-dock-width);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
   background: var(--surface, #fff);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+  box-shadow: -4px 0 16px rgb(0 0 0 / 8%);
   padding: 0.75rem;
 }
 
@@ -37,11 +49,33 @@
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+  flex-shrink: 0;
 }
 
+.ai-chat-fab-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ai-chat-fab-expand,
 .ai-chat-fab-close {
   border: none;
   background: transparent;
   cursor: pointer;
   color: var(--muted);
+  padding: 0.25rem 0.4rem;
+}
+
+.ai-chat-fab-expand:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-chat-fab-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
