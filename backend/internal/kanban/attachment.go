@@ -44,26 +44,54 @@ type Attachment struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
-var allowedAttachmentMIME = map[string]struct{}{
+// imageAttachmentMIME is the set used for inline display and Content-Disposition omission.
+var imageAttachmentMIME = map[string]struct{}{
 	"image/jpeg": {},
 	"image/png":  {},
 	"image/gif":  {},
 	"image/webp": {},
 }
 
-func sanitizeAttachmentAlt(name string) string {
+// allowedAttachmentMIME is every type the upload API accepts (images + PDF).
+var allowedAttachmentMIME = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(imageAttachmentMIME)+1)
+	for k, v := range imageAttachmentMIME {
+		m[k] = v
+	}
+	m["application/pdf"] = struct{}{}
+	return m
+}()
+
+func isImageAttachmentMIME(contentType string) bool {
+	_, ok := imageAttachmentMIME[strings.TrimSpace(strings.ToLower(contentType))]
+	return ok
+}
+
+// scrubAttachmentDisplayName removes characters that break markdown labels or HTTP headers.
+func scrubAttachmentDisplayName(name string) string {
 	name = strings.ReplaceAll(name, "]", "")
 	name = strings.ReplaceAll(name, "\n", "")
 	name = strings.ReplaceAll(name, "\r", "")
-	name = strings.TrimSpace(name)
+	return strings.TrimSpace(name)
+}
+
+func sanitizeAttachmentName(name, fallback string) string {
+	name = scrubAttachmentDisplayName(name)
 	if name == "" {
-		return "image"
+		if fallback == "" {
+			fallback = "file"
+		}
+		return fallback
 	}
 	if utf8.RuneCountInString(name) > attachmentMaxName {
 		runes := []rune(name)
 		name = string(runes[:attachmentMaxName])
 	}
 	return name
+}
+
+func sanitizeAttachmentAlt(name string) string {
+	return sanitizeAttachmentName(name, "image")
 }
 
 func attachmentObjectKey(itemID, attachmentID int64) string {
@@ -88,12 +116,16 @@ func stripAttachmentMarkup(text string, itemNumber, attachmentID int64) string {
 			b.WriteString(rest)
 			break
 		}
-		// Walk back to '![' for this image markdown.
-		start := strings.LastIndex(rest[:idx], "![")
-		if start < 0 || strings.Contains(rest[start:idx], "\n") {
+		// Walk back to '[' of ![alt](path) or [label](path); skip if a newline sits in the label.
+		bracket := strings.LastIndex(rest[:idx], "[")
+		if bracket < 0 || strings.Contains(rest[bracket:idx], "\n") {
 			b.WriteString(rest[:idx+len(needle)])
 			rest = rest[idx+len(needle):]
 			continue
+		}
+		start := bracket
+		if bracket > 0 && rest[bracket-1] == '!' {
+			start = bracket - 1
 		}
 		b.WriteString(rest[:start])
 		rest = rest[idx+len(needle):]
@@ -101,7 +133,10 @@ func stripAttachmentMarkup(text string, itemNumber, attachmentID int64) string {
 	return b.String()
 }
 
-func detectImageMIME(header []byte) string {
+func detectAttachmentMIME(header []byte) string {
+	if len(header) >= 4 && bytes.Equal(header[:4], []byte("%PDF")) {
+		return "application/pdf"
+	}
 	if len(header) >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff {
 		return "image/jpeg"
 	}
@@ -122,7 +157,7 @@ func validateAttachmentMIME(declared string, magic []byte) error {
 	if _, ok := allowedAttachmentMIME[declared]; !ok {
 		return ErrAttachmentInvalid
 	}
-	got := detectImageMIME(magic)
+	got := detectAttachmentMIME(magic)
 	if got == "" || got != declared {
 		return ErrAttachmentInvalid
 	}
@@ -157,7 +192,6 @@ func (r MySQLRepository) CreateAttachment(
 	if err != nil {
 		return Attachment{}, err
 	}
-	name = sanitizeAttachmentAlt(name)
 	contentType = strings.TrimSpace(strings.ToLower(contentType))
 
 	// Ignore client-declared size; enforce max by reading at most max+1 bytes.
@@ -172,6 +206,11 @@ func (r MySQLRepository) CreateAttachment(
 	if err := validateAttachmentMIME(contentType, data); err != nil {
 		return Attachment{}, err
 	}
+	fallback := "file"
+	if isImageAttachmentMIME(contentType) {
+		fallback = "image"
+	}
+	name = sanitizeAttachmentName(name, fallback)
 
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -488,5 +527,9 @@ func AttachmentContentPath(itemNumber, attachmentID int64) string {
 }
 
 func BuildAttachmentMarkup(itemNumber, attachmentID int64, alt string) string {
-	return "![" + sanitizeAttachmentAlt(alt) + "](" + AttachmentContentPath(itemNumber, attachmentID) + ")"
+	return "![" + sanitizeAttachmentName(alt, "image") + "](" + AttachmentContentPath(itemNumber, attachmentID) + ")"
+}
+
+func BuildFileAttachmentMarkup(itemNumber, attachmentID int64, name string) string {
+	return "[" + sanitizeAttachmentName(name, "file") + "](" + AttachmentContentPath(itemNumber, attachmentID) + ")"
 }

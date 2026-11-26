@@ -49,7 +49,7 @@ func (h handler) createAttachmentBody(w http.ResponseWriter, r *http.Request, ca
 	if err != nil {
 		var maxBytes *http.MaxBytesError
 		if errors.As(err, &maxBytes) {
-			invalid(w, "画像は5MiB以下にしてください。")
+			invalid(w, "添付は5MiB以下にしてください。")
 			return
 		}
 		invalid(w, "multipart の形式を確認してください。")
@@ -84,7 +84,7 @@ func (h handler) createAttachmentBody(w http.ResponseWriter, r *http.Request, ca
 	}
 	defer file.Close()
 	if header.Size > attachmentMaxBytes {
-		invalid(w, "画像は5MiB以下にしてください。")
+		invalid(w, "添付は5MiB以下にしてください。")
 		return
 	}
 	contentType := header.Header.Get("Content-Type")
@@ -131,7 +131,7 @@ func (h handler) getAttachmentContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.withAttachmentSlot(w, r, func() {
-		h.serveAttachmentContent(w, r, card.ID, attachmentID, etag)
+		h.serveAttachmentContent(w, r, card.ID, attachmentID, etag, attachment.ContentType, attachment.OriginalName)
 	})
 }
 
@@ -164,17 +164,63 @@ func etagMatches(header, etag string) bool {
 	return false
 }
 
-func (h handler) serveAttachmentContent(w http.ResponseWriter, r *http.Request, itemID, attachmentID int64, etag string) {
-	rc, contentType, err := h.repo.OpenAttachmentContent(r.Context(), h.blobs, itemID, attachmentID)
+func (h handler) serveAttachmentContent(w http.ResponseWriter, r *http.Request, itemID, attachmentID int64, etag, contentType, originalName string) {
+	rc, storedType, err := h.repo.OpenAttachmentContent(r.Context(), h.blobs, itemID, attachmentID)
 	if err != nil {
 		failAttachment(w, err)
 		return
 	}
 	defer rc.Close()
+	if storedType != "" {
+		contentType = storedType
+	}
 	w.Header().Set("Content-Type", contentType)
+	if !isImageAttachmentMIME(contentType) {
+		w.Header().Set("Content-Disposition", contentDispositionAttachment(originalName, contentType))
+	}
 	setAttachmentCacheHeaders(w, etag)
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, rc)
+}
+
+// contentDispositionAttachment builds a header-safe Content-Disposition for downloads.
+// Header encoding is local to HTTP responses (not markdown label sanitization).
+// For PDF, the download name always ends with .pdf so a spoofed .html suffix cannot stick.
+func contentDispositionAttachment(name, contentType string) string {
+	name = scrubAttachmentDisplayName(name)
+	if name == "" {
+		name = "file"
+	}
+	if strings.EqualFold(contentType, "application/pdf") && !strings.HasSuffix(strings.ToLower(name), ".pdf") {
+		name = name + ".pdf"
+	}
+	ascii := make([]rune, 0, len(name))
+	for _, r := range name {
+		switch {
+		case r == '"' || r == '\\' || r < 0x20 || r == 0x7f:
+			ascii = append(ascii, '_')
+		case r > 0x7e:
+			ascii = append(ascii, '_')
+		default:
+			ascii = append(ascii, r)
+		}
+	}
+	fallback := string(ascii)
+	if strings.Trim(fallback, "_") == "" {
+		fallback = "file"
+	}
+	var encoded strings.Builder
+	for _, b := range []byte(name) {
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') ||
+			b == '.' || b == '_' || b == '-' {
+			encoded.WriteByte(b)
+			continue
+		}
+		encoded.WriteByte('%')
+		encoded.WriteByte("0123456789ABCDEF"[b>>4])
+		encoded.WriteByte("0123456789ABCDEF"[b&0x0f])
+	}
+	return `attachment; filename="` + fallback + `"; filename*=UTF-8''` + encoded.String()
 }
 
 func (h handler) deleteAttachment(w http.ResponseWriter, r *http.Request) {
@@ -225,13 +271,13 @@ func failAttachment(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrNotFound):
 		reply(w, http.StatusNotFound, map[string]string{"message": "添付が見つかりません。"})
 	case errors.Is(err, ErrAttachmentLimit):
-		invalid(w, "添付はアイテムあたり20枚までです。")
+		invalid(w, "添付はアイテムあたり20件までです。")
 	case errors.Is(err, ErrAttachmentQuota):
 		invalid(w, "このプロジェクトの添付容量の上限に達しています。")
 	case errors.Is(err, ErrAttachmentInvalid):
-		invalid(w, "画像の形式またはサイズを確認してください。")
+		invalid(w, "添付の形式またはサイズを確認してください。")
 	case errors.Is(err, ErrBlobStorageUnavailable):
-		reply(w, http.StatusServiceUnavailable, map[string]string{"message": "画像ストレージが設定されていません。"})
+		reply(w, http.StatusServiceUnavailable, map[string]string{"message": "添付ストレージが設定されていません。"})
 	default:
 		fail(w, err)
 	}

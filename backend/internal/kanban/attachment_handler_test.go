@@ -69,7 +69,11 @@ func attachmentHandler(t *testing.T) (http.Handler, *memoryRepo, *MemoryBlobStor
 	return h, repo, blobs
 }
 
-func postPNG(t *testing.T, h http.Handler, number int64, field, filename string, body []byte, extraFields map[string]string) *httptest.ResponseRecorder {
+func pdfBytes() []byte {
+	return []byte("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n")
+}
+
+func postAttachment(t *testing.T, h http.Handler, number int64, field, filename, contentType string, body []byte, extraFields map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -83,7 +87,7 @@ func postPNG(t *testing.T, h http.Handler, number int64, field, filename string,
 	}
 	hwr := textproto.MIMEHeader{}
 	hwr.Set("Content-Disposition", `form-data; name="file"; filename="`+filename+`"`)
-	hwr.Set("Content-Type", "image/png")
+	hwr.Set("Content-Type", contentType)
 	part, err := w.CreatePart(hwr)
 	if err != nil {
 		t.Fatal(err)
@@ -100,6 +104,16 @@ func postPNG(t *testing.T, h http.Handler, number int64, field, filename string,
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
+}
+
+func postPNG(t *testing.T, h http.Handler, number int64, field, filename string, body []byte, extraFields map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	return postAttachment(t, h, number, field, filename, "image/png", body, extraFields)
+}
+
+func postPDF(t *testing.T, h http.Handler, number int64, field, filename string, body []byte, extraFields map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	return postAttachment(t, h, number, field, filename, "application/pdf", body, extraFields)
 }
 
 func TestAttachmentUploadListContentDelete(t *testing.T) {
@@ -458,11 +472,110 @@ func TestCreateAttachmentRemovesMultipartTempFiles(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
-		if !strings.Contains(rec.Body.String(), "画像は5MiB以下にしてください。") {
+		if !strings.Contains(rec.Body.String(), "添付は5MiB以下にしてください。") {
 			t.Fatalf("want MaxBytes message, got %s", rec.Body.String())
 		}
 		assertNoLeak(t, before)
 	})
+
+	t.Run("pdfMagicMismatch400", func(t *testing.T) {
+		before := countFiles(t, tmpdir)
+		junk := make([]byte, attachmentMultipartMaxMemory+1)
+		copy(junk, []byte("not-a-pdf"))
+		rec := postPDF(t, h, card.Number, "description", "bad.pdf", junk, nil)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		assertNoLeak(t, before)
+	})
+}
+
+func TestDeleteStripsFileAttachmentMarkup(t *testing.T) {
+	h, repo, _ := attachmentHandler(t)
+	card, err := repo.CreateItem(t.Context(), ItemInput{Title: "pdf-del", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := postPDF(t, h, card.Number, "description", "doc.pdf", pdfBytes(), nil)
+	if w.Code != 201 {
+		t.Fatalf("upload=%d %s", w.Code, w.Body)
+	}
+	var att Attachment
+	if err := json.Unmarshal(w.Body.Bytes(), &att); err != nil {
+		t.Fatal(err)
+	}
+	card = repo.cards[card.ID]
+	fileMarkup := BuildFileAttachmentMarkup(card.Number, att.ID, "doc.pdf")
+	card.Description = "前 " + fileMarkup + " 後"
+	card.Solution = "sol " + fileMarkup
+	repo.cards[card.ID] = card
+	cmt, err := repo.CreateComment(t.Context(), card.ID, "a", "cmt "+fileMarkup, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	del := request(h, "DELETE", "/api/items/by-number/"+strconv.FormatInt(card.Number, 10)+"/attachments/"+strconv.FormatInt(att.ID, 10), "")
+	if del.Code != 204 {
+		t.Fatalf("delete=%d %s", del.Code, del.Body)
+	}
+	card = repo.cards[card.ID]
+	if strings.Contains(card.Description, "/attachments/") || strings.Contains(card.Solution, "/attachments/") {
+		t.Fatalf("file markup left: desc=%q sol=%q", card.Description, card.Solution)
+	}
+	cmt = repo.comments[cmt.ID]
+	if strings.Contains(cmt.Body, "/attachments/") {
+		t.Fatalf("file markup left in comment: %q", cmt.Body)
+	}
+}
+
+func TestPDFAttachmentContentDispositionAndSize(t *testing.T) {
+	h, repo, _ := attachmentHandler(t)
+	card, err := repo.CreateItem(t.Context(), ItemInput{Title: "pdf", ColumnID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := postPDF(t, h, card.Number, "description", "報告.pdf", pdfBytes(), nil)
+	if w.Code != 201 {
+		t.Fatalf("upload=%d %s", w.Code, w.Body)
+	}
+	var att Attachment
+	if err := json.Unmarshal(w.Body.Bytes(), &att); err != nil {
+		t.Fatal(err)
+	}
+	if att.ContentType != "application/pdf" {
+		t.Fatalf("ct=%s", att.ContentType)
+	}
+
+	content := request(h, "GET", "/api/items/by-number/"+strconv.FormatInt(card.Number, 10)+"/attachments/"+strconv.FormatInt(att.ID, 10)+"/content", "")
+	if content.Code != 200 {
+		t.Fatalf("content=%d %s", content.Code, content.Body)
+	}
+	if content.Header().Get("Content-Type") != "application/pdf" {
+		t.Fatalf("ct=%s", content.Header().Get("Content-Type"))
+	}
+	cd := content.Header().Get("Content-Disposition")
+	if !strings.Contains(cd, "attachment") || !strings.Contains(cd, "filename=") || !strings.Contains(cd, "filename*=UTF-8''") {
+		t.Fatalf("disposition=%q", cd)
+	}
+
+	pngUp := postPNG(t, h, card.Number, "description", "a.png", pngBytes(), nil)
+	if pngUp.Code != 201 {
+		t.Fatalf("png upload=%d %s", pngUp.Code, pngUp.Body)
+	}
+	var pngAtt Attachment
+	if err := json.Unmarshal(pngUp.Body.Bytes(), &pngAtt); err != nil {
+		t.Fatal(err)
+	}
+	pngContent := request(h, "GET", "/api/items/by-number/"+strconv.FormatInt(card.Number, 10)+"/attachments/"+strconv.FormatInt(pngAtt.ID, 10)+"/content", "")
+	if pngContent.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("png should omit disposition, got %q", pngContent.Header().Get("Content-Disposition"))
+	}
+
+	over := make([]byte, attachmentMaxBytes+1)
+	copy(over, pdfBytes())
+	tooBig := postPDF(t, h, card.Number, "description", "big.pdf", over, nil)
+	if tooBig.Code != 400 {
+		t.Fatalf("oversize=%d %s", tooBig.Code, tooBig.Body)
+	}
 }
 
 func TestAttachmentProjectQuota(t *testing.T) {
