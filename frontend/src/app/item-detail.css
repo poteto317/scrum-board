@@ -493,41 +493,46 @@ h1 {
   color: var(--accent);
 }
 .acl-fieldset {
-  margin: 16px 0 24px;
-  padding: 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--border, #ccc) 80%, transparent);
+  min-width: 0;
+  margin: 18px 0 8px;
+  padding: 0;
+  border: 0;
 }
 .acl-fieldset legend {
-  padding: 0 4px;
+  padding: 0;
   font-size: 13px;
-  font-weight: 600;
+  color: var(--muted);
 }
 .acl-fieldset label {
-  display: block;
   margin: 8px 0;
-  font-size: 14px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
-.acl-fieldset select {
+.acl-fieldset > label {
   display: block;
-  margin-top: 4px;
-  width: min(100%, 320px);
 }
 .acl-user-lists {
   display: grid;
   gap: 12px;
   margin: 8px 0 12px;
 }
+.acl-user-list {
+  max-height: 12rem;
+  overflow-y: auto;
+}
 .acl-list-label {
   display: block;
   font-size: 12px;
   color: var(--muted);
-  margin-bottom: 4px;
 }
-.acl-user {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
+.acl-user input {
+  width: auto;
+}
+@media (min-width: 751px) {
+  .acl-fieldset select {
+    padding-inline: 8px;
+    font-size: 13px;
+  }
 }
 .muted {
   color: var(--muted);
