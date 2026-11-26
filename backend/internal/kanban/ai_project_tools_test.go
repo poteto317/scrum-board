@@ -649,6 +649,10 @@ func TestProjectChatToolDefinitions(t *testing.T) {
 		if tool.InputSchema["type"] != "object" || tool.Description == "" {
 			t.Fatalf("%s: schema=%v", tool.Name, tool.InputSchema)
 		}
+		// The model is told what decodeToolInput enforces: no fields beyond the listed ones.
+		if tool.InputSchema["additionalProperties"] != false {
+			t.Fatalf("%s: the schema must forbid unknown fields", tool.Name)
+		}
 	}
 	props := tools[0].InputSchema["properties"].(map[string]any)
 	for _, key := range []string{"query", "status", "assignee", "dueFrom", "dueTo", "sort", "limit", "offset"} {
