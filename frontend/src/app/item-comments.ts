@@ -23,9 +23,21 @@ import {
 import { buildAttachmentMarkup, insertMarkupAt } from './description-link';
 import { DescriptionRichText } from './description-rich-text';
 import { ItemComment } from './models';
+import {
+  ATTACHMENT_IMAGE_BUSY_HINT,
+  imageUploadDoneMessage,
+  imageUploadPlanNotice,
+  planImageUpload,
+} from './attachment-image';
+import {
+  clipboardFilesToAttach,
+  filesFromDataTransfer,
+  pasteLinkOverSelection,
+} from './paste-content';
+import { uploadImagesInOrder } from './upload-images-in-order';
 
-const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 export const COMMENT_BODY_MAX = 4000;
+const COMMENT_BODY_LENGTH_ERROR = `本文は${COMMENT_BODY_MAX}文字以内にしてください。`;
 
 /** Pure list helpers — kept free of Http / component state (SRP). */
 export function appendComment(list: ItemComment[], created: ItemComment): ItemComment[] {
@@ -267,9 +279,9 @@ export class ItemComments implements OnChanges {
 
   onDraftImageChange(event: Event): void {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const files = Array.from(input.files ?? []);
     input.value = '';
-    if (file) this.uploadDraftImage(file);
+    if (files.length) this.uploadDraftImages(files);
   }
 
   onCommentDragOver(event: DragEvent): void {
@@ -287,8 +299,8 @@ export class ItemComments implements OnChanges {
       this.tryInsertAttachmentRefFromDataTransfer(dt, 'draft');
       return;
     }
-    const file = dt.files?.[0];
-    if (file) this.uploadDraftImage(file);
+    const files = filesFromDataTransfer(dt);
+    if (files.length) this.uploadDraftImages(files);
   }
 
   onEditDrop(event: DragEvent): void {
@@ -299,10 +311,76 @@ export class ItemComments implements OnChanges {
     this.tryInsertAttachmentRefFromDataTransfer(dt, 'edit');
   }
 
-  uploadDraftImage(file: File): void {
-    if (this.readOnly || this.imageBusy() || this.uploadGuard || this.number <= 0) return;
-    if (!ALLOWED_IMAGE_TYPES.has(file.type) || file.size <= 0 || file.size > 5 * 1024 * 1024) {
-      this.actionError.set('JPEG / PNG / GIF / WebP（5MiB以下）を選んでください。');
+  /** 下書きへの貼り付け: 画像はアップロードしてキャレットの位置へ、選択への URL はリンクにする。 */
+  onDraftPaste(event: ClipboardEvent): void {
+    if (this.readOnly) return;
+    const dt = event.clipboardData;
+    if (!dt) return;
+    const el = event.target as HTMLTextAreaElement;
+    const start = el.selectionStart ?? this.draftBody().length;
+    const end = el.selectionEnd ?? start;
+    const files = clipboardFilesToAttach(dt);
+    if (files.length) {
+      event.preventDefault();
+      this.uploadDraftImages(files, { start, end });
+      return;
+    }
+    this.pasteLink(event, el, 'draft');
+  }
+
+  /** 編集中のコメントへの貼り付け: 選択への URL をリンクにする（画像のアップロードはしない）。 */
+  onEditPaste(event: ClipboardEvent): void {
+    if (this.readOnly) return;
+    this.pasteLink(event, event.target as HTMLTextAreaElement, 'edit');
+  }
+
+  private pasteLink(event: ClipboardEvent, el: HTMLTextAreaElement, target: 'draft' | 'edit'): void {
+    const dt = event.clipboardData;
+    if (!dt) return;
+    const body = target === 'draft' ? this.draftBody() : this.editBody();
+    // ngModel が反映する前の入力とずれていたら、位置が合わないので通常の貼り付けに任せる。
+    if (el.value !== body) return;
+    const result = pasteLinkOverSelection(
+      body,
+      el.selectionStart ?? 0,
+      el.selectionEnd ?? 0,
+      dt.getData('text/plain').trim(),
+      COMMENT_BODY_MAX,
+    );
+    if (result.kind === 'default') return;
+    event.preventDefault();
+    if (result.kind === 'error') {
+      this.actionError.set(COMMENT_BODY_LENGTH_ERROR);
+      return;
+    }
+    this.actionError.set('');
+    if (target === 'draft') {
+      this.draftBody.set(result.text);
+    } else {
+      this.editBody.set(result.text);
+    }
+    // ngModel の反映（マイクロタスク）の後でキャレットをリンクの直後へ戻す。
+    setTimeout(() => {
+      if (el.isConnected && el.value === result.text) {
+        el.setSelectionRange(result.caret, result.caret);
+      }
+    });
+  }
+
+  /**
+   * 画像を 1 件ずつ順にアップロードし、成功するたびに下書きへ入れる。
+   * `at` が無ければ末尾へ（ボタン・ドロップ）、あればその位置へ（貼り付け）。
+   */
+  uploadDraftImages(files: readonly File[], at?: { start: number; end: number }): void {
+    // 投稿の応答を待つ間に入れると、投稿の成功で空になった下書きへ画像だけが入る。
+    if (this.readOnly || this.posting() || this.number <= 0) return;
+    if (this.imageBusy() || this.uploadGuard) {
+      if (this.uploadGuard) this.actionError.set(ATTACHMENT_IMAGE_BUSY_HINT);
+      return;
+    }
+    const plan = planImageUpload(files);
+    if (!plan.accepted.length) {
+      this.actionError.set(imageUploadPlanNotice(plan));
       return;
     }
     this.uploadGuard = true;
@@ -311,24 +389,41 @@ export class ItemComments implements OnChanges {
     const number = this.number;
     const projectId = this.scopedProjectId();
     const generation = this.generation;
-    this.api.uploadAttachment(number, file, 'comment', projectId).subscribe({
-      next: (att) => {
-        if (!this.stillCurrent(generation, number, projectId)) return;
-        this.uploadGuard = false;
-        this.imageBusy.set(false);
+    let caret = at;
+    let stopError = '';
+    let stale = false;
+    uploadImagesInOrder({
+      files: plan.accepted,
+      upload: (file) => this.api.uploadAttachment(number, file, 'comment', projectId),
+      onUploaded: (att, file) => {
+        // 待っている間にアイテムが切り替わった・再読み込みされたら、下書きには入れない。
+        if (!this.stillCurrent(generation, number, projectId)) {
+          stale = true;
+          return 'stop';
+        }
+        const body = this.draftBody();
         const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
-        const inserted = insertMarkupAt(this.draftBody(), this.draftBody().length, this.draftBody().length, markup, COMMENT_BODY_MAX);
+        const inserted = insertMarkupAt(
+          body,
+          caret?.start ?? body.length,
+          caret?.end ?? body.length,
+          markup,
+          COMMENT_BODY_MAX,
+        );
         if (!inserted) {
-          this.actionError.set(`本文は${COMMENT_BODY_MAX}文字以内にしてください。`);
-          return;
+          stopError = COMMENT_BODY_LENGTH_ERROR;
+          return 'stop';
         }
         this.draftBody.set(inserted.text);
+        if (caret) caret = { start: inserted.caret, end: inserted.caret };
+        return 'continue';
       },
-      error: () => {
-        if (!this.stillCurrent(generation, number, projectId)) return;
+      onDone: (outcome) => {
+        // 忙しい状態は、切り替えの後でも必ず解く。文言は今のアイテムのものだけ出す。
         this.uploadGuard = false;
         this.imageBusy.set(false);
-        this.actionError.set('画像のアップロードに失敗しました。');
+        if (stale || !this.stillCurrent(generation, number, projectId)) return;
+        this.actionError.set(imageUploadDoneMessage(outcome, plan, stopError));
       },
     });
   }
