@@ -52,9 +52,13 @@ type memoryRepo struct {
 	nextAIMessageID    int64
 	aiUsage            AIUsage
 	projectAIMessages  map[int64]memoryProjectAIMessage
-	listLivingFail     error
-	updateItemFail     error
-	updateItemFailID   int64
+	// project chat conversations (ai_project_chat_memory_test.go)
+	projectAIConversations      map[int64]memoryProjectAIConversation
+	nextProjectAIConversationID int64
+	projectAIClock              time.Time
+	listLivingFail              error
+	updateItemFail              error
+	updateItemFailID            int64
 }
 
 func fresh() *memoryRepo {

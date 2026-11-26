@@ -1,11 +1,14 @@
 package kanban
 
-// Routes of /api/projects/{id}/ai-chat: who is asking about which project, and reading and
-// clearing the caller's own history. The POST (asking the model) is in ai_project_chat_post.go.
+// Routes of /api/projects/{id}/ai-chat: who is asking about which project, reading the
+// caller's latest conversation and clearing all of the caller's conversations. The POST
+// (asking the model) is in ai_project_chat_post.go, the routes of single conversations in
+// ai_project_conversation_handler.go.
 
 import "net/http"
 
-// projectChatScope resolves the caller and the project of /api/projects/{id}/ai-chat.
+// projectChatScope resolves the caller and the project of /api/projects/{id}/ai-chat and
+// /api/projects/{id}/ai-conversations.
 // It answers 401, 400 or 404 itself.
 func (h handler) projectChatScope(w http.ResponseWriter, r *http.Request) (User, Project, bool) {
 	user, ok := CurrentUser(r.Context())
@@ -31,28 +34,33 @@ func (h handler) projectChatScope(w http.ResponseWriter, r *http.Request) (User,
 	return User{}, Project{}, false
 }
 
-func (h handler) listProjectAIChat(w http.ResponseWriter, r *http.Request) {
+// latestProjectAIChat answers the caller's latest conversation in the project with its
+// messages: what the chat shows when it is opened. Without any conversation it answers
+// "conversation": null and no messages.
+func (h handler) latestProjectAIChat(w http.ResponseWriter, r *http.Request) {
 	user, project, ok := h.projectChatScope(w, r)
 	if !ok {
 		return
 	}
-	list, err := h.repo.ListProjectAIMessages(r.Context(), project.ID, user.ID)
+	latest, err := h.repo.LatestProjectAIConversation(r.Context(), project.ID, user.ID)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	if list == nil {
-		list = []ProjectAIMessage{}
+	if latest == nil {
+		reply(w, http.StatusOK, map[string]any{"conversation": nil, "messages": []ProjectAIMessage{}})
+		return
 	}
-	reply(w, http.StatusOK, map[string]any{"messages": list})
+	h.replyProjectAIConversation(w, r, project.ID, user.ID, *latest)
 }
 
+// clearProjectAIChat deletes all of the caller's conversations in the project.
 func (h handler) clearProjectAIChat(w http.ResponseWriter, r *http.Request) {
 	user, project, ok := h.projectChatScope(w, r)
 	if !ok {
 		return
 	}
-	if err := h.repo.ClearProjectAIMessages(r.Context(), project.ID, user.ID); err != nil {
+	if err := h.repo.ClearProjectAIConversations(r.Context(), project.ID, user.ID); err != nil {
 		fail(w, err)
 		return
 	}

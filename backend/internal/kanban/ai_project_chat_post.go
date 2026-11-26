@@ -8,8 +8,9 @@ import (
 	"time"
 )
 
-// POST /api/projects/{id}/ai-chat, one step per function: read the request, admit it (limits),
-// load what the model is given, ask the model, then store and answer.
+// POST /api/projects/{id}/ai-chat, one step per function: read the request, find the
+// conversation (ai_project_chat_conversation.go), admit it (limits), load what the model is
+// given, ask the model, then store and answer.
 
 const (
 	// maxProjectChatModelCalls is how often the model is called for one user message.
@@ -44,13 +45,19 @@ func (h handler) postProjectAIChat(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Decided before the model is called: the history is read from this conversation and the
+	// answer is stored in it. A conversation that is not the caller's is 404 here, before 503.
+	conversation, ok := h.resolveProjectChatConversation(w, r, project.ID, user.ID, req)
+	if !ok {
+		return
+	}
 	admission, ok := h.admitProjectChat(w, r, user.ID)
 	if !ok {
 		return
 	}
 	defer admission.release()
 
-	in, err := h.loadProjectChatInput(r.Context(), project, &user, req)
+	in, err := h.loadProjectChatInput(r.Context(), project, &user, conversation, req)
 	if err != nil {
 		fail(w, err)
 		return
@@ -67,11 +74,15 @@ func (h handler) postProjectAIChat(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.storeProjectChatTurn(r.Context(), project.ID, user.ID, req.Message, answer); err != nil {
+	turn := ProjectAITurn{Title: projectAIConversationTitle(req.Message), UserBody: req.Message,
+		AssistantBody: answer.text, InputTokens: answer.inTok, OutputTokens: answer.outTok}
+	stored, err := h.storeProjectChatTurn(r.Context(), project.ID, user.ID, conversation, turn)
+	if err != nil {
 		projectChatStorageFailed(w, "append")
 		return
 	}
-	h.replyProjectChatTurn(w, r, project.ID, user.ID, in.history, req.Message, answer)
+	before := projectChatHistoryInStored(stored.ID, projectChatConversationID(conversation), in.history)
+	h.replyProjectChatTurn(w, r, project.ID, user.ID, stored, before, turn)
 }
 
 // ---- 1. the request ----
@@ -79,6 +90,10 @@ func (h handler) postProjectAIChat(w http.ResponseWriter, r *http.Request) {
 type projectAIChatRequest struct {
 	Message         string `json:"message"`
 	FocusItemNumber *int64 `json:"focusItemNumber"`
+	// ConversationID continues that conversation, NewConversation starts one; with neither
+	// the message continues the latest conversation. Both together are refused.
+	ConversationID  *int64 `json:"conversationId"`
+	NewConversation bool   `json:"newConversation"`
 }
 
 // decodeProjectChatRequest reads and checks the body. It answers 415 or 400 itself.
@@ -101,11 +116,21 @@ func (h handler) decodeProjectChatRequest(w http.ResponseWriter, r *http.Request
 		invalid(w, "focusItemNumber は正のアイテム番号を指定してください。")
 		return projectAIChatRequest{}, false
 	}
+	if req.ConversationID != nil && *req.ConversationID <= 0 {
+		invalid(w, msgProjectAIConversationInvalidID)
+		return projectAIChatRequest{}, false
+	}
+	if req.ConversationID != nil && req.NewConversation {
+		invalid(w, msgProjectChatConversationAndNew)
+		return projectAIChatRequest{}, false
+	}
 	req.Message = msg
 	return req, true
 }
 
-// ---- 2. the limits ----
+// ---- 2. the conversation: ai_project_chat_conversation.go ----
+
+// ---- 3. the limits ----
 
 // projectChatAdmission is what an admitted project chat holds until it ends: the user's
 // single running chat, a rate limit reservation and one of the shared AI slots.
@@ -169,18 +194,19 @@ func (a *projectChatAdmission) release() {
 	a.h.projectChats.end(a.userID)
 }
 
-// ---- 3. what the model is given ----
+// ---- 4. what the model is given ----
 
 // projectChatInput is everything read before the model is called.
 type projectChatInput struct {
 	system  string
 	turns   []ChatTurn         // the history for the model, ending with the new message
 	columns []Column           // read once: used by the prompt and by the tools' status filter
-	history []ProjectAIMessage // the stored history as it was before this message
+	history []ProjectAIMessage // the conversation's stored messages as they were before this message
 }
 
-// loadProjectChatInput reads the columns, the open item and the history (in this order).
-func (h handler) loadProjectChatInput(ctx context.Context, project Project, user *User, req projectAIChatRequest) (projectChatInput, error) {
+// loadProjectChatInput reads the columns, the open item and the history (in this order). The
+// history is the one of the conversation the message continues; a new conversation has none.
+func (h handler) loadProjectChatInput(ctx context.Context, project Project, user *User, conversation *ProjectAIConversation, req projectAIChatRequest) (projectChatInput, error) {
 	columns, err := h.repo.Columns(ctx)
 	if err != nil {
 		return projectChatInput{}, err
@@ -189,9 +215,11 @@ func (h handler) loadProjectChatInput(ctx context.Context, project Project, user
 	if err != nil {
 		return projectChatInput{}, err
 	}
-	history, err := h.repo.ListProjectAIMessages(ctx, project.ID, user.ID)
-	if err != nil {
-		return projectChatInput{}, err
+	history := []ProjectAIMessage{}
+	if conversation != nil {
+		if history, err = h.repo.ListProjectAIMessages(ctx, project.ID, user.ID, conversation.ID); err != nil {
+			return projectChatInput{}, err
+		}
 	}
 	return newProjectChatInput(project.Name, time.Now(), columns, focus, history, req.Message, h.historyTurns), nil
 }
@@ -240,7 +268,7 @@ func (h handler) loadProjectChatFocus(ctx context.Context, projectID int64, numb
 	return &projectChatFocus{Item: item, Comments: comments}, nil
 }
 
-// ---- 4. asking the model ----
+// ---- 5. asking the model ----
 
 // projectChatContext limits the whole tool loop to maxProjectChatDuration, and to what the
 // request has left after keeping projectChatAfterModelReserve for recording the usage and
@@ -340,38 +368,43 @@ func projectChatStorageFailed(w http.ResponseWriter, stage string) {
 	aiChatServerError(w)
 }
 
-// ---- 5. storing and answering ----
+// ---- 6. storing and answering ----
 
-// storeProjectChatTurn stores the exchange. The answer is paid for, so it is stored even when
-// the client has gone away (it shows up when the chat is opened again). It may take
-// projectChatStoreTimeout, which projectChatContext keeps free.
-func (h handler) storeProjectChatTurn(ctx context.Context, projectID, userID int64, userBody string, answer projectChatAnswer) error {
+// storeProjectChatTurn stores the exchange in the conversation (nil: a new one) and returns
+// the conversation it went to. That is a new one too when the intended conversation was
+// deleted while the model was working: the answer is paid for and is not dropped. For the same
+// reason it is stored even when the client has gone away (it shows up when the chat is opened
+// again). It may take projectChatStoreTimeout, which projectChatContext keeps free.
+func (h handler) storeProjectChatTurn(ctx context.Context, projectID, userID int64, conversation *ProjectAIConversation, turn ProjectAITurn) (ProjectAIConversation, error) {
 	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), projectChatStoreTimeout)
 	defer cancel()
-	return h.repo.AppendProjectAITurn(storeCtx, projectID, userID, userBody, answer.text, answer.inTok, answer.outTok)
+	return h.repo.AppendProjectAITurn(storeCtx, projectID, userID, projectChatConversationID(conversation), turn)
 }
 
-// replyProjectChatTurn answers 200 with the stored history. When reading it back fails, the
-// answer is built from what is known instead.
-func (h handler) replyProjectChatTurn(w http.ResponseWriter, r *http.Request, projectID, userID int64, before []ProjectAIMessage, userBody string, answer projectChatAnswer) {
-	list, err := h.repo.ListProjectAIMessages(r.Context(), projectID, userID)
+// replyProjectChatTurn answers 200 with the conversation the exchange was stored in and all
+// of its messages. When reading them back fails, the answer is built from what is known
+// instead; before is the history that belongs to that conversation (projectChatHistoryInStored).
+func (h handler) replyProjectChatTurn(w http.ResponseWriter, r *http.Request, projectID, userID int64, stored ProjectAIConversation, before []ProjectAIMessage, turn ProjectAITurn) {
+	list, err := h.repo.ListProjectAIMessages(r.Context(), projectID, userID, stored.ID)
 	if err != nil || len(list) == 0 {
 		// Turn is already stored; avoid 500 so clients do not retry and duplicate.
 		slog.Error("project ai chat list after append failed", "stage", "list")
-		list = unstoredProjectChatTurn(projectID, before, userBody, answer)
+		list = unstoredProjectChatTurn(projectID, stored.ID, before, turn)
 	}
 	reply(w, http.StatusOK, map[string]any{
-		"assistant": list[len(list)-1],
-		"messages":  list,
+		"conversation": stored,
+		"assistant":    list[len(list)-1],
+		"messages":     list,
 	})
 }
 
-// unstoredProjectChatTurn is the history as the client should see it when the stored one
-// cannot be read back: the history from before, the message and the answer. The two new ones
-// have no stored id or time; they get distinct negative placeholder ids.
-func unstoredProjectChatTurn(projectID int64, before []ProjectAIMessage, userBody string, answer projectChatAnswer) []ProjectAIMessage {
-	assistant := ProjectAIMessage{ID: unstoredProjectChatAssistantID, ProjectID: projectID, Role: AIRoleAssistant, Body: answer.text,
-		InputTokens: tokenCountPtr(answer.inTok), OutputTokens: tokenCountPtr(answer.outTok)}
+// unstoredProjectChatTurn is the conversation's messages as the client should see them when
+// the stored ones cannot be read back: the history from before, the message and the answer.
+// The two new ones have no stored id or time; they get distinct negative placeholder ids and
+// the id of the conversation they were stored in.
+func unstoredProjectChatTurn(projectID, conversationID int64, before []ProjectAIMessage, turn ProjectAITurn) []ProjectAIMessage {
+	assistant := ProjectAIMessage{ID: unstoredProjectChatAssistantID, ProjectID: projectID, ConversationID: conversationID, Role: AIRoleAssistant, Body: turn.AssistantBody,
+		InputTokens: tokenCountPtr(turn.InputTokens), OutputTokens: tokenCountPtr(turn.OutputTokens)}
 	return append(append([]ProjectAIMessage{}, before...),
-		ProjectAIMessage{ID: unstoredProjectChatUserID, ProjectID: projectID, Role: AIRoleUser, Body: userBody}, assistant)
+		ProjectAIMessage{ID: unstoredProjectChatUserID, ProjectID: projectID, ConversationID: conversationID, Role: AIRoleUser, Body: turn.UserBody}, assistant)
 }

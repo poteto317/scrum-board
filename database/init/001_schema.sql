@@ -155,8 +155,22 @@ CREATE TABLE IF NOT EXISTS item_ai_messages (
  CONSTRAINT chk_ai_message_role CHECK (role IN ('user', 'assistant')),
  INDEX ai_messages_item_created (item_id, created_at, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- Keep in sync with backend/internal/kanban/ai_project_conversation_migrate.go (projectAIConversationsDDL).
+-- References users: must stay after the users table. project_ai_messages references it: must stay before that table.
+CREATE TABLE IF NOT EXISTS project_ai_conversations (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ project_id BIGINT NOT NULL,
+ user_id BIGINT NOT NULL,
+ title VARCHAR(120) NOT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ CONSTRAINT fk_project_ai_conversation_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+ CONSTRAINT fk_project_ai_conversation_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+ INDEX project_ai_conversations_scope (project_id, user_id, updated_at, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 -- Keep in sync with backend/internal/kanban/ai_project_chat_migrate.go (projectAIMessagesDDL).
 -- References users: must stay after the users table.
+-- conversation_id stays NULLable: an older server may still add messages without it during a rollout.
 CREATE TABLE IF NOT EXISTS project_ai_messages (
  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
  project_id BIGINT NOT NULL,
@@ -166,10 +180,13 @@ CREATE TABLE IF NOT EXISTS project_ai_messages (
  input_tokens INT NULL,
  output_tokens INT NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ conversation_id BIGINT NULL,
  CONSTRAINT fk_project_ai_message_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
  CONSTRAINT fk_project_ai_message_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
  CONSTRAINT chk_project_ai_message_role CHECK (role IN ('user', 'assistant')),
- INDEX project_ai_messages_scope (project_id, user_id, created_at, id)
+ INDEX project_ai_messages_scope (project_id, user_id, created_at, id),
+ INDEX project_ai_messages_conversation (conversation_id, created_at, id),
+ CONSTRAINT fk_project_ai_message_conversation FOREIGN KEY (conversation_id) REFERENCES project_ai_conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 CREATE TABLE IF NOT EXISTS ai_usage (
  id TINYINT NOT NULL PRIMARY KEY,

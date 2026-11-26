@@ -14,10 +14,62 @@ type memoryProjectAIMessage struct {
 	userID int64
 }
 
-func (m *memoryRepo) ListProjectAIMessages(_ context.Context, projectID, userID int64) ([]ProjectAIMessage, error) {
+// memoryProjectAIConversation keeps the owner next to the conversation, like the message.
+type memoryProjectAIConversation struct {
+	ProjectAIConversation
+	userID int64
+}
+
+// projectAINow is a clock that never gives the same instant twice, so the order by updated_at
+// is the order of the calls (MySQL's clock has microseconds, and its calls take longer than one).
+func (m *memoryRepo) projectAINow() time.Time {
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	if !now.After(m.projectAIClock) {
+		now = m.projectAIClock.Add(time.Microsecond)
+	}
+	m.projectAIClock = now
+	return now
+}
+
+func (m *memoryRepo) ListProjectAIConversations(_ context.Context, projectID, userID int64) ([]ProjectAIConversation, error) {
+	out := make([]ProjectAIConversation, 0)
+	for _, c := range m.projectAIConversations {
+		if c.ProjectID == projectID && c.userID == userID {
+			out = append(out, c.ProjectAIConversation)
+		}
+	}
+	slices.SortFunc(out, func(a, b ProjectAIConversation) int {
+		if c := b.UpdatedAt.Compare(a.UpdatedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(b.ID, a.ID)
+	})
+	if len(out) > maxProjectAIConversations {
+		out = out[:maxProjectAIConversations]
+	}
+	return out, nil
+}
+
+func (m *memoryRepo) GetProjectAIConversation(_ context.Context, projectID, userID, conversationID int64) (ProjectAIConversation, error) {
+	c, ok := m.projectAIConversations[conversationID]
+	if !ok || c.ProjectID != projectID || c.userID != userID {
+		return ProjectAIConversation{}, ErrNotFound
+	}
+	return c.ProjectAIConversation, nil
+}
+
+func (m *memoryRepo) LatestProjectAIConversation(ctx context.Context, projectID, userID int64) (*ProjectAIConversation, error) {
+	list, _ := m.ListProjectAIConversations(ctx, projectID, userID)
+	if len(list) == 0 {
+		return nil, nil
+	}
+	return &list[0], nil
+}
+
+func (m *memoryRepo) ListProjectAIMessages(_ context.Context, projectID, userID, conversationID int64) ([]ProjectAIMessage, error) {
 	out := make([]ProjectAIMessage, 0)
 	for _, msg := range m.projectAIMessages {
-		if msg.ProjectID == projectID && msg.userID == userID {
+		if msg.ConversationID == conversationID && msg.ProjectID == projectID && msg.userID == userID {
 			out = append(out, msg.ProjectAIMessage)
 		}
 	}
@@ -26,32 +78,105 @@ func (m *memoryRepo) ListProjectAIMessages(_ context.Context, projectID, userID 
 	return out, nil
 }
 
-func (m *memoryRepo) AppendProjectAITurn(ctx context.Context, projectID, userID int64, userBody, assistantBody string, inTok, outTok int64) error {
+// AppendProjectAITurn mirrors the MySQL steps: find or create the conversation (and keep the
+// 100 newest), trim its messages to 200 with the two new ones, add them, touch updated_at.
+func (m *memoryRepo) AppendProjectAITurn(ctx context.Context, projectID, userID int64, conversationID *int64, turn ProjectAITurn) (ProjectAIConversation, error) {
 	if !m.projectExists(projectID) {
-		return ErrProject
+		return ProjectAIConversation{}, ErrProject
 	}
 	if m.projectAIMessages == nil {
 		m.projectAIMessages = map[int64]memoryProjectAIMessage{}
 	}
-	existing, _ := m.ListProjectAIMessages(ctx, projectID, userID)
-	for i := 0; i < len(existing)+2-maxAIChatStoredMessages; i++ {
+	if m.projectAIConversations == nil {
+		m.projectAIConversations = map[int64]memoryProjectAIConversation{}
+	}
+	var conversation memoryProjectAIConversation
+	found := false
+	if conversationID != nil {
+		conversation, found = m.projectAIConversations[*conversationID]
+		found = found && conversation.ProjectID == projectID && conversation.userID == userID
+	}
+	if !found {
+		m.nextProjectAIConversationID++
+		now := m.projectAINow()
+		conversation = memoryProjectAIConversation{userID: userID, ProjectAIConversation: ProjectAIConversation{
+			ID: m.nextProjectAIConversationID, ProjectID: projectID, Title: turn.Title, CreatedAt: now, UpdatedAt: now,
+		}}
+		m.projectAIConversations[conversation.ID] = conversation
+		m.trimProjectAIConversations(projectID, userID, conversation.ID)
+	}
+	existing, _ := m.ListProjectAIMessages(ctx, projectID, userID, conversation.ID)
+	for i := range projectAIMessagesOverLimit(len(existing), projectAITurnMessages) {
 		delete(m.projectAIMessages, existing[i].ID)
 	}
-	now := time.Now().UTC()
+	now := m.projectAINow()
 	uid := m.nextAIMessageID
 	aid := uid + 1
 	m.nextAIMessageID += 2
 	m.projectAIMessages[uid] = memoryProjectAIMessage{userID: userID, ProjectAIMessage: ProjectAIMessage{
-		ID: uid, ProjectID: projectID, Role: AIRoleUser, Body: userBody, CreatedAt: now,
+		ID: uid, ProjectID: projectID, ConversationID: conversation.ID, Role: AIRoleUser, Body: turn.UserBody, CreatedAt: now,
 	}}
 	m.projectAIMessages[aid] = memoryProjectAIMessage{userID: userID, ProjectAIMessage: ProjectAIMessage{
-		ID: aid, ProjectID: projectID, Role: AIRoleAssistant, Body: assistantBody, CreatedAt: now.Add(time.Nanosecond),
-		InputTokens: tokenCountPtr(inTok), OutputTokens: tokenCountPtr(outTok),
+		ID: aid, ProjectID: projectID, ConversationID: conversation.ID, Role: AIRoleAssistant, Body: turn.AssistantBody, CreatedAt: now.Add(time.Nanosecond),
+		InputTokens: tokenCountPtr(turn.InputTokens), OutputTokens: tokenCountPtr(turn.OutputTokens),
 	}}
+	conversation.UpdatedAt = m.projectAINow()
+	m.projectAIConversations[conversation.ID] = conversation
+	return conversation.ProjectAIConversation, nil
+}
+
+// trimProjectAIConversations deletes what is beyond the 100 conversations of the scope,
+// oldest update first, never the one named keep.
+func (m *memoryRepo) trimProjectAIConversations(projectID, userID, keep int64) {
+	var all []ProjectAIConversation
+	for _, c := range m.projectAIConversations {
+		if c.ProjectID == projectID && c.userID == userID {
+			all = append(all, c.ProjectAIConversation)
+		}
+	}
+	slices.SortFunc(all, func(a, b ProjectAIConversation) int {
+		if c := a.UpdatedAt.Compare(b.UpdatedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	overflow := projectAIConversationsOverLimit(len(all))
+	for _, c := range all {
+		if overflow <= 0 {
+			break
+		}
+		if c.ID == keep {
+			continue
+		}
+		m.dropProjectAIConversation(c.ID)
+		overflow--
+	}
+}
+
+// dropProjectAIConversation deletes a conversation and its messages (ON DELETE CASCADE).
+func (m *memoryRepo) dropProjectAIConversation(conversationID int64) {
+	delete(m.projectAIConversations, conversationID)
+	for id, msg := range m.projectAIMessages {
+		if msg.ConversationID == conversationID {
+			delete(m.projectAIMessages, id)
+		}
+	}
+}
+
+func (m *memoryRepo) DeleteProjectAIConversation(ctx context.Context, projectID, userID, conversationID int64) error {
+	if _, err := m.GetProjectAIConversation(ctx, projectID, userID, conversationID); err != nil {
+		return err
+	}
+	m.dropProjectAIConversation(conversationID)
 	return nil
 }
 
-func (m *memoryRepo) ClearProjectAIMessages(_ context.Context, projectID, userID int64) error {
+func (m *memoryRepo) ClearProjectAIConversations(_ context.Context, projectID, userID int64) error {
+	for id, c := range m.projectAIConversations {
+		if c.ProjectID == projectID && c.userID == userID {
+			delete(m.projectAIConversations, id)
+		}
+	}
 	for id, msg := range m.projectAIMessages {
 		if msg.ProjectID == projectID && msg.userID == userID {
 			delete(m.projectAIMessages, id)
@@ -61,6 +186,11 @@ func (m *memoryRepo) ClearProjectAIMessages(_ context.Context, projectID, userID
 }
 
 func (m *memoryRepo) dropProjectAIMessages(projectID int64) {
+	for id, c := range m.projectAIConversations {
+		if c.ProjectID == projectID {
+			delete(m.projectAIConversations, id)
+		}
+	}
 	for id, msg := range m.projectAIMessages {
 		if msg.ProjectID == projectID {
 			delete(m.projectAIMessages, id)
