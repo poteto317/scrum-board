@@ -152,85 +152,6 @@
         @if (form.controls.title.touched && form.controls.title.invalid) {
           <p class="form-error">タイトルを1〜200文字で入力してください。</p>
         }
-        @if (canManage()) {
-          <fieldset class="acl-fieldset" [disabled]="!authReady() || acl.saving()">
-            <legend>アクセス</legend>
-            <label>
-              閲覧
-              <select
-                [value]="acl.viewAccess()"
-                (change)="acl.viewAccess.set($any($event.target).value)"
-              >
-                <option value="public">全公開（ログイン不要で詳細可）</option>
-                <option value="open">ログイン全員</option>
-                <option value="restricted">指定ユーザー</option>
-              </select>
-            </label>
-            <label>
-              編集
-              <select
-                [value]="acl.editAccess()"
-                (change)="acl.editAccess.set($any($event.target).value)"
-              >
-                <option value="open">ログイン全員（閲覧可の人）</option>
-                <option value="restricted">指定ユーザー</option>
-              </select>
-            </label>
-            @if (acl.viewAccess() === 'restricted' || acl.editAccess() === 'restricted') {
-              @if (usersLoadError()) {
-                <p class="form-error" role="alert">{{ usersLoadError() }}</p>
-              } @else if (usersSession.users() === null) {
-                <p class="muted">ユーザー一覧を読み込み中…</p>
-              } @else {
-                <div class="acl-user-lists">
-                  @if (acl.viewAccess() === 'restricted') {
-                    <div>
-                      <span class="acl-list-label">閲覧可</span>
-                      @for (u of usersSession.users()!; track u.id) {
-                        <label class="acl-user">
-                          <input
-                            type="checkbox"
-                            [checked]="acl.viewUserIds().includes(u.id)"
-                            [disabled]="u.disabled || acl.saving() || usersLoadError()"
-                            (change)="acl.toggleUser('view', u.id, $any($event.target).checked)"
-                          />
-                          {{ u.displayName }}
-                        </label>
-                      }
-                    </div>
-                  }
-                  @if (acl.editAccess() === 'restricted') {
-                    <div>
-                      <span class="acl-list-label">編集可</span>
-                      @for (u of usersSession.users()!; track u.id) {
-                        <label class="acl-user">
-                          <input
-                            type="checkbox"
-                            [checked]="acl.editUserIds().includes(u.id)"
-                            [disabled]="u.disabled || acl.saving() || usersLoadError()"
-                            (change)="acl.toggleUser('edit', u.id, $any($event.target).checked)"
-                          />
-                          {{ u.displayName }}
-                        </label>
-                      }
-                    </div>
-                  }
-                </div>
-              }
-            }
-            <button
-              type="button"
-              class="secondary"
-              [disabled]="acl.saving() || !!usersLoadError()"
-              (click)="acl.save()"
-            >
-              アクセス設定を保存
-            </button>
-            @if (acl.error()) {
-              <p class="form-error" role="alert">{{ acl.error() }}</p>
-            }
-          </fieldset>
-        }
         <app-description-blocks-editor
           [value]="form.controls.description.value"
           [disabled]="form.disabled"
@@ -702,6 +623,89 @@
               </li>
             }
           </ul>
+          @if (canManage()) {
+            <fieldset class="acl-fieldset" [disabled]="!authReady() || acl.saving()">
+              <legend>アクセス</legend>
+              <label>
+                閲覧
+                <select
+                  [value]="acl.viewAccess()"
+                  (change)="acl.viewAccess.set($any($event.target).value)"
+                >
+                  <option value="public">全公開（ログイン不要で詳細可）</option>
+                  <option value="open">ログイン全員</option>
+                  <option value="restricted">指定ユーザー</option>
+                </select>
+              </label>
+              <label>
+                編集
+                <select
+                  [value]="acl.editAccess()"
+                  (change)="acl.editAccess.set($any($event.target).value)"
+                >
+                  <option value="open">ログイン全員（閲覧可の人）</option>
+                  <option value="restricted">指定ユーザー</option>
+                </select>
+              </label>
+              @if (acl.viewAccess() === 'restricted' || acl.editAccess() === 'restricted') {
+                @if (usersLoadError()) {
+                  <p class="form-error" role="alert">{{ usersLoadError() }}</p>
+                } @else if (usersSession.users() === null) {
+                  <p class="muted">ユーザー一覧を読み込み中…</p>
+                } @else {
+                  <div class="acl-user-lists">
+                    @if (acl.viewAccess() === 'restricted') {
+                      <div>
+                        <span class="acl-list-label">閲覧可</span>
+                        <div class="acl-user-list">
+                          @for (u of usersSession.users()!; track u.id) {
+                            <label class="acl-user">
+                              <input
+                                type="checkbox"
+                                [checked]="acl.viewUserIds().includes(u.id)"
+                                [disabled]="u.disabled || acl.saving() || usersLoadError()"
+                                (change)="acl.toggleUser('view', u.id, $any($event.target).checked)"
+                              />
+                              {{ u.displayName }}
+                            </label>
+                          }
+                        </div>
+                      </div>
+                    }
+                    @if (acl.editAccess() === 'restricted') {
+                      <div>
+                        <span class="acl-list-label">編集可</span>
+                        <div class="acl-user-list">
+                          @for (u of usersSession.users()!; track u.id) {
+                            <label class="acl-user">
+                              <input
+                                type="checkbox"
+                                [checked]="acl.editUserIds().includes(u.id)"
+                                [disabled]="u.disabled || acl.saving() || usersLoadError()"
+                                (change)="acl.toggleUser('edit', u.id, $any($event.target).checked)"
+                              />
+                              {{ u.displayName }}
+                            </label>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              }
+              <button
+                type="button"
+                class="secondary"
+                [disabled]="acl.saving() || !!usersLoadError()"
+                (click)="acl.save()"
+              >
+                アクセス設定を保存
+              </button>
+              @if (acl.error()) {
+                <p class="form-error" role="alert">{{ acl.error() }}</p>
+              }
+            </fieldset>
+          }
           <div class="timestamps">
             <span>作成日時</span><time>{{ item()!.createdAt | date: 'yyyy/MM/dd HH:mm' }}</time
             ><span>更新日時</span><time>{{ item()!.updatedAt | date: 'yyyy/MM/dd HH:mm' }}</time>

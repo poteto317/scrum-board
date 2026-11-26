@@ -340,6 +340,73 @@ describe('ItemDetail autosave', () => {
     expect(readBoardScroll()).toBeNull();
     expect(router.navigate).toHaveBeenCalledWith(['/']);
   });
+  it('shows the access fieldset inside properties, not between title and description', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const acl = el.querySelector('fieldset.acl-fieldset');
+    expect(acl).toBeTruthy();
+    expect(acl!.closest('.properties-list')).toBeTruthy();
+    expect(el.querySelector('.detail-page-doc fieldset.acl-fieldset')).toBeNull();
+    const timestamps = el.querySelector('.properties-list .timestamps')!;
+    expect(
+      acl!.compareDocumentPosition(timestamps) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const status = el.querySelector('#detail-status')!;
+    expect(status.compareDocumentPosition(acl!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    f.destroy();
+  });
+  it('hides the access fieldset from users who cannot manage the item', async () => {
+    api.itemByNumber.mockReturnValue(of({ ...card, canManage: false }));
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('fieldset.acl-fieldset')).toBeNull();
+    f.destroy();
+  });
+  it('keeps the access fieldset out of the item form values and its save button non-submitting', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const acl = (f.nativeElement as HTMLElement).querySelector('fieldset.acl-fieldset')!;
+    expect(acl.querySelector('[formControlName], [formcontrolname]')).toBeNull();
+    const saveButton = Array.from(acl.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('アクセス設定を保存'),
+    )!;
+    expect(saveButton.type).toBe('button');
+    f.destroy();
+  });
+  it('changes the access draft without autosaving the item form from the properties', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const select = el.querySelector(
+      '.properties-list fieldset.acl-fieldset select',
+    ) as HTMLSelectElement;
+    expect(select.closest('form.detail-layout')).toBeTruthy();
+    select.value = 'restricted';
+    select.dispatchEvent(new Event('change'));
+    select.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    f.detectChanges();
+    expect(f.componentInstance.acl.viewAccess()).toBe('restricted');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(api.updateItem).not.toHaveBeenCalled();
+    f.destroy();
+  });
+  it('disables the access fieldset in properties while the access is saving', async () => {
+    const f = create();
+    await Promise.resolve();
+    f.detectChanges();
+    f.componentInstance.acl.saving.set(true);
+    f.detectChanges();
+    const acl = (f.nativeElement as HTMLElement).querySelector(
+      '.properties-list fieldset.acl-fieldset',
+    ) as HTMLFieldSetElement;
+    expect(acl.disabled).toBe(true);
+    f.destroy();
+  });
   it('places comments above history', () => {
     const f = create();
     const comments = f.nativeElement.querySelector('app-item-comments');
