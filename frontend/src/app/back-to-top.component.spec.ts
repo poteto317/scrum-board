@@ -145,6 +145,7 @@ describe('BackToTop', () => {
     const f = create();
     const b = button(f)!;
     b.dispatchEvent(new Event('pointerdown'));
+    b.dispatchEvent(new Event('pointerup'));
     b.click();
     b.dispatchEvent(new FocusEvent('focus'));
     setScroll(0);

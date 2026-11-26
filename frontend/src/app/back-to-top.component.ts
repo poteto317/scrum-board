@@ -44,8 +44,6 @@ export class BackToTop {
   }
 
   scrollToTop() {
-    // Browsers that do not focus a pressed button (Safari) never reach onFocus; clear here.
-    this.pointerPressed = false;
     const reduced = window.matchMedia?.(REDUCED_MOTION_QUERY).matches ?? false;
     window.scrollTo({ top: 0, behavior: backToTopScrollBehavior(reduced) });
   }
