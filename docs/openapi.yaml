@@ -2620,6 +2620,94 @@ paths:
       security:
       - cookieAuth: []
       - basicAuth: []
+  /api/projects/{id}/ai-proposals/{pid}:
+    patch:
+      summary: プロジェクト AI チャットの提案の状態を変える
+      operationId: patch_api_projects_id_ai_proposals_pid
+      description: |
+        ログインが必要。呼び出したユーザー自身の、そのプロジェクトの提案の状態だけを変える（アイテムは変えない。適用は画面が既存のアイテムの API で行う）。
+        許す変更: pending→applied（確保）、pending→dismissed（破棄）、applied→pending（確保の解放。作成の結果の番号が無いときだけ）、
+        applied→applied + createdItemNumber（item_create の結果の記録。1 回だけ）。それ以外は 409 で、本文に現在の提案。
+        AI を呼ばないので、AI の利用制限・ANTHROPIC_API_KEY は関係しない。
+        エラーの順序: 401 → 400／404（プロジェクト）→ 400（提案 ID・本文）→ 404（提案）→ 409。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              properties:
+                state:
+                  type: string
+                  enum:
+                  - pending
+                  - applied
+                  - dismissed
+                createdItemNumber:
+                  type: integer
+                  minimum: 1
+                  description: state が applied のときだけ。item_create を適用して作ったアイテムの番号。
+              additionalProperties: false
+      responses:
+        '200':
+          description: 変更後の提案
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectAIProposal'
+        '400':
+          description: 提案 ID が不正（「提案IDが不正です。」）、または本文が不正（「提案の状態が不正です。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: |
+            プロジェクトなし、または提案が見つからない（「提案が見つかりません。」）。無い・別のユーザーのもの・別のプロジェクトのもの、を区別しない。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 今の状態からは変えられない（「この提案は既に処理されています。」）
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - message
+                - proposal
+                properties:
+                  message:
+                    type: string
+                  proposal:
+                    $ref: '#/components/schemas/ProjectAIProposal'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: プロジェクト ID
+      - name: pid
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: 提案 ID
+      security:
+      - cookieAuth: []
+      - basicAuth: []
   /api/public-config:
     get:
       summary: 公開設定（ログイン不要）
@@ -3372,6 +3460,64 @@ components:
         outputTokens:
           type: integer
         createdAt:
+          type: string
+          format: date-time
+        proposals:
+          type: array
+          description: 回答（assistant）の提案。無ければ省略。読み直しに失敗して組み立てた応答には付かない。
+          items:
+            $ref: '#/components/schemas/ProjectAIProposal'
+      additionalProperties: false
+    ProjectAIProposal:
+      type: object
+      description: |
+        AI の提案。モデルの提案のツールが作り、回答と一緒に保存される。アイテムは変えない（適用は画面が既存のアイテムの API を利用者の権限で呼ぶ）。
+        status_change は itemNumber・itemTitle・columnId・columnName、description_edit は itemNumber・itemTitle・description・baseDescription（提案のときの説明）、
+        item_create は title・description・columnId・columnName（常に Todo の列）と、適用後の createdItemNumber。名前とタイトルは表示用で、判定には ID と番号を使う。
+      required:
+      - id
+      - messageId
+      - kind
+      - state
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: integer
+        messageId:
+          type: integer
+        kind:
+          type: string
+          enum:
+          - status_change
+          - description_edit
+          - item_create
+        state:
+          type: string
+          enum:
+          - pending
+          - applied
+          - dismissed
+        itemNumber:
+          type: integer
+        itemTitle:
+          type: string
+        columnId:
+          type: integer
+        columnName:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        baseDescription:
+          type: string
+        createdItemNumber:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
       additionalProperties: false
