@@ -51,6 +51,7 @@ type memoryRepo struct {
 	aiMessages         map[int64]AIMessage
 	nextAIMessageID    int64
 	aiUsage            AIUsage
+	projectAIMessages  map[int64]memoryProjectAIMessage
 	listLivingFail     error
 	updateItemFail     error
 	updateItemFailID   int64
@@ -808,6 +809,7 @@ func (m *memoryRepo) DeleteProject(_ context.Context, id int64) error {
 		}
 	}
 	m.projects = next
+	m.dropProjectAIMessages(id) // mirrors ON DELETE CASCADE
 	return nil
 }
 func (m *memoryRepo) ReorderProjects(_ context.Context, projectIDs []int64) ([]Project, error) {

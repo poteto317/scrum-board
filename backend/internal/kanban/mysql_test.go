@@ -48,6 +48,7 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"workspace_list_filter",
 		"item_attachments",
 		"item_ai_messages",
+		"project_ai_messages",
 		"ai_usage",
 		"item_comments",
 		"item_acl_entries",
@@ -139,6 +140,10 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeUsers(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	// project_ai_messages references users, so it comes after InitializeUsers (same order as cmd/server).
+	if err = repo.InitializeProjectAIChat(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = repo.InitializeSessions(t.Context()); err != nil {

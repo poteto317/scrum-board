@@ -41,45 +41,65 @@ func buildAIChatSystem(item Item, comments []Comment) string {
 	var b strings.Builder
 	b.WriteString(aiChatSystemPrefix)
 	b.WriteString("\n\n# カード文脈\n")
-	b.WriteString("タイトル:\n```\n")
-	b.WriteString(clipAIChatField(item.Title, maxAIChatContextFieldLen))
-	b.WriteString("\n```\n説明:\n```\n")
-	b.WriteString(clipAIChatField(item.Description, maxAIChatContextFieldLen))
-	b.WriteString("\n```\n")
-	if len(comments) > 0 {
-		if len(comments) > maxAIChatContextComments {
-			comments = comments[len(comments)-maxAIChatContextComments:]
-		}
-		b.WriteString("\n# コメント（新しい順に最大30件）\n")
-		for i, c := range comments {
-			author := c.Author
-			if author == "" {
-				author = "(匿名)"
-			}
-			fmt.Fprintf(&b, "%d. %s:\n```\n%s\n```\n", i+1, author, clipAIChatField(c.Body, maxAIChatContextFieldLen))
-		}
-	}
+	writeItemPromptContext(&b, item, comments, "# コメント（新しい順に最大30件）")
 	return b.String()
+}
+
+// writeItemPromptContext writes one item for a prompt: title and description (each cut to
+// maxAIChatContextFieldLen and fenced), then the last maxAIChatContextComments comments,
+// oldest first, under commentsHeading. Without comments the heading is left out too.
+// Both chats (item and project) describe an item with this, so they cut and fence alike.
+func writeItemPromptContext(b *strings.Builder, item Item, comments []Comment, commentsHeading string) {
+	b.WriteString("タイトル:\n")
+	b.WriteString(fencedBlock(clipAIChatField(item.Title, maxAIChatContextFieldLen)))
+	b.WriteString("\n説明:\n")
+	b.WriteString(fencedBlock(clipAIChatField(item.Description, maxAIChatContextFieldLen)))
+	b.WriteString("\n")
+	if len(comments) == 0 {
+		return
+	}
+	if len(comments) > maxAIChatContextComments {
+		comments = comments[len(comments)-maxAIChatContextComments:]
+	}
+	b.WriteString("\n" + commentsHeading + "\n")
+	for i, c := range comments {
+		// The author stands outside the fence: keep it on its one line.
+		author := promptLabel(c.Author)
+		if author == "" {
+			author = "(匿名)"
+		}
+		fmt.Fprintf(b, "%d. %s:\n%s\n", i+1, author, fencedBlock(clipAIChatField(c.Body, maxAIChatContextFieldLen)))
+	}
 }
 
 // selectAIChatHistoryForModel returns the last maxTurns user+assistant pairs for the model.
 func selectAIChatHistoryForModel(msgs []AIMessage, maxTurns int) []ChatTurn {
-	if maxTurns <= 0 || len(msgs) == 0 {
+	turns := make([]ChatTurn, len(msgs))
+	for i, m := range msgs {
+		turns[i] = ChatTurn{Role: m.Role, Body: m.Body}
+	}
+	return lastChatTurns(turns, maxTurns)
+}
+
+// lastChatTurns keeps the last maxTurns user+assistant pairs. A leading assistant message
+// (its question was cut off) and messages with an unknown role are dropped.
+func lastChatTurns(turns []ChatTurn, maxTurns int) []ChatTurn {
+	if maxTurns <= 0 || len(turns) == 0 {
 		return nil
 	}
 	maxMsgs := maxTurns * 2
-	if len(msgs) > maxMsgs {
-		msgs = msgs[len(msgs)-maxMsgs:]
+	if len(turns) > maxMsgs {
+		turns = turns[len(turns)-maxMsgs:]
 	}
-	if len(msgs) > 0 && msgs[0].Role == AIRoleAssistant {
-		msgs = msgs[1:]
+	if len(turns) > 0 && turns[0].Role == AIRoleAssistant {
+		turns = turns[1:]
 	}
-	out := make([]ChatTurn, 0, len(msgs))
-	for _, m := range msgs {
-		if m.Role != AIRoleUser && m.Role != AIRoleAssistant {
+	out := make([]ChatTurn, 0, len(turns))
+	for _, t := range turns {
+		if t.Role != AIRoleUser && t.Role != AIRoleAssistant {
 			continue
 		}
-		out = append(out, ChatTurn{Role: m.Role, Body: m.Body})
+		out = append(out, t)
 	}
 	return out
 }
