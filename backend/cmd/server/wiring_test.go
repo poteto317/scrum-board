@@ -58,8 +58,13 @@ func (r *smallRepo) ListProjects(ctx context.Context) ([]kanban.Project, error) 
 	return []kanban.Project{{ID: 1, Name: "メイン"}}, nil
 }
 
-func (r *smallRepo) ListProjectAIMessages(context.Context, int64, int64) ([]kanban.ProjectAIMessage, error) {
+func (r *smallRepo) ListProjectAIMessages(context.Context, int64, int64, int64) ([]kanban.ProjectAIMessage, error) {
 	return []kanban.ProjectAIMessage{}, nil
+}
+
+// LatestProjectAIConversation: a POST without a conversation asks for the latest one. There is none.
+func (r *smallRepo) LatestProjectAIConversation(context.Context, int64, int64) (*kanban.ProjectAIConversation, error) {
+	return nil, nil
 }
 
 func (r *smallRepo) GetAIUsage(context.Context) (kanban.AIUsage, error) {
@@ -372,7 +377,7 @@ func TestWithAKeyTheProjectChatUsesToolsThroughTheRealChatter(t *testing.T) {
 	r.Header.Set("Content-Type", "application/json")
 	r.AddCookie(&http.Cookie{Name: kanban.SessionCookieName, Value: kanban.HandlerTestSessionID})
 	h.ServeHTTP(w, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "プロジェクトの回答") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "プロジェクトの回答") || !strings.Contains(w.Body.String(), `"conversation":{"id":1,`) {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
 	mu.Lock()
@@ -399,18 +404,18 @@ func (r *projectChatRepo) Columns(context.Context) ([]kanban.Column, error) {
 	return []kanban.Column{{ID: 1, Name: "Todo"}}, nil
 }
 
-func (r *projectChatRepo) AppendProjectAITurn(context.Context, int64, int64, string, string, int64, int64) error {
+func (r *projectChatRepo) AppendProjectAITurn(_ context.Context, projectID, _ int64, _ *int64, turn kanban.ProjectAITurn) (kanban.ProjectAIConversation, error) {
 	r.appended.Add(1)
-	return nil
+	return kanban.ProjectAIConversation{ID: 1, ProjectID: projectID, Title: turn.Title}, nil
 }
 
-func (r *projectChatRepo) ListProjectAIMessages(context.Context, int64, int64) ([]kanban.ProjectAIMessage, error) {
+func (r *projectChatRepo) ListProjectAIMessages(_ context.Context, _, _, conversationID int64) ([]kanban.ProjectAIMessage, error) {
 	if r.appended.Load() == 0 {
 		return []kanban.ProjectAIMessage{}, nil
 	}
 	return []kanban.ProjectAIMessage{
-		{ID: 1, ProjectID: 1, Role: kanban.AIRoleUser, Body: "期限が近いものは？"},
-		{ID: 2, ProjectID: 1, Role: kanban.AIRoleAssistant, Body: "プロジェクトの回答"},
+		{ID: 1, ProjectID: 1, ConversationID: conversationID, Role: kanban.AIRoleUser, Body: "期限が近いものは？"},
+		{ID: 2, ProjectID: 1, ConversationID: conversationID, Role: kanban.AIRoleAssistant, Body: "プロジェクトの回答"},
 	}, nil
 }
 
