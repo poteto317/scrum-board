@@ -27,7 +27,7 @@
       <input
         #imageFile
         type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp"
+        [accept]="imageAccept"
         multiple
         hidden
         (change)="onImageFileChange($event)"

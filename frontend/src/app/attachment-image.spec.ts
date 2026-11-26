@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ATTACHMENT_IMAGE_ACCEPT,
   ATTACHMENT_IMAGE_BATCH_HINT,
   ATTACHMENT_IMAGE_HINT,
   ATTACHMENT_IMAGE_MAX_BYTES,
@@ -31,6 +32,12 @@ describe('isAllowedImageFile', () => {
     expect(isAllowedImageFile(file('a.png', 'image/png', ATTACHMENT_IMAGE_MAX_BYTES + 1))).toBe(
       false,
     );
+  });
+});
+
+describe('ATTACHMENT_IMAGE_ACCEPT', () => {
+  it('lists the allowed types for the file picker', () => {
+    expect(ATTACHMENT_IMAGE_ACCEPT).toBe('image/jpeg,image/png,image/gif,image/webp');
   });
 });
 

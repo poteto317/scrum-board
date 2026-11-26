@@ -24,6 +24,7 @@ import { buildAttachmentMarkup, insertMarkupAt } from './description-link';
 import { DescriptionRichText } from './description-rich-text';
 import { ItemComment } from './models';
 import {
+  ATTACHMENT_IMAGE_ACCEPT,
   ATTACHMENT_IMAGE_BUSY_HINT,
   imageUploadDoneMessage,
   imageUploadPlanNotice,
@@ -133,6 +134,7 @@ export class ItemComments implements OnChanges {
   readonly draftBody = signal('');
   readonly editBody = signal('');
   readonly actionError = signal('');
+  readonly imageAccept = ATTACHMENT_IMAGE_ACCEPT;
   readonly imageBusy = signal(false);
   readonly confirmAttachmentId = signal<number | null>(null);
 

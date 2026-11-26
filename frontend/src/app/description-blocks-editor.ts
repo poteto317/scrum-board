@@ -32,6 +32,7 @@ import {
 } from './description-link';
 import { DescriptionRichText } from './description-rich-text';
 import {
+  ATTACHMENT_IMAGE_ACCEPT,
   ATTACHMENT_IMAGE_BUSY_HINT,
   imageUploadDoneMessage,
   imageUploadPlanNotice,
@@ -82,6 +83,7 @@ export class DescriptionBlocksEditor {
   readonly blurLeave = output<void>();
   readonly lengthError = signal('');
   readonly imageError = signal('');
+  readonly imageAccept = ATTACHMENT_IMAGE_ACCEPT;
   readonly imageBusy = signal(false);
   readonly confirmDeleteId = signal<number | null>(null);
   readonly attachments = signal<ItemAttachment[]>([]);
