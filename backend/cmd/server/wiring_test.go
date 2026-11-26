@@ -50,6 +50,18 @@ func (r *smallRepo) UserBySessionID(_ context.Context, sessionID string, _ time.
 	return kanban.User{ID: 1, LoginName: "admin", DisplayName: "admin", Role: kanban.RoleAdmin}, nil
 }
 
+// ListProjects records the request deadline that the project routes see.
+func (r *smallRepo) ListProjects(ctx context.Context) ([]kanban.Project, error) {
+	if d, ok := ctx.Deadline(); ok {
+		r.deadline.Store(d)
+	}
+	return []kanban.Project{{ID: 1, Name: "メイン"}}, nil
+}
+
+func (r *smallRepo) ListProjectAIMessages(context.Context, int64, int64) ([]kanban.ProjectAIMessage, error) {
+	return []kanban.ProjectAIMessage{}, nil
+}
+
 func (r *smallRepo) GetAIUsage(context.Context) (kanban.AIUsage, error) {
 	return kanban.AIUsage{}, nil
 }
@@ -270,6 +282,235 @@ func TestAKeyWithSurroundingWhitespaceIsTrimmedAndABlankKeyMeansNotConfigured(t 
 	for _, blank := range []string{" ", "\n", " \t\n "} {
 		if newFormatter(getenvFrom(map[string]string{"ANTHROPIC_API_KEY": blank})) != nil {
 			t.Fatalf("a blank key %q must mean not configured", blank)
+		}
+	}
+}
+
+func TestOnlyTheProjectChatPostGetsTheLongTimeout(t *testing.T) {
+	isolate(t)
+	cases := []struct {
+		name, method, target, body string
+		status                     int
+		want                       time.Duration
+	}{
+		// 存在しないプロジェクト（404）でも、期限はハンドラーに入る前に決まっている。
+		{"project chat POST", http.MethodPost, "/api/projects/999/ai-chat", `{"message":"q"}`, 404, kanban.ProjectChatRequestTimeout},
+		{"project chat GET", http.MethodGet, "/api/projects/1/ai-chat", "", 200, kanban.RequestTimeout},
+		{"project chat DELETE", http.MethodDelete, "/api/projects/999/ai-chat", "", 404, kanban.RequestTimeout},
+		{"project list", http.MethodGet, "/api/projects", "", 200, kanban.RequestTimeout},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &smallRepo{}
+			h := buildHandler(repo, getenvFrom(map[string]string{}))
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
+			r.Header.Set("Content-Type", "application/json")
+			r.AddCookie(&http.Cookie{Name: kanban.SessionCookieName, Value: kanban.HandlerTestSessionID})
+			before := time.Now()
+			h.ServeHTTP(w, r)
+			if w.Code != tc.status {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+			deadline, ok := repo.deadline.Load().(time.Time)
+			if got := deadline.Sub(before); !ok || got > tc.want+time.Second || got < tc.want-time.Second {
+				t.Fatalf("request deadline must be about %v, got %v (set=%v)", tc.want, got, ok)
+			}
+		})
+	}
+	if kanban.ProjectChatRequestTimeout != 50*time.Second || kanban.RequestTimeout != 15*time.Second {
+		t.Fatalf("timeouts=%v %v", kanban.ProjectChatRequestTimeout, kanban.RequestTimeout)
+	}
+}
+
+func TestIsProjectAIChatPost(t *testing.T) {
+	cases := []struct {
+		method, target string
+		want           bool
+	}{
+		{http.MethodPost, "/api/projects/1/ai-chat", true},
+		{http.MethodPost, "/api/projects/abc/ai-chat", true}, // the handler answers 400; still this route
+		{http.MethodGet, "/api/projects/1/ai-chat", false},
+		{http.MethodDelete, "/api/projects/1/ai-chat", false},
+		{http.MethodPost, "/api/projects/1", false},
+		{http.MethodPost, "/api/projects//ai-chat", false},
+		{http.MethodPost, "/api/projects/1/x/ai-chat", false},
+		{http.MethodPost, "/api/items/by-number/1/ai-chat", false},
+		{http.MethodPost, "/api/items/refined", false},
+	}
+	for _, tc := range cases {
+		if got := isProjectAIChatPost(httptest.NewRequest(tc.method, tc.target, nil)); got != tc.want {
+			t.Fatalf("%s %s => %v", tc.method, tc.target, got)
+		}
+	}
+}
+
+func TestWithAKeyTheProjectChatUsesToolsThroughTheRealChatter(t *testing.T) {
+	isolate(t)
+	var bodies []map[string]any
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		bodies = append(bodies, body)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		reply, _ := json.Marshal(map[string]any{
+			"id": "msg_test", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
+			"content":     []map[string]any{{"type": "text", "text": "プロジェクトの回答"}},
+			"stop_reason": "end_turn", "stop_sequence": nil,
+			"usage": map[string]any{"input_tokens": 3, "output_tokens": 4},
+		})
+		_, _ = w.Write(reply)
+	}))
+	defer srv.Close()
+	repo := &projectChatRepo{}
+	h := buildHandler(repo, getenvFrom(map[string]string{"ANTHROPIC_API_KEY": secretKey}), option.WithBaseURL(srv.URL))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/projects/1/ai-chat", strings.NewReader(`{"message":"期限が近いものは？"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.AddCookie(&http.Cookie{Name: kanban.SessionCookieName, Value: kanban.HandlerTestSessionID})
+	h.ServeHTTP(w, r)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "プロジェクトの回答") {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 1 {
+		t.Fatalf("model calls=%d", len(bodies))
+	}
+	tools, _ := bodies[0]["tools"].([]any)
+	if len(tools) != 2 || tools[0].(map[string]any)["name"] != "search_items" || tools[1].(map[string]any)["name"] != "get_item" {
+		t.Fatalf("the real chatter must be given both tools: %v", bodies[0]["tools"])
+	}
+	if repo.appended.Load() != 1 {
+		t.Fatalf("stored turns=%d", repo.appended.Load())
+	}
+}
+
+// projectChatRepo implements what a POST /api/projects/{id}/ai-chat without tool calls touches.
+type projectChatRepo struct {
+	smallRepo
+	appended atomic.Int32
+}
+
+func (r *projectChatRepo) Columns(context.Context) ([]kanban.Column, error) {
+	return []kanban.Column{{ID: 1, Name: "Todo"}}, nil
+}
+
+func (r *projectChatRepo) AppendProjectAITurn(context.Context, int64, int64, string, string, int64, int64) error {
+	r.appended.Add(1)
+	return nil
+}
+
+func (r *projectChatRepo) ListProjectAIMessages(context.Context, int64, int64) ([]kanban.ProjectAIMessage, error) {
+	if r.appended.Load() == 0 {
+		return []kanban.ProjectAIMessage{}, nil
+	}
+	return []kanban.ProjectAIMessage{
+		{ID: 1, ProjectID: 1, Role: kanban.AIRoleUser, Body: "期限が近いものは？"},
+		{ID: 2, ProjectID: 1, Role: kanban.AIRoleAssistant, Body: "プロジェクトの回答"},
+	}, nil
+}
+
+type usageRecord struct{ requests, in, out int64 }
+
+// toolChatRepo adds what a tool call and the usage record touch.
+type toolChatRepo struct {
+	projectChatRepo
+	searches atomic.Int32
+	usage    atomic.Value // usageRecord
+}
+
+func (r *toolChatRepo) SearchProjectItems(context.Context, int64, kanban.ItemSearch) ([]kanban.Item, error) {
+	r.searches.Add(1)
+	return []kanban.Item{}, nil
+}
+
+func (r *toolChatRepo) AddAIUsage(_ context.Context, requests, inTok, outTok int64) error {
+	r.usage.Store(usageRecord{requests, inTok, outTok})
+	return nil
+}
+
+// 実物のチャットとハンドラーをつないで: 1 回目はツール、2 回目で上流が失敗。
+// 502 を返し、履歴には足さず、1 回目の実数と 2 回目の見積もりを利用量に記録する。上流の文言は出さない。
+func TestProjectChatFailingAfterAToolCallStillRecordsUsage(t *testing.T) {
+	isolate(t)
+	logs := captureLogs(t)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if calls.Add(1) == 1 {
+			body, _ := json.Marshal(map[string]any{
+				"id": "msg_test", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
+				"content": []map[string]any{{"type": "tool_use", "id": "toolu_1", "name": "search_items",
+					"input": map[string]any{"query": "SENTINEL-TOOL-QUERY"}}},
+				"stop_reason": "tool_use", "stop_sequence": nil,
+				"usage": map[string]any{"input_tokens": 100, "output_tokens": 7},
+			})
+			_, _ = w.Write(body)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"api_error","message":"`+secretReply+`"}}`)
+	}))
+	defer srv.Close()
+	repo := &toolChatRepo{}
+	h := buildHandler(repo, getenvFrom(map[string]string{"ANTHROPIC_API_KEY": secretKey}), option.WithBaseURL(srv.URL))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/projects/1/ai-chat", strings.NewReader(`{"message":"認証は？"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.AddCookie(&http.Cookie{Name: kanban.SessionCookieName, Value: kanban.HandlerTestSessionID})
+	h.ServeHTTP(w, r)
+	if w.Code != 502 || !strings.Contains(w.Body.String(), `"code":"ai_failed"`) {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if calls.Load() != 2 || repo.searches.Load() != 1 || repo.appended.Load() != 0 {
+		t.Fatalf("model calls=%d searches=%d appended=%d", calls.Load(), repo.searches.Load(), repo.appended.Load())
+	}
+	usage, ok := repo.usage.Load().(usageRecord)
+	if !ok || usage.requests != 1 || usage.in <= 100 || usage.out != 7 {
+		t.Fatalf("usage must be the first call plus an estimate of the failed one: %+v (recorded=%v)", usage, ok)
+	}
+	for _, secret := range []string{secretKey, secretReply, "SENTINEL-TOOL-QUERY"} {
+		if strings.Contains(w.Body.String(), secret) || strings.Contains(logs.String(), secret) {
+			t.Fatalf("leaked %q: body=%s logs=%s", secret, w.Body.String(), logs.String())
+		}
+	}
+}
+
+// 期限の切り替えは、中のハンドラーが何であっても、経路だけで決まる。
+func TestWithRouteTimeoutsPicksTheLimitByRoute(t *testing.T) {
+	var got time.Duration
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		deadline, ok := r.Context().Deadline()
+		if !ok {
+			t.Errorf("%s %s has no deadline", r.Method, r.URL.Path)
+		}
+		got = time.Until(deadline)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	h := withRouteTimeouts(inner)
+	cases := []struct {
+		method, target string
+		want           time.Duration
+	}{
+		{http.MethodPost, "/api/projects/1/ai-chat", kanban.ProjectChatRequestTimeout},
+		{http.MethodGet, "/api/projects/1/ai-chat", kanban.RequestTimeout},
+		{http.MethodPost, "/api/items/by-number/1/ai-chat", kanban.RequestTimeout},
+		{http.MethodPost, "/api/items/1/attachments", 60 * time.Second},
+		{http.MethodGet, "/api/attachments/1/content", 60 * time.Second},
+		{http.MethodGet, "/api/board", kanban.RequestTimeout},
+	}
+	for _, tc := range cases {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(tc.method, tc.target, nil))
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("%s %s: status=%d", tc.method, tc.target, w.Code)
+		}
+		if got > tc.want || got < tc.want-time.Second {
+			t.Fatalf("%s %s: deadline in %v, want about %v", tc.method, tc.target, got, tc.want)
 		}
 	}
 }
