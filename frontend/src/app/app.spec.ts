@@ -92,6 +92,11 @@ describe('App header and sidebar', () => {
     return setupApp(extra, routerRoutes);
   }
 
+  it('mounts a single back-to-top button host inside the app chrome', () => {
+    const { f } = setup();
+    expect(f.nativeElement.querySelectorAll('app-back-to-top').length).toBe(1);
+  });
+
   it('does not render the project switcher in the header', () => {
     const { f } = setup();
     expect(f.nativeElement.querySelector('#project-select-trigger')).toBeNull();
