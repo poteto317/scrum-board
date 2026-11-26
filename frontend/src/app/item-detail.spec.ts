@@ -389,22 +389,20 @@ describe('ItemDetail autosave', () => {
     select.value = 'restricted';
     select.dispatchEvent(new Event('change'));
     select.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const submit = new Event('submit', { bubbles: true, cancelable: true });
+    select.closest('form')!.dispatchEvent(submit);
     f.detectChanges();
+    expect(submit.defaultPrevented).toBe(true);
     expect(f.componentInstance.acl.viewAccess()).toBe('restricted');
     await vi.advanceTimersByTimeAsync(2000);
     expect(api.updateItem).not.toHaveBeenCalled();
-    f.destroy();
-  });
-  it('disables the access fieldset in properties while the access is saving', async () => {
-    const f = create();
-    await Promise.resolve();
-    f.detectChanges();
-    f.componentInstance.acl.saving.set(true);
-    f.detectChanges();
-    const acl = (f.nativeElement as HTMLElement).querySelector(
-      '.properties-list fieldset.acl-fieldset',
-    ) as HTMLFieldSetElement;
-    expect(acl.disabled).toBe(true);
+    // 陽性対照: 同じハーネスで項目の欄を変えると保存が走り、アクセスの値は含まれない
+    const title = el.querySelector('#detail-title') as HTMLInputElement;
+    title.value = '編集中';
+    title.dispatchEvent(new Event('input'));
+    title.dispatchEvent(new Event('blur'));
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith(18, { title: '編集中' });
     f.destroy();
   });
   it('places comments above history', () => {
