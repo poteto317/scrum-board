@@ -27,6 +27,7 @@ import {
 import {
   buildAttachmentMarkup,
   insertMarkupAt,
+  parseDescriptionLinks,
 } from './description-link';
 import { DescriptionRichText } from './description-rich-text';
 
@@ -80,6 +81,19 @@ export class DescriptionBlocksEditor {
   readonly gapIndexes = computed(() => {
     const n = this.blocks().length;
     return Array.from({ length: n + 1 }, (_, i) => i);
+  });
+
+  /**
+   * Rich preview under the textareas. Only when links/images need rendering —
+   * plain text alone looked like a second, non-editable duplicate block.
+   */
+  readonly showRichPreview = computed(() => {
+    const number = this.itemNumber();
+    const text = this.value();
+    if (number <= 0 || text === '') return false;
+    return parseDescriptionLinks(text, number).some(
+      (seg) => seg.kind === 'link' || seg.kind === 'image',
+    );
   });
 
   /** When set, skip the next value() update only if it equals this string (echo). */
