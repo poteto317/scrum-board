@@ -167,7 +167,11 @@ export class AiChatFab implements OnInit {
     if (event.isComposing || event.keyCode === 229 || event.repeat) return;
     if (Date.now() - this.openedAt < OPEN_GUARD_MS) return;
     if (document.querySelector('dialog[open]')) return;
-    if (isEditableFocusTarget(document.activeElement)) return;
+    const active = document.activeElement;
+    const panel = this.panelRef()?.nativeElement;
+    if (panel && active instanceof Node && panel.contains(active) && isEditableFocusTarget(active)) {
+      return;
+    }
     event.preventDefault();
     this.closePanel({ restoreFocus: true });
   };
@@ -184,6 +188,8 @@ export class AiChatFab implements OnInit {
       if (ok) {
         this.closePanel({ restoreFocus: false });
       }
+    } catch {
+      // navigate 失敗時はドックを開いたまま（L-001）
     } finally {
       this.expanding.set(false);
     }

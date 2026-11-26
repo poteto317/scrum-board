@@ -41,7 +41,7 @@ function setup(opts: {
       provideRouter([]),
       {
         provide: ProjectSession,
-        useValue: { bootstrapped, switching, activeId },
+        useValue: { bootstrapped, switching, activeId, projects: signal([{ id: 1, name: 'P1', position: 0 }, { id: 7, name: 'P7', position: 1 }]) },
       },
       { provide: Api, useValue: api },
       {
@@ -95,7 +95,15 @@ describe('AiChatPage', () => {
       imports: [AiChatPage],
       providers: [
         provideRouter([{ path: 'ai-chat', component: AiChatPage }]),
-        { provide: ProjectSession, useValue: { bootstrapped, switching, activeId } },
+        {
+          provide: ProjectSession,
+          useValue: {
+            bootstrapped,
+            switching,
+            activeId,
+            projects: signal([{ id: 1, name: 'P1', position: 0 }]),
+          },
+        },
         {
           provide: Api,
           useValue: {
@@ -135,7 +143,18 @@ describe('AiChatPage', () => {
       imports: [AiChatPage],
       providers: [
         provideRouter([{ path: 'ai-chat', component: AiChatPage }]),
-        { provide: ProjectSession, useValue: { bootstrapped, switching, activeId } },
+        {
+          provide: ProjectSession,
+          useValue: {
+            bootstrapped,
+            switching,
+            activeId,
+            projects: signal([
+              { id: 1, name: 'P1', position: 0 },
+              { id: 7, name: 'P7', position: 1 },
+            ]),
+          },
+        },
         {
           provide: Api,
           useValue: {

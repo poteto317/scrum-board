@@ -558,5 +558,17 @@ describe('AiChatFab', () => {
       expect(f.componentInstance.open()).toBe(true);
       expect(f.componentInstance.expanding()).toBe(false);
     });
+
+    it('keeps the dock open when navigate rejects', async () => {
+      const { f, ctx, router } = setup();
+      ctx.setBoard();
+      f.detectChanges();
+      openPanel(f);
+      vi.spyOn(router, 'navigate').mockRejectedValue(new Error('nav failed'));
+      await f.componentInstance.expandToPage();
+      f.detectChanges();
+      expect(f.componentInstance.open()).toBe(true);
+      expect(f.componentInstance.expanding()).toBe(false);
+    });
   });
 });

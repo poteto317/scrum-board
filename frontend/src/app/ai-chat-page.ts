@@ -45,7 +45,9 @@ export class AiChatPage {
 
   readonly projectId = computed(() => {
     const parsed = this.queryParse();
-    if (parsed.kind === 'ok') return parsed.id;
+    if (parsed.kind === 'ok') {
+      return this.knownProjectId(parsed.id);
+    }
     if (parsed.kind === 'invalid') return null;
     const id = this.projects.activeId();
     return id != null && id > 0 ? id : null;
@@ -53,10 +55,18 @@ export class AiChatPage {
 
   readonly view = computed<PageView>(() => {
     if (!this.projects.bootstrapped() || this.projects.switching()) return 'waiting';
-    if (this.queryParse().kind === 'invalid') return 'invalid';
+    const parsed = this.queryParse();
+    if (parsed.kind === 'invalid') return 'invalid';
+    if (parsed.kind === 'ok' && this.knownProjectId(parsed.id) == null) return 'invalid';
     if (this.projectId() == null) return 'empty';
     return 'chat';
   });
+
+  private knownProjectId(id: number): number | null {
+    const list = this.projects.projects();
+    if (!list.some((p) => p.id === id)) return null;
+    return id;
+  }
 
   constructor() {
     effect(() => {
