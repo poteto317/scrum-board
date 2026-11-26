@@ -2,6 +2,7 @@ import {
   afterNextRender,
   Component,
   computed,
+  DestroyRef,
   effect,
   ElementRef,
   HostListener,
@@ -30,9 +31,20 @@ import {
   parseDescriptionLinks,
 } from './description-link';
 import { DescriptionRichText } from './description-rich-text';
+import {
+  ATTACHMENT_IMAGE_BUSY_HINT,
+  imageUploadDoneMessage,
+  imageUploadPlanNotice,
+  planImageUpload,
+} from './attachment-image';
+import {
+  clipboardFilesToAttach,
+  filesFromDataTransfer,
+  pasteLinkOverSelection,
+} from './paste-content';
+import { uploadImagesInOrder } from './upload-images-in-order';
 
 const DEFAULT_LENGTH_ERROR = `説明は${DESCRIPTION_MAX_LEN}文字以内で入力してください。`;
-const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
 @Component({
   selector: 'app-description-blocks-editor',
@@ -77,6 +89,7 @@ export class DescriptionBlocksEditor {
   readonly insertMenuIndex = signal<number | null>(null);
   private uploadGuard = false;
   private deleteGuard = false;
+  private destroyed = false;
   /** Gap slots: 0..blocks.length inclusive. */
   readonly gapIndexes = computed(() => {
     const n = this.blocks().length;
@@ -102,6 +115,9 @@ export class DescriptionBlocksEditor {
   private composing = false;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      this.destroyed = true;
+    });
     effect(() => {
       const next = this.value();
       if (this.pendingEcho !== null && next === this.pendingEcho) {
@@ -201,6 +217,11 @@ export class DescriptionBlocksEditor {
     ) {
       return;
     }
+    // 画像のアップロード・削除の間（imageBusy）は、挿入位置がずれないように本文の構造を変えない。
+    if (this.imageBusy() && (event.key === 'Enter' || event.key === 'Backspace')) {
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
       const el = event.target as HTMLTextAreaElement;
@@ -259,7 +280,7 @@ export class DescriptionBlocksEditor {
   requestLink(): void {
     const index = this.focusedIndex;
     const el = this.areas().at(index)?.nativeElement;
-    if (!el || this.disabled()) return;
+    if (!el || this.disabled() || this.imageBusy()) return;
     const start = el.selectionStart ?? 0;
     const end = el.selectionEnd ?? 0;
     this.linkRequest.emit({
@@ -276,7 +297,7 @@ export class DescriptionBlocksEditor {
 
   openInsertMenu(index: number, event?: MouseEvent): void {
     event?.stopPropagation();
-    if (this.disabled()) return;
+    if (this.disabled() || this.imageBusy()) return;
     if (this.insertMenuIndex() === index) {
       this.closeInsertMenu();
       return;
@@ -313,9 +334,9 @@ export class DescriptionBlocksEditor {
 
   onImageFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const files = Array.from(input.files ?? []);
     input.value = '';
-    if (file) this.uploadImage(file);
+    if (files.length) this.uploadImages(files);
   }
 
   onDragOver(event: DragEvent): void {
@@ -326,19 +347,71 @@ export class DescriptionBlocksEditor {
   onDrop(event: DragEvent): void {
     if (!this.imagesEnabled()) return;
     event.preventDefault();
-    const file = event.dataTransfer?.files?.[0];
-    if (file) this.uploadImage(file);
+    const files = filesFromDataTransfer(event.dataTransfer);
+    if (files.length) this.uploadImages(files);
   }
 
-  uploadImage(file: File): void {
-    if (!this.imagesEnabled() || this.imageBusy() || this.uploadGuard) return;
-    if (!ALLOWED_IMAGE_TYPES.has(file.type) || file.size <= 0 || file.size > 5 * 1024 * 1024) {
-      this.imageError.set('JPEG / PNG / GIF / WebP（5MiB以下）を選んでください。');
+  /**
+   * 貼り付け: 画像ならアップロードして本文へ入れ、選択した文字への URL ならリンクにする。
+   * どちらでもなければ、ブラウザの通常の貼り付けに任せる。
+   */
+  onPaste(index: number, event: ClipboardEvent): void {
+    if (this.disabled()) return;
+    const dt = event.clipboardData;
+    if (!dt) return;
+    const files = clipboardFilesToAttach(dt);
+    if (files.length) {
+      if (!this.imagesEnabled()) return;
+      event.preventDefault();
+      this.focusedIndex = index;
+      this.uploadImages(files);
+      return;
+    }
+    const el = event.target as HTMLTextAreaElement;
+    const block = this.blocks()[index] ?? '';
+    // 変換中などで入力欄と手元の本文がずれていたら、位置が合わないので通常の貼り付けに任せる。
+    if (this.composing || el.value !== block) return;
+    // 画像のアップロード・削除の間は本文を変えない（入力欄は読み取り専用なので、通常の貼り付けも入らない）。
+    if (this.imageBusy()) return;
+    const others = descriptionLength(serializeDescriptionBlocks(this.blocks())) - descriptionLength(block);
+    const result = pasteLinkOverSelection(
+      block,
+      el.selectionStart ?? 0,
+      el.selectionEnd ?? 0,
+      dt.getData('text/plain').trim(),
+      DESCRIPTION_MAX_LEN - others,
+    );
+    if (result.kind === 'default') return;
+    event.preventDefault();
+    if (result.kind === 'error') {
+      this.lengthError.set(this.lengthErrorMessage());
+      return;
+    }
+    this.lengthError.set('');
+    const next = [...this.blocks()];
+    next[index] = result.text;
+    this.blocks.set(next);
+    this.emitText();
+    this.focusBlock(index, result.caret);
+  }
+
+  /** 画像を 1 件ずつ順にアップロードし、成功するたびにキャレットの位置へ入れる。 */
+  uploadImages(files: readonly File[]): void {
+    if (!this.imagesEnabled()) return;
+    if (this.imageBusy() || this.uploadGuard) {
+      // 黙って捨てない（貼り付け・ドロップは既定の動作を止めているので、何も起きないように見える）。
+      if (this.uploadGuard) this.imageError.set(ATTACHMENT_IMAGE_BUSY_HINT);
+      return;
+    }
+    const plan = planImageUpload(files);
+    if (!plan.accepted.length) {
+      this.imageError.set(imageUploadPlanNotice(plan));
       return;
     }
     const field = this.attachmentField();
     const number = this.itemNumber();
     if (!field || number <= 0) return;
+    const projectId = this.projectId();
     this.uploadGuard = true;
     this.imageBusy.set(true);
     this.imageError.set('');
@@ -346,31 +419,69 @@ export class DescriptionBlocksEditor {
     const el = this.areas().at(index)?.nativeElement;
     const start = el?.selectionStart ?? (this.blocks()[index]?.length ?? 0);
     const end = el?.selectionEnd ?? start;
-    this.api.uploadAttachment(number, file, field, this.projectId()).subscribe({
-      next: (att) => {
-        this.uploadGuard = false;
-        this.imageBusy.set(false);
-        const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
-        const blockText = this.blocks()[index] ?? '';
-        const inserted = insertMarkupAt(blockText, start, end, markup, DESCRIPTION_MAX_LEN);
-        if (!inserted) {
-          this.imageError.set(this.lengthErrorMessage());
-          return;
+    let caret = { start, end };
+    let stopError = '';
+    let stale = false;
+    uploadImagesInOrder({
+      files: plan.accepted,
+      upload: (file) => this.api.uploadAttachment(number, file, field, projectId),
+      onUploaded: (att, file) => {
+        // 待っている間に別のアイテムへ切り替わった・画面を離れたら、その本文には入れない。
+        if (
+          this.destroyed ||
+          this.itemNumber() !== number ||
+          this.attachmentField() !== field ||
+          this.projectId() !== projectId
+        ) {
+          stale = true;
+          return 'stop';
         }
-        const next = [...this.blocks()];
-        next[index] = inserted.text;
-        const normalized = normalizeDescriptionBlocks(next);
-        this.blocks.set(normalized);
-        this.emitText();
-        this.focusBlock(index, inserted.caret);
         this.reloadAttachments();
+        const markup = buildAttachmentMarkup(number, att.id, att.originalName || file.name);
+        const inserted = this.insertIntoBlock(index, caret.start, caret.end, markup);
+        if (!inserted) {
+          stopError = this.lengthErrorMessage();
+          return 'stop';
+        }
+        caret = { start: inserted.caret, end: inserted.caret };
+        return 'continue';
       },
-      error: () => {
+      onDone: (outcome) => {
+        // 忙しい状態は、切り替えの後でも必ず解く。文言は、始めたときのアイテムのままのときだけ出す。
         this.uploadGuard = false;
         this.imageBusy.set(false);
-        this.imageError.set('画像のアップロードに失敗しました。');
+        if (stale) return;
+        this.imageError.set(imageUploadDoneMessage(outcome, plan, stopError));
       },
     });
+  }
+
+  /**
+   * ブロックの `start..end` を `markup` に置き換えて通知し、キャレットを直後へ移す。
+   * 説明全体が上限を超えるなら何もせず null。
+   */
+  private insertIntoBlock(
+    index: number,
+    start: number,
+    end: number,
+    markup: string,
+  ): { caret: number } | null {
+    const blocks = this.blocks();
+    const at = Math.min(index, blocks.length - 1);
+    const block = blocks[at] ?? '';
+    const others = descriptionLength(serializeDescriptionBlocks(blocks)) - descriptionLength(block);
+    const inserted = insertMarkupAt(block, start, end, markup, DESCRIPTION_MAX_LEN - others);
+    if (!inserted) return null;
+    const next = [...blocks];
+    next[at] = inserted.text;
+    this.blocks.set(normalizeDescriptionBlocks(next));
+    this.emitText();
+    // 待っている間に別の欄へ移っていたら、フォーカスを奪い返さない。
+    const active = document.activeElement;
+    if (!active || active === document.body || this.host.nativeElement.contains(active)) {
+      this.focusBlock(at, inserted.caret);
+    }
+    return { caret: inserted.caret };
   }
 
   requestDeleteImage(attachmentId: number): void {
@@ -410,7 +521,7 @@ export class DescriptionBlocksEditor {
 
   private insertEmptyFromMenu(openLink: boolean): void {
     const index = this.insertMenuIndex();
-    if (index === null || this.disabled()) return;
+    if (index === null || this.disabled() || this.imageBusy()) return;
     const next = insertEmptyBlockAt(this.blocks(), index);
     this.closeInsertMenu();
     if (!next) {
