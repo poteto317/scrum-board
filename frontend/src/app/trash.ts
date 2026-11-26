@@ -1,4 +1,4 @@
-import { ActiveProjectName } from './active-project-name';
+import { ActiveProjectContext } from './active-project-context';
 import { DatePipe } from '@angular/common';
 import {
   Component,
@@ -30,7 +30,7 @@ export function trashRemainingDays(deletedAt: string | Date, now = Date.now()): 
 
 @Component({
   selector: 'app-trash',
-  imports: [RouterLink, Modal, DatePipe, ActiveProjectName],
+  imports: [RouterLink, Modal, DatePipe, ActiveProjectContext],
   templateUrl: './trash.html',
   styleUrl: './trash.css',
 })

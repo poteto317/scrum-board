@@ -2,20 +2,20 @@ import { Component, computed, inject, input } from '@angular/core';
 import { ProjectSession } from './project-session';
 
 /**
- * いま見ているプロジェクトの名前を文字だけで出す（切り替えはできない）。
- * ヘッダーに切り替えが無くなったので、プロジェクトの読み込みなどの失敗（`ProjectSession.error`）もここに出す。
- * `projectId` を渡さなければ選択中のプロジェクト、`null` なら何も出さない（不正な ID の画面に別の名前を出さない）。
+ * いま見ているプロジェクトの文脈（名前と、プロジェクトの読み込みなどの失敗）を文字だけで出す。切り替えはできない。
+ * ヘッダーに切り替えが無いページで、どのプロジェクトを見ているかと ProjectSession.error を伝える。
+ * `projectId` を渡さなければ選択中のプロジェクト、`null` なら名前を出さない（不正な ID の画面に別の名前を出さない）。
  */
 @Component({
-  selector: 'app-active-project-name',
+  selector: 'app-active-project-context',
   template: `@if (name(); as n) {
-    <p class="active-project-name">
-      プロジェクト: <strong>{{ n }}</strong>
-    </p>
-  }
-  @if (projectSession.error(); as message) {
-    <p class="project-error" role="alert">{{ message }}</p>
-  }`,
+      <p class="active-project-name">
+        プロジェクト: <strong>{{ n }}</strong>
+      </p>
+    }
+    @if (projectSession.error(); as message) {
+      <p class="project-error" role="alert">{{ message }}</p>
+    }`,
   styles: `
     .active-project-name {
       margin: 8px 0 0;
@@ -32,7 +32,7 @@ import { ProjectSession } from './project-session';
     }
   `,
 })
-export class ActiveProjectName {
+export class ActiveProjectContext {
   readonly projectSession = inject(ProjectSession);
   readonly projectId = input<number | null | undefined>(undefined);
 

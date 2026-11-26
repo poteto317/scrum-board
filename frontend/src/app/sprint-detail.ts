@@ -1,4 +1,4 @@
-import { ActiveProjectName } from './active-project-name';
+import { ActiveProjectContext } from './active-project-context';
 import {
   Component,
   DestroyRef,
@@ -31,7 +31,7 @@ import { bindProjectSwitchReload } from './project-switch-reload';
 
 @Component({
   selector: 'app-sprint-detail',
-  imports: [RouterLink, ReactiveFormsModule, Modal, ActiveProjectName],
+  imports: [RouterLink, ReactiveFormsModule, Modal, ActiveProjectContext],
   templateUrl: './sprint-detail.html',
   styleUrl: './sprint-detail.css',
 })
