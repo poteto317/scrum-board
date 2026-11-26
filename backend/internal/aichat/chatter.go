@@ -1,4 +1,12 @@
-// Package aichat talks to Claude for item-scoped Q&A (POST .../ai-chat).
+// Package aichat talks to Claude for the two chats of the board.
+//
+//   - Chat (chatter.go) answers a question about one item with a single model call
+//     (POST /api/items/by-number/{number}/ai-chat, kanban.ItemChatter).
+//   - ChatWithTools (chatter_tools.go) answers a question about a whole project: it calls the
+//     model in a loop, running the tools the model asks for in between
+//     (POST /api/projects/{id}/ai-chat, kanban.ProjectChatter).
+//
+// Both turn every model failure into a *Failure without upstream text (failure.go).
 package aichat
 
 import (
@@ -10,7 +18,9 @@ import (
 	"scrumboard/internal/kanban"
 )
 
-// Chatter implements kanban.ItemChatter on top of the official Anthropic SDK.
+// Chatter implements kanban.ItemChatter (Chat: one call) and kanban.ProjectChatter
+// (ChatWithTools: the tool loop) on top of the official Anthropic SDK. Both use the same
+// model, client and output limit; maxTokens applies to each model call.
 type Chatter struct {
 	model     string
 	maxTokens int64
@@ -32,16 +42,9 @@ func (c *Chatter) Chat(ctx context.Context, system string, messages []kanban.Cha
 	if len(messages) == 0 {
 		return "", 0, 0, &Failure{Kind: kindInvalidReq}
 	}
-	params := make([]anthropic.MessageParam, 0, len(messages))
-	for _, m := range messages {
-		switch m.Role {
-		case kanban.AIRoleUser:
-			params = append(params, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Body)))
-		case kanban.AIRoleAssistant:
-			params = append(params, anthropic.NewAssistantMessage(anthropic.NewTextBlock(m.Body)))
-		default:
-			return "", 0, 0, &Failure{Kind: kindInvalidReq}
-		}
+	params, ok := turnParams(messages, 0)
+	if !ok {
+		return "", 0, 0, &Failure{Kind: kindInvalidReq}
 	}
 	message, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.model),
@@ -65,13 +68,7 @@ func (c *Chatter) Chat(ctx context.Context, system string, messages []kanban.Cha
 	default:
 		return "", inTok, outTok, &Failure{Kind: kindInvalidOutput}
 	}
-	var text strings.Builder
-	for _, block := range message.Content {
-		if block.Type == "text" {
-			text.WriteString(block.Text)
-		}
-	}
-	out := strings.TrimSpace(text.String())
+	out := strings.TrimSpace(messageText(message))
 	if out == "" {
 		return "", inTok, outTok, &Failure{Kind: kindInvalidOutput}
 	}
