@@ -4,7 +4,8 @@ import type { Item } from './models';
 import {
   applyLabel,
   checkBlockReason,
-  createdMessage,
+  createdSuffix,
+  createdUnrecordedMessage,
   diffBase,
   dismissLabel,
   loadFailureMessage,
@@ -65,8 +66,8 @@ describe('project-ai-proposal-rules', () => {
   });
 
   it('words the created result', () => {
-    expect(createdMessage(12, true)).toBe('#12 を作成しました。');
-    expect(createdMessage(12, false)).toBe('#12 を作成しました（結果の記録に失敗しました）。');
+    expect(`#12${createdSuffix}`).toBe('#12 を作成しました。');
+    expect(createdUnrecordedMessage(12)).toBe('#12 を作成しました（結果の記録に失敗しました）。');
   });
 
   it('replaces the proposal of the same id only', () => {
