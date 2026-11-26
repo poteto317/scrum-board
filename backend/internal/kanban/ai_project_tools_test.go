@@ -642,8 +642,13 @@ func TestToolRepositoryFailuresStopTheLoopInsteadOfAnswering(t *testing.T) {
 
 func TestProjectChatToolDefinitions(t *testing.T) {
 	tools := projectChatTools()
-	if len(tools) != 2 || tools[0].Name != toolSearchItems || tools[1].Name != toolGetItem {
+	if len(tools) != 5 || tools[0].Name != toolSearchItems || tools[1].Name != toolGetItem || tools[2].Name != toolProposeStatusChange ||
+		tools[3].Name != toolProposeDescriptionEdit || tools[4].Name != toolProposeItemCreate {
 		t.Fatalf("tools=%+v", tools)
+	}
+	// propose_item_create cannot name a column: the item always goes to Todo.
+	if props := tools[4].InputSchema["properties"].(map[string]any); len(props) != 2 || props["title"] == nil || props["description"] == nil {
+		t.Fatalf("propose_item_create properties=%v", props)
 	}
 	for _, tool := range tools {
 		if tool.InputSchema["type"] != "object" || tool.Description == "" {

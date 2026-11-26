@@ -386,8 +386,8 @@ func TestWithAKeyTheProjectChatUsesToolsThroughTheRealChatter(t *testing.T) {
 		t.Fatalf("model calls=%d", len(bodies))
 	}
 	tools, _ := bodies[0]["tools"].([]any)
-	if len(tools) != 2 || tools[0].(map[string]any)["name"] != "search_items" || tools[1].(map[string]any)["name"] != "get_item" {
-		t.Fatalf("the real chatter must be given both tools: %v", bodies[0]["tools"])
+	if len(tools) != 5 || tools[0].(map[string]any)["name"] != "search_items" || tools[1].(map[string]any)["name"] != "get_item" {
+		t.Fatalf("the real chatter must be given all five tools (two reads, three proposals): %v", bodies[0]["tools"])
 	}
 	if repo.appended.Load() != 1 {
 		t.Fatalf("stored turns=%d", repo.appended.Load())

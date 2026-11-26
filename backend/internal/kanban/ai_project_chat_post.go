@@ -75,7 +75,7 @@ func (h handler) postProjectAIChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	turn := ProjectAITurn{Title: projectAIConversationTitle(req.Message), UserBody: req.Message,
-		AssistantBody: answer.text, InputTokens: answer.inTok, OutputTokens: answer.outTok}
+		AssistantBody: answer.text, InputTokens: answer.inTok, OutputTokens: answer.outTok, Proposals: answer.proposals}
 	stored, err := h.storeProjectChatTurn(r.Context(), project.ID, user.ID, conversation, turn)
 	if err != nil {
 		projectChatStorageFailed(w, "append")
@@ -293,6 +293,7 @@ func projectChatContext(ctx context.Context) (context.Context, context.CancelFun
 type projectChatAnswer struct {
 	text          string
 	inTok, outTok int64
+	proposals     []ProjectAIProposalDraft // what the proposal tools accepted
 }
 
 // askProjectChat runs the model with the tools and records the usage. On a failure it
@@ -305,7 +306,7 @@ func (h handler) askProjectChat(chatCtx context.Context, w http.ResponseWriter, 
 		writeProjectChatFailure(w, failure, err)
 		return projectChatAnswer{}, false
 	}
-	return projectChatAnswer{text: text, inTok: inTok, outTok: outTok}, true
+	return projectChatAnswer{text: text, inTok: inTok, outTok: outTok, proposals: tools.Proposals()}, true
 }
 
 // recordProjectChatUsage records the usage even when the client has gone away: the chat may
@@ -401,10 +402,23 @@ func (h handler) replyProjectChatTurn(w http.ResponseWriter, r *http.Request, pr
 // unstoredProjectChatTurn is the conversation's messages as the client should see them when
 // the stored ones cannot be read back: the history from before, the message and the answer.
 // The two new ones have no stored id or time; they get distinct negative placeholder ids and
-// the id of the conversation they were stored in.
+// the id of the conversation they were stored in. No message carries proposals: the stored
+// proposals' ids are not known, and one without its id could not be applied (opening the
+// conversation again shows them).
 func unstoredProjectChatTurn(projectID, conversationID int64, before []ProjectAIMessage, turn ProjectAITurn) []ProjectAIMessage {
+	before = withoutProposals(before)
 	assistant := ProjectAIMessage{ID: unstoredProjectChatAssistantID, ProjectID: projectID, ConversationID: conversationID, Role: AIRoleAssistant, Body: turn.AssistantBody,
 		InputTokens: tokenCountPtr(turn.InputTokens), OutputTokens: tokenCountPtr(turn.OutputTokens)}
 	return append(append([]ProjectAIMessage{}, before...),
 		ProjectAIMessage{ID: unstoredProjectChatUserID, ProjectID: projectID, ConversationID: conversationID, Role: AIRoleUser, Body: turn.UserBody}, assistant)
+}
+
+// withoutProposals is a copy of the messages with their proposals left out.
+func withoutProposals(messages []ProjectAIMessage) []ProjectAIMessage {
+	out := make([]ProjectAIMessage, len(messages))
+	for i, m := range messages {
+		m.Proposals = nil
+		out[i] = m
+	}
+	return out
 }
