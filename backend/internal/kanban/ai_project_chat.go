@@ -57,24 +57,3 @@ func (r MySQLRepository) ListProjectAIMessages(ctx context.Context, projectID, u
 	}
 	return out, rows.Err()
 }
-
-// ClearProjectAIConversations deletes all of one user's conversations in one project, and that
-// user's messages there that are in no conversation yet. Other users and projects are untouched.
-// The conversations go first: the same lock order as AppendProjectAITurn (conversation, then messages).
-func (r MySQLRepository) ClearProjectAIConversations(ctx context.Context, projectID, userID int64) error {
-	tx, err := r.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `DELETE FROM project_ai_conversations WHERE project_id=? AND user_id=?`, projectID, userID); err != nil {
-		return fmt.Errorf("clear project ai conversations: %w", err)
-	}
-	if _, err = tx.ExecContext(ctx, `DELETE FROM project_ai_messages WHERE project_id=? AND user_id=?`, projectID, userID); err != nil {
-		return fmt.Errorf("clear project ai messages: %w", err)
-	}
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("clear project ai chat: %w", err)
-	}
-	return nil
-}
