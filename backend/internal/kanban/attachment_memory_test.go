@@ -77,6 +77,11 @@ func (m *memoryRepo) CreateAttachment(
 	if err := validateAttachmentMIME(contentType, data); err != nil {
 		return Attachment{}, err
 	}
+	fallback := "file"
+	if isImageAttachmentMIME(contentType) {
+		fallback = "image"
+	}
+	name = sanitizeAttachmentName(name, fallback)
 	m.ensureAttachments()
 	count := 0
 	for _, a := range m.attachments {
@@ -114,7 +119,7 @@ func (m *memoryRepo) CreateAttachment(
 		Field:        field,
 		ContentType:  contentType,
 		ByteSize:     int64(len(data)),
-		OriginalName: sanitizeAttachmentAlt(name),
+		OriginalName: name,
 		CreatedAt:    time.Now().UTC(),
 	}
 	m.attachments[id] = memoryAttachment{Attachment: a, objectKey: key}
