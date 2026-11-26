@@ -385,11 +385,7 @@ export class DescriptionBlocksEditor {
       return;
     }
     this.lengthError.set('');
-    const next = [...this.blocks()];
-    next[index] = result.text;
-    this.blocks.set(next);
-    this.emitText();
-    this.focusBlock(index, result.caret);
+    this.replaceBlockText(index, result.text, result.caret);
   }
 
   /** 画像を 1 件ずつ順にアップロードし、成功するたびにキャレットの位置へ入れる。 */
@@ -466,16 +462,20 @@ export class DescriptionBlocksEditor {
     const others = descriptionLength(serializeDescriptionBlocks(blocks)) - descriptionLength(block);
     const inserted = insertMarkupAt(block, start, end, markup, DESCRIPTION_MAX_LEN - others);
     if (!inserted) return null;
-    const next = [...blocks];
-    next[at] = inserted.text;
+    this.replaceBlockText(at, inserted.text, inserted.caret);
+    return { caret: inserted.caret };
+  }
+
+  /** ブロックの本文を差し替えて通知し、キャレットを `caret` へ移す（別の欄へ移っていたら、フォーカスは奪わない）。 */
+  private replaceBlockText(index: number, text: string, caret: number): void {
+    const next = [...this.blocks()];
+    next[index] = text;
     this.blocks.set(normalizeDescriptionBlocks(next));
     this.emitText();
-    // 待っている間に別の欄へ移っていたら、フォーカスを奪い返さない。
     const active = document.activeElement;
     if (!active || active === document.body || this.host.nativeElement.contains(active)) {
-      this.focusBlock(at, inserted.caret);
+      this.focusBlock(index, caret);
     }
-    return { caret: inserted.caret };
   }
 
   requestDeleteImage(attachmentId: number): void {
