@@ -824,7 +824,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/JsonValue'
         '400':
-          description: 不正な multipart／MIME／サイズ
+          description: |
+            不正な multipart／許可外 MIME／マジック不一致／サイズ超過など。
+            例: 許可外 Content-Type、宣言とマジックの不一致、5MiB 超。
           content:
             application/json:
               schema:
@@ -847,7 +849,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      description: 1 ファイル最大 5 MiB・アイテム 20 枚・プロジェクト合計 100 MiB。同時アップロード／配信はサーバ側で 4 並列まで。
+      description: |
+        許可 MIME: image/jpeg, image/png, image/gif, image/webp, application/pdf。
+        1 ファイル最大 5 MiB・アイテム 20・プロジェクト合計 100 MiB。同時アップロード／配信はサーバ側で 4 並列まで。
+        クライアントは成功時のみ本文へ挿入する。画像は `![label](/api/items/by-number/{n}/attachments/{id}/content)`、
+        非画像（PDF）は `[label](/api/items/by-number/{n}/attachments/{id}/content)`。
       parameters:
       - name: number
         in: path
@@ -911,7 +917,9 @@ paths:
       operationId: get_api_items_by_number_number_attachments_id_content
       responses:
         '200':
-          description: バイナリ
+          description: |
+            バイナリ。画像 MIME は Content-Disposition 無し（インライン）。
+            画像以外（application/pdf）は `Content-Disposition: attachment`（filename / filename*）。
           headers:
             ETag:
               schema:
@@ -925,6 +933,10 @@ paths:
               schema:
                 type: string
               description: Cookie, Authorization（別のセッションが前のキャッシュを使わない）
+            Content-Disposition:
+              schema:
+                type: string
+              description: 非画像のみ attachment; filename=…; filename*=UTF-8''…
           content:
             image/jpeg:
               schema:
@@ -939,6 +951,10 @@ paths:
                 type: string
                 format: binary
             image/webp:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
               schema:
                 type: string
                 format: binary
