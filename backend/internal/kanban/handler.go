@@ -151,6 +151,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/projects/{id}/ai-conversations", h.listProjectAIConversations)
 	mux.HandleFunc("GET /api/projects/{id}/ai-conversations/{cid}", h.getProjectAIConversation)
 	mux.HandleFunc("DELETE /api/projects/{id}/ai-conversations/{cid}", h.deleteProjectAIConversation)
+	mux.HandleFunc("PATCH /api/projects/{id}/ai-proposals/{pid}", h.updateProjectAIProposal)
 	mux.HandleFunc("GET /api/sprints", h.listSprints)
 	mux.HandleFunc("POST /api/sprints", h.createSprint)
 	mux.HandleFunc("GET /api/sprints/{id}", h.getSprint)
