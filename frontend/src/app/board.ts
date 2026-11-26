@@ -1,3 +1,4 @@
+import { ProjectSwitcher } from './project-switcher';
 import { Modal } from './modal';
 import {
   afterNextRender,
@@ -114,6 +115,7 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
     NgStyle,
     CopyFeedbackBanner,
     ListFilterBar,
+    ProjectSwitcher,
   ],
   templateUrl: './board.html',
   styleUrl: './board.css',

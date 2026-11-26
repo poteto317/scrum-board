@@ -1,5 +1,8 @@
 <main class="board-page" [class.board-mobile]="isBoardMobile()">
-  <div class="breadcrumb">ワークスペース <span>/</span> <strong>かんばん</strong></div>
+  <div class="page-topbar">
+    <div class="breadcrumb">ワークスペース <span>/</span> <strong>かんばん</strong></div>
+    <app-project-switcher />
+  </div>
   <section class="board-toolbar" aria-label="ボードの概要">
     <h1 class="active-tab">
       <span class="board-icon" aria-hidden="true">▥</span> かんばんボード
