@@ -8,7 +8,7 @@
     <button
       type="button"
       class="secondary blocks-link-btn"
-      [disabled]="disabled()"
+      [disabled]="disabled() || imageBusy()"
       (mousedown)="$event.preventDefault()"
       (click)="requestLink()"
     >
@@ -28,6 +28,7 @@
         #imageFile
         type="file"
         accept="image/jpeg,image/png,image/gif,image/webp"
+        multiple
         hidden
         (change)="onImageFileChange($event)"
       />
@@ -72,11 +73,13 @@
         rows="1"
         [value]="blocks()[gapIndex]"
         [disabled]="disabled()"
+        [readOnly]="imageBusy()"
         [attr.aria-label]="'説明ブロック ' + (gapIndex + 1)"
         (focus)="onFocus(gapIndex)"
         (blur)="onBlur($event)"
         (input)="onInput(gapIndex, $event)"
         (keydown)="onKeydown(gapIndex, $event)"
+        (paste)="onPaste(gapIndex, $event)"
         (compositionstart)="onComposition(true)"
         (compositionend)="onComposition(false)"
       ></textarea>

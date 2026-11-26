@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Api } from './api';
 import { DescriptionBlocksEditor } from './description-blocks-editor';
@@ -485,7 +485,7 @@ describe('DescriptionBlocksEditor', () => {
       type: 'image/png',
     });
     Object.defineProperty(file, 'size', { value: 4 });
-    f.componentInstance.uploadImage(file);
+    f.componentInstance.uploadImages([file]);
     f.detectChanges();
     expect(apiStub.uploadAttachment).toHaveBeenCalled();
     expect(f.componentInstance.blocks()[0]).toContain('/attachments/9/content');
@@ -502,7 +502,7 @@ describe('DescriptionBlocksEditor', () => {
     const before = f.componentInstance.blocks()[0];
     const file = new File([new Uint8Array([1, 2, 3])], 'shot.png', { type: 'image/png' });
     Object.defineProperty(file, 'size', { value: 3 });
-    f.componentInstance.uploadImage(file);
+    f.componentInstance.uploadImages([file]);
     f.detectChanges();
     expect(f.componentInstance.blocks()[0]).toBe(before);
     expect(f.componentInstance.imageError()).toContain('アップロード');
@@ -557,5 +557,313 @@ describe('DescriptionBlocksEditor', () => {
     f.detectChanges();
     expect(f.componentInstance.showRichPreview()).toBe(true);
     expect(f.nativeElement.querySelector('.blocks-preview')).not.toBeNull();
+  });
+
+  describe('paste and multiple images', () => {
+    const png = (name: string, type = 'image/png') => {
+      const file = new File([new Uint8Array([1, 2, 3])], name, { type });
+      Object.defineProperty(file, 'size', { value: 3 });
+      return file;
+    };
+    const clipboard = (opts: { text?: string; html?: boolean; files?: File[] }) =>
+      ({
+        getData: (t: string) => (t === 'text/plain' ? (opts.text ?? '') : ''),
+        files: opts.files ?? [],
+        items: [],
+        types: [...(opts.text ? ['text/plain'] : []), ...(opts.html ? ['text/html'] : [])],
+      }) as unknown as DataTransfer;
+    const paste = (area: HTMLTextAreaElement, data: DataTransfer) => {
+      const ev = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, 'clipboardData', { value: data });
+      area.dispatchEvent(ev);
+      return ev;
+    };
+    const attachment = (id: number, originalName: string) => ({
+      id,
+      itemId: 1,
+      field: 'description',
+      contentType: 'image/png',
+      byteSize: 3,
+      originalName,
+      createdAt: '',
+    });
+    const mountWithImages = (value = 'hello') => {
+      const f = TestBed.createComponent(DescriptionBlocksEditor);
+      f.componentRef.setInput('value', value);
+      f.componentRef.setInput('itemNumber', 3);
+      f.componentRef.setInput('attachmentField', 'description');
+      f.detectChanges();
+      const area = f.nativeElement.querySelector('textarea.block-input') as HTMLTextAreaElement;
+      return { f, editor: f.componentInstance, area };
+    };
+
+    beforeEach(() => {
+      apiStub.uploadAttachment.mockClear();
+    });
+
+    it('uploads a pasted image and inserts it at the caret', () => {
+      apiStub.uploadAttachment.mockReturnValueOnce(of(attachment(9, 'image.png')));
+      const { editor, area } = mountWithImages('hello');
+      area.focus();
+      area.setSelectionRange(2, 2);
+      const ev = paste(area, clipboard({ files: [png('image.png')] }));
+      expect(ev.defaultPrevented).toBe(true);
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
+      expect(editor.blocks()[0]).toBe(
+        'he![image.png](/api/items/by-number/3/attachments/9/content)llo',
+      );
+      expect(editor.imageBusy()).toBe(false);
+      expect(editor.imageError()).toBe('');
+    });
+
+    it('uploads several pasted images one by one, in order', () => {
+      const first = new Subject<ReturnType<typeof attachment>>();
+      const second = new Subject<ReturnType<typeof attachment>>();
+      apiStub.uploadAttachment.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      const { editor, area } = mountWithImages('ab');
+      area.focus();
+      area.setSelectionRange(1, 1);
+      paste(area, clipboard({ files: [png('a.png'), png('b.png')] }));
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
+      expect(editor.imageBusy()).toBe(true);
+      first.next(attachment(1, 'a.png'));
+      first.complete();
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(2);
+      second.next(attachment(2, 'b.png'));
+      second.complete();
+      expect(editor.blocks()[0]).toBe(
+        'a![a.png](/api/items/by-number/3/attachments/1/content)' +
+          '![b.png](/api/items/by-number/3/attachments/2/content)b',
+      );
+      expect(editor.imageBusy()).toBe(false);
+    });
+
+    it('keeps the images added before a failure and reports how many were added', () => {
+      apiStub.uploadAttachment
+        .mockReturnValueOnce(of(attachment(1, 'a.png')))
+        .mockReturnValueOnce(throwError(() => new Error('fail')));
+      const { editor } = mountWithImages('');
+      editor.uploadImages([png('a.png'), png('b.png'), png('c.png')]);
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(2);
+      expect(editor.blocks()[0]).toBe('![a.png](/api/items/by-number/3/attachments/1/content)');
+      expect(editor.imageError()).toContain('3件中1件');
+      expect(editor.imageBusy()).toBe(false);
+    });
+
+    it('skips files that are not allowed images and says so', () => {
+      apiStub.uploadAttachment.mockReturnValueOnce(of(attachment(1, 'a.png')));
+      const { editor } = mountWithImages('');
+      editor.uploadImages([png('a.pdf', 'application/pdf'), png('a.png')]);
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
+      expect(editor.blocks()[0]).toContain('/attachments/1/content');
+      expect(editor.imageError()).toContain('JPEG');
+    });
+
+    it('uploads nothing when no pasted file is an allowed image', () => {
+      const { editor, area } = mountWithImages('hello');
+      const ev = paste(area, clipboard({ files: [png('a.pdf', 'application/pdf')] }));
+      expect(ev.defaultPrevented).toBe(true);
+      expect(apiStub.uploadAttachment).not.toHaveBeenCalled();
+      expect(editor.imageError()).toContain('JPEG');
+      expect(editor.blocks()).toEqual(['hello']);
+    });
+
+    it('does not insert into another item when the item changes during the upload', () => {
+      const pending = new Subject<ReturnType<typeof attachment>>();
+      apiStub.uploadAttachment.mockReturnValueOnce(pending);
+      const { f, editor } = mountWithImages('one');
+      editor.uploadImages([png('a.png'), png('b.png')]);
+      f.componentRef.setInput('itemNumber', 4);
+      f.componentRef.setInput('value', 'other');
+      f.detectChanges();
+      pending.next(attachment(1, 'a.png'));
+      pending.complete();
+      expect(editor.blocks()).toEqual(['other']);
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
+      expect(editor.imageBusy()).toBe(false);
+    });
+
+    it('leaves a pasted image to the browser when images are not enabled', () => {
+      const { f } = mount('hello');
+      const ev = paste(areas(f)[0]!, clipboard({ files: [png('image.png')] }));
+      expect(ev.defaultPrevented).toBe(false);
+      expect(apiStub.uploadAttachment).not.toHaveBeenCalled();
+    });
+
+    it('pastes text as usual when the clipboard has text, HTML and an image', () => {
+      const { area } = mountWithImages('hello');
+      const ev = paste(area, clipboard({ text: 'A1', html: true, files: [png('image.png')] }));
+      expect(ev.defaultPrevented).toBe(false);
+      expect(apiStub.uploadAttachment).not.toHaveBeenCalled();
+    });
+
+    it('turns the selection into a link when an https URL is pasted over it', async () => {
+      const { f, host, editor } = mount('see docs here');
+      const area = areas(f)[0]!;
+      area.focus();
+      area.setSelectionRange(4, 8);
+      const ev = paste(area, clipboard({ text: ' https://example.com/a\n' }));
+      expect(ev.defaultPrevented).toBe(true);
+      expect(editor.blocks()).toEqual(['see [docs](https://example.com/a) here']);
+      expect(host.texts.at(-1)).toBe('see [docs](https://example.com/a) here');
+      f.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(areas(f)[0]!.selectionStart).toBe('see [docs](https://example.com/a)'.length);
+    });
+
+    it('pastes a URL as usual without a selection, and plain text over a selection', () => {
+      const { f, host } = mount('see docs');
+      const area = areas(f)[0]!;
+      area.focus();
+      area.setSelectionRange(3, 3);
+      expect(paste(area, clipboard({ text: 'https://example.com' })).defaultPrevented).toBe(false);
+      area.setSelectionRange(4, 8);
+      expect(paste(area, clipboard({ text: 'plain' })).defaultPrevented).toBe(false);
+      expect(host.texts).toEqual([]);
+    });
+
+    it('refuses a pasted link that would exceed the description limit', () => {
+      const body = 'a' + 'x'.repeat(DESCRIPTION_MAX_LEN - 1);
+      const { f, host, editor } = mount(body);
+      const area = areas(f)[0]!;
+      area.focus();
+      area.setSelectionRange(0, 1);
+      const ev = paste(area, clipboard({ text: 'https://example.com' }));
+      expect(ev.defaultPrevented).toBe(true);
+      expect(editor.lengthError()).not.toBe('');
+      expect(editor.blocks()).toEqual([body]);
+      expect(host.texts).toEqual([]);
+    });
+
+    it('locks the blocks while images upload, so the insert position cannot move', () => {
+      const pending = new Subject<ReturnType<typeof attachment>>();
+      apiStub.uploadAttachment.mockReturnValueOnce(pending);
+      const { f, editor, area } = mountWithImages('ab');
+      area.focus();
+      area.setSelectionRange(2, 2);
+      paste(area, clipboard({ files: [png('a.png')] }));
+      f.detectChanges();
+      expect(area.readOnly).toBe(true);
+      const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      area.dispatchEvent(enter);
+      expect(enter.defaultPrevented).toBe(true);
+      area.setSelectionRange(0, 1);
+      const link = paste(area, clipboard({ text: 'https://example.com' }));
+      expect(link.defaultPrevented).toBe(false);
+      editor.openInsertMenu(0);
+      editor.requestLink();
+      expect(editor.insertMenuIndex()).toBeNull();
+      expect(editor.blocks()).toEqual(['ab']);
+      pending.next(attachment(1, 'a.png'));
+      pending.complete();
+      f.detectChanges();
+      expect(editor.blocks()).toEqual(['ab![a.png](/api/items/by-number/3/attachments/1/content)']);
+      expect(area.readOnly).toBe(false);
+    });
+
+    it('says so when more images arrive during an upload', () => {
+      const pending = new Subject<ReturnType<typeof attachment>>();
+      apiStub.uploadAttachment.mockReturnValueOnce(pending);
+      const { editor, area } = mountWithImages('ab');
+      editor.uploadImages([png('a.png')]);
+      const ev = paste(area, clipboard({ files: [png('b.png')] }));
+      expect(ev.defaultPrevented).toBe(true);
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
+      expect(editor.imageError()).toContain('アップロード中');
+      pending.next(attachment(1, 'a.png'));
+      pending.complete();
+      expect(editor.imageError()).toBe('');
+    });
+
+    it('stops quietly when the editor is destroyed during an upload', () => {
+      const pending = new Subject<ReturnType<typeof attachment>>();
+      apiStub.uploadAttachment.mockReturnValueOnce(pending);
+      const { f, editor } = mountWithImages('ab');
+      editor.uploadImages([png('a.png'), png('b.png')]);
+      f.destroy();
+      expect(() => {
+        pending.next(attachment(1, 'a.png'));
+        pending.complete();
+      }).not.toThrow();
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(1);
+      expect(editor.blocks()).toEqual(['ab']);
+    });
+
+    it('does not insert when the project changes during an upload', () => {
+      const pending = new Subject<ReturnType<typeof attachment>>();
+      apiStub.uploadAttachment.mockReturnValueOnce(pending);
+      const { f, editor } = mountWithImages('ab');
+      f.componentRef.setInput('projectId', 1);
+      f.detectChanges();
+      editor.uploadImages([png('a.png')]);
+      f.componentRef.setInput('projectId', 2);
+      f.detectChanges();
+      pending.next(attachment(1, 'a.png'));
+      expect(editor.blocks()).toEqual(['ab']);
+      expect(editor.imageBusy()).toBe(false);
+    });
+
+    it('stops at the description limit and keeps what fit', () => {
+      apiStub.uploadAttachment
+        .mockReturnValueOnce(of(attachment(1, 'a.png')))
+        .mockReturnValueOnce(of(attachment(2, 'b.png')));
+      const first = '![a.png](/api/items/by-number/3/attachments/1/content)';
+      const { editor } = mountWithImages('x'.repeat(DESCRIPTION_MAX_LEN - first.length));
+      editor.uploadImages([png('a.png'), png('b.png'), png('c.png')]);
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(2);
+      expect(editor.blocks()[0]).toContain('/attachments/1/content');
+      expect(editor.blocks()[0]).not.toContain('/attachments/2/content');
+      expect(editor.imageError()).not.toBe('');
+      expect(editor.imageBusy()).toBe(false);
+    });
+
+    it('shows the reason from the server when an upload is refused', () => {
+      apiStub.uploadAttachment.mockReturnValueOnce(
+        throwError(() => ({ error: { message: '添付はアイテムあたり20枚までです。' } })),
+      );
+      const { editor } = mountWithImages('');
+      editor.uploadImages([png('a.png')]);
+      expect(editor.imageError()).toBe('添付はアイテムあたり20枚までです。');
+    });
+
+    it('leaves a URL paste to the browser while composing', () => {
+      const { f, host } = mount('see docs');
+      const area = areas(f)[0]!;
+      area.focus();
+      area.dispatchEvent(new Event('compositionstart', { bubbles: true }));
+      area.setSelectionRange(4, 8);
+      const ev = paste(area, clipboard({ text: 'https://example.com' }));
+      expect(ev.defaultPrevented).toBe(false);
+      expect(host.texts).toEqual([]);
+    });
+
+    it('does nothing on paste while disabled', () => {
+      const f = TestBed.createComponent(DescriptionBlocksEditor);
+      f.componentRef.setInput('value', 'hello');
+      f.componentRef.setInput('itemNumber', 3);
+      f.componentRef.setInput('attachmentField', 'description');
+      f.componentRef.setInput('disabled', true);
+      f.detectChanges();
+      const ev = new Event('paste', { cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(ev, 'clipboardData', { value: clipboard({ files: [png('a.png')] }) });
+      f.componentInstance.onPaste(0, ev);
+      expect(ev.defaultPrevented).toBe(false);
+      expect(apiStub.uploadAttachment).not.toHaveBeenCalled();
+    });
+
+    it('uploads every dropped image', () => {
+      apiStub.uploadAttachment
+        .mockReturnValueOnce(of(attachment(1, 'a.png')))
+        .mockReturnValueOnce(of(attachment(2, 'b.png')));
+      const { editor } = mountWithImages('');
+      const ev = new Event('drop', { cancelable: true }) as DragEvent;
+      Object.defineProperty(ev, 'dataTransfer', {
+        value: clipboard({ files: [png('a.png'), png('b.png')] }),
+      });
+      editor.onDrop(ev);
+      expect(apiStub.uploadAttachment).toHaveBeenCalledTimes(2);
+      expect(editor.blocks()[0]).toContain('/attachments/1/content');
+      expect(editor.blocks()[0]).toContain('/attachments/2/content');
+    });
   });
 });
