@@ -276,6 +276,13 @@ type Repository interface {
 	ListAIMessages(context.Context, int64) ([]AIMessage, error)
 	AppendAITurn(ctx context.Context, itemID int64, userBody, assistantBody string, inTok, outTok int64) error
 	ClearAIMessages(context.Context, int64) error
+	// Project chat history is per project × user: these never touch another user's or project's messages.
+	ListProjectAIMessages(ctx context.Context, projectID, userID int64) ([]ProjectAIMessage, error)
+	AppendProjectAITurn(ctx context.Context, projectID, userID int64, userBody, assistantBody string, inTok, outTok int64) error
+	ClearProjectAIMessages(ctx context.Context, projectID, userID int64) error
+	// SearchProjectItems filters and orders the project's items (trash excluded, archive included) that
+	// search.Viewer may view (same meaning as CanView), and returns at most 201.
+	SearchProjectItems(ctx context.Context, projectID int64, search ItemSearch) ([]Item, error)
 	AddAIUsage(ctx context.Context, requests, inTok, outTok int64) error
 	GetAIUsage(context.Context) (AIUsage, error)
 	SetAICreditLimit(ctx context.Context, limit *int64) error

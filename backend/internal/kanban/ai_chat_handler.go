@@ -16,6 +16,36 @@ func aiChatFailed(w http.ResponseWriter) {
 	aiChatError(w, http.StatusBadGateway, "ai_failed", "AIチャットに失敗しました。時間をおいて再試行してください。")
 }
 
+// msgAIBusy is the 429 ai_busy text of both chats (no free slot, or the user's chat still runs).
+const msgAIBusy = "AIが混み合っています。少し待って再試行してください。"
+
+// The fixed answers below are shared by the item chat and the project chat.
+
+// aiChatUnsupportedMediaType answers a request whose body is not JSON (415).
+func aiChatUnsupportedMediaType(w http.ResponseWriter) {
+	aiChatError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", msgUnsupportedContentType)
+}
+
+// aiChatInvalidMessage answers a message NormalizeAIChatMessage refused (400).
+func aiChatInvalidMessage(w http.ResponseWriter, messageMax int) {
+	invalid(w, fmt.Sprintf("メッセージは1〜%d文字で、制御文字を含めず入力してください。", messageMax))
+}
+
+// aiChatNotConfigured answers a chat without an API key (503).
+func aiChatNotConfigured(w http.ResponseWriter) {
+	aiChatError(w, http.StatusServiceUnavailable, "ai_not_configured", "AIチャットが設定されていません。サーバーにANTHROPIC_API_KEYを設定してください。")
+}
+
+// aiChatBusy answers 429 ai_busy.
+func aiChatBusy(w http.ResponseWriter) {
+	aiChatError(w, http.StatusTooManyRequests, "ai_busy", msgAIBusy)
+}
+
+// aiChatServerError answers a failure of the server's own storage after the model was asked (500 server_error).
+func aiChatServerError(w http.ResponseWriter) {
+	aiChatError(w, http.StatusInternalServerError, "server_error", "処理に失敗しました。時間をおいて再試行してください。")
+}
+
 func logChatFailure(err error) {
 	kind, status := "unknown", 0
 	var failure FormatFailure
@@ -81,7 +111,7 @@ type aiChatRequest struct {
 
 func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	if !isJSONRequest(r) {
-		aiChatError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Typeはapplication/jsonにしてください。")
+		aiChatUnsupportedMediaType(w)
 		return
 	}
 	var req aiChatRequest
@@ -90,7 +120,7 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	}
 	msg, ok := NormalizeAIChatMessage(req.Message, h.messageMax)
 	if !ok {
-		invalid(w, fmt.Sprintf("メッセージは1〜%d文字で、制御文字を含めず入力してください。", h.messageMax))
+		aiChatInvalidMessage(w, h.messageMax)
 		return
 	}
 	card, ok := h.aiChatParentItem(w, r, true)
@@ -98,7 +128,7 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.chatter == nil {
-		aiChatError(w, http.StatusServiceUnavailable, "ai_not_configured", "AIチャットが設定されていません。サーバーにANTHROPIC_API_KEYを設定してください。")
+		aiChatNotConfigured(w)
 		return
 	}
 	if h.rejectIfAICreditLimitReached(w, r, aiChatError) {
@@ -117,7 +147,7 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	}()
 	release, acquired := h.acquireSlot()
 	if !acquired {
-		aiChatError(w, http.StatusTooManyRequests, "ai_busy", "AIが混み合っています。少し待って再試行してください。")
+		aiChatBusy(w)
 		return
 	}
 	defer release()
@@ -153,7 +183,7 @@ func (h handler) postAIChat(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.repo.AppendAITurn(r.Context(), card.ID, msg, replyText, inTok, outTok); err != nil {
 		slog.Error("ai chat storage failed", "stage", "append")
-		aiChatError(w, http.StatusInternalServerError, "server_error", "処理に失敗しました。時間をおいて再試行してください。")
+		aiChatServerError(w)
 		return
 	}
 	list, err := h.repo.ListAIMessages(r.Context(), card.ID)

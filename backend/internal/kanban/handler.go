@@ -12,6 +12,8 @@ type handler struct {
 	repo              Repository
 	formatter         ItemFormatter
 	chatter           ItemChatter
+	projectChatter    ProjectChatter
+	projectChats      *userInFlight
 	slots             chan struct{}
 	publicOrigin      string
 	prTitleResolver   *PRTitleResolver
@@ -33,8 +35,16 @@ func WithItemFormatter(f ItemFormatter) Option {
 }
 
 // WithAIChat enables POST /api/items/.../ai-chat. A nil chatter keeps that POST answering 503.
+// A chatter that also implements ProjectChatter enables POST /api/projects/{id}/ai-chat as well;
+// otherwise that POST keeps answering 503.
 func WithAIChat(c ItemChatter) Option {
-	return func(h *handler) { h.chatter = c }
+	return func(h *handler) {
+		h.chatter = c
+		h.projectChatter = nil
+		if pc, ok := c.(ProjectChatter); ok {
+			h.projectChatter = pc
+		}
+	}
 }
 
 // WithPublicOrigin sets the canonical public origin for GET /api/public-config (already normalized).
@@ -105,6 +115,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	h := handler{
 		repo:              repo,
 		slots:             make(chan struct{}, maxConcurrentFormats),
+		projectChats:      newUserInFlight(),
 		blobs:             UnavailableBlobStorage{},
 		rateLimiter:       NewNoopAIRateLimiter(),
 		loginAttempts:     NewMemoryLoginAttemptLimiter(),
@@ -134,6 +145,9 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("PATCH /api/projects/{id}", h.updateProject)
 	mux.HandleFunc("DELETE /api/projects/{id}", h.deleteProject)
 	mux.HandleFunc("PUT /api/projects/order", h.reorderProjects)
+	mux.HandleFunc("GET /api/projects/{id}/ai-chat", h.listProjectAIChat)
+	mux.HandleFunc("POST /api/projects/{id}/ai-chat", h.postProjectAIChat)
+	mux.HandleFunc("DELETE /api/projects/{id}/ai-chat", h.clearProjectAIChat)
 	mux.HandleFunc("GET /api/sprints", h.listSprints)
 	mux.HandleFunc("POST /api/sprints", h.createSprint)
 	mux.HandleFunc("GET /api/sprints/{id}", h.getSprint)

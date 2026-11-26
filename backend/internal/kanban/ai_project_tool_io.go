@@ -1,0 +1,64 @@
+package kanban
+
+import (
+	"bytes"
+	"encoding/json"
+	"math"
+	"strings"
+)
+
+// What crosses the boundary to the model, shared by every tool: reading the JSON input the
+// model wrote, and writing the JSON result (or one of the fixed error texts) it gets back.
+
+// toolErrorResult is the JSON a tool hands the model for a problem the model can react to.
+// The message is always one of the fixed texts below, never a Go error string.
+func toolErrorResult(message string) string {
+	return toolJSON(map[string]string{"error": message})
+}
+
+const (
+	toolErrInvalidInput = "入力が正しくありません。"
+	toolErrUnknownTool  = "そのツールはありません。"
+	toolErrItemNotFound = "アイテムが見つかりません。"
+	toolErrDateFormat   = "日付は YYYY-MM-DD の形式で指定してください。"
+	toolErrBudget       = "これ以上は調べられません。ここまでの結果で答えてください。"
+)
+
+// toolJSON encodes a tool result. HTML characters are kept as they are: the text goes to the model, not to a page.
+func toolJSON(v any) string {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return `{"error":"` + toolErrInvalidInput + `"}`
+	}
+	return strings.TrimSuffix(b.String(), "\n")
+}
+
+// decodeToolInput reads the model's tool input. Missing or null input is an empty object.
+func decodeToolInput(raw json.RawMessage, v any) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return true
+	}
+	return json.Unmarshal(trimmed, v) == nil
+}
+
+// wholeNumber reads a JSON number that must be an integer (10 and 10.0 are; 1.5 is not).
+func wholeNumber(f float64) (int64, bool) {
+	if math.IsNaN(f) || math.IsInf(f, 0) || f != math.Trunc(f) || math.Abs(f) > 1e15 {
+		return 0, false
+	}
+	return int64(f), true
+}
+
+func clampWhole(v *float64, fallback, low, high int) (int, bool) {
+	if v == nil {
+		return fallback, true
+	}
+	n, ok := wholeNumber(*v)
+	if !ok {
+		return 0, false
+	}
+	return int(min(max(n, int64(low)), int64(high))), true
+}
