@@ -12,7 +12,17 @@
 
 ## プロジェクトの AI チャット
 
-`POST /api/projects/{id}/ai-chat` に `{"message": "...", "focusItemNumber": 12}`（`focusItemNumber` は任意）を送ると、AI がそのプロジェクトのアイテムを検索して答えます。AI が読めるのは、呼び出したユーザーが閲覧できるアイテムだけです（ゴミ箱は対象外）。アイテムは書き換えません。履歴は「プロジェクト × ユーザー」ごとで、`GET` で自分の履歴を取得し、`DELETE` で自分の履歴だけを消せます。回答までに数十秒かかることがあります（このリクエストだけ、制限時間は 50 秒）。`ANTHROPIC_API_KEY` が未設定なら `POST` は 503 です。
+`POST /api/projects/{id}/ai-chat` に `{"message": "...", "focusItemNumber": 12}`（`focusItemNumber` は任意）を送ると、AI がそのプロジェクトのアイテムを検索して答えます。AI が読めるのは、呼び出したユーザーが閲覧できるアイテムだけです（ゴミ箱は対象外）。アイテムは書き換えません。回答までに数十秒かかることがあります（このリクエストだけ、制限時間は 50 秒）。`ANTHROPIC_API_KEY` が未設定なら `POST` は 503 です。
+
+履歴は「プロジェクト × ユーザー」ごとの **会話** に分かれています（自分の会話だけが見えます）。
+
+- `POST` の本文に `"conversationId": 3` を付けると、その会話に続けます。`"newConversation": true` を付けると、新しい会話を作ります（両方は 400）。どちらも付けなければ、いちばん新しい会話に続けます（会話が無ければ作ります）。
+- 応答は `{"conversation": {...}, "assistant": {...}, "messages": [...]}` で、`messages` はその会話の全部です。続きを送るときは、応答の `conversation.id` を `conversationId` に使います。
+- AI に渡る履歴は、続ける会話のものだけです。会話のタイトルは、最初のメッセージから自動で付きます。
+- `GET /api/projects/{id}/ai-chat` は、いちばん新しい会話とそのメッセージ（無ければ `"conversation": null`）。`DELETE /api/projects/{id}/ai-chat` は、自分のそのプロジェクトの会話を全部消します。
+- `GET /api/projects/{id}/ai-conversations` は会話の一覧（更新の新しい順、最大 100 件）。`GET` / `DELETE /api/projects/{id}/ai-conversations/{cid}` で、1 つの会話を取得・削除します。
+- 自分の会話でない ID（無い・別のユーザーのもの・別のプロジェクトのもの）は、どれも 404「会話が見つかりません。」です。
+- 会話は 100 件まで、1 つの会話のメッセージは 200 件までで、超えた分は古い順に消えます。
 
 アイテム単位の `/api/items/by-number/{number}/ai-chat` は非推奨です（動きは変えていません）。
 
@@ -48,6 +58,25 @@ curl --fail-with-body --max-time 60 --request POST \
   -b 'sb_session=SESSION_ID' \
   --data '{"message":"期限が近いアイテムは？"}' \
   http://127.0.0.1:4200/api/projects/1/ai-chat
+```
+
+会話を指定して続ける・新しい会話を始める・会話の一覧:
+
+```sh
+curl --fail-with-body --max-time 60 --request POST \
+  --header 'Content-Type: application/json' \
+  -b 'sb_session=SESSION_ID' \
+  --data '{"message":"その中で担当が未定のものは？","conversationId":3}' \
+  http://127.0.0.1:4200/api/projects/1/ai-chat
+
+curl --fail-with-body --max-time 60 --request POST \
+  --header 'Content-Type: application/json' \
+  -b 'sb_session=SESSION_ID' \
+  --data '{"message":"別の話題です","newConversation":true}' \
+  http://127.0.0.1:4200/api/projects/1/ai-chat
+
+curl --fail-with-body -b 'sb_session=SESSION_ID' \
+  http://127.0.0.1:4200/api/projects/1/ai-conversations
 ```
 
 詳細は OpenAPI の各 operation を参照してください。

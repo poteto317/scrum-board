@@ -2195,22 +2195,30 @@ paths:
       - basicAuth: []
   /api/projects/{id}/ai-chat:
     get:
-      summary: プロジェクト AI チャット履歴
+      summary: プロジェクト AI チャットの、いちばん新しい会話
       operationId: get_api_projects_id_ai_chat
       description: |
-        ログインが必要。呼び出したユーザー自身の、そのプロジェクトでの履歴を古い順に返す
-        （履歴は「プロジェクト × ユーザー」ごと。ほかのユーザーの履歴は返らない）。
-        ANTHROPIC_API_KEY 未設定でも返す。
+        ログインが必要。呼び出したユーザー自身の、そのプロジェクトでの **いちばん新しい会話**
+        （`updatedAt` の降順、同じなら `id` の降順の先頭）と、そのメッセージを古い順に返す。画面を開いたときの最初の表示に使う。
+        会話が 1 つも無ければ `conversation` は `null`、`messages` は空の配列。
+        履歴は「プロジェクト × ユーザー」ごとの会話に分かれていて、ほかのユーザーのものは返らない。
+        会話の一覧は `GET /api/projects/{id}/ai-conversations`。ANTHROPIC_API_KEY 未設定でも返す。
       responses:
         '200':
-          description: 履歴
+          description: いちばん新しい会話と、そのメッセージ
           content:
             application/json:
               schema:
                 type: object
                 required:
+                - conversation
                 - messages
                 properties:
+                  conversation:
+                    description: 会話が 1 つも無ければ null。
+                    oneOf:
+                    - $ref: '#/components/schemas/ProjectAIConversation'
+                    - type: 'null'
                   messages:
                     type: array
                     items:
@@ -2257,37 +2265,61 @@ paths:
         `focusItemNumber` は、アイテム詳細から送るときに付ける。そのプロジェクトの番号で引けて、呼び出したユーザーが閲覧できるときだけ、
         タイトル・説明・コメントを文脈に入れる。見つからない・閲覧できない・ゴミ箱にあるときは、エラーにせず文脈なしで続ける。
 
+        履歴は会話に分かれている。どの会話に続けるかは、本文で決まる。
+        - `conversationId` を付ける: その会話に続ける。呼び出したユーザー自身の、そのプロジェクトの会話でなければ 404
+          「会話が見つかりません。」（無い・別のユーザーのもの・別のプロジェクトのもの、を区別しない）。
+        - `"newConversation": true`: 新しい会話を作って、そこに保存する。`conversationId` と一緒には指定できない（400）。
+        - どちらも付けない（`conversationId` が null、`newConversation` が false も同じ）: いちばん新しい会話に続ける。
+          会話が 1 つも無ければ、新しく作る。
+        モデルに渡す履歴は、保存先の会話の直近 `AI_CHAT_HISTORY_TURNS` 往復だけ（新しい会話なら履歴なし。ほかの会話の履歴は渡らない）。
+        保存先の会話は、モデルを呼ぶ前に決める。モデルを待つ間にその会話が消されたときは、回答を捨てずに、新しい会話として保存する
+        （応答の `conversation.id` が、送った `conversationId` と違う）。
+        新しい会話のタイトルは、最初のメッセージから作る（空白の並びを 1 つの空白にして、先頭の 40 文字。超えたら末尾に「…」）。
+        会話は「プロジェクト × ユーザー」ごとに 100 件まで（新しく作って超えた分は、更新が古い順に消える）。
+        1 つの会話のメッセージは 200 件まで（超えた分は古い順に消える）。
+
         モデルの呼び出しは 1 メッセージにつき最大 4 回。このリクエストだけ、サーバーの制限時間は 50 秒
         （モデルとツールで最大 40 秒。ほかの経路は 15 秒）。
 
         クライアントが途中で切断しても、サーバーは最後まで実行し、利用量を数え、質問と回答を履歴に保存する。
-        その間に同じユーザーが送り直すと 429 `ai_busy` になる。実行が終わってから GET で履歴を取ると、回答が入っている。
+        その間に同じユーザーが送り直すと 429 `ai_busy` になる。実行が終わってから GET で会話を取ると、回答が入っている。
 
-        エラーの順序: 401 → 415 → 400（本文）→ 400／404（プロジェクト）→ 503 → 429 `ai_credit_limit` →
+        エラーの順序: 401 → 415 → 400（本文）→ 400／404（プロジェクト）→ 404（会話）→ 503 → 429 `ai_credit_limit` →
         429 `ai_busy`（同じユーザーのプロジェクトチャットが実行中）→ 429 `ai_rate_limit` → 429 `ai_busy`（同時実行の枠なし）→ 502／500。
         `code` が付くのは 415・429・502 と、500 のうち `server_error`（回答の保存の失敗、ツールの中のデータベースの失敗）、
         503 のうち `ai_not_configured`。モデルを呼ぶ前のデータベースの失敗の 500 と、50 秒の制限時間に達したときの 503
         （「処理がタイムアウトしました。」）は `message` だけ。400・401・404 も `message` だけ。
       responses:
         '200':
-          description: 回答と、更新後の自分の履歴
+          description: 保存先の会話、回答、その会話の更新後のメッセージ全部
           content:
             application/json:
               schema:
                 type: object
                 required:
+                - conversation
                 - assistant
                 - messages
                 properties:
+                  conversation:
+                    $ref: '#/components/schemas/ProjectAIConversation'
                   assistant:
                     $ref: '#/components/schemas/ProjectAIMessage'
                   messages:
                     type: array
+                    description: |
+                      `conversation` のメッセージ全部（古い順）。保存の後の読み直しに失敗したときは、わかっている内容から組み立てる
+                      （新しい 2 件の `id` は負の仮の値で、`createdAt` はゼロ値）。
                     items:
                       $ref: '#/components/schemas/ProjectAIMessage'
                 additionalProperties: false
         '400':
-          description: 本文が不正（JSON でない、未知のフィールド、メッセージが空・長すぎる・制御文字、focusItemNumber が整数でない・0 以下）、またはプロジェクト ID が不正
+          description: |
+            本文が不正（JSON でない、未知のフィールド、メッセージが空・長すぎる・制御文字、focusItemNumber が整数でない・0 以下、
+            conversationId が整数でない、newConversation が真偽値でない）、
+            conversationId が 0 以下（「会話IDが不正です。」）、
+            conversationId と `"newConversation": true` を両方指定（「conversationId と newConversation は同時に指定できません。」）、
+            またはプロジェクト ID が不正
           content:
             application/json:
               schema:
@@ -2299,7 +2331,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: プロジェクトなし（「プロジェクトが見つかりません。」）
+          description: |
+            プロジェクトなし（「プロジェクトが見つかりません。」）、または `conversationId` の会話が見つからない
+            （「会話が見つかりません。」。別のユーザー・別のプロジェクトの会話も同じ応答）。どちらも 503 より前で、モデルは呼ばない。
           content:
             application/json:
               schema:
@@ -2322,7 +2356,7 @@ paths:
         '500':
           description: |
             保存の失敗、またはツールの中のデータベースの失敗（code=server_error）。履歴には足さない。
-            モデルを呼ぶ前のデータベースの失敗（プロジェクト・列・開いているアイテム・履歴の読み込みなど）は、`code` の無い `message` だけの応答。
+            モデルを呼ぶ前のデータベースの失敗（プロジェクト・会話・列・開いているアイテム・履歴の読み込みなど）は、`code` の無い `message` だけの応答。
           content:
             application/json:
               schema:
@@ -2370,14 +2404,27 @@ paths:
                   description: |
                     1〜N Unicode 文字（既定 N=4000。サーバーの `AI_CHAT_MESSAGE_MAX` で上書き可）。前後の空白は除く。
                 focusItemNumber:
-                  type: integer
-                  minimum: 1
                   description: 開いているアイテムの番号（アイテム詳細から送るときだけ）。省略・null は「なし」。
+                  oneOf:
+                  - type: integer
+                    minimum: 1
+                  - type: 'null'
+                conversationId:
+                  oneOf:
+                  - type: integer
+                    minimum: 1
+                  - type: 'null'
+                  description: 続ける会話の ID。省略・null は「指定なし」（`newConversation` も無ければ、いちばん新しい会話に続ける）。
+                newConversation:
+                  type: boolean
+                  description: true なら新しい会話を作る。`conversationId` と一緒には指定できない。省略・false は「指定なし」。
               additionalProperties: false
     delete:
-      summary: プロジェクト AI チャット履歴クリア
+      summary: プロジェクト AI チャットの会話を全部消す
       operationId: delete_api_projects_id_ai_chat
-      description: ログインが必要。呼び出したユーザー自身の、そのプロジェクトでの履歴だけを消す。キー未設定でも可。
+      description: |
+        ログインが必要。呼び出したユーザー自身の、そのプロジェクトでの会話を全部（メッセージごと）消す。
+        ほかのユーザー・ほかのプロジェクトの会話は消えない。1 つだけ消すなら `DELETE /api/projects/{id}/ai-conversations/{cid}`。キー未設定でも可。
       responses:
         '204':
           description: クリア成功（本文なし）
@@ -2407,6 +2454,169 @@ paths:
           type: integer
           minimum: 1
         description: プロジェクト ID
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+  /api/projects/{id}/ai-conversations:
+    get:
+      summary: プロジェクト AI チャットの会話の一覧
+      operationId: get_api_projects_id_ai_conversations
+      description: |
+        ログインが必要。呼び出したユーザー自身の、そのプロジェクトでの会話を、更新の新しい順（`updatedAt` の降順、同じなら `id` の降順）に返す。
+        最大 100 件。メッセージは含めない。ほかのユーザー・ほかのプロジェクトの会話は返らない。0 件なら空の配列。
+        ANTHROPIC_API_KEY 未設定でも返す。
+      responses:
+        '200':
+          description: 会話の一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - conversations
+                properties:
+                  conversations:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: '#/components/schemas/ProjectAIConversation'
+                additionalProperties: false
+        '400':
+          description: プロジェクト ID が不正（「プロジェクトIDが不正です。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: プロジェクトなし（「プロジェクトが見つかりません。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: プロジェクト ID
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+  /api/projects/{id}/ai-conversations/{cid}:
+    get:
+      summary: プロジェクト AI チャットの会話を 1 つ取得
+      operationId: get_api_projects_id_ai_conversations_cid
+      description: |
+        ログインが必要。呼び出したユーザー自身の、そのプロジェクトの会話と、そのメッセージを古い順に返す。
+        エラーの順序: 401 → 400／404（プロジェクト）→ 400（会話 ID）→ 404（会話）。ANTHROPIC_API_KEY 未設定でも返す。
+      responses:
+        '200':
+          description: 会話と、そのメッセージ
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - conversation
+                - messages
+                properties:
+                  conversation:
+                    $ref: '#/components/schemas/ProjectAIConversation'
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectAIMessage'
+                additionalProperties: false
+        '400':
+          description: プロジェクト ID が不正（「プロジェクトIDが不正です。」）、または会話 ID が不正（数値でない・0 以下。「会話IDが不正です。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: |
+            プロジェクトなし（「プロジェクトが見つかりません。」）、または会話が見つからない（「会話が見つかりません。」）。
+            会話は、無い・別のユーザーのもの・別のプロジェクトのもの、を区別せず、どれも同じ応答。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: プロジェクト ID
+      - name: cid
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: 会話 ID
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+    delete:
+      summary: プロジェクト AI チャットの会話を 1 つ削除
+      operationId: delete_api_projects_id_ai_conversations_cid
+      description: |
+        ログインが必要。呼び出したユーザー自身の、そのプロジェクトの会話と、そのメッセージを消す。ほかの会話は残る。
+        エラーの順序: 401 → 400／404（プロジェクト）→ 400（会話 ID）→ 404（会話）。キー未設定でも可。
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '400':
+          description: プロジェクト ID が不正（「プロジェクトIDが不正です。」）、または会話 ID が不正（数値でない・0 以下。「会話IDが不正です。」）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: |
+            プロジェクトなし（「プロジェクトが見つかりません。」）、または会話が見つからない（「会話が見つかりません。」）。
+            会話は、無い・別のユーザーのもの・別のプロジェクトのもの、を区別せず、どれも同じ応答。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: プロジェクト ID
+      - name: cid
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: 会話 ID
       security:
       - cookieAuth: []
       - basicAuth: []
@@ -3103,12 +3313,41 @@ components:
           type: string
           format: date-time
       additionalProperties: false
+    ProjectAIConversation:
+      type: object
+      description: プロジェクト AI チャットの 1 つの会話。常に呼び出したユーザー自身のもので、ユーザー ID は含めない。
+      required:
+      - id
+      - projectId
+      - title
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        title:
+          type: string
+          maxLength: 120
+          description: |
+            最初のメッセージから自動で付く（空白の並びを 1 つの空白にして、先頭の 40 文字。超えたら末尾に「…」）。
+            会話ができる前からあった履歴を引き継いだ会話で、ユーザーのメッセージが無いものは「これまでの会話」。
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          description: 最後にやりとりを保存した時刻。一覧の並びに使う。
+      additionalProperties: false
     ProjectAIMessage:
       type: object
       description: プロジェクト AI チャットの 1 メッセージ。常に呼び出したユーザー自身のもので、ユーザー ID は含めない。
       required:
       - id
       - projectId
+      - conversationId
       - role
       - body
       - createdAt
@@ -3117,6 +3356,9 @@ components:
           type: integer
         projectId:
           type: integer
+        conversationId:
+          type: integer
+          description: このメッセージが属する会話の ID。
         role:
           type: string
           enum:
