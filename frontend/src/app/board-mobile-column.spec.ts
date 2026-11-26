@@ -1,7 +1,7 @@
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api } from './api';
 import { Board } from './board';
 import { normalizeBoardData } from './board-data';
@@ -47,6 +47,11 @@ function sample(settings: { cardLayout: 'pack' | 'free'; mobileBoardColumnId?: n
 describe('Board mobile column select', () => {
   let matchMediaMatches = false;
   let listeners: Array<(ev: MediaQueryListEvent) => void> = [];
+
+  // matchMedia の差し替えを戻す。戻さないと、同じワーカーで後に走るボードのテストがモバイル表示になる。
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   beforeEach(() => {
     matchMediaMatches = false;
