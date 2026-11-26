@@ -143,8 +143,33 @@ func TestDecodeProjectChatRequest(t *testing.T) {
 	if !ok || req.Message != "hello" || req.FocusItemNumber == nil || *req.FocusItemNumber != 12 {
 		t.Fatalf("ok=%v req=%+v", ok, req)
 	}
-	if req, ok, _ = post("application/json; charset=utf-8", `{"message":"q"}`); !ok || req.FocusItemNumber != nil {
-		t.Fatalf("no focus item: ok=%v req=%+v", ok, req)
+	if req, ok, _ = post("application/json; charset=utf-8", `{"message":"q"}`); !ok || req.FocusItemNumber != nil || req.ConversationID != nil || req.NewConversation {
+		t.Fatalf("no focus item, no conversation: ok=%v req=%+v", ok, req)
+	}
+	// 会話: ID を付ける・新しい会話にする・どちらも付けない（null や false は、付けないのと同じ）。
+	if req, ok, _ = post("application/json", `{"message":"q","conversationId":7}`); !ok || req.ConversationID == nil || *req.ConversationID != 7 || req.NewConversation {
+		t.Fatalf("conversationId: ok=%v req=%+v", ok, req)
+	}
+	if req, ok, _ = post("application/json", `{"message":"q","newConversation":true}`); !ok || req.ConversationID != nil || !req.NewConversation {
+		t.Fatalf("newConversation: ok=%v req=%+v", ok, req)
+	}
+	if req, ok, _ = post("application/json", `{"message":"q","conversationId":null,"newConversation":false}`); !ok || req.ConversationID != nil || req.NewConversation {
+		t.Fatalf("null and false: ok=%v req=%+v", ok, req)
+	}
+	if req, ok, _ = post("application/json", `{"message":"q","conversationId":7,"newConversation":false}`); !ok || req.ConversationID == nil || req.NewConversation {
+		t.Fatalf("an id with newConversation false is the id: ok=%v req=%+v", ok, req)
+	}
+	for body, want := range map[string]string{
+		`{"message":"q","conversationId":0}`:                        "会話IDが不正です。",
+		`{"message":"q","conversationId":-3}`:                       "会話IDが不正です。",
+		`{"message":"q","conversationId":7,"newConversation":true}`: "conversationId と newConversation は同時に指定できません。",
+		`{"message":"q","conversationId":"7"}`:                      "入力を確認してください。有効なJSONが必要です。",
+		`{"message":"q","conversationId":1.5}`:                      "入力を確認してください。有効なJSONが必要です。",
+		`{"message":"q","newConversation":"yes"}`:                   "入力を確認してください。有効なJSONが必要です。",
+	} {
+		if _, ok, w := post("application/json", body); ok || w.Code != 400 || decodeError(t, w).Message != want || decodeError(t, w).Code != "" {
+			t.Fatalf("%s: ok=%v status=%d body=%s", body, ok, w.Code, w.Body.String())
+		}
 	}
 	if _, ok, w := post("text/plain", `{"message":"q"}`); ok || w.Code != 415 || decodeError(t, w).Code != "unsupported_media_type" {
 		t.Fatalf("media type: %d %s", w.Code, w.Body.String())
@@ -215,10 +240,14 @@ func TestWriteProjectChatFailure(t *testing.T) {
 }
 
 func TestUnstoredProjectChatTurn(t *testing.T) {
-	before := []ProjectAIMessage{{ID: 1, ProjectID: 3, Role: AIRoleUser, Body: "old q"}, {ID: 2, ProjectID: 3, Role: AIRoleAssistant, Body: "old a"}}
-	got := unstoredProjectChatTurn(3, before, "q", projectChatAnswer{text: "a", inTok: 5, outTok: 0})
+	before := []ProjectAIMessage{{ID: 1, ProjectID: 3, ConversationID: 8, Role: AIRoleUser, Body: "old q"}, {ID: 2, ProjectID: 3, ConversationID: 8, Role: AIRoleAssistant, Body: "old a"}}
+	got := unstoredProjectChatTurn(3, 8, before, ProjectAITurn{UserBody: "q", AssistantBody: "a", InputTokens: 5, OutputTokens: 0})
 	if len(got) != 4 || got[0].ID != 1 || got[1].ID != 2 {
 		t.Fatalf("history must come first: %+v", got)
+	}
+	// 仮の 2 件にも、保存先の会話の ID を付ける。
+	if got[2].ConversationID != 8 || got[3].ConversationID != 8 {
+		t.Fatalf("conversation ids: %+v", got[2:])
 	}
 	if got[2].Role != AIRoleUser || got[2].Body != "q" || got[2].ProjectID != 3 || got[2].InputTokens != nil {
 		t.Fatalf("user message: %+v", got[2])
@@ -244,32 +273,41 @@ func TestUnstoredProjectChatTurn(t *testing.T) {
 	// 履歴の配列に空きがあっても、渡した側の配列を書き換えない。
 	roomy := make([]ProjectAIMessage, 1, 8)
 	roomy[0] = ProjectAIMessage{ID: 9}
-	_ = unstoredProjectChatTurn(3, roomy, "q", projectChatAnswer{text: "a"})
+	_ = unstoredProjectChatTurn(3, 8, roomy, ProjectAITurn{UserBody: "q", AssistantBody: "a"})
 	if spare := roomy[:2][1]; spare.Body != "" {
 		t.Fatalf("the caller's backing array was written: %+v", spare)
 	}
 }
 
-// 読むのは列・開いているアイテム・自分の履歴。別のユーザーの履歴は入らない。
+// 読むのは列・開いているアイテム・続ける会話の履歴。別の会話・別のユーザーの履歴は入らない。
 func TestLoadProjectChatInput(t *testing.T) {
 	repo := fresh()
 	ctx := context.Background()
-	if err := repo.AppendProjectAITurn(ctx, 1, 7, "old q", "old a", 1, 1); err != nil {
+	mine, err := repo.AppendProjectAITurn(ctx, 1, 7, nil, ProjectAITurn{Title: "t", UserBody: "old q", AssistantBody: "old a", InputTokens: 1, OutputTokens: 1})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AppendProjectAITurn(ctx, 1, 8, "someone else's", "answer", 1, 1); err != nil {
+	if _, err := repo.AppendProjectAITurn(ctx, 1, 7, nil, ProjectAITurn{Title: "t", UserBody: "another conversation", AssistantBody: "answer", InputTokens: 1, OutputTokens: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AppendProjectAITurn(ctx, 1, 8, nil, ProjectAITurn{Title: "t", UserBody: "someone else's", AssistantBody: "answer", InputTokens: 1, OutputTokens: 1}); err != nil {
 		t.Fatal(err)
 	}
 	h := handler{repo: repo, historyTurns: 20}
-	in, err := h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, projectAIChatRequest{Message: "new q"})
+	in, err := h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, &mine, projectAIChatRequest{Message: "new q"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(in.system, "Alpha") || strings.Contains(in.system, "いま開いているアイテム（") {
 		t.Fatalf("system=%s", in.system)
 	}
-	if len(in.columns) != 3 || len(in.history) != 2 || len(in.turns) != 3 || in.turns[2].Body != "new q" {
+	if len(in.columns) != 3 || len(in.history) != 2 || len(in.turns) != 3 || in.turns[0].Body != "old q" || in.turns[2].Body != "new q" {
 		t.Fatalf("columns=%d history=%d turns=%+v", len(in.columns), len(in.history), in.turns)
+	}
+	// 新しい会話は、履歴なし（空の配列で、nil ではない）。
+	in, err = h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, nil, projectAIChatRequest{Message: "new q"})
+	if err != nil || in.history == nil || len(in.history) != 0 || len(in.turns) != 1 || in.turns[0].Body != "new q" {
+		t.Fatalf("a new conversation has no history: err=%v history=%+v turns=%+v", err, in.history, in.turns)
 	}
 }
 

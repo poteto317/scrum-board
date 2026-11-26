@@ -276,10 +276,24 @@ type Repository interface {
 	ListAIMessages(context.Context, int64) ([]AIMessage, error)
 	AppendAITurn(ctx context.Context, itemID int64, userBody, assistantBody string, inTok, outTok int64) error
 	ClearAIMessages(context.Context, int64) error
-	// Project chat history is per project × user: these never touch another user's or project's messages.
-	ListProjectAIMessages(ctx context.Context, projectID, userID int64) ([]ProjectAIMessage, error)
-	AppendProjectAITurn(ctx context.Context, projectID, userID int64, userBody, assistantBody string, inTok, outTok int64) error
-	ClearProjectAIMessages(ctx context.Context, projectID, userID int64) error
+	// Project chat history is kept in conversations that belong to one project × user. Every one
+	// of these is narrowed by project and user (and the conversation, where one is named): they
+	// never touch another user's or project's conversations or messages.
+	// ListProjectAIConversations: newest update first (same time: larger id first), at most 100.
+	ListProjectAIConversations(ctx context.Context, projectID, userID int64) ([]ProjectAIConversation, error)
+	// GetProjectAIConversation: ErrNotFound when it is missing, another user's or another project's.
+	GetProjectAIConversation(ctx context.Context, projectID, userID, conversationID int64) (ProjectAIConversation, error)
+	// LatestProjectAIConversation: the first of the list, nil when there is none.
+	LatestProjectAIConversation(ctx context.Context, projectID, userID int64) (*ProjectAIConversation, error)
+	ListProjectAIMessages(ctx context.Context, projectID, userID, conversationID int64) ([]ProjectAIMessage, error)
+	// AppendProjectAITurn stores one exchange in the conversation and returns that conversation.
+	// With a nil conversationID, or when that conversation is gone, it creates one named turn.Title
+	// (and then keeps the 100 most recently updated). A conversation keeps its newest 200 messages.
+	AppendProjectAITurn(ctx context.Context, projectID, userID int64, conversationID *int64, turn ProjectAITurn) (ProjectAIConversation, error)
+	// DeleteProjectAIConversation: ErrNotFound when it is missing, another user's or another project's.
+	DeleteProjectAIConversation(ctx context.Context, projectID, userID, conversationID int64) error
+	// ClearProjectAIConversations deletes all of the user's conversations in the project.
+	ClearProjectAIConversations(ctx context.Context, projectID, userID int64) error
 	// SearchProjectItems filters and orders the project's items (trash excluded, archive included) that
 	// search.Viewer may view (same meaning as CanView), and returns at most 201.
 	SearchProjectItems(ctx context.Context, projectID int64, search ItemSearch) ([]Item, error)

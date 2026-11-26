@@ -3,6 +3,7 @@ package kanban
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -11,8 +12,9 @@ import (
 	"time"
 )
 
-// checkProjectAIHistoryScope is the storage contract of the project chat history, run against
-// both the memory repository and MySQL: per project × user, oldest first, 200 at most.
+// checkProjectAIHistoryScope is the storage contract of the project chat, run against both the
+// memory repository and MySQL: conversations per project × user (newest update first, 100 at
+// most), messages per conversation (oldest first, 200 at most), nothing of another user or project.
 func checkProjectAIHistoryScope(t *testing.T, repo Repository, projectA, projectB, userA, userB int64) {
 	t.Helper()
 	ctx := context.Background()
@@ -22,65 +24,166 @@ func checkProjectAIHistoryScope(t *testing.T, repo Repository, projectA, project
 			t.Fatal(err)
 		}
 	}
-	bodies := func(projectID, userID int64) string {
+	turn := func(projectID, userID int64, conversationID *int64, title, q, a string, inTok, outTok int64) ProjectAIConversation {
 		t.Helper()
-		list, err := repo.ListProjectAIMessages(ctx, projectID, userID)
+		c, err := repo.AppendProjectAITurn(ctx, projectID, userID, conversationID, ProjectAITurn{Title: title, UserBody: q, AssistantBody: a, InputTokens: inTok, OutputTokens: outTok})
+		must(err)
+		if c.ID == 0 || c.ProjectID != projectID || c.CreatedAt.IsZero() || c.UpdatedAt.Before(c.CreatedAt) {
+			t.Fatalf("stored conversation=%+v", c)
+		}
+		return c
+	}
+	bodies := func(projectID, userID, conversationID int64) string {
+		t.Helper()
+		list, err := repo.ListProjectAIMessages(ctx, projectID, userID, conversationID)
 		must(err)
 		if list == nil {
-			t.Fatal("an empty history must be an empty slice, not nil")
+			t.Fatal("no messages must be an empty slice, not nil")
 		}
 		var out []string
 		for _, m := range list {
-			if m.ProjectID != projectID || m.ID == 0 || m.CreatedAt.IsZero() {
+			if m.ProjectID != projectID || m.ConversationID != conversationID || m.ID == 0 || m.CreatedAt.IsZero() {
 				t.Fatalf("message=%+v", m)
 			}
 			out = append(out, m.Role+":"+m.Body)
 		}
 		return strings.Join(out, "|")
 	}
-	if got := bodies(projectA, userA); got != "" {
-		t.Fatalf("fresh history=%q", got)
+	ids := func(projectID, userID int64) []int64 {
+		t.Helper()
+		list, err := repo.ListProjectAIConversations(ctx, projectID, userID)
+		must(err)
+		if list == nil {
+			t.Fatal("no conversations must be an empty slice, not nil")
+		}
+		out := make([]int64, 0, len(list))
+		for _, c := range list {
+			if c.ProjectID != projectID {
+				t.Fatalf("conversation of another project: %+v", c)
+			}
+			out = append(out, c.ID)
+		}
+		return out
 	}
-	must(repo.AppendProjectAITurn(ctx, projectA, userA, "a-A q1", "a-A a1", 10, 20))
-	must(repo.AppendProjectAITurn(ctx, projectA, userA, "a-A q2", "a-A a2", 0, 0))
-	must(repo.AppendProjectAITurn(ctx, projectB, userA, "b-A q", "b-A a", 1, 1))
-	must(repo.AppendProjectAITurn(ctx, projectA, userB, "a-B q", "a-B a", 1, 1))
+	latest := func(projectID, userID int64) int64 {
+		t.Helper()
+		c, err := repo.LatestProjectAIConversation(ctx, projectID, userID)
+		must(err)
+		if c == nil {
+			return 0
+		}
+		return c.ID
+	}
+	if len(ids(projectA, userA)) != 0 || latest(projectA, userA) != 0 {
+		t.Fatal("a fresh scope has no conversation")
+	}
 
-	if got := bodies(projectA, userA); got != "user:a-A q1|assistant:a-A a1|user:a-A q2|assistant:a-A a2" {
-		t.Fatalf("project A × user A=%q", got)
+	// 会話は、ID なしの保存で作られる。ID を付ければ、その会話に続く（タイトルは変わらない）。
+	c1 := turn(projectA, userA, nil, "話題1", "a-A q1", "a-A a1", 10, 20)
+	if c1.Title != "話題1" {
+		t.Fatalf("title=%q", c1.Title)
 	}
-	if got := bodies(projectB, userA); got != "user:b-A q|assistant:b-A a" {
-		t.Fatalf("project B × user A=%q", got)
+	again := turn(projectA, userA, &c1.ID, "使われないタイトル", "a-A q2", "a-A a2", 0, 0)
+	if again.ID != c1.ID || again.Title != "話題1" || !again.CreatedAt.Equal(c1.CreatedAt) || again.UpdatedAt.Before(c1.UpdatedAt) {
+		t.Fatalf("continuing must keep the conversation: first=%+v again=%+v", c1, again)
 	}
-	if got := bodies(projectA, userB); got != "user:a-B q|assistant:a-B a" {
-		t.Fatalf("project A × user B=%q", got)
+	c2 := turn(projectA, userA, nil, "話題2", "a-A other q", "a-A other a", 1, 1)
+	cB := turn(projectB, userA, nil, "別プロジェクト", "b-A q", "b-A a", 1, 1)
+	cU := turn(projectA, userB, nil, "別ユーザー", "a-B q", "a-B a", 1, 1)
+	if c2.ID == c1.ID || cB.ID == c1.ID || cU.ID == c1.ID {
+		t.Fatal("every new conversation has its own id")
 	}
-	if got := bodies(projectB, userB); got != "" {
-		t.Fatalf("project B × user B=%q", got)
+	if got := bodies(projectA, userA, c1.ID); got != "user:a-A q1|assistant:a-A a1|user:a-A q2|assistant:a-A a2" {
+		t.Fatalf("conversation 1=%q", got)
+	}
+	if got := bodies(projectA, userA, c2.ID); got != "user:a-A other q|assistant:a-A other a" {
+		t.Fatalf("conversation 2=%q", got)
 	}
 	// トークンは、回答にだけ付く。0 は「無い」。
-	list, err := repo.ListProjectAIMessages(ctx, projectA, userA)
+	list, err := repo.ListProjectAIMessages(ctx, projectA, userA, c1.ID)
 	must(err)
 	if list[0].InputTokens != nil || list[1].InputTokens == nil || *list[1].InputTokens != 10 || *list[1].OutputTokens != 20 ||
 		list[3].InputTokens != nil || list[3].OutputTokens != nil {
 		t.Fatalf("tokens=%+v", list)
 	}
 
-	// クリアは、そのプロジェクト × ユーザーだけ。
-	must(repo.ClearProjectAIMessages(ctx, projectA, userA))
-	if got := bodies(projectA, userA); got != "" {
-		t.Fatalf("cleared=%q", got)
+	// 一覧は、そのプロジェクト × ユーザーのものだけで、更新の新しい順。続きを保存すると先頭に来る。
+	if got := ids(projectA, userA); !slices.Equal(got, []int64{c2.ID, c1.ID}) || latest(projectA, userA) != c2.ID {
+		t.Fatalf("list=%v want %v", got, []int64{c2.ID, c1.ID})
 	}
-	if bodies(projectB, userA) == "" || bodies(projectA, userB) == "" {
+	turn(projectA, userA, &c1.ID, "", "a-A q3", "a-A a3", 1, 1)
+	if got := ids(projectA, userA); !slices.Equal(got, []int64{c1.ID, c2.ID}) || latest(projectA, userA) != c1.ID {
+		t.Fatalf("after continuing conversation 1: list=%v", got)
+	}
+	if got := ids(projectB, userA); !slices.Equal(got, []int64{cB.ID}) {
+		t.Fatalf("project B × user A=%v", got)
+	}
+	if got := ids(projectA, userB); !slices.Equal(got, []int64{cU.ID}) {
+		t.Fatalf("project A × user B=%v", got)
+	}
+	if len(ids(projectB, userB)) != 0 || latest(projectB, userB) != 0 {
+		t.Fatal("project B × user B has nothing")
+	}
+
+	// 別のユーザー・別のプロジェクトからは、無いのと同じ（取得・メッセージ・削除）。
+	for _, wrong := range []struct{ projectID, userID int64 }{{projectA, userB}, {projectB, userA}, {projectB, userB}} {
+		if _, err := repo.GetProjectAIConversation(ctx, wrong.projectID, wrong.userID, c1.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("get from %+v: %v", wrong, err)
+		}
+		if got := bodies(wrong.projectID, wrong.userID, c1.ID); got != "" {
+			t.Fatalf("messages from %+v: %q", wrong, got)
+		}
+		if err := repo.DeleteProjectAIConversation(ctx, wrong.projectID, wrong.userID, c1.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("delete from %+v: %v", wrong, err)
+		}
+	}
+	if _, err := repo.GetProjectAIConversation(ctx, projectA, userA, 987654); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing id: %v", err)
+	}
+	if got, err := repo.GetProjectAIConversation(ctx, projectA, userA, c1.ID); err != nil || got.ID != c1.ID || got.Title != "話題1" {
+		t.Fatalf("own conversation: %+v %v", got, err)
+	}
+	// 他人の会話の ID で保存しても、その会話には足されない。自分の新しい会話になる。
+	stray := turn(projectA, userB, &c1.ID, "他人の ID", "stray q", "stray a", 1, 1)
+	if stray.ID == c1.ID || bodies(projectA, userB, stray.ID) != "user:stray q|assistant:stray a" ||
+		bodies(projectA, userA, c1.ID) != "user:a-A q1|assistant:a-A a1|user:a-A q2|assistant:a-A a2|user:a-A q3|assistant:a-A a3" {
+		t.Fatalf("someone else's conversation id must not be written to: stray=%+v", stray)
+	}
+
+	// 会話の削除は、その会話とそのメッセージだけ。
+	must(repo.DeleteProjectAIConversation(ctx, projectA, userA, c2.ID))
+	if got := ids(projectA, userA); !slices.Equal(got, []int64{c1.ID}) || bodies(projectA, userA, c2.ID) != "" {
+		t.Fatalf("after delete: list=%v", got)
+	}
+	if bodies(projectA, userA, c1.ID) == "" || bodies(projectB, userA, cB.ID) == "" || bodies(projectA, userB, cU.ID) == "" {
+		t.Fatal("deleting one conversation must not touch another")
+	}
+	if err := repo.DeleteProjectAIConversation(ctx, projectA, userA, c2.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second delete: %v", err)
+	}
+	// 消された会話への保存は、失敗せずに新しい会話になる（渡したタイトルが付く）。
+	reborn := turn(projectA, userA, &c2.ID, "消された後", "late q", "late a", 1, 1)
+	if reborn.ID == c2.ID || reborn.Title != "消された後" || bodies(projectA, userA, reborn.ID) != "user:late q|assistant:late a" {
+		t.Fatalf("append to a deleted conversation: %+v", reborn)
+	}
+
+	// クリアは、そのプロジェクト × ユーザーの会話を全部。
+	must(repo.ClearProjectAIConversations(ctx, projectA, userA))
+	if len(ids(projectA, userA)) != 0 || bodies(projectA, userA, c1.ID) != "" || bodies(projectA, userA, reborn.ID) != "" {
+		t.Fatal("clearing must delete every conversation of the scope")
+	}
+	if !slices.Equal(ids(projectB, userA), []int64{cB.ID}) || len(ids(projectA, userB)) != 2 || bodies(projectA, userB, cU.ID) == "" {
 		t.Fatal("clearing must not touch another project or another user")
 	}
 
-	// 200 件を超えた分は、そのプロジェクト × ユーザーの古い順に消える。
-	for i := range 100 {
-		must(repo.AppendProjectAITurn(ctx, projectA, userA, fmt.Sprintf("u%03d", i), fmt.Sprintf("a%03d", i), 1, 2))
+	// 200 件を超えた分は、その会話の古い順に消える。同じ持ち主の別の会話は減らない。
+	long := turn(projectA, userA, nil, "長い会話", "u000", "a000", 1, 2)
+	side := turn(projectA, userA, nil, "横の会話", "side q", "side a", 1, 1)
+	for i := 1; i < 100; i++ {
+		turn(projectA, userA, &long.ID, "", fmt.Sprintf("u%03d", i), fmt.Sprintf("a%03d", i), 1, 2)
 	}
-	must(repo.AppendProjectAITurn(ctx, projectA, userA, "newest-u", "newest-a", 3, 4))
-	list, err = repo.ListProjectAIMessages(ctx, projectA, userA)
+	turn(projectA, userA, &long.ID, "", "newest-u", "newest-a", 3, 4)
+	list, err = repo.ListProjectAIMessages(ctx, projectA, userA, long.ID)
 	must(err)
 	if len(list) != maxAIChatStoredMessages {
 		t.Fatalf("want %d, got %d", maxAIChatStoredMessages, len(list))
@@ -88,20 +191,47 @@ func checkProjectAIHistoryScope(t *testing.T, repo Repository, projectA, project
 	if list[0].Body != "u001" || list[1].Body != "a001" || list[198].Body != "newest-u" || list[199].Body != "newest-a" {
 		t.Fatalf("head=%q %q tail=%q %q", list[0].Body, list[1].Body, list[198].Body, list[199].Body)
 	}
-	if bodies(projectB, userA) != "user:b-A q|assistant:b-A a" || bodies(projectA, userB) != "user:a-B q|assistant:a-B a" {
-		t.Fatal("trimming must not touch another project or another user")
+	if bodies(projectA, userA, side.ID) != "user:side q|assistant:side a" || bodies(projectB, userA, cB.ID) != "user:b-A q|assistant:b-A a" ||
+		bodies(projectA, userB, cU.ID) != "user:a-B q|assistant:a-B a" {
+		t.Fatal("trimming must not touch another conversation, project or user")
+	}
+
+	// 会話は 100 件まで。101 件目を作ると、更新がいちばん古い 1 件（とそのメッセージ）が消える。
+	// いま 2 件（long, side。long のほうが後に更新された）。あと 98 件で 100 件。
+	var made []ProjectAIConversation
+	for i := range maxProjectAIConversations - 2 {
+		made = append(made, turn(projectA, userA, nil, fmt.Sprintf("会話%03d", i), "q", "a", 1, 1))
+	}
+	if got := ids(projectA, userA); len(got) != maxProjectAIConversations || got[len(got)-1] != side.ID || got[len(got)-2] != long.ID {
+		t.Fatalf("100 conversations, oldest update last: n=%d tail=%v", len(got), got[len(got)-2:])
+	}
+	// いちばん古い side に続きを足すと、long がいちばん古くなる。
+	turn(projectA, userA, &side.ID, "", "side q2", "side a2", 1, 1)
+	extra := turn(projectA, userA, nil, "101 件目", "q", "a", 1, 1)
+	got := ids(projectA, userA)
+	if len(got) != maxProjectAIConversations || got[0] != extra.ID || slices.Contains(got, long.ID) || !slices.Contains(got, side.ID) || !slices.Contains(got, made[0].ID) {
+		t.Fatalf("the conversation with the oldest update must go: n=%d first=%d", len(got), got[0])
+	}
+	if _, err := repo.GetProjectAIConversation(ctx, projectA, userA, long.ID); !errors.Is(err, ErrNotFound) || bodies(projectA, userA, long.ID) != "" {
+		t.Fatalf("the trimmed conversation and its messages must be gone: %v", err)
+	}
+	if !slices.Equal(ids(projectB, userA), []int64{cB.ID}) || len(ids(projectA, userB)) != 2 {
+		t.Fatal("the limit is per project × user")
 	}
 }
 
 func TestProjectAIHistoryScopeMemory(t *testing.T) {
 	f := newToolFixture(t)
 	checkProjectAIHistoryScope(t, f.repo, 1, f.other.ID, f.admin.ID, f.member.ID)
-	// プロジェクトを消すと、履歴も消える（MySQL の ON DELETE CASCADE と同じ）。
+	// プロジェクトを消すと、会話も履歴も消える（MySQL の ON DELETE CASCADE と同じ）。
 	if err := f.repo.DeleteProject(context.Background(), f.other.ID); err != nil {
 		t.Fatal(err)
 	}
-	if list, _ := f.repo.ListProjectAIMessages(context.Background(), f.other.ID, f.admin.ID); len(list) != 0 {
-		t.Fatalf("history of a deleted project=%d", len(list))
+	if list, _ := f.repo.ListProjectAIConversations(context.Background(), f.other.ID, f.admin.ID); len(list) != 0 {
+		t.Fatalf("conversations of a deleted project=%d", len(list))
+	}
+	if len(projectHistory(t, f.repo, f.other.ID, f.admin.ID)) != 0 {
+		t.Fatal("history of a deleted project must be gone")
 	}
 }
 
@@ -119,9 +249,22 @@ func TestProjectAIMessagesDDLMatchesSchemaFile(t *testing.T) {
 	if !strings.Contains(text, squashSQL(projectAIMessagesDDL)+";") {
 		t.Fatal("database/init/001_schema.sql must contain the same project_ai_messages DDL as projectAIMessagesDDL")
 	}
-	// users を参照するので、users より後に置く。
-	if strings.Index(text, "CREATE TABLE IF NOT EXISTS project_ai_messages") < strings.Index(text, "CREATE TABLE IF NOT EXISTS users") {
-		t.Fatal("project_ai_messages must come after users in the schema file")
+	if !strings.Contains(text, squashSQL(projectAIConversationsDDL)+";") {
+		t.Fatal("database/init/001_schema.sql must contain the same project_ai_conversations DDL as projectAIConversationsDDL")
+	}
+	// users を参照するので、users より後に置く。メッセージは会話を参照するので、会話より後に置く。
+	users := strings.Index(text, "CREATE TABLE IF NOT EXISTS users")
+	conversations := strings.Index(text, "CREATE TABLE IF NOT EXISTS project_ai_conversations")
+	messages := strings.Index(text, "CREATE TABLE IF NOT EXISTS project_ai_messages")
+	if users < 0 || !(users < conversations && conversations < messages) {
+		t.Fatalf("order in the schema file must be users < project_ai_conversations < project_ai_messages: %d %d %d", users, conversations, messages)
+	}
+	// 列は NULL を許したまま（入れ替えの途中に、古い版が会話なしで足す）。updated_at はアプリが書く。
+	if !strings.Contains(squashSQL(projectAIMessagesDDL), "conversation_id BIGINT NULL,") {
+		t.Fatal("conversation_id must stay NULLable")
+	}
+	if strings.Contains(projectAIConversationsDDL, "ON UPDATE") {
+		t.Fatal("project_ai_conversations.updated_at is written by the application, not by ON UPDATE")
 	}
 }
 
@@ -152,23 +295,43 @@ func TestProjectAIHistoryScopeMySQL(t *testing.T) {
 	member, other := mysqlSecondUserAndProject(t, repo)
 	checkProjectAIHistoryScope(t, repo, 1, other.ID, admin.ID, member.ID)
 
-	// 存在しないプロジェクトには足せない（外部キー）。
-	if err := repo.AppendProjectAITurn(t.Context(), 99999, admin.ID, "q", "a", 1, 1); err == nil {
+	// 存在しないプロジェクトには足せない（外部キー）。会話も残らない。
+	if _, err := repo.AppendProjectAITurn(t.Context(), 99999, admin.ID, nil, ProjectAITurn{Title: "t", UserBody: "q", AssistantBody: "a", InputTokens: 1, OutputTokens: 1}); err == nil {
 		t.Fatal("appending to a missing project must fail")
 	}
-	// プロジェクトを消すと、そのプロジェクトの履歴だけが消える。
-	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM project_ai_messages WHERE project_id=?`, other.ID).Scan(&n); err != nil || n != 2 {
-		t.Fatalf("before delete: n=%d err=%v", n, err)
+	count := func(query string, args ...any) int {
+		t.Helper()
+		var n int
+		if err := db.QueryRow(query, args...).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := count(`SELECT COUNT(*) FROM project_ai_conversations WHERE project_id=99999`); n != 0 {
+		t.Fatalf("a failed append must not leave a conversation: %d", n)
+	}
+	// メッセージの持ち主は、会話の行と同じ（持ち主は 2 か所にある）。会話の無いメッセージ・メッセージの無い会話は無い。
+	if n := count(`SELECT COUNT(*) FROM project_ai_messages m LEFT JOIN project_ai_conversations c ON c.id=m.conversation_id
+ WHERE c.id IS NULL OR c.project_id<>m.project_id OR c.user_id<>m.user_id`); n != 0 {
+		t.Fatalf("messages whose owner differs from their conversation's: %d", n)
+	}
+	if n := count(`SELECT COUNT(*) FROM project_ai_conversations c WHERE NOT EXISTS (SELECT 1 FROM project_ai_messages m WHERE m.conversation_id=c.id)`); n != 0 {
+		t.Fatalf("conversations without a message: %d", n)
+	}
+	// プロジェクトを消すと、そのプロジェクトの会話と履歴だけが消える。
+	mainMessages := count(`SELECT COUNT(*) FROM project_ai_messages WHERE project_id=1`)
+	mainConversations := count(`SELECT COUNT(*) FROM project_ai_conversations WHERE project_id=1`)
+	if count(`SELECT COUNT(*) FROM project_ai_messages WHERE project_id=?`, other.ID) != 2 || count(`SELECT COUNT(*) FROM project_ai_conversations WHERE project_id=?`, other.ID) != 1 {
+		t.Fatal("before delete: the other project has one conversation with two messages")
 	}
 	if err := repo.DeleteProject(t.Context(), other.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM project_ai_messages WHERE project_id=?`, other.ID).Scan(&n); err != nil || n != 0 {
-		t.Fatalf("project delete must cascade: n=%d err=%v", n, err)
+	if count(`SELECT COUNT(*) FROM project_ai_messages WHERE project_id=?`, other.ID) != 0 || count(`SELECT COUNT(*) FROM project_ai_conversations WHERE project_id=?`, other.ID) != 0 {
+		t.Fatal("project delete must cascade to its conversations and messages")
 	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM project_ai_messages WHERE project_id=1`).Scan(&n); err != nil || n != 202 {
-		t.Fatalf("the other project's history must stay: n=%d err=%v", n, err)
+	if count(`SELECT COUNT(*) FROM project_ai_messages WHERE project_id=1`) != mainMessages || count(`SELECT COUNT(*) FROM project_ai_conversations WHERE project_id=1`) != mainConversations || mainConversations < maxProjectAIConversations {
+		t.Fatalf("the other project's history must stay: conversations=%d messages=%d", mainConversations, mainMessages)
 	}
 }
 

@@ -70,8 +70,9 @@ func postProjectChat(h http.Handler, projectID int64, body string) *httptest.Res
 }
 
 type projectChatReply struct {
-	Assistant ProjectAIMessage   `json:"assistant"`
-	Messages  []ProjectAIMessage `json:"messages"`
+	Conversation *ProjectAIConversation `json:"conversation"`
+	Assistant    ProjectAIMessage       `json:"assistant"`
+	Messages     []ProjectAIMessage     `json:"messages"`
 }
 
 func decodeProjectChat(t *testing.T, w *httptest.ResponseRecorder) projectChatReply {
@@ -83,13 +84,31 @@ func decodeProjectChat(t *testing.T, w *httptest.ResponseRecorder) projectChatRe
 	return out
 }
 
+// projectHistory is everything stored for the user in the project: the messages of all
+// conversations, the oldest conversation first.
 func projectHistory(t *testing.T, repo Repository, projectID, userID int64) []ProjectAIMessage {
 	t.Helper()
-	list, err := repo.ListProjectAIMessages(context.Background(), projectID, userID)
+	conversations, err := repo.ListProjectAIConversations(context.Background(), projectID, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return list
+	out := []ProjectAIMessage{}
+	for i := len(conversations) - 1; i >= 0; i-- {
+		list, err := repo.ListProjectAIMessages(context.Background(), projectID, userID, conversations[i].ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, list...)
+	}
+	return out
+}
+
+func messageBodies(list []ProjectAIMessage) string {
+	var out []string
+	for _, m := range list {
+		out = append(out, m.Body)
+	}
+	return strings.Join(out, "|")
 }
 
 // 受け入れ条件 1・4: ツールを実行して結果を返し、最後の文章だけを保存して返す。トークンは合計を記録する。
@@ -283,6 +302,48 @@ func TestProjectAIChatGETAndDELETEWorkWithoutAKeyAndCheckTheProject(t *testing.T
 		if e := decodeError(t, w); w.Code != 404 || e.Message != "プロジェクトが見つかりません。" || e.Code != "" {
 			t.Fatalf("%s missing project: %d %s", method, w.Code, w.Body.String())
 		}
+	}
+}
+
+// 受け入れ条件 9: GET …/ai-chat は、いちばん新しい会話とそのメッセージ。無ければ conversation: null。
+func TestProjectAIChatGETReturnsTheLatestConversation(t *testing.T) {
+	f := newConversationFixture(t)
+	const admin = HandlerTestSessionID
+	w := request(f.h, "GET", projectChatPath(1), "")
+	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"conversation":null,"messages":[]}` {
+		t.Fatalf("no conversation: %d %s", w.Code, w.Body.String())
+	}
+	latest := func(session string, projectID int64) projectChatReply {
+		t.Helper()
+		w := requestWithCookie(f.h, "GET", projectChatPath(projectID), "", session)
+		if w.Code != 200 {
+			t.Fatalf("GET: %d %s", w.Code, w.Body.String())
+		}
+		return decodeProjectChat(t, w)
+	}
+	a := f.send(admin, 1, "A-1", withNewConversation).Conversation.ID
+	b := f.send(admin, 1, "B-1", withNewConversation).Conversation.ID
+	if got := latest(admin, 1); got.Conversation == nil || got.Conversation.ID != b || messageBodies(got.Messages) != "B-1|answer to B-1" {
+		t.Fatalf("latest=%+v %s", got.Conversation, messageBodies(got.Messages))
+	}
+	// 古い会話に続きを足すと、それがいちばん新しくなる。
+	f.send(admin, 1, "A-2", withConversation(a))
+	if got := latest(admin, 1); got.Conversation.ID != a || got.Conversation.Title != "A-1" || messageBodies(got.Messages) != "A-1|answer to A-1|A-2|answer to A-2" {
+		t.Fatalf("latest after continuing A=%+v %s", got.Conversation, messageBodies(got.Messages))
+	}
+	// 別のユーザー・別のプロジェクトには、自分のものが無ければ null。
+	if got := latest("member-session", 1); got.Conversation != nil || len(got.Messages) != 0 {
+		t.Fatalf("member=%+v", got)
+	}
+	if got := latest(admin, f.other.ID); got.Conversation != nil {
+		t.Fatalf("other project=%+v", got)
+	}
+	// いちばん新しい会話を消すと、次に新しいもの。
+	if w = request(f.h, "DELETE", projectConversationPath(1, a), ""); w.Code != 204 {
+		t.Fatalf("delete: %d", w.Code)
+	}
+	if got := latest(admin, 1); got.Conversation == nil || got.Conversation.ID != b {
+		t.Fatalf("latest after delete=%+v", got.Conversation)
 	}
 }
 
@@ -546,8 +607,8 @@ type projectAppendFailRepo struct {
 	*memoryRepo
 }
 
-func (r *projectAppendFailRepo) AppendProjectAITurn(context.Context, int64, int64, string, string, int64, int64) error {
-	return errors.New("append failed SENTINEL-SQL")
+func (r *projectAppendFailRepo) AppendProjectAITurn(context.Context, int64, int64, *int64, ProjectAITurn) (ProjectAIConversation, error) {
+	return ProjectAIConversation{}, errors.New("append failed SENTINEL-SQL")
 }
 
 func TestProjectAIChatAppendFailureIs500WithCodeAndStillCountsUsage(t *testing.T) {
@@ -840,14 +901,14 @@ type appendCtxRepo struct {
 	*memoryRepo
 }
 
-func (r *appendCtxRepo) AppendProjectAITurn(ctx context.Context, projectID, userID int64, userBody, assistantBody string, inTok, outTok int64) error {
+func (r *appendCtxRepo) AppendProjectAITurn(ctx context.Context, projectID, userID int64, conversationID *int64, turn ProjectAITurn) (ProjectAIConversation, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return ProjectAIConversation{}, err
 	}
 	if _, ok := ctx.Deadline(); !ok {
-		return errors.New("storing the answer must have a time limit")
+		return ProjectAIConversation{}, errors.New("storing the answer must have a time limit")
 	}
-	return r.memoryRepo.AppendProjectAITurn(ctx, projectID, userID, userBody, assistantBody, inTok, outTok)
+	return r.memoryRepo.AppendProjectAITurn(ctx, projectID, userID, conversationID, turn)
 }
 
 func TestProjectAIChatKeepsAskingAfterTheClientIsGone(t *testing.T) {
@@ -869,10 +930,7 @@ func TestProjectAIChatKeepsAskingAfterTheClientIsGone(t *testing.T) {
 	r.Header.Set("Content-Type", "application/json")
 	r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
 	h.ServeHTTP(w, r)
-	list, err := repo.memoryRepo.ListProjectAIMessages(context.Background(), 1, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	list := projectHistory(t, repo.memoryRepo, 1, 1)
 	// 閉じても質問は捨てない。開き直せば、質問と回答が履歴にある。
 	if len(list) != 2 || list[1].Body != "回答" {
 		t.Fatalf("closing the panel must not drop the question: status=%d %+v", w.Code, list)
