@@ -55,6 +55,14 @@ export class BackToTop {
   }
 
   /**
+   * The press ended (released, cancelled, or dragged away). Focus from the press, if any, has
+   * already arrived on pointerdown, so a later keyboard focus is not mistaken for a pointer one.
+   */
+  onPointerEnd() {
+    this.pointerPressed = false;
+  }
+
+  /**
    * Keep the button mounted only for keyboard focus, so focus is not dropped to body when it
    * would hide at the top. Focus from a pointer press is not kept, so the button hides at the top.
    */

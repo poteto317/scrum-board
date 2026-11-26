@@ -4,6 +4,9 @@
     class="secondary back-to-top"
     (click)="scrollToTop()"
     (pointerdown)="onPointerDown()"
+    (pointerup)="onPointerEnd()"
+    (pointercancel)="onPointerEnd()"
+    (pointerleave)="onPointerEnd()"
     (focus)="onFocus()"
     (blur)="onBlur()"
   >
