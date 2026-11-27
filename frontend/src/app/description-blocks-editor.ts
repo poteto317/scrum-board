@@ -14,7 +14,16 @@ import {
   viewChild,
   viewChildren,
 } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { Api, ItemAttachment } from './api';
+import {
+  ATTACHMENT_IMAGE_ACCEPT,
+  ATTACHMENT_IMAGE_BUSY_HINT,
+  imageUploadDoneMessage,
+  imageUploadPlanNotice,
+  attachmentMarkupKind,
+  planImageUpload,
+} from './attachment-image';
 import {
   DESCRIPTION_MAX_LEN,
   descriptionLength,
@@ -31,15 +40,9 @@ import {
   parseDescriptionLinks,
 } from './description-link';
 import { hasDescriptionBlockSyntax } from './description-markdown';
+import { buildDescriptionView, collectBookmarkUrls } from './description-view';
 import { DescriptionRichText } from './description-rich-text';
-import {
-  ATTACHMENT_IMAGE_ACCEPT,
-  ATTACHMENT_IMAGE_BUSY_HINT,
-  imageUploadDoneMessage,
-  imageUploadPlanNotice,
-  attachmentMarkupKind,
-  planImageUpload,
-} from './attachment-image';
+import { loadLinkPreviews } from './link-preview';
 import {
   clipboardFilesToAttach,
   filesFromDataTransfer,
@@ -48,6 +51,8 @@ import {
 import { uploadImagesInOrder } from './upload-images-in-order';
 
 const DEFAULT_LENGTH_ERROR = `説明は${DESCRIPTION_MAX_LEN}文字以内で入力してください。`;
+/** Single switch for bookmark promotion (preview collect + rich-text input). */
+const PROMOTE_BOOKMARKS = true;
 
 @Component({
   selector: 'app-description-blocks-editor',
@@ -92,8 +97,12 @@ export class DescriptionBlocksEditor {
   readonly blocks = signal<string[]>(['']);
   /** Insertion index for open menu; null when closed. */
   readonly insertMenuIndex = signal<number | null>(null);
+  readonly linkTitles = signal<Record<string, string>>({});
+  readonly promoteBookmarks = PROMOTE_BOOKMARKS;
   private uploadGuard = false;
   private deleteGuard = false;
+  private linkPreviewGeneration = 0;
+  private linkPreviewSub: Subscription | null = null;
   /** Gap slots: 0..blocks.length inclusive. */
   readonly gapIndexes = computed(() => {
     const n = this.blocks().length;
@@ -143,6 +152,40 @@ export class DescriptionBlocksEditor {
         return;
       }
       this.reloadAttachments();
+    });
+    effect(() => {
+      const number = this.itemNumber();
+      const text = this.value();
+      this.refreshLinkPreviews(number, text);
+    });
+    this.destroyRef.onDestroy(() => {
+      this.linkPreviewSub?.unsubscribe();
+      this.linkPreviewSub = null;
+    });
+  }
+
+  private refreshLinkPreviews(itemNumber: number, text: string): void {
+    this.linkPreviewSub?.unsubscribe();
+    this.linkPreviewSub = null;
+    const generation = ++this.linkPreviewGeneration;
+    // Description/solution editors always pass itemNumber>0; comments use a different component.
+    if (itemNumber <= 0 || text === '') {
+      this.linkTitles.set({});
+      return;
+    }
+    const view = buildDescriptionView(text, itemNumber, this.blockSyntax(), {
+      promoteBookmarks: PROMOTE_BOOKMARKS,
+    });
+    const urls = collectBookmarkUrls(view);
+    if (urls.length === 0) {
+      this.linkTitles.set({});
+      return;
+    }
+    this.linkPreviewSub = loadLinkPreviews(this.api, urls).subscribe({
+      next: (titles) => {
+        if (generation !== this.linkPreviewGeneration) return;
+        this.linkTitles.set(titles);
+      },
     });
   }
 

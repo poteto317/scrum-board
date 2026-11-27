@@ -19,6 +19,8 @@ describe('DescriptionRichText', () => {
     draggableImages?: boolean;
     canDelete?: boolean;
     blockSyntax?: boolean;
+    promoteBookmarks?: boolean;
+    linkTitles?: Record<string, string>;
   }) {
     TestBed.configureTestingModule({ imports: [DescriptionRichText] });
     const f = TestBed.createComponent(DescriptionRichText);
@@ -27,9 +29,27 @@ describe('DescriptionRichText', () => {
     f.componentRef.setInput('draggableImages', opts.draggableImages ?? false);
     f.componentRef.setInput('canDelete', opts.canDelete ?? false);
     f.componentRef.setInput('blockSyntax', opts.blockSyntax ?? false);
+    f.componentRef.setInput('promoteBookmarks', opts.promoteBookmarks ?? false);
+    f.componentRef.setInput('linkTitles', opts.linkTitles ?? {});
     f.detectChanges();
     return f;
   }
+
+  it('renders bookmark cards when promoteBookmarks is on', () => {
+    const url = 'https://example.com/doc';
+    const f = mount({
+      text: `[${url}](${url})`,
+      itemNumber: 7,
+      promoteBookmarks: true,
+      linkTitles: { [url]: 'Example Doc' },
+    });
+    const card = f.nativeElement.querySelector('a.rich-bookmark') as HTMLAnchorElement;
+    expect(card).toBeTruthy();
+    expect(card.href).toBe('https://example.com/doc');
+    expect(card.querySelector('.rich-bookmark-title')?.textContent).toBe('Example Doc');
+    expect(card.getAttribute('target')).toBe('_blank');
+    expect(card.getAttribute('rel')).toContain('noopener');
+  });
 
   it('reuses parsed segments across change detection and unrelated input changes', () => {
     const f = mount({ text: '[see](https://example.com)', itemNumber: 7 });
