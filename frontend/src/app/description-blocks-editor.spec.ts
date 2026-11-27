@@ -560,6 +560,26 @@ describe('DescriptionBlocksEditor', () => {
     expect(f.nativeElement.querySelector('.blocks-preview')).not.toBeNull();
   });
 
+  it('rewrites image display size via rich-text size button (L-060 wiring)', () => {
+    const f = TestBed.createComponent(DescriptionBlocksEditor);
+    const markup = '![shot](/api/items/by-number/140/attachments/9/content)';
+    f.componentRef.setInput('value', markup);
+    f.componentRef.setInput('itemNumber', 140);
+    f.componentRef.setInput('attachmentField', 'description');
+    f.detectChanges();
+    const spy = vi.fn();
+    f.componentInstance.textChange.subscribe(spy);
+    const btn = f.nativeElement.querySelector(
+      'app-description-rich-text button[aria-label="大"]',
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    f.detectChanges();
+    expect(spy).toHaveBeenCalledWith(
+      '![shot](/api/items/by-number/140/attachments/9/content "lg")',
+    );
+  });
+
   it('shows rich preview when text has a same-item file attachment link', () => {
     const f = TestBed.createComponent(DescriptionBlocksEditor);
     f.componentRef.setInput(
@@ -594,7 +614,7 @@ describe('DescriptionBlocksEditor', () => {
     const f = mountPreview('# 見出し', 140, 'solution');
     expect(f.nativeElement.querySelector('.blocks-preview')).toBeNull();
     const linked = mountPreview('# 見出し [l](https://example.com)', 140, 'solution');
-    const preview = linked.nativeElement.querySelector('.blocks-preview') as HTMLElement;
+    const preview = linked.nativeElement.querySelector('.blocks-preview .rich-text') as HTMLElement;
     expect(preview.querySelector('h2')).toBeNull();
     expect(preview.textContent).toContain('# 見出し');
   });
