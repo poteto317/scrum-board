@@ -25,7 +25,7 @@ import { buildDescriptionView } from './description-view';
             rel="noopener noreferrer"
           >
             <span class="rich-bookmark-title">{{ bookmarkTitle(seg.url) }}</span>
-            <span class="rich-bookmark-url">{{ bookmarkHost(seg.url) }}</span>
+            <span class="rich-bookmark-url">{{ bookmarkURLLabel(seg.url) }}</span>
           </a>
         } @else if (seg.kind === 'image') {
           <span class="rich-image">
@@ -269,8 +269,10 @@ export class DescriptionRichText {
     return '読み込み中';
   }
 
-  bookmarkHost(url: string): string {
-    return hostnameFallback(url);
+  /** Shortened URL for the secondary line (not just hostname). */
+  bookmarkURLLabel(url: string): string {
+    const trimmed = url.replace(/^https:\/\//, '');
+    return [...trimmed].length > 64 ? [...trimmed].slice(0, 64).join('') + '…' : trimmed;
   }
 
   onDragStart(attachmentId: number, alt: string, event: DragEvent): void {

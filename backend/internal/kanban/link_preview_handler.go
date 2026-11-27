@@ -24,8 +24,8 @@ func (h handler) batchLinkPreviews(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	// Bound work before DNS (syntax parse only). Absolute raw cap avoids huge bodies.
-	if len(in.URLs) > maxLinkPreviewBatch*5 {
+	// Bound before DNS (same raw-array cap as OpenAPI maxItems / error copy).
+	if len(in.URLs) > maxLinkPreviewBatch {
 		invalid(w, "一度に取得できるURLは20件までです。")
 		return
 	}
@@ -43,10 +43,6 @@ func (h handler) batchLinkPreviews(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[key] = struct{}{}
 		keys = append(keys, key)
-	}
-	if len(keys) > maxLinkPreviewBatch {
-		invalid(w, "一度に取得できるURLは20件までです。")
-		return
 	}
 	previews := make(map[string]linkPreviewEntry, len(keys))
 	if h.linkPreviewResolver == nil {
