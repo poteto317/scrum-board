@@ -241,8 +241,11 @@ describe('DescriptionRichText', () => {
         text: buildAttachmentMarkup(7, 3, 'pic', 'lg'),
         itemNumber: 7,
         canChangeImageSize: true,
+        canDelete: true,
       });
-      (f.nativeElement.querySelector('.rich-image img') as HTMLImageElement).click();
+      const img = f.nativeElement.querySelector('.rich-image img') as HTMLImageElement;
+      expect(img.getAttribute('tabindex')).toBe('-1');
+      img.click();
       f.detectChanges();
       expect(open).toBe(true);
       expect(f.nativeElement.querySelector('dialog[open]')).toBeTruthy();
@@ -250,6 +253,18 @@ describe('DescriptionRichText', () => {
       f.detectChanges();
       expect(open).toBe(true);
       (f.nativeElement.querySelector('button[aria-label="閉じる"]') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(open).toBe(false);
+      const del = f.nativeElement.querySelector('.rich-image-delete') as HTMLButtonElement;
+      del.click();
+      f.detectChanges();
+      expect(open).toBe(false);
+      const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
+      open = true;
+      dialog.setAttribute('open', '');
+      dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+      // Native Escape closes via dialog; simulate close path.
+      proto.close!.call(dialog);
       f.detectChanges();
       expect(open).toBe(false);
     } finally {
