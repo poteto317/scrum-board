@@ -3,9 +3,6 @@ import { isNotFound } from './api-error';
 
 /** AI チャットの会話の判定と表示（DOM・API・signal に触れない） */
 
-/** 専用画面の左に一覧を常に出す幅 */
-export const CONVERSATION_LIST_PINNED_QUERY = '(min-width: 768px)';
-
 /**
  * 送ったときの会話と、いま表示中の会話が同じか（null は、まだ保存されていない新しい会話）。
  * 応答の conversation.id とは比べない: 新しい会話への送信では、応答の ID は送った ID と違う。
@@ -66,19 +63,15 @@ export function conversationActionsLocked(state: {
 }
 
 /**
- * 一覧とやりとりのどちらを出すか。専用画面で幅があれば、一覧を左に常に出す（pinned）。
- * それ以外は、「履歴」で、やりとりの代わりに一覧を出す。
+ * 一覧とやりとりのどちらを出すか。
+ * 履歴トグルが開いているときだけ一覧を出し、それ以外はやりとり（スレッド）を出す。
  */
 export function conversationListView(state: {
-  layout: 'fab' | 'dock' | 'page';
-  wide: boolean;
   historyOpen: boolean;
-}): { pinned: boolean; showList: boolean; showThread: boolean } {
-  const pinned = state.layout === 'page' && state.wide;
+}): { showList: boolean; showThread: boolean } {
   return {
-    pinned,
-    showList: pinned || state.historyOpen,
-    showThread: pinned || !state.historyOpen,
+    showList: state.historyOpen,
+    showThread: !state.historyOpen,
   };
 }
 
