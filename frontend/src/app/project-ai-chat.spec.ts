@@ -99,8 +99,6 @@ function setup(
     focusItem?: AiChatFocusItem | null;
     user?: User | null;
     layout?: 'fab' | 'dock' | 'page';
-    /** 幅が 768px 以上か */
-    wide?: boolean;
     initialConversationId?: unknown;
   } = {},
 ) {
@@ -116,17 +114,6 @@ function setup(
     getAICredits: vi.fn(() => of(okCredits)),
     ...api,
   };
-  const media = { matches: opts.wide ?? false, changed: () => undefined as void };
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn(() => ({
-      get matches() {
-        return media.matches;
-      },
-      addEventListener: (_: string, cb: () => void) => (media.changed = cb),
-      removeEventListener: () => undefined,
-    })),
-  );
   TestBed.configureTestingModule({
     imports: [ProjectAiChat],
     providers: [
@@ -148,7 +135,7 @@ function setup(
     f.componentRef.setInput('initialConversationId', opts.initialConversationId);
   }
   f.detectChanges();
-  return { f, c, user, api: stubs, shown, sendingEvents, media };
+  return { f, c, user, api: stubs, shown, sendingEvents };
 }
 
 type Fixture = { nativeElement: HTMLElement };
@@ -170,6 +157,10 @@ const rowTimes = (f: Fixture) =>
     (el) => el.textContent,
   );
 const list = (f: Fixture) => f.nativeElement.querySelector<HTMLElement>('.ai-chat-conversations');
+const openHistory = (f: { nativeElement: HTMLElement; detectChanges: () => void }) => {
+  button(f, '.ai-chat-history-toggle').click();
+  f.detectChanges();
+};
 const bodies = (f: Fixture) =>
   Array.from(f.nativeElement.querySelectorAll('.ai-chat-body')).map((el) => el.textContent);
 const applyButtons = (f: Fixture) =>
@@ -437,7 +428,8 @@ describe('ProjectAiChat', () => {
 
   describe('conversation list', () => {
     it('lists titles and update times, newest first, as buttons', () => {
-      const { f } = setup({}, { layout: 'page', wide: true });
+      const { f } = setup({}, { layout: 'page' });
+      openHistory(f);
       expect(rowTitles(f)).toEqual(['要約して', '期限が近いものは']);
       expect(rowTimes(f)).toEqual(
         [c5, c4].map((conv) => {
@@ -450,15 +442,18 @@ describe('ProjectAiChat', () => {
     });
 
     it('marks only the shown conversation with aria-current', () => {
-      const { f, c } = setup({}, { layout: 'page', wide: true });
+      const { f, c } = setup({}, { layout: 'page' });
+      openHistory(f);
       expect(rows(f).map((row) => row.getAttribute('aria-current'))).toEqual(['true', null]);
       c.startNew();
       f.detectChanges();
+      openHistory(f);
       expect(rows(f).map((row) => row.getAttribute('aria-current'))).toEqual([null, null]);
     });
 
     it('labels each delete button with the conversation it deletes', () => {
-      const { f } = setup({}, { layout: 'page', wide: true });
+      const { f } = setup({}, { layout: 'page' });
+      openHistory(f);
       expect(rowDeletes(f).map((b) => b.getAttribute('aria-label'))).toEqual([
         '会話「要約して」を削除',
         '会話「期限が近いものは」を削除',
@@ -469,8 +464,9 @@ describe('ProjectAiChat', () => {
       const pending = new Subject<ProjectAIConversation[]>();
       const { f, c } = setup(
         { listProjectAIConversations: vi.fn(() => pending) },
-        { layout: 'page', wide: true },
+        { layout: 'page' },
       );
+      openHistory(f);
       expect(c.listState()).toBe('loading');
       expect(list(f)!.textContent).toContain('読み込み中…');
       expect(list(f)!.textContent).not.toContain('会話はまだありません。');
@@ -485,7 +481,8 @@ describe('ProjectAiChat', () => {
         .fn()
         .mockReturnValueOnce(httpError(500, '一覧を読めません'))
         .mockReturnValueOnce(of([c5]));
-      const { f, c } = setup({ listProjectAIConversations }, { layout: 'page', wide: true });
+      const { f, c } = setup({ listProjectAIConversations }, { layout: 'page' });
+      openHistory(f);
       expect(c.listState()).toBe('error');
       expect(list(f)!.querySelector('[role="alert"]')?.textContent).toContain('一覧を読めません');
       expect(list(f)!.textContent).not.toContain('会話はまだありません。');
@@ -500,15 +497,16 @@ describe('ProjectAiChat', () => {
     it('shows the empty message only when the list was read and has no conversation', () => {
       const { f } = setup(
         { getLatestProjectAIChat: vi.fn(() => of(noChat)), listProjectAIConversations: vi.fn(() => of([])) },
-        { layout: 'page', wide: true },
+        { layout: 'page' },
       );
+      openHistory(f);
       expect(list(f)!.textContent).toContain('会話はまだありません。');
     });
   });
 
   describe('history toggle', () => {
     it('swaps the messages for the list in the dock, and back', () => {
-      const { f } = setup({}, { layout: 'dock', wide: true });
+      const { f } = setup({}, { layout: 'dock' });
       const toggle = button(f, '.ai-chat-history-toggle');
       expect(toggle.getAttribute('aria-expanded')).toBe('false');
       expect(toggle.getAttribute('aria-controls')).toBe('ai-chat-conversations');
@@ -547,24 +545,40 @@ describe('ProjectAiChat', () => {
       expect(c.historyOpen()).toBe(false);
     });
 
-    it('always shows the list beside the messages on a wide page, without the toggle', () => {
-      const { f } = setup({}, { layout: 'page', wide: true });
-      expect(f.nativeElement.querySelector('.ai-chat-history-toggle')).toBeNull();
-      expect(list(f)).not.toBeNull();
-      expect(f.nativeElement.querySelector('.ai-chat-list')).not.toBeNull();
-      expect(f.nativeElement.querySelector('.ai-chat-main--split')).not.toBeNull();
-    });
-
-    it('uses the toggle on a narrow page, and pins the list when the window becomes wide', () => {
-      const { f, media } = setup({}, { layout: 'page', wide: false });
+    it('hides the list on a page until history is opened, with the toggle visible', () => {
+      const { f } = setup({}, { layout: 'page' });
       expect(f.nativeElement.querySelector('.ai-chat-history-toggle')).not.toBeNull();
       expect(list(f)).toBeNull();
-      media.matches = true;
-      media.changed();
-      f.detectChanges();
-      expect(f.nativeElement.querySelector('.ai-chat-history-toggle')).toBeNull();
+      expect(f.nativeElement.querySelector('.ai-chat-list')).not.toBeNull();
+      openHistory(f);
       expect(list(f)).not.toBeNull();
+      expect(f.nativeElement.querySelector('.ai-chat-list')).toBeNull();
+      button(f, '.ai-chat-history-toggle').click();
+      f.detectChanges();
+      expect(list(f)).toBeNull();
+      expect(f.nativeElement.querySelector('.ai-chat-list')).not.toBeNull();
     });
+
+    it('returns to the thread after a conversation is picked on a page', () => {
+      const { f, c } = setup({}, { layout: 'page' });
+      openHistory(f);
+      rows(f)[1].click();
+      f.detectChanges();
+      expect(c.historyOpen()).toBe(false);
+      expect(list(f)).toBeNull();
+      expect(bodies(f)).toEqual(['別の履歴']);
+    });
+
+    it('closes the history list after starting a new conversation on a page', () => {
+      const { f, c } = setup({}, { layout: 'page' });
+      openHistory(f);
+      expect(list(f)).not.toBeNull();
+      button(f, '.ai-chat-new').click();
+      f.detectChanges();
+      expect(c.historyOpen()).toBe(false);
+      expect(list(f)).toBeNull();
+    });
+
   });
 
   describe('new conversation', () => {
@@ -596,7 +610,7 @@ describe('ProjectAiChat', () => {
         .mockReturnValue(of([c9, c5, c4]));
       const { f, c } = setup(
         { postProjectAIChat, listProjectAIConversations },
-        { layout: 'page', wide: true },
+        { layout: 'page' },
       );
       c.startNew();
       c.draft.set('新しい話題');
@@ -607,6 +621,7 @@ describe('ProjectAiChat', () => {
       expect(c.messages()).toEqual([m9]);
       expect(listProjectAIConversations).toHaveBeenCalledTimes(2);
       expect(c.conversations()).toEqual([c9, c5, c4]);
+      openHistory(f);
       expect(rows(f).map((row) => row.getAttribute('aria-current'))).toEqual(['true', null, null]);
       // 続きは、できた会話に送る。同じ会話なので、一覧は読み直さない
       c.draft.set('続き');
@@ -631,12 +646,14 @@ describe('ProjectAiChat', () => {
 
   describe('pick a conversation', () => {
     it('shows its messages and continues it', () => {
-      const { f, c, api } = setup({}, { layout: 'page', wide: true });
+      const { f, c, api } = setup({}, { layout: 'page' });
+      openHistory(f);
       rows(f)[1].click();
       f.detectChanges();
       expect(api.getProjectAIConversation).toHaveBeenCalledWith(1, 4);
       expect(c.conversationId()).toBe(4);
       expect(bodies(f)).toEqual(['別の履歴']);
+      openHistory(f);
       expect(rows(f).map((row) => row.getAttribute('aria-current'))).toEqual([null, 'true']);
       c.draft.set('続き');
       c.send();
@@ -658,7 +675,8 @@ describe('ProjectAiChat', () => {
 
     it('moves focus to the input when a deleted row disappears', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const { f, c } = setup({}, { layout: 'page', wide: true });
+      const { f, c } = setup({}, { layout: 'page' });
+      openHistory(f);
       const del = f.nativeElement.querySelectorAll('.ai-chat-conversation-delete')[1] as HTMLButtonElement;
       del.focus();
       del.click();
@@ -738,7 +756,8 @@ describe('ProjectAiChat', () => {
 
     it('deletes the shown conversation from the history row and becomes a new conversation', () => {
       const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const { f, c, api } = setup({}, { layout: 'page', wide: true });
+      const { f, c, api } = setup({}, { layout: 'page' });
+      openHistory(f);
       rowDeletes(f)[0].click();
       f.detectChanges();
       expect(confirm).toHaveBeenCalledWith('この会話を削除しますか？');
@@ -751,7 +770,8 @@ describe('ProjectAiChat', () => {
 
     it('deletes another conversation from the list and keeps the shown one', () => {
       const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const { f, c, api } = setup({}, { layout: 'page', wide: true });
+      const { f, c, api } = setup({}, { layout: 'page' });
+      openHistory(f);
       rowDeletes(f)[1].click();
       f.detectChanges();
       expect(confirm).toHaveBeenCalledWith('この会話を削除しますか？');
@@ -763,7 +783,8 @@ describe('ProjectAiChat', () => {
 
     it('keeps the conversation when the confirm is cancelled', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(false);
-      const { f, c, api } = setup({}, { layout: 'page', wide: true });
+      const { f, c, api } = setup({}, { layout: 'page' });
+      openHistory(f);
       rowDeletes(f)[0].click();
       expect(api.deleteProjectAIConversation).not.toHaveBeenCalled();
       expect(c.messages()).toEqual([m1, m2]);
@@ -772,7 +793,8 @@ describe('ProjectAiChat', () => {
     it('keeps the conversation and shows the error when delete fails (L-001)', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       const deleteProjectAIConversation = vi.fn(() => httpError(500, '消せません'));
-      const { f, c } = setup({ deleteProjectAIConversation }, { layout: 'page', wide: true });
+      const { f, c } = setup({ deleteProjectAIConversation }, { layout: 'page' });
+      openHistory(f);
       rowDeletes(f)[0].click();
       expect(c.conversationId()).toBe(5);
       expect(c.messages()).toEqual([m1, m2]);
@@ -784,7 +806,8 @@ describe('ProjectAiChat', () => {
     it('treats 404 as deleted: it was already gone elsewhere', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       const deleteProjectAIConversation = vi.fn(() => httpError(404, '会話が見つかりません。'));
-      const { f, c } = setup({ deleteProjectAIConversation }, { layout: 'page', wide: true });
+      const { f, c } = setup({ deleteProjectAIConversation }, { layout: 'page' });
+      openHistory(f);
       rowDeletes(f)[0].click();
       expect(c.conversationId()).toBeNull();
       expect(c.messages()).toEqual([]);
@@ -795,7 +818,8 @@ describe('ProjectAiChat', () => {
 
     it('ignores a second click of a double-click on the row button (L-408)', () => {
       const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const { f, api } = setup({}, { layout: 'page', wide: true });
+      const { f, api } = setup({}, { layout: 'page' });
+      openHistory(f);
       rowDeletes(f)[0].dispatchEvent(
         new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }),
       );
@@ -823,7 +847,7 @@ describe('ProjectAiChat', () => {
         .fn()
         .mockReturnValueOnce(first)
         .mockReturnValueOnce(of([c4]));
-      const { c } = setup({ listProjectAIConversations }, { layout: 'page', wide: true });
+      const { c } = setup({ listProjectAIConversations }, { layout: 'page' });
       c.deleteConversation(5);
       expect(listProjectAIConversations).toHaveBeenCalledTimes(2);
       first.next([c5, c4]);
@@ -837,8 +861,9 @@ describe('ProjectAiChat', () => {
       const pending = new Subject<ProjectAIChatPostResponse>();
       const { f, c, api } = setup(
         { postProjectAIChat: vi.fn(() => pending) },
-        { layout: 'page', wide: true },
+        { layout: 'page' },
       );
+      openHistory(f);
       expect(actionsDisabled(f)).toBe(false);
       c.draft.set('hi');
       c.send();
@@ -863,8 +888,9 @@ describe('ProjectAiChat', () => {
       const pending = new Subject<ProjectAIChatView>();
       const { f, c, api } = setup(
         { getLatestProjectAIChat: vi.fn(() => pending) },
-        { layout: 'page', wide: true },
+        { layout: 'page' },
       );
+      openHistory(f);
       expect(rows(f)).toHaveLength(2);
       expect(actionsDisabled(f)).toBe(true);
       c.selectConversation(4);
@@ -881,7 +907,8 @@ describe('ProjectAiChat', () => {
         .fn()
         .mockReturnValueOnce(httpError(500, '失敗'))
         .mockReturnValueOnce(of(latest));
-      const { f, c } = setup({ getLatestProjectAIChat }, { layout: 'page', wide: true });
+      const { f, c } = setup({ getLatestProjectAIChat }, { layout: 'page' });
+      openHistory(f);
       expect(actionsDisabled(f)).toBe(true);
       c.reload();
       f.detectChanges();
@@ -892,8 +919,9 @@ describe('ProjectAiChat', () => {
       const pending = new Subject<ProjectAIConversationView>();
       const { f, c, api } = setup(
         { getProjectAIConversation: vi.fn(() => pending) },
-        { layout: 'page', wide: true },
+        { layout: 'page' },
       );
+      openHistory(f);
       rows(f)[1].click();
       f.detectChanges();
       expect(actionsDisabled(f)).toBe(true);
@@ -911,8 +939,9 @@ describe('ProjectAiChat', () => {
       const pending = new Subject<void>();
       const { f, c, api } = setup(
         { deleteProjectAIConversation: vi.fn(() => pending) },
-        { layout: 'page', wide: true },
+        { layout: 'page' },
       );
+      openHistory(f);
       rowDeletes(f)[1].click();
       f.detectChanges();
       expect(c.deleting()).toBe(true);
@@ -1254,7 +1283,7 @@ describe('ProjectAiChat', () => {
 
     it('clears editing when the shown conversation is deleted', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const { c } = setup({}, { layout: 'page', wide: true });
+      const { c } = setup({}, { layout: 'page' });
       c.startEdit(m1);
       c.deleteConversation(5);
       expect(c.editingFromMessageId()).toBeNull();
@@ -1854,7 +1883,7 @@ describe('ProjectAiChat', () => {
         .mockReturnValueOnce(pendingList);
       const { f, c, user, api } = setup(
         { getLatestProjectAIChat, listProjectAIConversations },
-        { layout: 'page', wide: true },
+        { layout: 'page' },
       );
       c.draft.set('前のユーザーの下書き');
       user.set(userOf(2));
@@ -1863,6 +1892,8 @@ describe('ProjectAiChat', () => {
       expect(c.conversationId()).toBeNull();
       expect(c.draft()).toBe('');
       expect(f.nativeElement.querySelector('.ai-chat-msg')).toBeNull();
+      expect(c.conversations()).toEqual([]);
+      openHistory(f);
       expect(rows(f)).toEqual([]);
       expect(getLatestProjectAIChat).toHaveBeenCalledTimes(2);
       expect(listProjectAIConversations).toHaveBeenCalledTimes(2);

@@ -36,17 +36,6 @@
   min-height: 0;
   overflow: auto;
 }
-/* 専用画面で幅があるとき: 一覧を左の列に常に出す */
-.ai-chat--page .ai-chat-main--split {
-  flex-direction: row;
-  gap: 1rem;
-}
-.ai-chat--page .ai-chat-main--split .ai-chat-conversations {
-  flex: 0 0 16rem;
-  margin-bottom: 0;
-  padding-right: 1rem;
-  border-right: 1px solid var(--line);
-}
 .ai-chat-head {
   display: flex;
   flex-wrap: wrap;
