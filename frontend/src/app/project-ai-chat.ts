@@ -314,9 +314,9 @@ export class ProjectAiChat implements OnChanges {
 
   private showLoaded(conversationId: number | null, messages: ProjectAIMessage[]) {
     this.initialTarget = null;
+    this.enableStickToBottom();
     this.messages.set(messages);
     this.loading.set(false);
-    this.stickAndScrollToBottom();
     this.showConversation(conversationId);
   }
 
@@ -384,9 +384,14 @@ export class ProjectAiChat implements OnChanges {
     this.stickToBottom = isNearBottom(el);
   }
 
-  /** 追従を有効にして、可能なら最下部へスクロールを予約する */
-  private stickAndScrollToBottom() {
+  /** 追従を有効にする（スクロール予約は messages/loading の effect、または明示 schedule） */
+  private enableStickToBottom() {
     this.stickToBottom = true;
+  }
+
+  /** 送信直後など、messages がまだ変わらないときに stick on して即予約する */
+  private stickAndScrollToBottom() {
+    this.enableStickToBottom();
     this.scheduleScrollToBottomIfStuck();
   }
 
@@ -422,7 +427,7 @@ export class ProjectAiChat implements OnChanges {
   /** 空の新しい会話にする。サーバーには、最初に送ったときに作られる */
   startNew() {
     if (this.actionsLocked()) return;
-    this.stickAndScrollToBottom();
+    this.enableStickToBottom();
     this.messages.set([]);
     this.error.set('');
     this.historyOpen.set(false);
@@ -446,7 +451,7 @@ export class ProjectAiChat implements OnChanges {
       .subscribe({
         next: (view) => {
           if (!this.stillCurrent(scope)) return;
-          this.stickAndScrollToBottom();
+          this.enableStickToBottom();
           this.messages.set(view.messages);
           this.switching.set(false);
           this.historyOpen.set(false);
@@ -550,7 +555,7 @@ export class ProjectAiChat implements OnChanges {
       this.patchConversations((list) => removeConversation(list, conversationId));
       this.focusInputIfLost();
       if (!sameConversation(conversationId, this.conversationId())) return;
-      this.stickAndScrollToBottom();
+      this.enableStickToBottom();
       this.messages.set([]);
       this.showConversation(null);
     };
