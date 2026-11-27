@@ -21,7 +21,7 @@
 | 追従条件 | 「最下部付近にいる」ときだけ自動で下へ（stick-to-bottom）。閾値 **48px** | 常に最下部へ強制 |
 | 利用者の上スクロール | list の `scroll` で最下部から離れたら stick off。以後 **messages が増えても**飛ばない | IntersectionObserver のみ |
 | 自分の送信 | `send()` 開始時に stick on。その後ユーザーが上へ離れたら stick off が勝ち、到着した返答では飛ばない | 送信後は常に強制追従 |
-| 会話切替・新規 | **別会話へ移るとき** stick on し、描画後に最下部へ。同一会話の送信完了では stick を触らない（上スクロール維持） | 前会話の scrollTop を持ち越し。毎回 showConversation で stick on |
+| 会話切替・新規・削除後の空表示 | `showLoaded` / `selectConversation` / `startNew` / 表示中会話の削除成功で stick on。`showConversation` は ID 通知のみ（stick を触らない）。同一会話の送信完了でも stick を触らない | 前会話の scrollTop を持ち越し。`showConversation` で stick on |
 | レイアウト修正 | **dock / page**（＝製品の FAB パネルと専用ページ）で list に `overflow: auto` を明示、compose に `flex-shrink: 0`。thread は縦 flex のまま。`layout='fab'` 経路があれば従来の `max-height: 28rem` を維持するが、受け入れの主対象は dock/page | compose を `position: sticky` に頼る |
 | 追従トリガー | **`messages` の内容変化**（件数・末尾 id）と会話切替／新規／送信開始の stick on。sending 表示は list の外なので list 高さ追従のトリガーにしない。提案カードの高さ変化専用の ResizeObserver は範囲外（stick 中の次の messages 更新でのみ追従） | sending 変化や提案「展開」をトリガーにする |
 | 実装の置き場 | 純関数 `isNearBottom(el, threshold)` と `scrollElementToBottom(el)` を小さなヘルパーに置き、コンポーネントは DOM 参照とイベント配線のみ。適用は **list 要素が存在する成功表示後だけ** `afterNextRender` で行う（L-824）。`loading` / `loadError` 中は list が未マウントなのでスケジュールしない。ref が無ければ no-op | テンプレートに直接 scroll ロジック。loading 中に登録 |
@@ -32,8 +32,8 @@
 2. `stickToBottom` はコンポーネント内の private フラグ（初期 `true`）。
 3. `(scroll)` on list: `stickToBottom = isNearBottom(el, 48)`。
 4. `messages` が変わったあと（かつ list が表示中）: stick なら `afterNextRender` で最下部へ。loading / loadError 表示中は登録しない。
-5. `send()` の送信開始時: `stickToBottom = true` のうえ、次の描画で最下部へ（ユーザー吹き出しが見える）。返答到着前に利用者が上へスクロールすれば stick off。
-6. `showConversation` / `startNew` / 初回 load 成功（list が出たあと）: stick on + 描画後スクロール。
+5. `send()` の送信開始時: stick on のうえ **明示 schedule**（この時点では messages 未変化のため）。返答到着前に利用者が上へスクロールすれば stick off。
+6. `showLoaded` / `selectConversation` / `startNew` / 表示中会話の削除成功: stick on。スクロール予約は messages／loading の effect に任せる。`showConversation` は stick しない。
 
 ### 入力欄が下に保たれること
 
