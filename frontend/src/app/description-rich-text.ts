@@ -185,12 +185,13 @@ import { buildDescriptionView } from './description-view';
     <dialog
       #imageLightbox
       class="modal-backdrop rich-image-lightbox"
+      aria-labelledby="rich-image-lightbox-title"
       (click)="onLightboxBackdrop($event)"
       (close)="onLightboxClosed()"
     >
       <form method="dialog" class="modal rich-image-lightbox-panel" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h2>{{ lightboxAlt() }}</h2>
+          <h2 id="rich-image-lightbox-title">{{ lightboxAlt() }}</h2>
           <button
             #lightboxClose
             type="button"
@@ -449,8 +450,8 @@ export class DescriptionRichText {
   }
 
   onLightboxBackdrop(event: MouseEvent): void {
-    // Backdrop clicks hit the dialog element; do not close (spec).
-    if (event.target === event.currentTarget) event.preventDefault();
+    // Native <dialog> does not close on backdrop click; stop bubbling only.
+    if (event.target === event.currentTarget) event.stopPropagation();
   }
 
   onLightboxClosed(): void {

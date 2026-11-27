@@ -452,6 +452,8 @@ export class ItemComments implements OnChanges {
     const number = this.number;
     const projectId = this.scopedProjectId();
     const previous = c;
+    const optimistic = { ...c, body: next };
+    this.comments.update((list) => replaceComment(list, optimistic));
     this.savingId.set(c.id);
     this.actionError.set('');
     this.mutationRequest?.unsubscribe();
