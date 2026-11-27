@@ -1,11 +1,12 @@
 package kanban
 
-// Tools of the project chat. The read tools (search_items, get_item) only read, only inside
-// the project of the URL, and only what the asking user may view. Trashed items do not exist
-// for them; archived ones do.
+// Tools of the project chat. The read tools (search_items, get_item) only read, and only what
+// the asking user may view. When cross-project search is off they stay inside the URL project;
+// when on they cover every project. Trashed items do not exist for them; archived ones do.
 //
 // The proposal tools (propose_*) change nothing: they collect proposals that are stored with
-// the answer and applied by the user on the screen (ai_project_tool_proposals.go).
+// the answer and applied by the user on the screen (ai_project_tool_proposals.go). Proposals
+// always target the URL project only.
 //
 // This file is what the model is told about the tools (names and input schemas). Reading an
 // input and building a result live with each tool (ai_project_tool_search_items.go,
@@ -22,16 +23,32 @@ const (
 )
 
 // projectChatTools is the tool list given to the model.
-func projectChatTools() []ChatTool {
+func projectChatTools(crossProject bool) []ChatTool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
+	searchDesc := "このプロジェクトのアイテムを検索する。結果は {total, truncated, items} で、items は {number, projectId, projectName, title, status, assignee, dueAt, archived, updatedAt, snippet}。" +
+		"total が items の件数より多いときは offset で続きを取れる。truncated が true のときは、全件は見ていない。本文やコメントを読むには get_item を使う。"
+	getDesc := "このプロジェクトのアイテム 1 件を番号で開き、タイトル・説明・ソリューション・状態・担当・期限・コメント（新しい 30 件）を返す。"
+	getProps := map[string]any{
+		"number": map[string]any{"type": "integer", "description": "アイテムの番号（#12 なら 12）。"},
+	}
+	getRequired := []string{"number"}
+	if crossProject {
+		searchDesc = "閲覧できる全プロジェクトのアイテムを検索する。結果は {total, truncated, items} で、items は {number, projectId, projectName, title, status, assignee, dueAt, archived, updatedAt, snippet}。" +
+			"total が items の件数より多いときは offset で続きを取れる。truncated が true のときは、全件は見ていない。本文やコメントを読むには get_item（projectId 必須）を使う。"
+		getDesc = "閲覧できるプロジェクトのアイテム 1 件を projectId と番号で開き、タイトル・説明・ソリューション・状態・担当・期限・コメント（新しい 30 件）を返す。projectId は必須。"
+		getProps["projectId"] = map[string]any{"type": "integer", "description": "アイテムが属するプロジェクトの ID。"}
+		getRequired = []string{"number", "projectId"}
+	}
+	proposeScope := ""
+	if crossProject {
+		proposeScope = "提案は現在のプロジェクトのアイテムだけ。他プロジェクトの番号では提案しない。"
+	}
 	return []ChatTool{
 		{
-			Name: toolSearchItems,
-			Description: "このプロジェクトのアイテムを検索する。結果は {total, truncated, items} で、items は {number, title, status, assignee, dueAt, archived, updatedAt, snippet}。" +
-				"total が items の件数より多いときは offset で続きを取れる。truncated が true のときは、全件は見ていない。本文やコメントを読むには get_item を使う。",
+			Name:        toolSearchItems,
+			Description: searchDesc,
 			InputSchema: map[string]any{
-				"type": "object",
-				// Unknown fields are an input error (decodeToolInput); say so in the schema too.
+				"type":                 "object",
 				"additionalProperties": false,
 				"properties": map[string]any{
 					"query":    str("検索語。空白区切りはすべて含むもの（AND）。タイトル・説明・ソリューション・コメントの部分一致。#12 のような語は番号にも一致する。省略すると絞り込まない。"),
@@ -52,20 +69,18 @@ func projectChatTools() []ChatTool {
 		},
 		{
 			Name:        toolGetItem,
-			Description: "このプロジェクトのアイテム 1 件を番号で開き、タイトル・説明・ソリューション・状態・担当・期限・コメント（新しい 30 件）を返す。",
+			Description: getDesc,
 			InputSchema: map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
-				"properties": map[string]any{
-					"number": map[string]any{"type": "integer", "description": "アイテムの番号（#12 なら 12）。"},
-				},
-				"required": []string{"number"},
+				"properties":           getProps,
+				"required":             getRequired,
 			},
 		},
 		{
 			Name: toolProposeStatusChange,
 			Description: "アイテム 1 件のステータス（列）の変更を提案する。アイテムは変わらない。利用者が画面で適用したときに変わる。" +
-				"利用者が頼んだときだけ使う。結果は {proposed, kind}。",
+				"利用者が頼んだときだけ使う。結果は {proposed, kind}。" + proposeScope,
 			InputSchema: map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
@@ -79,7 +94,7 @@ func projectChatTools() []ChatTool {
 		{
 			Name: toolProposeDescriptionEdit,
 			Description: "アイテム 1 件の説明の書き換えを提案する。アイテムは変わらない。利用者が画面で差分を見て適用したときに変わる。" +
-				"利用者が頼んだときだけ使う。先に get_item で今の説明を読む。結果は {proposed, kind}。",
+				"利用者が頼んだときだけ使う。先に get_item で今の説明を読む。結果は {proposed, kind}。" + proposeScope,
 			InputSchema: map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,

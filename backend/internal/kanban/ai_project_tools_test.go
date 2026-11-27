@@ -70,14 +70,22 @@ func TestParseSearchItemsInputRejectsBadInput(t *testing.T) {
 
 func TestParseGetItemInput(t *testing.T) {
 	for raw, want := range map[string]int64{`{"number":12}`: 12, `{"number":12.0}`: 12} {
-		if n, ok := parseGetItemInput(json.RawMessage(raw)); !ok || n != want {
-			t.Fatalf("%s => %d %v", raw, n, ok)
+		n, _, problem := parseGetItemInput(json.RawMessage(raw), false)
+		if problem != "" || n != want {
+			t.Fatalf("%s => %d %q", raw, n, problem)
 		}
 	}
 	for _, raw := range []string{``, `{}`, `null`, `{"number":0}`, `{"number":-1}`, `{"number":"12"}`, `{"number":1.5}`, `{"number":null}`, `"12"`} {
-		if n, ok := parseGetItemInput(json.RawMessage(raw)); ok {
-			t.Fatalf("%q must be rejected, got %d", raw, n)
+		if _, _, problem := parseGetItemInput(json.RawMessage(raw), false); problem == "" {
+			t.Fatalf("%q must be rejected", raw)
 		}
+	}
+	n, pid, problem := parseGetItemInput(json.RawMessage(`{"number":12,"projectId":3}`), true)
+	if problem != "" || n != 12 || pid != 3 {
+		t.Fatalf("cross => %d %d %q", n, pid, problem)
+	}
+	if _, _, problem := parseGetItemInput(json.RawMessage(`{"number":12}`), true); problem == "" {
+		t.Fatal("cross without projectId must be rejected")
 	}
 }
 
@@ -185,7 +193,15 @@ func (f *toolFixture) item(t *testing.T, in ItemInput) Item {
 }
 
 func (f *toolFixture) exec(user User, projectID int64) *projectToolExecutor {
-	return newProjectToolExecutor(f.repo, projectID, &user, f.repo.sortedColumns())
+	return f.execCross(user, projectID, false)
+}
+
+func (f *toolFixture) execCross(user User, projectID int64, cross bool) *projectToolExecutor {
+	names := map[int64]string{}
+	for _, p := range f.repo.projects {
+		names[p.ID] = p.Name
+	}
+	return newProjectToolExecutor(f.repo, projectID, &user, f.repo.sortedColumns(), cross, names)
 }
 
 func runTool(t *testing.T, e *projectToolExecutor, name, input string) string {
@@ -435,7 +451,7 @@ func checkSearchCountsOnlyViewableMatches(t *testing.T, repo Repository, admin, 
 	}
 	search := func(user User, input string) (searchItemsOut, []int64) {
 		t.Helper()
-		return searchNumbers(t, newProjectToolExecutor(repo, 1, &user, columns), input)
+		return searchNumbers(t, newProjectToolExecutor(repo, 1, &user, columns, false, nil), input)
 	}
 	// 閲覧できる 200 件と、それより新しい、メンバーには見えない 10 件。
 	hidden := map[int64]bool{}
@@ -501,11 +517,11 @@ func checkHiddenCommentMatchIsNotCounted(t *testing.T, repo Repository, admin, m
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("the search must not return a hidden item for the member: rows=%d err=%v", len(rows), err)
 	}
-	out, numbers := searchNumbers(t, newProjectToolExecutor(repo, 1, &member, columns), `{"query":"zzonlycomment"}`)
+	out, numbers := searchNumbers(t, newProjectToolExecutor(repo, 1, &member, columns, false, nil), `{"query":"zzonlycomment"}`)
 	if out.Total != 0 || out.Truncated || len(numbers) != 0 {
 		t.Fatalf("member: total=%d truncated=%v items=%v", out.Total, out.Truncated, numbers)
 	}
-	out, numbers = searchNumbers(t, newProjectToolExecutor(repo, 1, &admin, columns), `{"query":"zzonlycomment"}`)
+	out, numbers = searchNumbers(t, newProjectToolExecutor(repo, 1, &admin, columns, false, nil), `{"query":"zzonlycomment"}`)
 	if out.Total != 1 || !slices.Equal(numbers, []int64{card.Number}) {
 		t.Fatalf("admin: total=%d items=%v", out.Total, numbers)
 	}
@@ -592,6 +608,13 @@ func (r *failingToolRepo) SearchProjectItems(ctx context.Context, projectID int6
 	return r.memoryRepo.SearchProjectItems(ctx, projectID, s)
 }
 
+func (r *failingToolRepo) SearchViewableItems(ctx context.Context, s ItemSearch) ([]Item, error) {
+	if r.searchErr != nil {
+		return nil, r.searchErr
+	}
+	return r.memoryRepo.SearchViewableItems(ctx, s)
+}
+
 func (r *failingToolRepo) ListComments(ctx context.Context, itemID int64) ([]Comment, error) {
 	if r.commentsErr != nil {
 		return nil, r.commentsErr
@@ -627,7 +650,7 @@ func TestToolRepositoryFailuresStopTheLoopInsteadOfAnswering(t *testing.T) {
 			}
 			repo := &failingToolRepo{memoryRepo: f.repo}
 			tc.prepare(repo)
-			e := newProjectToolExecutor(repo, 1, &f.admin, f.repo.sortedColumns())
+			e := newProjectToolExecutor(repo, 1, &f.admin, f.repo.sortedColumns(), false, nil)
 			out, err := e.Run(context.Background(), ToolCall{Name: tc.name, Input: json.RawMessage(tc.input)})
 			if !errors.Is(err, boom) || out != "" || !errors.Is(e.failure(), boom) {
 				t.Fatalf("out=%q err=%v failure=%v", out, err, e.failure())
@@ -641,7 +664,7 @@ func TestToolRepositoryFailuresStopTheLoopInsteadOfAnswering(t *testing.T) {
 }
 
 func TestProjectChatToolDefinitions(t *testing.T) {
-	tools := projectChatTools()
+	tools := projectChatTools(false)
 	if len(tools) != 5 || tools[0].Name != toolSearchItems || tools[1].Name != toolGetItem || tools[2].Name != toolProposeStatusChange ||
 		tools[3].Name != toolProposeDescriptionEdit || tools[4].Name != toolProposeItemCreate {
 		t.Fatalf("tools=%+v", tools)
@@ -667,6 +690,13 @@ func TestProjectChatToolDefinitions(t *testing.T) {
 	}
 	if required := tools[1].InputSchema["required"].([]string); !slices.Equal(required, []string{"number"}) {
 		t.Fatalf("get_item required=%v", required)
+	}
+	cross := projectChatTools(true)
+	if required := cross[1].InputSchema["required"].([]string); !slices.Equal(required, []string{"number", "projectId"}) {
+		t.Fatalf("cross get_item required=%v", required)
+	}
+	if props := cross[1].InputSchema["properties"].(map[string]any); props["projectId"] == nil {
+		t.Fatal("cross get_item must list projectId")
 	}
 }
 

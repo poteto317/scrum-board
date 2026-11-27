@@ -33,7 +33,7 @@ func TestViewableProjectItems(t *testing.T) {
 	entries := map[int64]ItemACL{13: {ViewUserIDs: []int64{member}}}
 	ids := func(user *User) []int64 {
 		var out []int64
-		for _, it := range viewableProjectItems(items, entries, 1, user) {
+		for _, it := range viewableProjectItems(items, entries, 1, user, false) {
 			out = append(out, it.ID)
 		}
 		return out
@@ -59,10 +59,10 @@ func TestViewableProjectItems(t *testing.T) {
 		t.Fatalf("owner sees %v", got)
 	}
 	// 許可の一覧が読めていなくても（空）、制限付きは持ち主以外に見せない。
-	if got := viewableProjectItems(items, map[int64]ItemACL{}, 1, &User{ID: member}); len(got) != 2 {
+	if got := viewableProjectItems(items, map[int64]ItemACL{}, 1, &User{ID: member}, false); len(got) != 2 {
 		t.Fatalf("without entries a restricted item must stay hidden: %d", len(got))
 	}
-	if got := viewableProjectItems(nil, entries, 1, &User{ID: member}); got == nil || len(got) != 0 {
+	if got := viewableProjectItems(nil, entries, 1, &User{ID: member}, false); got == nil || len(got) != 0 {
 		t.Fatalf("no items: %#v", got)
 	}
 }

@@ -93,14 +93,16 @@ func parseSearchItemsInput(raw json.RawMessage, columns []Column) (plan searchIt
 }
 
 type searchItemOut struct {
-	Number    int64   `json:"number"`
-	Title     string  `json:"title"`
-	Status    string  `json:"status"`
-	Assignee  string  `json:"assignee"`
-	DueAt     *string `json:"dueAt"`
-	Archived  bool    `json:"archived"`
-	UpdatedAt string  `json:"updatedAt"`
-	Snippet   string  `json:"snippet"`
+	Number      int64   `json:"number"`
+	ProjectID   int64   `json:"projectId"`
+	ProjectName string  `json:"projectName"`
+	Title       string  `json:"title"`
+	Status      string  `json:"status"`
+	Assignee    string  `json:"assignee"`
+	DueAt       *string `json:"dueAt"`
+	Archived    bool    `json:"archived"`
+	UpdatedAt   string  `json:"updatedAt"`
+	Snippet     string  `json:"snippet"`
 }
 
 type searchItemsOut struct {
@@ -112,13 +114,14 @@ type searchItemsOut struct {
 
 // searchItemsPage builds the result from the viewable matches (already cut to maxItemSearchMatches).
 // more says that the query found more matches than were looked at.
-func searchItemsPage(viewable []Item, more bool, plan searchItemsPlan, columns []Column) searchItemsOut {
+func searchItemsPage(viewable []Item, more bool, plan searchItemsPlan, columns []Column, projectNames map[int64]string) searchItemsOut {
 	names := columnNameByID(columns)
 	out := searchItemsOut{Total: len(viewable), Truncated: more, Items: []searchItemOut{}}
 	for i := plan.Offset; i < len(viewable) && len(out.Items) < plan.Limit; i++ {
 		it := viewable[i]
 		out.Items = append(out.Items, searchItemOut{
-			Number: it.Number, Title: it.Title, Status: names[it.ColumnID], Assignee: it.Assignee,
+			Number: it.Number, ProjectID: it.ProjectID, ProjectName: projectNames[it.ProjectID],
+			Title: it.Title, Status: names[it.ColumnID], Assignee: it.Assignee,
 			DueAt: tokyoTimePtr(it.DueAt), Archived: it.ArchivedAt != nil, UpdatedAt: tokyoTime(it.UpdatedAt),
 			Snippet: searchSnippet(it.Description, it.Solution, plan.Search.Terms),
 		})
