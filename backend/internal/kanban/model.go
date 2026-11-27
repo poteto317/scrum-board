@@ -290,6 +290,10 @@ type Repository interface {
 	// With a nil conversationID, or when that conversation is gone, it creates one named turn.Title
 	// (and then keeps the 100 most recently updated). A conversation keeps its newest 200 messages.
 	AppendProjectAITurn(ctx context.Context, projectID, userID int64, conversationID *int64, turn ProjectAITurn) (ProjectAIConversation, error)
+	// ReplaceAndAppendProjectAITurn deletes messages with id >= replaceFromMessageID in the
+	// conversation (proposals CASCADE), then stores turn, in one transaction. When that
+	// conversation is gone, it creates one named turn.Title like AppendProjectAITurn.
+	ReplaceAndAppendProjectAITurn(ctx context.Context, projectID, userID, conversationID, replaceFromMessageID int64, turn ProjectAITurn) (ProjectAIConversation, error)
 	// DeleteProjectAIConversation: ErrNotFound when it is missing, another user's or another project's.
 	DeleteProjectAIConversation(ctx context.Context, projectID, userID, conversationID int64) error
 	// ClearProjectAIConversations deletes all of the user's conversations in the project.

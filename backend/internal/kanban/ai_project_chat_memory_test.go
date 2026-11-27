@@ -91,6 +91,18 @@ func (m *memoryRepo) ListProjectAIMessages(_ context.Context, projectID, userID,
 // AppendProjectAITurn mirrors the MySQL steps: find or create the conversation (and keep the
 // 100 newest), trim its messages to 200 with the two new ones, add them, touch updated_at.
 func (m *memoryRepo) AppendProjectAITurn(ctx context.Context, projectID, userID int64, conversationID *int64, turn ProjectAITurn) (ProjectAIConversation, error) {
+	return m.persistProjectAITurnOnce(ctx, projectID, userID, conversationID, nil, turn)
+}
+
+// ReplaceAndAppendProjectAITurn mirrors MySQL: lock/find the conversation (or create one),
+// drop id >= replaceFromMessageID and their proposals, then append the turn.
+func (m *memoryRepo) ReplaceAndAppendProjectAITurn(ctx context.Context, projectID, userID, conversationID, replaceFromMessageID int64, turn ProjectAITurn) (ProjectAIConversation, error) {
+	return m.persistProjectAITurnOnce(ctx, projectID, userID, &conversationID, &replaceFromMessageID, turn)
+}
+
+// persistProjectAITurnOnce is one in-memory TX: find/create conversation, optional truncate,
+// trim, insert turn, touch. replaceFromMessageID nil means append-only (MySQL と同型).
+func (m *memoryRepo) persistProjectAITurnOnce(ctx context.Context, projectID, userID int64, conversationID, replaceFromMessageID *int64, turn ProjectAITurn) (ProjectAIConversation, error) {
 	if !m.projectExists(projectID) {
 		return ProjectAIConversation{}, ErrProject
 	}
@@ -114,6 +126,17 @@ func (m *memoryRepo) AppendProjectAITurn(ctx context.Context, projectID, userID 
 		}}
 		m.projectAIConversations[conversation.ID] = conversation
 		m.trimProjectAIConversations(projectID, userID, conversation.ID)
+	} else if replaceFromMessageID != nil {
+		existing, _ := m.ListProjectAIMessages(ctx, projectID, userID, conversation.ID)
+		if !projectChatReplaceTargetOK(existing, *replaceFromMessageID) {
+			return ProjectAIConversation{}, ErrProjectAIReplaceStale
+		}
+		for id, msg := range m.projectAIMessages {
+			if msg.ConversationID == conversation.ID && msg.ID >= *replaceFromMessageID {
+				delete(m.projectAIMessages, id)
+				m.dropProjectAIProposalsOf(id)
+			}
+		}
 	}
 	existing, _ := m.ListProjectAIMessages(ctx, projectID, userID, conversation.ID)
 	for i := range projectAIMessagesOverLimit(len(existing), projectAITurnMessages) {

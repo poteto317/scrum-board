@@ -10,6 +10,38 @@ import (
 // projectAITurnMessages is how many messages one exchange adds: the user's and the answer.
 const projectAITurnMessages = 2
 
+// ErrProjectAIReplaceStale means replaceFromMessageID is no longer the last user turn after the
+// conversation row was locked (another turn was appended while the model ran).
+var ErrProjectAIReplaceStale = errors.New("project ai replace target stale")
+
+// projectChatReplaceTargetOK is true when replaceFromMessageID is a user message in history
+// and no later user message exists (it is the last user turn).
+func projectChatReplaceTargetOK(history []ProjectAIMessage, replaceFromMessageID int64) bool {
+	found := false
+	role := ""
+	for _, m := range history {
+		if m.ID == replaceFromMessageID {
+			found = true
+			role = m.Role
+		}
+		if m.ID > replaceFromMessageID && m.Role == AIRoleUser {
+			return false
+		}
+	}
+	return found && role == AIRoleUser
+}
+
+// projectChatHistoryBeforeReplace keeps messages with id < replaceFromMessageID for the model.
+func projectChatHistoryBeforeReplace(history []ProjectAIMessage, replaceFromMessageID int64) []ProjectAIMessage {
+	out := make([]ProjectAIMessage, 0, len(history))
+	for _, m := range history {
+		if m.ID < replaceFromMessageID {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 // ProjectAITurn is one exchange to store: the user's message, the final answer and the tokens
 // the model reported for it (0: not reported). Title names the conversation when the exchange
 // starts a new one; it is not used otherwise.
@@ -37,9 +69,33 @@ func (r MySQLRepository) AppendProjectAITurn(ctx context.Context, projectID, use
 	return conversation, err
 }
 
+// ReplaceAndAppendProjectAITurn truncates the conversation from replaceFromMessageID (inclusive)
+// and stores one exchange in the same transaction. When the conversation is gone, it creates
+// one named turn.Title (paid answers are not dropped). A lost lock race is tried again.
+func (r MySQLRepository) ReplaceAndAppendProjectAITurn(ctx context.Context, projectID, userID, conversationID, replaceFromMessageID int64, turn ProjectAITurn) (ProjectAIConversation, error) {
+	var conversation ProjectAIConversation
+	err := retryProjectAILockRace(ctx, func() (err error) {
+		conversation, err = r.replaceAndAppendProjectAITurnOnce(ctx, projectID, userID, conversationID, replaceFromMessageID, turn)
+		return err
+	})
+	return conversation, err
+}
+
 // appendProjectAITurnOnce is one try, in one transaction: lock the named conversation (or make
 // a new one and trim the conversations), trim its messages, add the two new ones, touch it.
 func (r MySQLRepository) appendProjectAITurnOnce(ctx context.Context, projectID, userID int64, conversationID *int64, turn ProjectAITurn) (ProjectAIConversation, error) {
+	return r.persistProjectAITurnOnce(ctx, projectID, userID, conversationID, nil, turn, "append project ai turn")
+}
+
+// replaceAndAppendProjectAITurnOnce locks the conversation, deletes id >= replaceFromMessageID
+// when that conversation is still there, then persists the turn (proposals CASCADE with deletes).
+func (r MySQLRepository) replaceAndAppendProjectAITurnOnce(ctx context.Context, projectID, userID, conversationID, replaceFromMessageID int64, turn ProjectAITurn) (ProjectAIConversation, error) {
+	return r.persistProjectAITurnOnce(ctx, projectID, userID, &conversationID, &replaceFromMessageID, turn, "replace and append project ai turn")
+}
+
+// persistProjectAITurnOnce is one TX: lock/create conversation, optional truncate from id,
+// trim, insert turn, touch. replaceFromMessageID nil means append-only.
+func (r MySQLRepository) persistProjectAITurnOnce(ctx context.Context, projectID, userID int64, conversationID, replaceFromMessageID *int64, turn ProjectAITurn, commitErr string) (ProjectAIConversation, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return ProjectAIConversation{}, err
@@ -59,6 +115,18 @@ func (r MySQLRepository) appendProjectAITurnOnce(ctx context.Context, projectID,
 		if err = trimProjectAIConversations(ctx, tx, projectID, userID, id); err != nil {
 			return ProjectAIConversation{}, err
 		}
+	} else if replaceFromMessageID != nil {
+		// Lock 後に直前 user を再確認（prepare〜model 中の並行追記を誤って消さない）。
+		ok, err := projectAIReplaceTargetStillOK(ctx, tx, id, *replaceFromMessageID)
+		if err != nil {
+			return ProjectAIConversation{}, err
+		}
+		if !ok {
+			return ProjectAIConversation{}, ErrProjectAIReplaceStale
+		}
+		if err = deleteProjectAIMessagesFrom(ctx, tx, id, *replaceFromMessageID); err != nil {
+			return ProjectAIConversation{}, err
+		}
 	}
 	if err = trimProjectAIMessages(ctx, tx, id, projectAITurnMessages); err != nil {
 		return ProjectAIConversation{}, err
@@ -71,9 +139,41 @@ func (r MySQLRepository) appendProjectAITurnOnce(ctx context.Context, projectID,
 		return ProjectAIConversation{}, err
 	}
 	if err = tx.Commit(); err != nil {
-		return ProjectAIConversation{}, fmt.Errorf("append project ai turn: %w", err)
+		return ProjectAIConversation{}, fmt.Errorf("%s: %w", commitErr, err)
 	}
 	return conversation, nil
+}
+
+// deleteProjectAIMessagesFrom drops messages of the conversation with id >= fromID (and their
+// proposals via ON DELETE CASCADE). conversationID is one whose owner was locked in this
+// transaction.
+func deleteProjectAIMessagesFrom(ctx context.Context, tx *sql.Tx, conversationID, fromID int64) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM project_ai_messages WHERE conversation_id=? AND id>=?`, conversationID, fromID); err != nil {
+		return fmt.Errorf("delete project ai messages from: %w", err)
+	}
+	return nil
+}
+
+// projectAIReplaceTargetStillOK loads id+role under the locked conversation and applies the
+// same last-user rule as prepare (projectChatReplaceTargetOK).
+func projectAIReplaceTargetStillOK(ctx context.Context, tx *sql.Tx, conversationID, replaceFromMessageID int64) (bool, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id, role FROM project_ai_messages WHERE conversation_id=? ORDER BY id ASC`, conversationID)
+	if err != nil {
+		return false, fmt.Errorf("list project ai messages for replace check: %w", err)
+	}
+	defer rows.Close()
+	var history []ProjectAIMessage
+	for rows.Next() {
+		var m ProjectAIMessage
+		if err := rows.Scan(&m.ID, &m.Role); err != nil {
+			return false, err
+		}
+		history = append(history, m)
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return projectChatReplaceTargetOK(history, replaceFromMessageID), nil
 }
 
 // insertProjectAITurnMessages adds the user's message and the answer to the conversation. The
