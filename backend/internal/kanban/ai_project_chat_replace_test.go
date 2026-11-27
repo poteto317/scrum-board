@@ -193,11 +193,43 @@ func TestProjectAIChatReplaceModelFailureDoesNotTruncate(t *testing.T) {
 type replaceCallRepo struct {
 	*memoryRepo
 	replaceCalls int
+	replaceErr   error
 }
 
 func (r *replaceCallRepo) ReplaceAndAppendProjectAITurn(ctx context.Context, projectID, userID, conversationID, replaceFromMessageID int64, turn ProjectAITurn) (ProjectAIConversation, error) {
 	r.replaceCalls++
+	if r.replaceErr != nil {
+		return ProjectAIConversation{}, r.replaceErr
+	}
 	return r.memoryRepo.ReplaceAndAppendProjectAITurn(ctx, projectID, userID, conversationID, replaceFromMessageID, turn)
+}
+
+// モデル成功後に Replace が stale なら 400 で、履歴は不変（storage 500 に潰さない）。
+func TestProjectAIChatReplaceStaleAfterModelIsBadRequest(t *testing.T) {
+	repo := &replaceCallRepo{memoryRepo: fresh(), replaceErr: ErrProjectAIReplaceStale}
+	ctx := context.Background()
+	c, err := repo.AppendProjectAITurn(ctx, 1, 1, nil, ProjectAITurn{Title: "t", UserBody: "q1", AssistantBody: "a1", InputTokens: 1, OutputTokens: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := repo.ListProjectAIMessages(ctx, 1, 1, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatter := &fakeProjectChatter{fn: answers("paid answer", 1, 1)}
+	h := NewHandler(repo, WithAIChat(chatter))
+	body := fmt.Sprintf(`{"message":"edited","conversationId":%d,"replaceFromMessageId":%d}`, c.ID, msgs[0].ID)
+	w := postProjectChat(h, 1, body)
+	if w.Code != 400 || decodeError(t, w).Message != msgProjectChatReplaceInvalid {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if repo.replaceCalls != 1 {
+		t.Fatalf("ReplaceAndAppend calls=%d", repo.replaceCalls)
+	}
+	after, err := repo.ListProjectAIMessages(ctx, 1, 1, c.ID)
+	if err != nil || len(after) != 2 || after[0].Body != "q1" {
+		t.Fatalf("history must stay: %+v err=%v", after, err)
+	}
 }
 
 func TestLoadProjectChatInputFiltersReplaceFrom(t *testing.T) {
