@@ -29,22 +29,26 @@ export class ItemTemplatesCreateSession {
   readonly selectedId = signal<number | null>(null);
   private loadGeneration = 0;
 
-  readonly createForm = new FormGroup({
-    name: new FormControl('', { nonNullable: true, validators: [textLimit(60, true)] }),
-    titleTemplate: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
-    descriptionTemplate: new FormControl('', {
-      nonNullable: true,
-      validators: [textLimit(10000)],
-    }),
-  });
-  readonly editForm = new FormGroup({
-    name: new FormControl('', { nonNullable: true, validators: [textLimit(60, true)] }),
-    titleTemplate: new FormControl('', { nonNullable: true, validators: [textLimit(200, true)] }),
-    descriptionTemplate: new FormControl('', {
-      nonNullable: true,
-      validators: [textLimit(10000)],
-    }),
-  });
+  readonly createForm = this.newTemplateForm();
+  readonly editForm = this.newTemplateForm();
+
+  private newTemplateForm() {
+    return new FormGroup({
+      name: new FormControl('', { nonNullable: true, validators: [textLimit(60, true)] }),
+      // required uses trim; max length uses raw runes (matches NormalizeItemTemplateTitle).
+      titleTemplate: new FormControl('', {
+        nonNullable: true,
+        validators: [
+          (c) => (!String(c.value ?? '').trim() ? { required: true } : null),
+          textLimit(200, false),
+        ],
+      }),
+      descriptionTemplate: new FormControl('', {
+        nonNullable: true,
+        validators: [textLimit(10000)],
+      }),
+    });
+  }
 
   resetSelection() {
     this.selectedId.set(null);

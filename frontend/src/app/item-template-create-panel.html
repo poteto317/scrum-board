@@ -14,7 +14,7 @@
   <p class="form-error" role="alert">{{ session.listError() }}</p>
 }
 @if (session.adminMessage()) {
-  <p class="form-error" role="status">{{ session.adminMessage() }}</p>
+  <p class="field-note" role="status">{{ session.adminMessage() }}</p>
 }
 @if (isAdmin()) {
   <button type="button" class="linkish" (click)="session.toggleManage()" [disabled]="busy()">

@@ -496,6 +496,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '500':
+          description: seed や一覧の処理失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
       - basicAuth: []
