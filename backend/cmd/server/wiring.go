@@ -61,6 +61,7 @@ func buildHandler(repo kanban.Repository, getenv func(string) string, opts ...op
 	handlerOpts = append(
 		handlerOpts,
 		kanban.WithPRTitleResolver(kanban.NewPRTitleResolver(nil, getenv("GITHUB_TOKEN"))),
+		kanban.WithLinkPreviewResolver(kanban.NewLinkPreviewResolver()),
 	)
 	handlerOpts = append(handlerOpts, kanban.WithBlobStorage(kanban.NewBlobStorageFromEnv(context.Background(), getenv)))
 	return withRouteTimeouts(kanban.NewHandler(repo, handlerOpts...))

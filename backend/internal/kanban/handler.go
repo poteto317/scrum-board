@@ -16,8 +16,9 @@ type handler struct {
 	projectChats      *userInFlight
 	slots             chan struct{}
 	publicOrigin      string
-	prTitleResolver   *PRTitleResolver
-	blobs             BlobStorage
+	prTitleResolver     *PRTitleResolver
+	linkPreviewResolver *LinkPreviewResolver
+	blobs               BlobStorage
 	rateLimiter       AIRateLimiter
 	loginAttempts     LoginAttemptLimiter
 	messageMax        int
@@ -55,6 +56,12 @@ func WithPublicOrigin(origin string) Option {
 // WithPRTitleResolver injects PR title resolution for tests; production uses GitHub with optional GITHUB_TOKEN.
 func WithPRTitleResolver(r *PRTitleResolver) Option {
 	return func(h *handler) { h.prTitleResolver = r }
+}
+
+// WithLinkPreviewResolver injects link preview resolution for tests.
+// Production NewHandler wires NewLinkPreviewResolver() (SSRF-safe client).
+func WithLinkPreviewResolver(r *LinkPreviewResolver) Option {
+	return func(h *handler) { h.linkPreviewResolver = r }
 }
 
 // WithBlobStorage injects attachment object storage (Memory in tests, GCS in production).
@@ -122,8 +129,9 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 		messageMax:        maxAIChatMessageLen,
 		historyTurns:      maxAIChatHistoryTurns,
 		schedulerJobToken: HandlerTestSchedulerToken,
-		attachmentSlots:   make(chan struct{}, attachmentMaxConcurrent),
-		// prTitleResolver nil by default so unit tests do not hit GitHub; wire in production via WithPRTitleResolver.
+		attachmentSlots: make(chan struct{}, attachmentMaxConcurrent),
+		// prTitleResolver / linkPreviewResolver nil by default so unit tests do not hit the network;
+		// wire in production via WithPRTitleResolver / WithLinkPreviewResolver.
 	}
 	for _, opt := range opts {
 		opt(&h)
@@ -213,6 +221,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/items/by-number/{number}/command-templates", h.listItemCommandTemplatesByNumber)
 	mux.HandleFunc("PUT /api/items/by-number/{number}/command-templates", h.replaceItemCommandTemplatesByNumber)
 	mux.HandleFunc("POST /api/pr-titles", h.batchPRTitles)
+	mux.HandleFunc("POST /api/link-previews", h.batchLinkPreviews)
 	mux.HandleFunc("GET /api/list-filter", h.getListFilter)
 	mux.HandleFunc("PUT /api/list-filter", h.putListFilter)
 	mux.HandleFunc("GET /api/header-menu", h.getHeaderMenu)

@@ -2067,6 +2067,61 @@ paths:
             schema:
               $ref: '#/components/schemas/JsonValue'
       description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+  /api/link-previews:
+    post:
+      summary: 説明リンクのプレビュー（タイトル）一括取得
+      operationId: post_api_link_previews
+      description: |
+        ログイン必須。リクエストの `urls`（最大 20・正規化後ユニーク）について、サーバーが SSRF ガード付きで HTML メタからタイトルを取得する。
+        レスポンス `previews` のキーは正規化後 URL。成功は `{ "ok": true, "title": "..." }`、失敗は `{ "ok": false }`（title なし）。
+        正規化に失敗した URL はキーを作らない。アプリ認証ヘッダは外向き要求に付与しない。
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [previews]
+                properties:
+                  previews:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      required: [ok]
+                      properties:
+                        ok:
+                          type: boolean
+                        title:
+                          type: string
+        '400':
+          description: 不正な入力（件数超過など）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [urls]
+              properties:
+                urls:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: string
   /api/projects/order:
     put:
       summary: プロジェクト全件並び替え
