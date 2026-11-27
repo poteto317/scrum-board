@@ -379,7 +379,7 @@ export class ProjectAiChat implements OnChanges {
   }
 
   onMessageListScroll(event: Event) {
-    const el = event.target;
+    const el = event.currentTarget;
     if (!(el instanceof HTMLElement)) return;
     this.stickToBottom = isNearBottom(el);
   }
