@@ -49,6 +49,7 @@ import { buildDescriptionView } from './description-view';
             <img
               [src]="seg.src"
               [alt]="seg.alt"
+              tabindex="-1"
               loading="lazy"
               decoding="async"
               [attr.draggable]="draggableImages() ? 'true' : 'false'"
