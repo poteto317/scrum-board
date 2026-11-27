@@ -231,6 +231,14 @@
           ×
         </button>
       </header>
+      <app-item-template-create-panel
+        selectId="backlog-item-template"
+        [isAdmin]="isItemTemplateAdmin()"
+        [busy]="saving()"
+        [saving]="saving"
+        [projectId]="projectSession.activeId()"
+        (applied)="onItemTemplateApplied($event)"
+      />
       <form [formGroup]="itemForm" (ngSubmit)="addItem()">
         <label for="backlog-card-title">タイトル <span class="required">必須</span></label
         ><input
