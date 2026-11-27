@@ -370,3 +370,39 @@ func TestNewProjectChatInput(t *testing.T) {
 		t.Fatalf("no focus, no history: %+v", none.turns)
 	}
 }
+
+
+func TestLoadProjectChatFocusStaysOnURLProjectWhenCross(t *testing.T) {
+	repo := fresh()
+	ctx := context.Background()
+	other, err := repo.CreateProject(ctx, "Other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	there, err := repo.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "elsewhere", ProjectID: &other.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := handler{repo: repo, historyTurns: 20}
+	on := true
+	n := there.Number // numbers are per-project; URL project has no item with this number yet
+	in, err := h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 1}, nil, projectAIChatRequest{Message: "q", CrossProjectSearch: &on, FocusItemNumber: &n}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(in.system, "いま開いているアイテム") {
+		t.Fatalf("other-project-only focus must not enter system:\n%s", in.system)
+	}
+	here, err := repo.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "here-focus"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n = here.Number
+	in, err = h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 1}, nil, projectAIChatRequest{Message: "q", CrossProjectSearch: &on, FocusItemNumber: &n}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(in.system, "いま開いているアイテム") || !strings.Contains(in.system, "here-focus") {
+		t.Fatalf("URL focus must enter system:\n%s", in.system)
+	}
+}
