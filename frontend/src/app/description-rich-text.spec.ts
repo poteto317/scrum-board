@@ -18,6 +18,7 @@ describe('DescriptionRichText', () => {
     itemNumber: number;
     draggableImages?: boolean;
     canDelete?: boolean;
+    canChangeImageSize?: boolean;
     blockSyntax?: boolean;
     promoteBookmarks?: boolean;
     linkTitles?: Record<string, string>;
@@ -28,6 +29,7 @@ describe('DescriptionRichText', () => {
     f.componentRef.setInput('itemNumber', opts.itemNumber);
     f.componentRef.setInput('draggableImages', opts.draggableImages ?? false);
     f.componentRef.setInput('canDelete', opts.canDelete ?? false);
+    f.componentRef.setInput('canChangeImageSize', opts.canChangeImageSize ?? false);
     f.componentRef.setInput('blockSyntax', opts.blockSyntax ?? false);
     f.componentRef.setInput('promoteBookmarks', opts.promoteBookmarks ?? false);
     f.componentRef.setInput('linkTitles', opts.linkTitles ?? {});
@@ -184,7 +186,7 @@ describe('DescriptionRichText', () => {
 
     it('keeps markup as plain text when block syntax is off (comments, solutions)', () => {
       const f = mount({ text: '# A\n- x\n---', itemNumber: 7 });
-      const el = f.nativeElement as HTMLElement;
+      const el = f.nativeElement.querySelector('.rich-text') as HTMLElement;
       expect(el.querySelector('h2, ul, hr')).toBeNull();
       expect(el.querySelector('.rich-paragraph')!.textContent).toBe('# A\n- x\n---');
     });
@@ -199,5 +201,83 @@ describe('DescriptionRichText', () => {
       expect(list.nativeElement.querySelector('li img')).toBeTruthy();
       expect(list.nativeElement.querySelector('li .rich-image-delete')).toBeTruthy();
     });
+  });
+
+  it('applies display-size classes and emits size changes', () => {
+    const f = mount({
+      text: buildAttachmentMarkup(7, 3, 'pic', 'lg'),
+      itemNumber: 7,
+      canChangeImageSize: true,
+    });
+    const wrap = f.nativeElement.querySelector('.rich-image') as HTMLElement;
+    expect(wrap.classList.contains('rich-image--lg')).toBe(true);
+    expect(getComputedStyle(wrap.querySelector('img')!).maxWidth).toBe('min(100%, 48rem)');
+    const sizeSpy = vi.fn();
+    f.componentInstance.imageDisplaySize.subscribe(sizeSpy);
+    (f.nativeElement.querySelector('button[aria-label="小"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(sizeSpy).toHaveBeenCalledWith({ attachmentId: 3, size: 'sm' });
+  });
+
+  it('opens lightbox on image click and ignores backdrop click', () => {
+    const proto = HTMLDialogElement.prototype as {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShow = proto.showModal;
+    const origClose = proto.close;
+    let open = false;
+    proto.showModal = function (this: HTMLDialogElement) {
+      open = true;
+      this.setAttribute('open', '');
+    };
+    proto.close = function (this: HTMLDialogElement) {
+      open = false;
+      this.removeAttribute('open');
+      this.dispatchEvent(new Event('close'));
+    };
+    try {
+      const f = mount({
+        text: buildAttachmentMarkup(7, 3, 'pic', 'lg'),
+        itemNumber: 7,
+        canChangeImageSize: true,
+      });
+      (f.nativeElement.querySelector('.rich-image img') as HTMLImageElement).click();
+      f.detectChanges();
+      expect(open).toBe(true);
+      expect(f.nativeElement.querySelector('dialog[open]')).toBeTruthy();
+      (f.nativeElement.querySelector('dialog') as HTMLDialogElement).click();
+      f.detectChanges();
+      expect(open).toBe(true);
+      (f.nativeElement.querySelector('button[aria-label="閉じる"]') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(open).toBe(false);
+    } finally {
+      proto.showModal = origShow;
+      proto.close = origClose;
+    }
+  });
+
+  it('hides size controls when canChangeImageSize is false but still opens lightbox', () => {
+    const proto = HTMLDialogElement.prototype as { showModal?: () => void };
+    const origShow = proto.showModal;
+    let opened = false;
+    proto.showModal = function (this: HTMLDialogElement) {
+      opened = true;
+      this.setAttribute('open', '');
+    };
+    try {
+      const f = mount({
+        text: buildAttachmentMarkup(7, 3, 'pic'),
+        itemNumber: 7,
+        canChangeImageSize: false,
+      });
+      expect(f.nativeElement.querySelector('.rich-image-size')).toBeNull();
+      (f.nativeElement.querySelector('img') as HTMLImageElement).click();
+      f.detectChanges();
+      expect(opened).toBe(true);
+    } finally {
+      proto.showModal = origShow;
+    }
   });
 });
