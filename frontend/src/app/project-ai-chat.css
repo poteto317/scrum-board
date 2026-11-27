@@ -164,6 +164,24 @@
   resize: vertical;
   min-height: 4.5rem;
 }
+.ai-chat-compose-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.ai-chat-send {
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+.ai-chat-send-icon {
+  display: block;
+  flex-shrink: 0;
+}
+.ai-chat-send:not(:disabled):active {
+  transform: translateY(1px);
+}
 .sr-only {
   position: absolute;
   width: 1px;
