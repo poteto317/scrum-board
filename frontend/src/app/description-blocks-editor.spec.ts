@@ -20,6 +20,7 @@ const apiStub = {
   ),
   deleteAttachment: vi.fn(() => of(undefined)),
   listAttachments: vi.fn(() => of([])),
+  linkPreviews: vi.fn(() => of({ previews: {} })),
 };
 
 @Component({

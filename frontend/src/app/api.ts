@@ -407,6 +407,11 @@ export class Api {
   prTitles(urls: string[]) {
     return this.http.post<{ titles: Record<string, string> }>('/api/pr-titles', { urls });
   }
+  linkPreviews(urls: string[]) {
+    return this.http.post<{
+      previews: Record<string, { ok: boolean; title?: string }>;
+    }>('/api/link-previews', { urls });
+  }
   createColumn(name: string) {
     return this.http.post<Column>('/api/columns', { name });
   }

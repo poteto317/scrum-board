@@ -4,6 +4,7 @@ import {
   SCRUM_ATTACHMENT_MIME,
   encodeAttachmentDragPayload,
 } from './attachment-dnd';
+import { hostnameFallback } from './description-link';
 import { buildDescriptionView } from './description-view';
 
 @Component({
@@ -16,6 +17,16 @@ import { buildDescriptionView } from './description-view';
           <span class="rich-text-plain">{{ seg.text }}</span>
         } @else if (seg.kind === 'link') {
           <a [href]="seg.url" target="_blank" rel="noopener noreferrer">{{ seg.label }}</a>
+        } @else if (seg.kind === 'bookmark') {
+          <a
+            class="rich-bookmark"
+            [href]="seg.url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="rich-bookmark-title">{{ bookmarkTitle(seg.url) }}</span>
+            <span class="rich-bookmark-url">{{ bookmarkHost(seg.url) }}</span>
+          </a>
         } @else if (seg.kind === 'image') {
           <span class="rich-image">
             <img
@@ -202,6 +213,33 @@ import { buildDescriptionView } from './description-view';
       margin-top: 0.25rem;
       font-size: 0.85rem;
     }
+    .rich-bookmark {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      margin: 0.35rem 0;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+      border-radius: 6px;
+      text-decoration: none;
+      color: inherit;
+      max-width: 36rem;
+    }
+    .rich-bookmark:hover {
+      border-color: color-mix(in srgb, currentColor 35%, transparent);
+    }
+    .rich-bookmark-title {
+      font-weight: 600;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+    .rich-bookmark-url {
+      font-size: 0.85rem;
+      opacity: 0.75;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   `,
 })
 export class DescriptionRichText {
@@ -209,13 +247,31 @@ export class DescriptionRichText {
   readonly itemNumber = input.required<number>();
   /** Render headings/lists/tasks/quotes/code/rules (description only). */
   readonly blockSyntax = input(false);
+  /** Promote sole `[url](url)` paragraphs to bookmark cards (description/solution). */
+  readonly promoteBookmarks = input(false);
+  /** Normalized URL → title from POST /api/link-previews. */
+  readonly linkTitles = input<Record<string, string>>({});
   readonly canDelete = input(false);
   readonly draggableImages = input(false);
   readonly deleteImage = output<number>();
 
   readonly blocks = computed(() =>
-    buildDescriptionView(this.text(), this.itemNumber(), this.blockSyntax()),
+    buildDescriptionView(this.text(), this.itemNumber(), this.blockSyntax(), {
+      promoteBookmarks: this.promoteBookmarks(),
+    }),
   );
+
+  bookmarkTitle(url: string): string {
+    const titles = this.linkTitles();
+    if (Object.prototype.hasOwnProperty.call(titles, url)) {
+      return titles[url] || hostnameFallback(url);
+    }
+    return '読み込み中';
+  }
+
+  bookmarkHost(url: string): string {
+    return hostnameFallback(url);
+  }
 
   onDragStart(attachmentId: number, alt: string, event: DragEvent): void {
     if (!this.draggableImages()) return;
