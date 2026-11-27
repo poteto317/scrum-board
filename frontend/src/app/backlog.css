@@ -12,6 +12,13 @@
   display: flex;
   gap: 12px;
 }
+.page-topbar > .breadcrumb {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .breadcrumb a {
   text-decoration: none;
   color: var(--muted);
