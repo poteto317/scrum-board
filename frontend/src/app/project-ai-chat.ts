@@ -57,7 +57,6 @@ import { ProjectAiConversationList } from './project-ai-conversation-list';
 import { ProjectAiProposalCard } from './project-ai-proposal-card';
 import { replaceProposal } from './project-ai-proposal-rules';
 import {
-  CONVERSATION_LIST_PINNED_QUERY,
   conversationActionsLocked,
   conversationListView,
   conversationRef,
@@ -138,7 +137,6 @@ export class ProjectAiChat implements OnChanges {
   readonly error = signal('');
   /** 最初の読み込みの失敗だけ（入力欄ごと隠す） */
   readonly loadError = signal('');
-  private readonly wide = signal(false);
 
   readonly canApply = computed(
     () => this.layout() !== 'page' && this.focusItem()?.canEdit === true,
@@ -172,8 +170,6 @@ export class ProjectAiChat implements OnChanges {
   );
   readonly listView = computed(() =>
     conversationListView({
-      layout: this.layout(),
-      wide: this.wide(),
       historyOpen: this.historyOpen(),
     }),
   );
@@ -220,7 +216,6 @@ export class ProjectAiChat implements OnChanges {
       this.cancelScopedRequests();
       this.applyRequest?.unsubscribe();
     });
-    this.bindWideMedia(destroyRef);
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -708,15 +703,6 @@ export class ProjectAiChat implements OnChanges {
     if (this.sending() === sending) return;
     this.sending.set(sending);
     this.sendingChange.emit(sending);
-  }
-
-  private bindWideMedia(destroyRef: DestroyRef) {
-    if (typeof matchMedia !== 'function') return;
-    const mq = matchMedia(CONVERSATION_LIST_PINNED_QUERY);
-    const sync = () => this.wide.set(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    destroyRef.onDestroy(() => mq.removeEventListener('change', sync));
   }
 
   private currentUserId(): number | null {

@@ -15,17 +15,15 @@
       >
         {{ newConversationLabel }}
       </button>
-      @if (!listView().pinned) {
-        <button
-          type="button"
-          class="secondary ai-chat-history-toggle"
-          (click)="toggleHistory()"
-          [attr.aria-expanded]="historyOpen() ? 'true' : 'false'"
-          aria-controls="ai-chat-conversations"
-        >
-          履歴
-        </button>
-      }
+      <button
+        type="button"
+        class="secondary ai-chat-history-toggle"
+        (click)="toggleHistory()"
+        [attr.aria-expanded]="historyOpen() ? 'true' : 'false'"
+        aria-controls="ai-chat-conversations"
+      >
+        履歴
+      </button>
     </div>
   </div>
 
@@ -38,7 +36,7 @@
     <p class="ai-chat-status" role="status">{{ lowRemainingMessage }}</p>
   }
 
-  <div class="ai-chat-main" [class.ai-chat-main--split]="listView().pinned">
+  <div class="ai-chat-main">
     @if (listView().showList) {
       <nav id="ai-chat-conversations" class="ai-chat-conversations" aria-label="会話の履歴">
         @switch (listState()) {
