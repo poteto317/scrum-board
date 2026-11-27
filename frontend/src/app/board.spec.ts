@@ -185,7 +185,10 @@ describe('Board create requests', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    expect(f.nativeElement.querySelector('.page-topbar app-project-switcher')).toBeTruthy();
+    const topbar = f.nativeElement.querySelector('.page-topbar') as HTMLElement;
+    expect(topbar).toBeTruthy();
+    expect(topbar.children.length).toBe(2);
+    expect(topbar.children[1]?.tagName).toBe('APP-PROJECT-SWITCHER');
   });
 
   it('omits the status select from the card modal', async () => {

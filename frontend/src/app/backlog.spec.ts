@@ -193,7 +193,10 @@ describe('Backlog reordering', () => {
     const f = TestBed.createComponent(Backlog);
     f.detectChanges();
     await f.whenStable();
-    expect(f.nativeElement.querySelector('.page-topbar app-project-switcher')).toBeTruthy();
+    const topbar = f.nativeElement.querySelector('.page-topbar') as HTMLElement;
+    expect(topbar).toBeTruthy();
+    expect(topbar.children.length).toBe(2);
+    expect(topbar.children[1]?.tagName).toBe('APP-PROJECT-SWITCHER');
   });
 
   it('does not show comment UI on backlog rows', async () => {

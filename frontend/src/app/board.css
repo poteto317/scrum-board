@@ -9,6 +9,13 @@
   display: flex;
   gap: 12px;
 }
+.page-topbar > .breadcrumb {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .breadcrumb strong {
   font-weight: 500;
   color: var(--ink);
