@@ -233,6 +233,9 @@ func (r MySQLRepository) DeleteProject(ctx context.Context, id int64) error {
 	if err = assertProjectDeletable(ctx, tx, id); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM item_templates WHERE project_id=?`, id); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM sprints WHERE project_id=?`, id); err != nil {
 		return err
 	}

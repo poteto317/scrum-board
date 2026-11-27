@@ -30,13 +30,11 @@ func (h handler) requireItemTemplateProjectID(w http.ResponseWriter, r *http.Req
 		fail(w, listErr)
 		return 0, false
 	}
-	for _, p := range projects {
-		if p.ID == pid {
-			return pid, true
-		}
+	if !projectIDExists(projects, pid) {
+		failProject(w, ErrNotFound)
+		return 0, false
 	}
-	failProject(w, ErrNotFound)
-	return 0, false
+	return pid, true
 }
 
 func itemTemplatePathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -55,7 +53,11 @@ func (h handler) listItemTemplates(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := h.repo.ListItemTemplatesEnsuringSeeds(r.Context(), pid)
 	if err != nil {
-		failItemTemplate(w, err)
+		if errors.Is(err, ErrNotFound) {
+			failProject(w, err)
+			return
+		}
+		fail(w, err)
 		return
 	}
 	reply(w, 200, map[string][]ItemTemplate{"templates": list})
