@@ -168,10 +168,43 @@ func TestItemTemplatesNonAdminForbidden(t *testing.T) {
 	})
 	r.sessions["member-session"] = Session{ID: "member-session", UserID: 2, ExpiresAt: now.Add(time.Hour), CreatedAt: now}
 	h := NewHandler(r)
-	w := requestWithCookie(h, "POST", "/api/item-templates?projectId=1",
-		`{"name":"x","titleTemplate":"t","descriptionTemplate":""}`, "member-session")
-	if w.Code != 403 {
-		t.Fatalf("member create: %d %s", w.Code, w.Body.String())
+
+	// Seed one template as admin so PATCH/DELETE have a target.
+	w := request(h, "POST", "/api/item-templates?projectId=1",
+		`{"name":"keep","titleTemplate":"t","descriptionTemplate":""}`)
+	if w.Code != 201 {
+		t.Fatalf("admin create: %d %s", w.Code, w.Body.String())
+	}
+	var created ItemTemplate
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil || created.ID == 0 {
+		t.Fatalf("created %+v", created)
+	}
+
+	body := `{"name":"x","titleTemplate":"t","descriptionTemplate":""}`
+	w = requestWithCookie(h, "POST", "/api/item-templates?projectId=1", body, "member-session")
+	assertAPIMessage(t, w.Code, w.Body.Bytes(), 403, msgForbidden)
+	w = requestWithCookie(h, "PATCH", "/api/item-templates/"+itoa(created.ID)+"?projectId=1",
+		`{"name":"stolen"}`, "member-session")
+	assertAPIMessage(t, w.Code, w.Body.Bytes(), 403, msgForbidden)
+	w = requestWithCookie(h, "DELETE", "/api/item-templates/"+itoa(created.ID)+"?projectId=1", "", "member-session")
+	assertAPIMessage(t, w.Code, w.Body.Bytes(), 403, msgForbidden)
+
+	list, err := r.ListItemTemplates(t.Context(), 1)
+	if err != nil || len(list) != 1 || list[0].Name != "keep" {
+		t.Fatalf("catalog after member writes: %+v err=%v", list, err)
+	}
+}
+
+func TestItemTemplatesUnauthorized(t *testing.T) {
+	h := NewHandler(fresh())
+	w := requestAnon(h, "GET", "/api/item-templates?projectId=1", "")
+	if w.Code != 401 {
+		t.Fatalf("anon GET: %d %s", w.Code, w.Body.String())
+	}
+	w = requestAnon(h, "POST", "/api/item-templates?projectId=1",
+		`{"name":"x","titleTemplate":"t","descriptionTemplate":""}`)
+	if w.Code != 401 {
+		t.Fatalf("anon POST: %d %s", w.Code, w.Body.String())
 	}
 }
 
