@@ -1,10 +1,22 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, input, output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import {
   SCRUM_ATTACHMENT_MIME,
   encodeAttachmentDragPayload,
 } from './attachment-dnd';
-import { hostnameFallback } from './description-link';
+import {
+  ImageDisplaySize,
+  hostnameFallback,
+  normalizeImageDisplaySize,
+} from './description-link';
 import { buildDescriptionView } from './description-view';
 
 @Component({
@@ -28,7 +40,12 @@ import { buildDescriptionView } from './description-view';
             <span class="rich-bookmark-url">{{ bookmarkURLLabel(seg.url) }}</span>
           </a>
         } @else if (seg.kind === 'image') {
-          <span class="rich-image">
+          <span
+            class="rich-image"
+            [class.rich-image--sm]="seg.displaySize === 'sm'"
+            [class.rich-image--md]="seg.displaySize === 'md'"
+            [class.rich-image--lg]="seg.displaySize === 'lg'"
+          >
             <img
               [src]="seg.src"
               [alt]="seg.alt"
@@ -36,16 +53,42 @@ import { buildDescriptionView } from './description-view';
               decoding="async"
               [attr.draggable]="draggableImages() ? 'true' : 'false'"
               (dragstart)="onDragStart(seg.attachmentId, seg.alt, $event)"
+              (click)="openLightbox(seg.src, seg.alt, $event)"
             />
-            @if (canDelete()) {
-              <button
-                type="button"
-                class="secondary rich-image-delete"
-                [attr.aria-label]="'画像を削除: ' + seg.alt"
-                (click)="onDelete(seg.attachmentId, $event)"
-              >
-                削除
-              </button>
+            @if (canChangeImageSize() || canDelete()) {
+              <span class="rich-image-actions">
+                @if (canChangeImageSize()) {
+                  <span
+                    class="rich-image-size"
+                    role="group"
+                    aria-label="画像の表示サイズ"
+                    (click)="$event.stopPropagation()"
+                  >
+                    @for (size of sizeOptions; track size) {
+                      <button
+                        type="button"
+                        class="secondary rich-image-size-btn"
+                        [class.is-active]="seg.displaySize === size"
+                        [attr.aria-pressed]="seg.displaySize === size"
+                        [attr.aria-label]="sizeLabel(size)"
+                        (click)="onSize(seg.attachmentId, size, $event)"
+                      >
+                        {{ sizeLabel(size) }}
+                      </button>
+                    }
+                  </span>
+                }
+                @if (canDelete()) {
+                  <button
+                    type="button"
+                    class="secondary rich-image-delete"
+                    [attr.aria-label]="'画像を削除: ' + seg.alt"
+                    (click)="onDelete(seg.attachmentId, $event)"
+                  >
+                    削除
+                  </button>
+                }
+              </span>
             }
           </span>
         } @else if (seg.kind === 'file') {
@@ -138,6 +181,32 @@ import { buildDescriptionView } from './description-view';
         }
       }
     </div>
+    <dialog
+      #imageLightbox
+      class="modal-backdrop rich-image-lightbox"
+      (click)="onLightboxBackdrop($event)"
+      (close)="onLightboxClosed()"
+    >
+      <form method="dialog" class="modal rich-image-lightbox-panel" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>{{ lightboxAlt() }}</h2>
+          <button
+            #lightboxClose
+            type="button"
+            class="secondary"
+            aria-label="閉じる"
+            (click)="closeLightbox()"
+          >
+            ×
+          </button>
+        </div>
+        <div class="rich-image-lightbox-body">
+          @if (lightboxSrc(); as src) {
+            <img [src]="src" [alt]="lightboxAlt()" />
+          }
+        </div>
+      </form>
+    </dialog>
   `,
   styles: `
     .rich-text {
@@ -208,10 +277,52 @@ import { buildDescriptionView } from './description-view';
       max-width: min(100%, 28rem);
       height: auto;
       border-radius: 0.25rem;
+      cursor: zoom-in;
+    }
+    .rich-image--sm img {
+      max-width: min(100%, 12rem);
+    }
+    .rich-image--md img {
+      max-width: min(100%, 28rem);
+    }
+    .rich-image--lg img {
+      max-width: min(100%, 48rem);
+    }
+    .rich-image-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.25rem;
+    }
+    .rich-image-size {
+      display: inline-flex;
+      gap: 0.2rem;
+    }
+    .rich-image-size-btn {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.4rem;
+    }
+    .rich-image-size-btn.is-active {
+      font-weight: 650;
     }
     .rich-image-delete {
-      margin-top: 0.25rem;
       font-size: 0.85rem;
+    }
+    .rich-image-lightbox-panel {
+      max-width: min(96vw, 56rem);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .rich-image-lightbox-body {
+      overflow: auto;
+      text-align: center;
+    }
+    .rich-image-lightbox-body img {
+      max-width: 100%;
+      max-height: min(80vh, 48rem);
+      height: auto;
     }
     .rich-bookmark {
       display: flex;
@@ -252,14 +363,29 @@ export class DescriptionRichText {
   /** Normalized URL → title from POST /api/link-previews. */
   readonly linkTitles = input<Record<string, string>>({});
   readonly canDelete = input(false);
+  /** When true, show sm/md/lg controls (same gate as delete for description/solution). */
+  readonly canChangeImageSize = input(false);
   readonly draggableImages = input(false);
   readonly deleteImage = output<number>();
+  readonly imageDisplaySize = output<{ attachmentId: number; size: ImageDisplaySize }>();
+
+  readonly sizeOptions: ImageDisplaySize[] = ['sm', 'md', 'lg'];
+
+  private readonly imageLightbox = viewChild<ElementRef<HTMLDialogElement>>('imageLightbox');
+  private readonly lightboxCloseBtn = viewChild<ElementRef<HTMLButtonElement>>('lightboxClose');
+  readonly lightboxSrc = signal<string | null>(null);
+  readonly lightboxAlt = signal('');
+  private lightboxReturnFocus: HTMLElement | null = null;
 
   readonly blocks = computed(() =>
     buildDescriptionView(this.text(), this.itemNumber(), this.blockSyntax(), {
       promoteBookmarks: this.promoteBookmarks(),
     }),
   );
+
+  sizeLabel(size: ImageDisplaySize): string {
+    return size === 'sm' ? '小' : size === 'lg' ? '大' : '中';
+  }
 
   bookmarkTitle(url: string): string {
     const titles = this.linkTitles();
@@ -291,7 +417,46 @@ export class DescriptionRichText {
   }
 
   onDelete(attachmentId: number, event: MouseEvent): void {
+    event.stopPropagation();
     if (event.detail > 1) return;
     this.deleteImage.emit(attachmentId);
+  }
+
+  onSize(attachmentId: number, size: ImageDisplaySize, event: MouseEvent): void {
+    event.stopPropagation();
+    if (event.detail > 1) return;
+    this.imageDisplaySize.emit({
+      attachmentId,
+      size: normalizeImageDisplaySize(size),
+    });
+  }
+
+  openLightbox(src: string, alt: string, event: MouseEvent): void {
+    if (event.detail > 1) return;
+    const dialog = this.imageLightbox()?.nativeElement;
+    if (!dialog) return;
+    this.lightboxReturnFocus = event.currentTarget as HTMLElement;
+    this.lightboxSrc.set(src);
+    this.lightboxAlt.set(alt || 'image');
+    if (!dialog.open) dialog.showModal();
+    queueMicrotask(() => this.lightboxCloseBtn()?.nativeElement.focus());
+  }
+
+  closeLightbox(): void {
+    const dialog = this.imageLightbox()?.nativeElement;
+    if (dialog?.open) dialog.close();
+  }
+
+  onLightboxBackdrop(event: MouseEvent): void {
+    // Backdrop clicks hit the dialog element; do not close (spec).
+    if (event.target === event.currentTarget) event.preventDefault();
+  }
+
+  onLightboxClosed(): void {
+    this.lightboxSrc.set(null);
+    this.lightboxAlt.set('');
+    const el = this.lightboxReturnFocus;
+    this.lightboxReturnFocus = null;
+    queueMicrotask(() => el?.focus?.());
   }
 }
