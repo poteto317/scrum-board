@@ -1206,6 +1206,24 @@ describe('ProjectAiChat', () => {
       expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '直した', 5, 3, m1.id);
     });
 
+    it('replaces messages and clears editing when resend succeeds', () => {
+      const replaced: ProjectAIChatPostResponse = {
+        conversation: c5,
+        assistant: { ...m2, id: 20, body: '新しい答え' },
+        messages: [
+          { ...m1, id: 19, body: '直した' },
+          { ...m2, id: 20, body: '新しい答え' },
+        ],
+      };
+      const { c } = setup({ postProjectAIChat: vi.fn(() => of(replaced)) });
+      c.startEdit(m1);
+      c.draft.set('直した');
+      c.send();
+      expect(c.editingFromMessageId()).toBeNull();
+      expect(c.draft()).toBe('');
+      expect(c.messages()).toEqual(replaced.messages);
+    });
+
     it('keeps editing state when resend fails', () => {
       const pending = new Subject<ProjectAIChatPostResponse>();
       const { c } = setup({ postProjectAIChat: vi.fn(() => pending) });
