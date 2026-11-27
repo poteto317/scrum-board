@@ -40,6 +40,7 @@ import {
   PROJECT_AI_CONVERSATION_DELETE_CONFIRM,
   PROJECT_AI_CONVERSATION_GONE_ON_SEND,
   PROJECT_AI_CONVERSATION_NOT_FOUND,
+  PROJECT_AI_EDIT_NEEDS_CONVERSATION,
   PROJECT_AI_NEW_CONVERSATION_LABEL,
   applyCommentConfirm,
   applyDescriptionConfirm,
@@ -124,6 +125,8 @@ export class ProjectAiChat implements OnChanges {
   readonly listError = this.conversationList.error.asReadonly();
   readonly historyOpen = signal(false);
   readonly draft = signal('');
+  /** 編集中の直前 user メッセージ id。null は通常送信 */
+  readonly editingFromMessageId = signal<number | null>(null);
   /** 最初の読み込み（表示する会話を決める）の途中 */
   readonly loading = signal(false);
   readonly switching = signal(false);
@@ -176,6 +179,16 @@ export class ProjectAiChat implements OnChanges {
     }),
   );
   readonly blockedMessage = computed(() => blockedReasonMessage(this.blockReason()));
+  /** 編集できる直前の user メッセージ（表示条件を満たすときだけ） */
+  readonly lastEditableUserMessage = computed(() => {
+    if (!this.settled() || this.composeInactive()) return null;
+    const msgs = this.messages();
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') return msgs[i];
+    }
+    return null;
+  });
+  readonly editing = computed(() => this.editingFromMessageId() != null);
 
   readonly lowRemainingMessage = AI_LOW_REMAINING_MESSAGE;
   readonly emptyMessage = PROJECT_AI_CHAT_EMPTY_MESSAGE;
@@ -241,6 +254,7 @@ export class ProjectAiChat implements OnChanges {
     this.announced = null;
     this.conversationList.reset();
     this.historyOpen.set(false);
+    this.clearEditing();
     this.draft.set('');
     this.error.set('');
     this.loadError.set('');
@@ -427,12 +441,31 @@ export class ProjectAiChat implements OnChanges {
   /** 空の新しい会話にする。サーバーには、最初に送ったときに作られる */
   startNew() {
     if (this.actionsLocked()) return;
+    this.clearEditing();
     this.enableStickToBottom();
     this.messages.set([]);
     this.error.set('');
     this.historyOpen.set(false);
     this.showConversation(null);
     this.inputRef()?.nativeElement.focus();
+  }
+
+  startEdit(msg: ProjectAIMessage, event?: MouseEvent) {
+    if (event && event.detail > 1) return;
+    if (this.lastEditableUserMessage()?.id !== msg.id) return;
+    this.draft.set(msg.body);
+    this.editingFromMessageId.set(msg.id);
+    this.error.set('');
+    this.inputRef()?.nativeElement.focus();
+  }
+
+  cancelEdit() {
+    this.clearEditing();
+    this.draft.set('');
+  }
+
+  private clearEditing() {
+    this.editingFromMessageId.set(null);
   }
 
   selectConversation(conversationId: number) {
@@ -451,6 +484,7 @@ export class ProjectAiChat implements OnChanges {
       .subscribe({
         next: (view) => {
           if (!this.stillCurrent(scope)) return;
+          this.clearEditing();
           this.enableStickToBottom();
           this.messages.set(view.messages);
           this.switching.set(false);
@@ -487,24 +521,51 @@ export class ProjectAiChat implements OnChanges {
       this.error.set(draft.error);
       return;
     }
-    const text = draft.text;
+    const target = this.resolveSendTarget();
+    if (!target.ok) {
+      this.error.set(target.error);
+      return;
+    }
     this.stickAndScrollToBottom();
     this.sendRequest?.unsubscribe();
     const scope = this.scope();
-    const sentTo = this.conversationId();
     this.setSending(true);
     this.error.set('');
     // 送信中に別のアイテムへ移っても、同じプロジェクトなら回答は表示する（focusItem は比べない）
-    this.sendRequest = this.api
-      .postProjectAIChat(scope.projectId, text, conversationRef(sentTo), this.focusItem()?.number)
-      .subscribe({
-        next: (res) => {
-          if (this.stillCurrent(scope)) this.onSent(sentTo, res);
-        },
-        error: (err) => {
-          if (this.stillCurrent(scope)) this.onSendFailed(sentTo, err);
-        },
-      });
+    const focusNumber = this.focusItem()?.number;
+    const req =
+      target.replaceFrom != null
+        ? this.api.postProjectAIChat(
+            scope.projectId,
+            draft.text,
+            target.conversation,
+            focusNumber,
+            target.replaceFrom,
+          )
+        : this.api.postProjectAIChat(scope.projectId, draft.text, target.conversation, focusNumber);
+    this.sendRequest = req.subscribe({
+      next: (res) => {
+        if (this.stillCurrent(scope)) this.onSent(target.sentTo, res);
+      },
+      error: (err) => {
+        if (this.stillCurrent(scope)) this.onSendFailed(target.sentTo, err);
+      },
+    });
+  }
+
+  /** 通常送信と編集再送信の会話／replace 引数を決める */
+  private resolveSendTarget():
+    | { ok: true; conversation: ConversationRef; sentTo: number | null; replaceFrom: number | null }
+    | { ok: false; error: string } {
+    const replaceFrom = this.editingFromMessageId();
+    const sentTo = this.conversationId();
+    if (replaceFrom != null) {
+      if (sentTo == null) {
+        return { ok: false, error: PROJECT_AI_EDIT_NEEDS_CONVERSATION };
+      }
+      return { ok: true, conversation: sentTo, sentTo, replaceFrom };
+    }
+    return { ok: true, conversation: conversationRef(sentTo), sentTo, replaceFrom: null };
   }
 
   /** 回答が保存された。一覧に反映し、送った先がまだ表示中なら、やりとりも出す */
@@ -520,6 +581,7 @@ export class ProjectAiChat implements OnChanges {
     if (!sameConversation(sentTo, this.conversationId())) return;
     this.messages.set(res.messages);
     this.draft.set('');
+    this.clearEditing();
     this.showConversation(res.conversation.id);
   }
 
@@ -530,6 +592,7 @@ export class ProjectAiChat implements OnChanges {
     if (isConversationGoneOnSend(sentTo, err)) {
       // 表示中の会話が外で消えていた。下書きを残して、新しい会話として送り直せるようにする
       this.loadConversations();
+      this.clearEditing();
       this.messages.set([]);
       this.showConversation(null);
       this.error.set(PROJECT_AI_CONVERSATION_GONE_ON_SEND);
@@ -555,6 +618,7 @@ export class ProjectAiChat implements OnChanges {
       this.patchConversations((list) => removeConversation(list, conversationId));
       this.focusInputIfLost();
       if (!sameConversation(conversationId, this.conversationId())) return;
+      this.clearEditing();
       this.enableStickToBottom();
       this.messages.set([]);
       this.showConversation(null);
