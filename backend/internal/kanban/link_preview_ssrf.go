@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -67,7 +68,8 @@ func hasDisallowedURLRunes(s string) bool {
 // parseLinkPreviewURL is pure syntax validation (same spirit as frontend normalizeDescriptionLinkUrl).
 func parseLinkPreviewURL(raw string) (*url.URL, error) {
 	text := strings.TrimSpace(raw)
-	if text == "" || len(text) > linkPreviewMaxURLLen || hasDisallowedURLRunes(text) {
+	// Match frontend string length (JS UTF-16 ≈ rune count for BMP URLs we allow).
+	if text == "" || utf8.RuneCountInString(text) > linkPreviewMaxURLLen || hasDisallowedURLRunes(text) {
 		return nil, fmt.Errorf("invalid url")
 	}
 	if !strings.HasPrefix(text, "https://") {
@@ -90,7 +92,7 @@ func parseLinkPreviewURL(raw string) (*url.URL, error) {
 }
 
 // ensureLinkPreviewHostPublic performs DNS / IP public checks (I/O).
-func ensureLinkPreviewHostPublic(u *url.URL) error {
+func ensureLinkPreviewHostPublic(ctx context.Context, u *url.URL) error {
 	host := u.Hostname()
 	if blockedLinkPreviewHostname(host) {
 		return fmt.Errorf("blocked host")
@@ -101,7 +103,7 @@ func ensureLinkPreviewHostPublic(u *url.URL) error {
 		}
 		return nil
 	}
-	ips, err := linkPreviewLookupIP(context.Background(), "ip", host)
+	ips, err := linkPreviewLookupIP(ctx, "ip", host)
 	if err != nil || len(ips) == 0 {
 		return fmt.Errorf("dns lookup failed")
 	}
@@ -115,11 +117,15 @@ func ensureLinkPreviewHostPublic(u *url.URL) error {
 
 // validateLinkPreviewURL parses then ensures the host resolves only to public IPs.
 func validateLinkPreviewURL(raw string) (*url.URL, error) {
+	return validateLinkPreviewURLContext(context.Background(), raw)
+}
+
+func validateLinkPreviewURLContext(ctx context.Context, raw string) (*url.URL, error) {
 	u, err := parseLinkPreviewURL(raw)
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureLinkPreviewHostPublic(u); err != nil {
+	if err := ensureLinkPreviewHostPublic(ctx, u); err != nil {
 		return nil, err
 	}
 	return u, nil
@@ -175,7 +181,7 @@ func newLinkPreviewHTTPClientWithTransport(rt http.RoundTripper) *http.Client {
 			if len(via) >= linkPreviewMaxRedirect {
 				return fmt.Errorf("too many redirects")
 			}
-			if _, err := validateLinkPreviewURL(req.URL.String()); err != nil {
+			if _, err := validateLinkPreviewURLContext(req.Context(), req.URL.String()); err != nil {
 				return err
 			}
 			// Never forward auth from our app (we never set it); strip just in case.

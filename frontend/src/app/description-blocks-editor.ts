@@ -103,6 +103,7 @@ export class DescriptionBlocksEditor {
   private deleteGuard = false;
   private linkPreviewGeneration = 0;
   private linkPreviewSub: Subscription | null = null;
+  private lastPreviewURLKey = '';
   /** Gap slots: 0..blocks.length inclusive. */
   readonly gapIndexes = computed(() => {
     const n = this.blocks().length;
@@ -170,6 +171,7 @@ export class DescriptionBlocksEditor {
     const generation = ++this.linkPreviewGeneration;
     // Description/solution editors always pass itemNumber>0; comments use a different component.
     if (itemNumber <= 0 || text === '') {
+      this.lastPreviewURLKey = '';
       this.linkTitles.set({});
       return;
     }
@@ -178,9 +180,15 @@ export class DescriptionBlocksEditor {
     });
     const urls = collectBookmarkUrls(view);
     if (urls.length === 0) {
+      this.lastPreviewURLKey = '';
       this.linkTitles.set({});
       return;
     }
+    const urlKey = urls.slice().sort().join('\0');
+    if (urlKey === this.lastPreviewURLKey && Object.keys(this.linkTitles()).length > 0) {
+      return;
+    }
+    this.lastPreviewURLKey = urlKey;
     this.linkPreviewSub = loadLinkPreviews(this.api, urls).subscribe({
       next: (titles) => {
         if (generation !== this.linkPreviewGeneration) return;

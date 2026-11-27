@@ -112,11 +112,15 @@ func contentTypeAllowsHTML(ct string) bool {
 }
 
 func (r *LinkPreviewResolver) Resolve(ctx context.Context, rawURL string) (string, bool) {
-	u, err := validateLinkPreviewURL(rawURL)
+	u, err := validateLinkPreviewURLContext(ctx, rawURL)
 	if err != nil {
 		return "", false
 	}
-	key := u.String()
+	// Prefer caller-trimmed raw when it round-trips; otherwise canonical String().
+	key := strings.TrimSpace(rawURL)
+	if key == "" {
+		key = u.String()
+	}
 
 	r.mu.Lock()
 	if e, ok := r.cache[key]; ok {
@@ -129,8 +133,8 @@ func (r *LinkPreviewResolver) Resolve(ctx context.Context, rawURL string) (strin
 			// SWR: return stale success and refresh in background if still within stale max age.
 			if !e.okAt.IsZero() && now.Sub(e.okAt) <= linkPreviewStaleMaxAge {
 				title := e.title
+				r.scheduleRefreshLocked(key)
 				r.mu.Unlock()
-				go r.refresh(key)
 				return title, true
 			}
 		} else if now.Before(e.expiry) {
@@ -162,21 +166,30 @@ func (r *LinkPreviewResolver) Resolve(ctx context.Context, rawURL string) (strin
 	return title, ok
 }
 
-func (r *LinkPreviewResolver) refresh(key string) {
-	ctx, cancel := context.WithTimeout(context.Background(), linkPreviewHTTPTimeout)
-	defer cancel()
-	title, ok := r.fetch(ctx, key)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if ok {
-		r.storeLocked(key, title, true)
+// scheduleRefreshLocked starts at most one background refresh per key (caller holds mu).
+func (r *LinkPreviewResolver) scheduleRefreshLocked(key string) {
+	if _, ok := r.inflight[key]; ok {
 		return
 	}
-	// stale-if-error: do not overwrite a still-fresh-enough success with failure.
-	if e, exists := r.cache[key]; exists && e.ok && !e.okAt.IsZero() && r.now().Sub(e.okAt) <= linkPreviewStaleMaxAge {
-		return
-	}
-	r.storeLocked(key, "", false)
+	fl := &linkPreviewFlight{done: make(chan struct{})}
+	r.inflight[key] = fl
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), linkPreviewHTTPTimeout)
+		defer cancel()
+		title, ok := r.fetch(ctx, key)
+		r.mu.Lock()
+		fl.title, fl.ok = title, ok
+		close(fl.done)
+		delete(r.inflight, key)
+		if ok {
+			r.storeLocked(key, title, true)
+		} else if e, exists := r.cache[key]; exists && e.ok && !e.okAt.IsZero() && r.now().Sub(e.okAt) <= linkPreviewStaleMaxAge {
+			// stale-if-error
+		} else {
+			r.storeLocked(key, "", false)
+		}
+		r.mu.Unlock()
+	}()
 }
 
 func (r *LinkPreviewResolver) storeLocked(key, title string, ok bool) {
