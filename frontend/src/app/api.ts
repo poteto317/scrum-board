@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CommandTemplate } from './command-template';
+import { ItemTemplate } from './item-template';
 import { ConditionalGetResult, getJSONConditional } from './conditional-get';
 import { ItemOrderColumn } from './item-order';
 import { WorkspaceListFilters } from './list-filter';
@@ -597,6 +598,33 @@ export class Api {
   }
   deleteCommandTemplate(id: number) {
     return this.http.delete<void>(`/api/command-templates/${id}`);
+  }
+  listItemTemplates(projectId: number) {
+    return this.http.get<{ templates: ItemTemplate[] }>('/api/item-templates', {
+      params: { projectId: String(projectId) },
+    });
+  }
+  createItemTemplate(
+    projectId: number,
+    input: { name: string; titleTemplate: string; descriptionTemplate: string },
+  ) {
+    return this.http.post<ItemTemplate>('/api/item-templates', input, {
+      params: { projectId: String(projectId) },
+    });
+  }
+  updateItemTemplate(
+    projectId: number,
+    id: number,
+    input: { name?: string; titleTemplate?: string; descriptionTemplate?: string },
+  ) {
+    return this.http.patch<ItemTemplate>(`/api/item-templates/${id}`, input, {
+      params: { projectId: String(projectId) },
+    });
+  }
+  deleteItemTemplate(projectId: number, id: number) {
+    return this.http.delete<void>(`/api/item-templates/${id}`, {
+      params: { projectId: String(projectId) },
+    });
   }
   listItemCommandTemplatesByNumber(number: number, projectId?: number) {
     const params = projectId && projectId > 0 ? { projectId: String(projectId) } : undefined;
