@@ -207,7 +207,7 @@ export class ProjectSwitcher {
     const panel = this.projectSelectListRef()?.nativeElement;
     if (!trigger || !panel) return;
     const room = Math.max(80, window.innerHeight - trigger.getBoundingClientRect().bottom - 8);
-    panel.style.maxHeight = `${Math.min(280, room)}px`;
+    panel.style.maxHeight = `${Math.min(360, room)}px`;
   }
 
   closeProjectMenu(restoreFocus: boolean) {

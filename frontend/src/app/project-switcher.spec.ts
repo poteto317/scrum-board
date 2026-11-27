@@ -305,9 +305,22 @@ describe('ProjectSwitcher', () => {
     expect(panel).toBeTruthy();
     expect(getComputedStyle(panel).top).toBe('100%');
     expect(getComputedStyle(panel).position).toBe('absolute');
+    expect(getComputedStyle(panel).left).toBe('50%');
+    expect(getComputedStyle(panel).right).toBe('auto');
+    expect(getComputedStyle(panel).transform).toContain('translateX(-50%)');
     await Promise.resolve();
     f.detectChanges();
     expect(panel.style.maxHeight).toMatch(/^\d+px$/);
+    const maxHeightPx = Number.parseInt(panel.style.maxHeight, 10);
+    expect(maxHeightPx).toBeGreaterThan(0);
+    expect(maxHeightPx).toBeLessThanOrEqual(360);
+  });
+
+  it('uses the enlarged trigger size from the component stylesheet', () => {
+    const { f } = setup();
+    const trigger = projectTrigger(f);
+    expect(getComputedStyle(trigger).maxWidth).toBe('360px');
+    expect(getComputedStyle(trigger).fontSize).toBe('16px');
   });
 
   it('moves highlight with arrows and selects with Enter', () => {

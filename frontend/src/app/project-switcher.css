@@ -6,22 +6,22 @@
   position: relative;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
   gap: 6px;
   min-width: 0;
 }
 .project-select-trigger {
-  max-width: 180px;
+  max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border-radius: 8px;
+  padding: 8px 16px;
   text-align: left;
   cursor: pointer;
 }
@@ -32,14 +32,15 @@
 .project-select-list {
   position: absolute;
   top: 100%;
-  right: 0;
-  left: auto;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   z-index: 20;
   margin: 4px 0 0;
   padding: 4px 0;
   min-width: 100%;
-  max-width: min(280px, 80vw);
-  max-height: min(280px, 50vh);
+  max-width: min(560px, 90vw);
+  max-height: min(360px, 55vh);
   overflow-y: auto;
   list-style: none;
   background: var(--paper);
@@ -51,8 +52,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  font-size: 14px;
+  padding: 12px 16px;
+  font-size: 16px;
   color: var(--ink);
   cursor: pointer;
   white-space: nowrap;
@@ -78,5 +79,5 @@
 }
 .project-error {
   flex-basis: 100%;
-  text-align: right;
+  text-align: center;
 }
