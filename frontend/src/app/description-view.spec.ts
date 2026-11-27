@@ -4,7 +4,7 @@ import {
   buildFileAttachmentMarkup,
   parseDescriptionLinks,
 } from './description-link';
-import { buildDescriptionView } from './description-view';
+import { buildDescriptionView, collectBookmarkUrls } from './description-view';
 
 describe('buildDescriptionView', () => {
   it('keeps the whole text as one paragraph when block syntax is off', () => {
@@ -14,6 +14,57 @@ describe('buildDescriptionView', () => {
     ]);
     expect(buildDescriptionView('', 7, false)).toEqual([
       { kind: 'paragraph', segments: [{ kind: 'text', text: '' }] },
+    ]);
+  });
+
+  it('promotes a sole [url](url) paragraph to bookmark when enabled', () => {
+    const url = 'https://example.com/x';
+    const text = `[${url}](${url})`;
+    expect(buildDescriptionView(text, 7, true, { promoteBookmarks: true })).toEqual([
+      {
+        kind: 'paragraph',
+        segments: [{ kind: 'bookmark', label: url, url }],
+      },
+    ]);
+    expect(buildDescriptionView(text, 7, true)).toEqual([
+      {
+        kind: 'paragraph',
+        segments: [{ kind: 'link', label: url, url }],
+      },
+    ]);
+  });
+
+  it('collects bookmark urls from paragraph blocks only', () => {
+    const url = 'https://a.example/';
+    expect(
+      collectBookmarkUrls([
+        { kind: 'paragraph', segments: [{ kind: 'bookmark', label: url, url }] },
+        {
+          kind: 'heading',
+          level: 1,
+          segments: [{ kind: 'bookmark', label: 'https://b.example/', url: 'https://b.example/' }],
+        },
+      ]),
+    ).toEqual([url]);
+  });
+
+  it('does not promote named links or list items', () => {
+    const url = 'https://example.com/x';
+    expect(
+      buildDescriptionView(`[GitHub](${url})`, 7, true, { promoteBookmarks: true }),
+    ).toEqual([
+      {
+        kind: 'paragraph',
+        segments: [{ kind: 'link', label: 'GitHub', url }],
+      },
+    ]);
+    expect(
+      buildDescriptionView(`- [${url}](${url})`, 7, true, { promoteBookmarks: true }),
+    ).toEqual([
+      {
+        kind: 'bullet-list',
+        items: [[{ kind: 'link', label: url, url }]],
+      },
     ]);
   });
 

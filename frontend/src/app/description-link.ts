@@ -1,8 +1,24 @@
 export type DescriptionSegment =
   | { kind: 'text'; text: string }
   | { kind: 'link'; label: string; url: string }
+  /** Display-only; produced by `buildDescriptionView` promote, never by `parseDescriptionLinks`. */
+  | { kind: 'bookmark'; label: string; url: string }
   | { kind: 'image'; alt: string; src: string; attachmentId: number }
   | { kind: 'file'; label: string; src: string; attachmentId: number };
+
+/** True when markdown label is the raw URL itself (bookmark candidate). */
+export function isBookmarkLink(label: string, url: string): boolean {
+  return label === url && normalizeDescriptionLinkUrl(url) !== null;
+}
+
+/** Hostname for display fallback when a link preview title is missing. */
+export function hostnameFallback(url: string): string {
+  try {
+    return new URL(url).hostname || url;
+  } catch {
+    return url;
+  }
+}
 
 const MAX_URL_LEN = 2048;
 /** Max Unicode length for description after link insert (matches form textLimit). */

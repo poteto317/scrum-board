@@ -3,11 +3,21 @@ import {
   buildFileAttachmentMarkup,
   formatDescriptionLink,
   insertDescriptionLink,
+  isBookmarkLink,
   normalizeDescriptionLinkLabel,
   normalizeDescriptionLinkUrl,
   parseDescriptionLinks,
   sanitizeAttachmentAlt,
 } from './description-link';
+
+describe('isBookmarkLink', () => {
+  it('requires label === url and a valid https url', () => {
+    const url = 'https://example.com/a';
+    expect(isBookmarkLink(url, url)).toBe(true);
+    expect(isBookmarkLink('Docs', url)).toBe(false);
+    expect(isBookmarkLink('http://example.com', 'http://example.com')).toBe(false);
+  });
+});
 
 describe('normalizeDescriptionLinkUrl', () => {
   it('accepts https and returns the trimmed same string', () => {
