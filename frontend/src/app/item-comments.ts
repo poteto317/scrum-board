@@ -21,9 +21,11 @@ import {
   decodeAttachmentDragPayload,
 } from './attachment-dnd';
 import {
+  ImageDisplaySize,
   buildAttachmentMarkup,
   buildAttachmentMarkupForKind,
   insertMarkupAt,
+  setAttachmentImageDisplaySize,
 } from './description-link';
 import { DescriptionRichText } from './description-rich-text';
 import { ItemComment } from './models';
@@ -433,6 +435,39 @@ export class ItemComments implements OnChanges {
         this.imageBusy.set(false);
         if (!this.stillCurrent(generation, number, projectId)) return;
         this.actionError.set(imageUploadDoneMessage(outcome, plan, stopError));
+      },
+    });
+  }
+
+  onCommentImageDisplaySize(
+    c: ItemComment,
+    ev: { attachmentId: number; size: ImageDisplaySize },
+  ): void {
+    // Size UI is only on the viewing rich-text (edit mode is textarea-only).
+    if (!this.canModifyComment(c) || this.number <= 0 || this.savingId() != null) return;
+    if (this.editingId() === c.id) return;
+    const next = setAttachmentImageDisplaySize(c.body, this.number, ev.attachmentId, ev.size);
+    if (next === c.body) return;
+    const generation = this.generation;
+    const number = this.number;
+    const projectId = this.scopedProjectId();
+    const previous = c;
+    this.savingId.set(c.id);
+    this.actionError.set('');
+    this.mutationRequest?.unsubscribe();
+    this.mutationRequest = this.api.updateComment(number, c.id, { body: next }, projectId).subscribe({
+      next: (updated) => {
+        if (!this.stillCurrent(generation, number, projectId)) return;
+        this.comments.update((list) => replaceComment(list, updated));
+      },
+      error: () => {
+        if (!this.stillCurrent(generation, number, projectId)) return;
+        this.comments.update((list) => replaceComment(list, previous));
+        this.actionError.set('コメントを保存できませんでした。');
+        this.savingId.set(null);
+      },
+      complete: () => {
+        if (this.stillCurrent(generation, number, projectId)) this.savingId.set(null);
       },
     });
   }

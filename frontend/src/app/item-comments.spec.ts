@@ -306,6 +306,59 @@ describe('ItemComments', () => {
     expect(f.componentInstance.comments()[0].body).toBe('hello');
   });
 
+  it('patches comment body when image size button is clicked while viewing (L-060)', () => {
+    const body = '![pic](/api/items/by-number/3/attachments/9/content)';
+    const withImage = { ...c1, body };
+    const update = vi.fn((_n: number, _id: number, patch: { body: string }) =>
+      of({ ...withImage, ...patch }),
+    );
+    const f = setup({
+      listComments: vi.fn(() => of([withImage])),
+      updateComment: update,
+    });
+    const btn = f.nativeElement.querySelector(
+      'app-description-rich-text button[aria-label="小"]',
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    f.detectChanges();
+    expect(update).toHaveBeenCalledWith(
+      3,
+      1,
+      { body: '![pic](/api/items/by-number/3/attachments/9/content "sm")' },
+      undefined,
+    );
+  });
+
+  it('does not show size controls when comments are read-only', () => {
+    const body = '![pic](/api/items/by-number/3/attachments/9/content)';
+    const withImage = { ...c1, body };
+    const update = vi.fn();
+    const f = setup({
+      listComments: vi.fn(() => of([withImage])),
+      updateComment: update,
+    });
+    f.componentRef.setInput('readOnly', true);
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('app-description-rich-text .rich-image-size')).toBeNull();
+    f.componentInstance.onCommentImageDisplaySize(withImage, { attachmentId: 9, size: 'sm' });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('ignores image size changes while the comment is being edited as plain text', () => {
+    const body = '![pic](/api/items/by-number/3/attachments/9/content)';
+    const withImage = { ...c1, body };
+    const update = vi.fn();
+    const f = setup({
+      listComments: vi.fn(() => of([withImage])),
+      updateComment: update,
+    });
+    f.componentInstance.startEdit(withImage);
+    f.componentInstance.onCommentImageDisplaySize(withImage, { attachmentId: 9, size: 'lg' });
+    expect(f.componentInstance.editBody()).toBe(body);
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('keeps row when delete is cancelled', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const del = vi.fn(() => of(undefined));
