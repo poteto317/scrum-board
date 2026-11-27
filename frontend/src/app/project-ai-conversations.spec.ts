@@ -118,45 +118,17 @@ describe('project-ai-conversations', () => {
   });
 
   describe('conversationListView', () => {
-    it('pins the list beside the thread on a wide page', () => {
-      expect(conversationListView({ layout: 'page', wide: true, historyOpen: false })).toEqual({
-        pinned: true,
-        showList: true,
-        showThread: true,
-      });
-    });
-
-    it('ignores the history toggle while the list is pinned', () => {
-      expect(conversationListView({ layout: 'page', wide: true, historyOpen: true })).toEqual({
-        pinned: true,
-        showList: true,
-        showThread: true,
-      });
-    });
-
-    it('swaps the thread for the list on a narrow page', () => {
-      expect(conversationListView({ layout: 'page', wide: false, historyOpen: false })).toEqual({
-        pinned: false,
+    it('shows the thread when history is closed', () => {
+      expect(conversationListView({ historyOpen: false })).toEqual({
         showList: false,
         showThread: true,
       });
-      expect(conversationListView({ layout: 'page', wide: false, historyOpen: true })).toEqual({
-        pinned: false,
-        showList: true,
-        showThread: false,
-      });
     });
 
-    it('swaps the thread for the list in the dock even when the window is wide', () => {
-      expect(conversationListView({ layout: 'dock', wide: true, historyOpen: true })).toEqual({
-        pinned: false,
+    it('shows the list instead of the thread when history is open', () => {
+      expect(conversationListView({ historyOpen: true })).toEqual({
         showList: true,
         showThread: false,
-      });
-      expect(conversationListView({ layout: 'fab', wide: true, historyOpen: false })).toEqual({
-        pinned: false,
-        showList: false,
-        showThread: true,
       });
     });
   });
