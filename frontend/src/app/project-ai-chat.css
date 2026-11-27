@@ -34,6 +34,7 @@
   max-height: none;
   flex: 1;
   min-height: 0;
+  overflow: auto;
 }
 /* 専用画面で幅があるとき: 一覧を左の列に常に出す */
 .ai-chat--page .ai-chat-main--split {
@@ -158,6 +159,7 @@
 .ai-chat-compose {
   display: grid;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 .ai-chat-compose textarea {
   width: 100%;

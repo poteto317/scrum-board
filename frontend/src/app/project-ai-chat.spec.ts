@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { ApplicationRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
@@ -1169,6 +1169,110 @@ describe('ProjectAiChat', () => {
       expect(send!.querySelector('.ai-chat-send-icon')?.getAttribute('aria-hidden')).toBe(
         'true',
       );
+    });
+  });
+
+  describe('message list autoscroll', () => {
+    const flushRender = () => {
+      TestBed.inject(ApplicationRef).tick();
+    };
+
+    const mockListMetrics = (list: HTMLElement, scrollTop: number) => {
+      Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => 400 });
+      Object.defineProperty(list, 'clientHeight', { configurable: true, get: () => 100 });
+      Object.defineProperty(list, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (v: number) => {
+          scrollTop = v;
+        },
+      });
+      return () => scrollTop;
+    };
+
+    it('scrolls to bottom when messages grow while stuck', () => {
+      const { f, c } = setup();
+      f.detectChanges();
+      flushRender();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      const readTop = mockListMetrics(list, 0);
+      c.messages.set([...latest.messages, { ...m2, id: 99, body: '追記' }]);
+      f.detectChanges();
+      flushRender();
+      expect(readTop()).toBe(400);
+    });
+
+    it('does not scroll after the user leaves the bottom', () => {
+      const { f, c } = setup();
+      f.detectChanges();
+      flushRender();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      const readTop = mockListMetrics(list, 0);
+      list.dispatchEvent(new Event('scroll'));
+      c.messages.set([...latest.messages, { ...m2, id: 100, body: '上にいる間の返答' }]);
+      f.detectChanges();
+      flushRender();
+      expect(readTop()).toBe(0);
+    });
+
+    it('re-sticks on send then stays unstuck if user scrolls up before the reply', () => {
+      const pending = new Subject<ProjectAIChatPostResponse>();
+      const { f, c, api } = setup({ postProjectAIChat: vi.fn(() => pending) });
+      f.detectChanges();
+      flushRender();
+      c.draft.set('hi');
+      c.send();
+      expect(api.postProjectAIChat).toHaveBeenCalled();
+      flushRender();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      const readTop = mockListMetrics(list, 0);
+      list.dispatchEvent(new Event('scroll'));
+      pending.next(posted);
+      pending.complete();
+      f.detectChanges();
+      flushRender();
+      expect(readTop()).toBe(0);
+    });
+
+    it('keeps scroll position when a new conversation id is assigned after send', () => {
+      const pending = new Subject<ProjectAIChatPostResponse>();
+      const { f, c } = setup({
+        getLatestProjectAIChat: vi.fn(() => of(noChat)),
+        postProjectAIChat: vi.fn(() => pending),
+      });
+      f.detectChanges();
+      flushRender();
+      c.draft.set('first');
+      c.send();
+      flushRender();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      const readTop = mockListMetrics(list, 0);
+      list.dispatchEvent(new Event('scroll'));
+      pending.next(postedNew);
+      pending.complete();
+      f.detectChanges();
+      flushRender();
+      expect(readTop()).toBe(0);
+    });
+
+    it('does not scroll the list while loading has no list', () => {
+      const pending = new Subject<ProjectAIChatView>();
+      const { f, c } = setup({ getLatestProjectAIChat: vi.fn(() => pending) });
+      f.detectChanges();
+      flushRender();
+      expect(f.nativeElement.querySelector('.ai-chat-list')).toBeNull();
+      expect(c.loading()).toBe(true);
+      pending.next(latest);
+      pending.complete();
+      f.detectChanges();
+      flushRender();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      expect(list).toBeTruthy();
+      const readTop = mockListMetrics(list, 0);
+      c.messages.set([...latest.messages, { ...m2, id: 101, body: 'load後' }]);
+      f.detectChanges();
+      flushRender();
+      expect(readTop()).toBe(400);
     });
   });
 
