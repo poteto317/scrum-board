@@ -173,8 +173,10 @@ func (h handler) prepareProjectChatReplace(w http.ResponseWriter, r *http.Reques
 	if req.ReplaceFromMessageID == nil {
 		return nil, false, true
 	}
+	// Invariant: decode requires conversationId with replace; resolve returns that
+	// conversation or 404 before we get here (conversation is never nil for replace).
 	if conversation == nil {
-		invalid(w, msgProjectChatReplaceNeedsConversation)
+		fail(w, errors.New("replaceFromMessageId without resolved conversation"))
 		return nil, false, false
 	}
 	msgs, err := h.repo.ListProjectAIMessages(r.Context(), projectID, userID, conversation.ID)
