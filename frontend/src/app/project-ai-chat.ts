@@ -170,7 +170,6 @@ export class ProjectAiChat implements OnChanges {
       deleting: this.deleting(),
     }),
   );
-  readonly canDeleteShown = computed(() => !this.actionsLocked() && this.conversationId() != null);
   readonly listView = computed(() =>
     conversationListView({
       layout: this.layout(),
@@ -601,12 +600,8 @@ export class ProjectAiChat implements OnChanges {
     this.error.set(errorMessage(err));
   }
 
-  deleteShownConversation() {
-    const conversationId = this.conversationId();
-    if (conversationId != null) this.deleteConversation(conversationId);
-  }
-
-  deleteConversation(conversationId: number) {
+  deleteConversation(conversationId: number, event?: MouseEvent) {
+    if (event && event.detail > 1) return;
     if (this.actionsLocked()) return;
     if (!window.confirm(PROJECT_AI_CONVERSATION_DELETE_CONFIRM)) return;
     this.deleteRequest?.unsubscribe();
