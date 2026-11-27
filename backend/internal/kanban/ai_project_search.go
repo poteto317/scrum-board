@@ -66,13 +66,18 @@ func itemSearchViewSQL(v ItemSearchViewer) (string, []any) {
 		" AND e.capability COLLATE utf8mb4_0900_bin IN ('" + ACLCapabilityView + "','" + ACLCapabilityEdit + "')))))", []any{v.UserID, v.UserID}
 }
 
-// projectItemSearchSQL builds the search query. LIKE uses the default escape character (backslash).
+// projectItemSearchSQL builds the search query. projectID > 0 limits to that project; 0 means
+// every project (cross-project search). LIKE uses the default escape character (backslash).
 // Who may view an item is decided here, before the LIMIT: a match the viewer may not see takes
 // none of the rows, so neither the row count nor "there are more" says anything about it.
 func projectItemSearchSQL(projectID int64, s ItemSearch) (string, []any) {
 	var b strings.Builder
-	b.WriteString("SELECT " + cardFields + numberedCards + " WHERE c.project_id=? AND c.deleted_at IS NULL")
-	args := []any{projectID}
+	b.WriteString("SELECT " + cardFields + numberedCards + " WHERE c.deleted_at IS NULL")
+	args := []any{}
+	if projectID > 0 {
+		b.WriteString(" AND c.project_id=?")
+		args = append(args, projectID)
+	}
 	viewSQL, viewArgs := itemSearchViewSQL(s.Viewer)
 	b.WriteString(" AND " + viewSQL)
 	args = append(args, viewArgs...)
@@ -115,6 +120,15 @@ func projectItemSearchSQL(projectID int64, s ItemSearch) (string, []any) {
 // SearchProjectItems filters and orders the project's living items (archived ones included,
 // trashed ones not) that s.Viewer may view, and returns at most maxItemSearchMatches+1 of them.
 func (r MySQLRepository) SearchProjectItems(ctx context.Context, projectID int64, s ItemSearch) ([]Item, error) {
+	return r.searchItems(ctx, projectID, s)
+}
+
+// SearchViewableItems is SearchProjectItems across every project (no project_id filter).
+func (r MySQLRepository) SearchViewableItems(ctx context.Context, s ItemSearch) ([]Item, error) {
+	return r.searchItems(ctx, 0, s)
+}
+
+func (r MySQLRepository) searchItems(ctx context.Context, projectID int64, s ItemSearch) ([]Item, error) {
 	query, args := projectItemSearchSQL(projectID, s)
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
