@@ -20,6 +20,9 @@ type memoryRepo struct {
 	next               int64
 	templates          []CommandTemplate
 	nextTemplateID     int64
+	itemTemplates      []ItemTemplate
+	nextItemTemplateID int64
+	itemTemplateSeedFail error
 	cardTemplateIDs    map[int64][]int64
 	defaultTemplateIDs []int64
 	settings           BoardSettings
@@ -73,8 +76,9 @@ func fresh() *memoryRepo {
 		columns:         []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}},
 		cards:           map[int64]Item{},
 		next:            1,
-		nextTemplateID:  1,
-		cardTemplateIDs: map[int64][]int64{},
+		nextTemplateID:     1,
+		nextItemTemplateID: 1,
+		cardTemplateIDs:    map[int64][]int64{},
 		settings:        BoardSettings{CardLayout: CardLayoutPack, MobileBoardColumnID: 1, ActiveProjectID: 1},
 		projects:        []Project{{ID: 1, Name: "メイン", Position: 0}},
 		nextProject:     2,
@@ -1147,6 +1151,109 @@ func (m *memoryRepo) DeleteCommandTemplate(_ context.Context, id int64) error {
 		for cardID, ids := range m.cardTemplateIDs {
 			m.cardTemplateIDs[cardID] = removeID(ids, id)
 		}
+		return nil
+	}
+	return ErrNotFound
+}
+
+func (m *memoryRepo) ListItemTemplatesEnsuringSeeds(ctx context.Context, projectID int64) ([]ItemTemplate, error) {
+	if err := m.EnsureItemTemplateSeeds(ctx, projectID); err != nil {
+		return nil, err
+	}
+	return m.ListItemTemplates(ctx, projectID)
+}
+
+func (m *memoryRepo) ListItemTemplates(_ context.Context, projectID int64) ([]ItemTemplate, error) {
+	out := []ItemTemplate{}
+	for _, item := range m.itemTemplates {
+		if item.ProjectID == projectID {
+			out = append(out, item)
+		}
+	}
+	slices.SortFunc(out, func(a, b ItemTemplate) int {
+		if c := cmp.Compare(a.Position, b.Position); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return out, nil
+}
+
+func (m *memoryRepo) EnsureItemTemplateSeeds(_ context.Context, projectID int64) error {
+	if m.itemTemplateSeedFail != nil {
+		return m.itemTemplateSeedFail
+	}
+	if !m.projectExists(projectID) {
+		return ErrNotFound
+	}
+	for _, item := range m.itemTemplates {
+		if item.ProjectID == projectID {
+			return nil
+		}
+	}
+	if m.nextItemTemplateID < 1 {
+		m.nextItemTemplateID = 1
+	}
+	for i, seed := range defaultItemTemplateSeeds() {
+		m.itemTemplates = append(m.itemTemplates, ItemTemplate{
+			ID: m.nextItemTemplateID, ProjectID: projectID,
+			Name: seed.Name, TitleTemplate: seed.TitleTemplate, DescriptionTemplate: seed.DescriptionTemplate,
+			Position: i,
+		})
+		m.nextItemTemplateID++
+	}
+	return nil
+}
+
+func (m *memoryRepo) CreateItemTemplate(_ context.Context, projectID int64, in ItemTemplateInput) (ItemTemplate, error) {
+	if !m.projectExists(projectID) {
+		return ItemTemplate{}, ErrNotFound
+	}
+	if m.nextItemTemplateID < 1 {
+		m.nextItemTemplateID = 1
+	}
+	maxPos := -1
+	for _, item := range m.itemTemplates {
+		if item.ProjectID == projectID && item.Position > maxPos {
+			maxPos = item.Position
+		}
+	}
+	item := ItemTemplate{
+		ID: m.nextItemTemplateID, ProjectID: projectID,
+		Name: in.Name, TitleTemplate: in.TitleTemplate, DescriptionTemplate: in.DescriptionTemplate,
+		Position: maxPos + 1,
+	}
+	m.nextItemTemplateID++
+	m.itemTemplates = append(m.itemTemplates, item)
+	return item, nil
+}
+
+func (m *memoryRepo) UpdateItemTemplate(_ context.Context, projectID, id int64, p ItemTemplatePatch) (ItemTemplate, error) {
+	for i, item := range m.itemTemplates {
+		if item.ID != id || item.ProjectID != projectID {
+			continue
+		}
+		if p.Name != nil {
+			item.Name = *p.Name
+		}
+		if p.TitleTemplate != nil {
+			item.TitleTemplate = *p.TitleTemplate
+		}
+		if p.DescriptionTemplate != nil {
+			item.DescriptionTemplate = *p.DescriptionTemplate
+		}
+		m.itemTemplates[i] = item
+		return item, nil
+	}
+	return ItemTemplate{}, ErrNotFound
+}
+
+func (m *memoryRepo) DeleteItemTemplate(_ context.Context, projectID, id int64) error {
+	for i, item := range m.itemTemplates {
+		if item.ID != id || item.ProjectID != projectID {
+			continue
+		}
+		m.itemTemplates = append(m.itemTemplates[:i], m.itemTemplates[i+1:]...)
 		return nil
 	}
 	return ErrNotFound

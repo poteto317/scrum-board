@@ -111,6 +111,9 @@ func run() error {
 		err = repo.InitializeCommandTemplates(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeItemTemplates(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeItemCommandTemplates(migrationCtx)
 	}
 	if err == nil {
