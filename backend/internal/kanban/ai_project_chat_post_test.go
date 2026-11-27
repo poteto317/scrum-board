@@ -294,7 +294,7 @@ func TestLoadProjectChatInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := handler{repo: repo, historyTurns: 20}
-	in, err := h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, &mine, projectAIChatRequest{Message: "new q"})
+	in, err := h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, &mine, projectAIChatRequest{Message: "new q"}, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +305,7 @@ func TestLoadProjectChatInput(t *testing.T) {
 		t.Fatalf("columns=%d history=%d turns=%+v", len(in.columns), len(in.history), in.turns)
 	}
 	// 新しい会話は、履歴なし（空の配列で、nil ではない）。
-	in, err = h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, nil, projectAIChatRequest{Message: "new q"})
+	in, err = h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, nil, projectAIChatRequest{Message: "new q"}, nil, false)
 	if err != nil || in.history == nil || len(in.history) != 0 || len(in.turns) != 1 || in.turns[0].Body != "new q" {
 		t.Fatalf("a new conversation has no history: err=%v history=%+v turns=%+v", err, in.history, in.turns)
 	}

@@ -2342,7 +2342,14 @@ paths:
         - `"newConversation": true`: 新しい会話を作って、そこに保存する。`conversationId` と一緒には指定できない（400）。
         - どちらも付けない（`conversationId` が null、`newConversation` が false も同じ）: いちばん新しい会話に続ける。
           会話が 1 つも無ければ、新しく作る。
-        モデルに渡す履歴は、保存先の会話の直近 `AI_CHAT_HISTORY_TURNS` 往復だけ（新しい会話なら履歴なし。ほかの会話の履歴は渡らない）。
+        `replaceFromMessageId`（任意・正の整数）を付けると、そのユーザーメッセージ以降を置き換えて再送信する（編集・やり直し）。
+        - `conversationId` 必須。`newConversation: true` との併用は 400。
+        - 対象は表示中会話の、時系列で最後の user メッセージだけ。メッセージが無い・他ユーザー・他会話・role が user でない・それより新しい user があるときは 400
+          「編集対象のメッセージが不正です。」（モデルは呼ばない。履歴は変えない）。
+        - モデル入力はメモリ上で `id < replaceFromMessageId` の履歴だけ。モデル失敗・保存失敗では DB を変えない。
+        - 成功時のみ、1 トランザクションで `id >= replaceFromMessageId` を削除してから新 user＋新 assistant を保存する（提案は CASCADE 削除）。
+        モデルに渡す履歴は、保存先の会話の直近 `AI_CHAT_HISTORY_TURNS` 往復だけ（新しい会話なら履歴なし。ほかの会話の履歴は渡らない。
+        `replaceFromMessageId` 指定時は上記の切り詰めた履歴からさらに直近往復）。
         保存先の会話は、モデルを呼ぶ前に決める。モデルを待つ間にその会話が消されたときは、回答を捨てずに、新しい会話として保存する
         （応答の `conversation.id` が、送った `conversationId` と違う）。
         新しい会話のタイトルは、最初のメッセージから作る（空白の並びを 1 つの空白にして、先頭の 40 文字。超えたら末尾に「…」）。
@@ -2387,9 +2394,13 @@ paths:
         '400':
           description: |
             本文が不正（JSON でない、未知のフィールド、メッセージが空・長すぎる・制御文字、focusItemNumber が整数でない・0 以下、
-            conversationId が整数でない、newConversation が真偽値でない）、
+            conversationId が整数でない、newConversation が真偽値でない、replaceFromMessageId が整数でない）、
             conversationId が 0 以下（「会話IDが不正です。」）、
             conversationId と `"newConversation": true` を両方指定（「conversationId と newConversation は同時に指定できません。」）、
+            replaceFromMessageId が 0 以下（「replaceFromMessageId は正の整数を指定してください。」）、
+            replaceFromMessageId と `"newConversation": true` を両方指定（「replaceFromMessageId と newConversation は同時に指定できません。」）、
+            replaceFromMessageId があるのに conversationId が無い（「replaceFromMessageId を指定するときは conversationId が必要です。」）、
+            replaceFromMessageId の対象が不正（「編集対象のメッセージが不正です。」。無い・他ユーザー・他会話・role≠user・直前の user でない）、
             またはプロジェクト ID が不正
           content:
             application/json:
@@ -2485,10 +2496,18 @@ paths:
                   - type: integer
                     minimum: 1
                   - type: 'null'
-                  description: 続ける会話の ID。省略・null は「指定なし」（`newConversation` も無ければ、いちばん新しい会話に続ける）。
+                  description: 続ける会話の ID。省略・null は「指定なし」（`newConversation` も無ければ、いちばん新しい会話に続ける）。`replaceFromMessageId` を付けるときは必須。
                 newConversation:
                   type: boolean
-                  description: true なら新しい会話を作る。`conversationId` と一緒には指定できない。省略・false は「指定なし」。
+                  description: true なら新しい会話を作る。`conversationId` および `replaceFromMessageId` と一緒には指定できない。省略・false は「指定なし」。
+                replaceFromMessageId:
+                  oneOf:
+                  - type: integer
+                    minimum: 1
+                  - type: 'null'
+                  description: |
+                    編集・やり直しの起点。正の整数のとき、その user メッセージ（当該会話の直前の user のみ）以降を置き換えて再送信する。
+                    `conversationId` 必須。`newConversation` と併用不可。省略・null は通常の追記送信。
               additionalProperties: false
     delete:
       summary: プロジェクト AI チャットの会話を全部消す

@@ -51,13 +51,19 @@ func (h handler) postProjectAIChat(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// replaceFromMessageId is checked before admit (400 before 503/429) and before any DELETE.
+	// One List: validated truncated history is passed to load so admit 後に再 List しない.
+	replaceHistory, replaceListed, ok := h.prepareProjectChatReplace(w, r, project.ID, user.ID, conversation, req)
+	if !ok {
+		return
+	}
 	admission, ok := h.admitProjectChat(w, r, user.ID)
 	if !ok {
 		return
 	}
 	defer admission.release()
 
-	in, err := h.loadProjectChatInput(r.Context(), project, &user, conversation, req)
+	in, err := h.loadProjectChatInput(r.Context(), project, &user, conversation, req, replaceHistory, replaceListed)
 	if err != nil {
 		fail(w, err)
 		return
@@ -76,9 +82,17 @@ func (h handler) postProjectAIChat(w http.ResponseWriter, r *http.Request) {
 	}
 	turn := ProjectAITurn{Title: projectAIConversationTitle(req.Message), UserBody: req.Message,
 		AssistantBody: answer.text, InputTokens: answer.inTok, OutputTokens: answer.outTok, Proposals: answer.proposals}
-	stored, err := h.storeProjectChatTurn(r.Context(), project.ID, user.ID, conversation, turn)
+	stored, err := h.storeProjectChatTurn(r.Context(), project.ID, user.ID, conversation, turn, req.ReplaceFromMessageID)
 	if err != nil {
-		projectChatStorageFailed(w, "append")
+		if errors.Is(err, ErrProjectAIReplaceStale) {
+			invalid(w, msgProjectChatReplaceInvalid)
+			return
+		}
+		stage := "append"
+		if req.ReplaceFromMessageID != nil {
+			stage = "replace"
+		}
+		projectChatStorageFailed(w, stage)
 		return
 	}
 	before := projectChatHistoryInStored(stored.ID, projectChatConversationID(conversation), in.history)
@@ -94,7 +108,17 @@ type projectAIChatRequest struct {
 	// the message continues the latest conversation. Both together are refused.
 	ConversationID  *int64 `json:"conversationId"`
 	NewConversation bool   `json:"newConversation"`
+	// ReplaceFromMessageID, when set, replaces that user message and everything after it.
+	// Requires ConversationID; refused with NewConversation.
+	ReplaceFromMessageID *int64 `json:"replaceFromMessageId"`
 }
+
+const (
+	msgProjectChatReplaceAndNew            = "replaceFromMessageId と newConversation は同時に指定できません。"
+	msgProjectChatReplaceNeedsConversation = "replaceFromMessageId を指定するときは conversationId が必要です。"
+	msgProjectChatReplaceInvalidID         = "replaceFromMessageId は正の整数を指定してください。"
+	msgProjectChatReplaceInvalid           = "編集対象のメッセージが不正です。"
+)
 
 // decodeProjectChatRequest reads and checks the body. It answers 415 or 400 itself.
 // The returned Message is the normalized one.
@@ -124,8 +148,45 @@ func (h handler) decodeProjectChatRequest(w http.ResponseWriter, r *http.Request
 		invalid(w, msgProjectChatConversationAndNew)
 		return projectAIChatRequest{}, false
 	}
+	if req.ReplaceFromMessageID != nil {
+		if *req.ReplaceFromMessageID <= 0 {
+			invalid(w, msgProjectChatReplaceInvalidID)
+			return projectAIChatRequest{}, false
+		}
+		if req.NewConversation {
+			invalid(w, msgProjectChatReplaceAndNew)
+			return projectAIChatRequest{}, false
+		}
+		if req.ConversationID == nil {
+			invalid(w, msgProjectChatReplaceNeedsConversation)
+			return projectAIChatRequest{}, false
+		}
+	}
 	req.Message = msg
 	return req, true
+}
+
+// prepareProjectChatReplace checks replaceFromMessageId (missing / not user / not last user → 400)
+// before admit and any DELETE. When replacing, listed is true and history is the truncated slice
+// for the model (may be empty). When not replacing, listed is false and load Lists as usual.
+func (h handler) prepareProjectChatReplace(w http.ResponseWriter, r *http.Request, projectID, userID int64, conversation *ProjectAIConversation, req projectAIChatRequest) (history []ProjectAIMessage, listed, ok bool) {
+	if req.ReplaceFromMessageID == nil {
+		return nil, false, true
+	}
+	if conversation == nil {
+		invalid(w, msgProjectChatReplaceNeedsConversation)
+		return nil, false, false
+	}
+	msgs, err := h.repo.ListProjectAIMessages(r.Context(), projectID, userID, conversation.ID)
+	if err != nil {
+		fail(w, err)
+		return nil, false, false
+	}
+	if !projectChatReplaceTargetOK(msgs, *req.ReplaceFromMessageID) {
+		invalid(w, msgProjectChatReplaceInvalid)
+		return nil, false, false
+	}
+	return projectChatHistoryBeforeReplace(msgs, *req.ReplaceFromMessageID), true, true
 }
 
 // ---- 2. the conversation: ai_project_chat_conversation.go ----
@@ -206,7 +267,8 @@ type projectChatInput struct {
 
 // loadProjectChatInput reads the columns, the open item and the history (in this order). The
 // history is the one of the conversation the message continues; a new conversation has none.
-func (h handler) loadProjectChatInput(ctx context.Context, project Project, user *User, conversation *ProjectAIConversation, req projectAIChatRequest) (projectChatInput, error) {
+// When replaceListed is true, replaceHistory (possibly empty) is used as-is; otherwise List.
+func (h handler) loadProjectChatInput(ctx context.Context, project Project, user *User, conversation *ProjectAIConversation, req projectAIChatRequest, replaceHistory []ProjectAIMessage, replaceListed bool) (projectChatInput, error) {
 	columns, err := h.repo.Columns(ctx)
 	if err != nil {
 		return projectChatInput{}, err
@@ -216,7 +278,12 @@ func (h handler) loadProjectChatInput(ctx context.Context, project Project, user
 		return projectChatInput{}, err
 	}
 	history := []ProjectAIMessage{}
-	if conversation != nil {
+	if replaceListed {
+		history = replaceHistory
+		if history == nil {
+			history = []ProjectAIMessage{}
+		}
+	} else if conversation != nil {
 		if history, err = h.repo.ListProjectAIMessages(ctx, project.ID, user.ID, conversation.ID); err != nil {
 			return projectChatInput{}, err
 		}
@@ -375,10 +442,19 @@ func projectChatStorageFailed(w http.ResponseWriter, stage string) {
 // the conversation it went to. That is a new one too when the intended conversation was
 // deleted while the model was working: the answer is paid for and is not dropped. For the same
 // reason it is stored even when the client has gone away (it shows up when the chat is opened
-// again). It may take projectChatStoreTimeout, which projectChatContext keeps free.
-func (h handler) storeProjectChatTurn(ctx context.Context, projectID, userID int64, conversation *ProjectAIConversation, turn ProjectAITurn) (ProjectAIConversation, error) {
+// again). When replaceFromMessageID is set, truncate and append run in one transaction
+// (ReplaceAndAppendProjectAITurn). It may take projectChatStoreTimeout, which projectChatContext
+// keeps free.
+func (h handler) storeProjectChatTurn(ctx context.Context, projectID, userID int64, conversation *ProjectAIConversation, turn ProjectAITurn, replaceFromMessageID *int64) (ProjectAIConversation, error) {
 	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), projectChatStoreTimeout)
 	defer cancel()
+	if replaceFromMessageID != nil {
+		cid := projectChatConversationID(conversation)
+		if cid == nil {
+			return h.repo.AppendProjectAITurn(storeCtx, projectID, userID, nil, turn)
+		}
+		return h.repo.ReplaceAndAppendProjectAITurn(storeCtx, projectID, userID, *cid, *replaceFromMessageID, turn)
+	}
 	return h.repo.AppendProjectAITurn(storeCtx, projectID, userID, projectChatConversationID(conversation), turn)
 }
 
