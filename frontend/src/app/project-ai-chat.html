@@ -181,6 +181,15 @@
             (keydown.enter)="onComposeKeydown($event)"
           ></textarea>
           <div class="ai-chat-compose-actions">
+            <label class="ai-chat-cross-project">
+              <input
+                type="checkbox"
+                name="crossProjectSearch"
+                [ngModel]="crossProjectSearch()"
+                (ngModelChange)="setCrossProjectSearch($event)"
+              />
+              プロジェクト横断で検索
+            </label>
             @if (editing()) {
               <button
                 type="button"

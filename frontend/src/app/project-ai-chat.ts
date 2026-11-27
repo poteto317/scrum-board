@@ -71,6 +71,13 @@ import {
   upsertConversationFirst,
 } from './project-ai-conversations';
 import { canScheduleStickScroll, isNearBottom, scrollElementToBottom } from './ai-chat-scroll';
+import {
+  CROSS_PROJECT_SEARCH_KEY,
+  readCrossProjectSearch,
+  writeCrossProjectSearch,
+} from './project-ai-chat-cross-project-prefs';
+
+export { CROSS_PROJECT_SEARCH_KEY };
 
 @Component({
   selector: 'app-project-ai-chat',
@@ -124,6 +131,8 @@ export class ProjectAiChat implements OnChanges {
   readonly listError = this.conversationList.error.asReadonly();
   readonly historyOpen = signal(false);
   readonly draft = signal('');
+  /** プロジェクト横断検索（localStorage に保存。送信中も変更可） */
+  readonly crossProjectSearch = signal(readCrossProjectSearch());
   /** 編集中の直前 user メッセージ id。null は通常送信 */
   readonly editingFromMessageId = signal<number | null>(null);
   /** 最初の読み込み（表示する会話を決める）の途中 */
@@ -527,6 +536,7 @@ export class ProjectAiChat implements OnChanges {
     this.error.set('');
     // 送信中に別のアイテムへ移っても、同じプロジェクトなら回答は表示する（focusItem は比べない）
     const focusNumber = this.focusItem()?.number;
+    const cross = this.crossProjectSearch();
     const req =
       target.replaceFrom != null
         ? this.api.postProjectAIChat(
@@ -535,8 +545,16 @@ export class ProjectAiChat implements OnChanges {
             target.conversation,
             focusNumber,
             target.replaceFrom,
+            cross,
           )
-        : this.api.postProjectAIChat(scope.projectId, draft.text, target.conversation, focusNumber);
+        : this.api.postProjectAIChat(
+            scope.projectId,
+            draft.text,
+            target.conversation,
+            focusNumber,
+            undefined,
+            cross,
+          );
     this.sendRequest = req.subscribe({
       next: (res) => {
         if (this.stillCurrent(scope)) this.onSent(target.sentTo, res);
@@ -715,5 +733,10 @@ export class ProjectAiChat implements OnChanges {
 
   private stillCurrent(scope: ChatScope) {
     return sameChatScope(scope, this.scope());
+  }
+
+  setCrossProjectSearch(on: boolean) {
+    this.crossProjectSearch.set(on);
+    writeCrossProjectSearch(on);
   }
 }
