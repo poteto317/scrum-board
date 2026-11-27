@@ -252,9 +252,21 @@ func (m *memoryRepo) searchViewerCanView(card Item, v ItemSearchViewer) bool {
 
 // SearchProjectItems mirrors projectItemSearchSQL: same filters (the view check included), same order, at most 201 rows.
 func (m *memoryRepo) SearchProjectItems(_ context.Context, projectID int64, s ItemSearch) ([]Item, error) {
+	return m.searchItems(projectID, s)
+}
+
+// SearchViewableItems mirrors projectItemSearchSQL with projectID 0 (all projects).
+func (m *memoryRepo) SearchViewableItems(_ context.Context, s ItemSearch) ([]Item, error) {
+	return m.searchItems(0, s)
+}
+
+func (m *memoryRepo) searchItems(projectID int64, s ItemSearch) ([]Item, error) {
 	out := make([]Item, 0)
 	for _, card := range m.cards {
-		if !m.living(card) || m.cardProjectID(card) != projectID {
+		if !m.living(card) {
+			continue
+		}
+		if projectID > 0 && m.cardProjectID(card) != projectID {
 			continue
 		}
 		if !m.searchViewerCanView(card, s.Viewer) {

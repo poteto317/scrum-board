@@ -121,19 +121,42 @@ describe('Api', () => {
     api.postProjectAIChat(4, '期限が近いものは', 9).subscribe();
     const req = http.expectOne('/api/projects/4/ai-chat');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ message: '期限が近いものは', conversationId: 9 });
+    expect(req.request.body).toEqual({
+      message: '期限が近いものは',
+      conversationId: 9,
+      crossProjectSearch: false,
+    });
     req.flush({ conversation: {}, assistant: {}, messages: [] });
   });
   it('posts a project AI chat message as a new conversation', () => {
     api.postProjectAIChat(4, '期限が近いものは', 'new').subscribe();
     const req = http.expectOne('/api/projects/4/ai-chat');
-    expect(req.request.body).toEqual({ message: '期限が近いものは', newConversation: true });
+    expect(req.request.body).toEqual({
+      message: '期限が近いものは',
+      newConversation: true,
+      crossProjectSearch: false,
+    });
     req.flush({ conversation: {}, assistant: {}, messages: [] });
   });
   it('posts a project AI chat message with the open item number', () => {
     api.postProjectAIChat(4, '要約して', 9, 12).subscribe();
     const req = http.expectOne('/api/projects/4/ai-chat');
-    expect(req.request.body).toEqual({ message: '要約して', focusItemNumber: 12, conversationId: 9 });
+    expect(req.request.body).toEqual({
+      message: '要約して',
+      focusItemNumber: 12,
+      conversationId: 9,
+      crossProjectSearch: false,
+    });
+    req.flush({ conversation: {}, assistant: {}, messages: [] });
+  });
+  it('posts crossProjectSearch true when requested', () => {
+    api.postProjectAIChat(4, '横断', 9, undefined, undefined, true).subscribe();
+    const req = http.expectOne('/api/projects/4/ai-chat');
+    expect(req.request.body).toEqual({
+      message: '横断',
+      conversationId: 9,
+      crossProjectSearch: true,
+    });
     req.flush({ conversation: {}, assistant: {}, messages: [] });
   });
   it('sends the selected status as columnId', () => {

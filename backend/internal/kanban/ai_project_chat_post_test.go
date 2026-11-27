@@ -159,6 +159,18 @@ func TestDecodeProjectChatRequest(t *testing.T) {
 	if req, ok, _ = post("application/json", `{"message":"q","conversationId":7,"newConversation":false}`); !ok || req.ConversationID == nil || req.NewConversation {
 		t.Fatalf("an id with newConversation false is the id: ok=%v req=%+v", ok, req)
 	}
+	if req, ok, _ = post("application/json", `{"message":"q"}`); !ok || req.CrossProjectSearch != nil || req.crossProjectSearchEnabled() {
+		t.Fatalf("cross omitted: ok=%v req=%+v", ok, req)
+	}
+	if req, ok, _ = post("application/json", `{"message":"q","crossProjectSearch":false}`); !ok || req.CrossProjectSearch == nil || *req.CrossProjectSearch || req.crossProjectSearchEnabled() {
+		t.Fatalf("cross false: ok=%v req=%+v", ok, req)
+	}
+	if req, ok, _ = post("application/json", `{"message":"q","crossProjectSearch":true}`); !ok || !req.crossProjectSearchEnabled() {
+		t.Fatalf("cross true: ok=%v req=%+v", ok, req)
+	}
+	if req, ok, _ = post("application/json", `{"message":"q","crossProjectSearch":null}`); !ok || req.CrossProjectSearch != nil || req.crossProjectSearchEnabled() {
+		t.Fatalf("cross null: ok=%v req=%+v", ok, req)
+	}
 	for body, want := range map[string]string{
 		`{"message":"q","conversationId":0}`:                        "会話IDが不正です。",
 		`{"message":"q","conversationId":-3}`:                       "会話IDが不正です。",
@@ -166,6 +178,8 @@ func TestDecodeProjectChatRequest(t *testing.T) {
 		`{"message":"q","conversationId":"7"}`:                      "入力を確認してください。有効なJSONが必要です。",
 		`{"message":"q","conversationId":1.5}`:                      "入力を確認してください。有効なJSONが必要です。",
 		`{"message":"q","newConversation":"yes"}`:                   "入力を確認してください。有効なJSONが必要です。",
+		`{"message":"q","crossProjectSearch":"yes"}`:                "入力を確認してください。有効なJSONが必要です。",
+		`{"message":"q","crossProjectSearch":1}`:                    "入力を確認してください。有効なJSONが必要です。",
 	} {
 		if _, ok, w := post("application/json", body); ok || w.Code != 400 || decodeError(t, w).Message != want || decodeError(t, w).Code != "" {
 			t.Fatalf("%s: ok=%v status=%d body=%s", body, ok, w.Code, w.Body.String())
@@ -304,6 +318,20 @@ func TestLoadProjectChatInput(t *testing.T) {
 	if len(in.columns) != 3 || len(in.history) != 2 || len(in.turns) != 3 || in.turns[0].Body != "old q" || in.turns[2].Body != "new q" {
 		t.Fatalf("columns=%d history=%d turns=%+v", len(in.columns), len(in.history), in.turns)
 	}
+	if in.crossProject || len(in.projectNames) != 1 || in.projectNames[1] != "Alpha" {
+		t.Fatalf("off names: cross=%v names=%v", in.crossProject, in.projectNames)
+	}
+	if _, err := repo.CreateProject(ctx, "Beta"); err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	in, err = h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, &mine, projectAIChatRequest{Message: "new q", CrossProjectSearch: &on}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !in.crossProject || !strings.Contains(in.system, "横断検索がオン") || len(in.projectNames) < 2 {
+		t.Fatalf("on cross: cross=%v systemCross=%v names=%v", in.crossProject, strings.Contains(in.system, "横断検索がオン"), in.projectNames)
+	}
 	// 新しい会話は、履歴なし（空の配列で、nil ではない）。
 	in, err = h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &User{ID: 7}, nil, projectAIChatRequest{Message: "new q"}, nil, false)
 	if err != nil || in.history == nil || len(in.history) != 0 || len(in.turns) != 1 || in.turns[0].Body != "new q" {
@@ -320,7 +348,7 @@ func TestNewProjectChatInput(t *testing.T) {
 		{Role: AIRoleUser, Body: "q2"}, {Role: AIRoleAssistant, Body: "a2"},
 	}
 	focus := &projectChatFocus{Item: Item{Number: 12, Title: "開いているもの"}}
-	in := newProjectChatInput("Alpha", now, columns, focus, history, "new q", 1)
+	in := newProjectChatInput("Alpha", now, columns, focus, history, "new q", 1, false, nil)
 	for _, want := range []string{"Alpha", "2026-11-27", "Todo", "Doing", "いま開いているアイテム（#12）", "開いているもの"} {
 		if !strings.Contains(in.system, want) {
 			t.Fatalf("system lacks %q:\n%s", want, in.system)
@@ -338,7 +366,44 @@ func TestNewProjectChatInput(t *testing.T) {
 	if len(in.history) != 4 || len(in.columns) != 2 {
 		t.Fatalf("history and columns are passed on whole: %d %d", len(in.history), len(in.columns))
 	}
-	if none := newProjectChatInput("Alpha", now, columns, nil, nil, "q", 20); strings.Contains(none.system, "いま開いているアイテム（") || len(none.turns) != 1 {
+	if none := newProjectChatInput("Alpha", now, columns, nil, nil, "q", 20, false, nil); strings.Contains(none.system, "いま開いているアイテム（") || len(none.turns) != 1 {
 		t.Fatalf("no focus, no history: %+v", none.turns)
+	}
+}
+
+
+func TestLoadProjectChatFocusStaysOnURLProjectWhenCross(t *testing.T) {
+	repo := fresh()
+	ctx := context.Background()
+	other, err := repo.CreateProject(ctx, "Other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	there, err := repo.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "elsewhere", ProjectID: &other.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := repo.users[0]
+	h := handler{repo: repo, historyTurns: 20}
+	on := true
+	n := there.Number // numbers are per-project; URL project has no item with this number yet
+	in, err := h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &admin, nil, projectAIChatRequest{Message: "q", CrossProjectSearch: &on, FocusItemNumber: &n}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(in.system, "# いま開いているアイテム") {
+		t.Fatalf("other-project-only focus must not enter system:\n%s", in.system)
+	}
+	here, err := repo.CreateItem(ctx, ItemInput{ColumnID: 1, Title: "here-focus"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n = here.Number
+	in, err = h.loadProjectChatInput(ctx, Project{ID: 1, Name: "Alpha"}, &admin, nil, projectAIChatRequest{Message: "q", CrossProjectSearch: &on, FocusItemNumber: &n}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(in.system, "# いま開いているアイテム") || !strings.Contains(in.system, "here-focus") {
+		t.Fatalf("URL focus must enter system:\n%s", in.system)
 	}
 }

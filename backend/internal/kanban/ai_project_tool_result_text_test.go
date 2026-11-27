@@ -71,13 +71,13 @@ func TestGetItemResultTextFallsBackToTheBudgetError(t *testing.T) {
 
 // getItemResultText is the text getItemResultWithDescription hands the model.
 func getItemResultText(item Item, comments []Comment, columns []Column, limit int) string {
-	text, _ := getItemResultWithDescription(item, comments, columns, limit)
+	text, _ := getItemResultWithDescription(item, comments, columns, limit, "")
 	return text
 }
 
 // fitGetItem is fitGetItemOut encoded, as getItemResultWithDescription encodes it.
 func fitGetItem(item Item, comments []Comment, columns []Column, limit int) (string, bool) {
-	out, ok := fitGetItemOut(item, comments, columns, limit)
+	out, ok := fitGetItemOut(item, comments, columns, limit, "")
 	if !ok {
 		return "", false
 	}

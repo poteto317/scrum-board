@@ -247,7 +247,7 @@ describe('AiChatFab', () => {
       expect(chat(f)).toBeTruthy();
       expect(api.getLatestProjectAIChat).toHaveBeenCalledWith(4);
       ask(f, '期限が近いものは');
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(4, '期限が近いものは', 5, undefined);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(4, '期限が近いものは', 5, undefined, undefined, false);
     });
 
     it('asks about the active project without picking an item on backlog', () => {
@@ -257,7 +257,7 @@ describe('AiChatFab', () => {
       openPanel(f);
       expect(f.nativeElement.querySelector('select')).toBeNull();
       ask(f, 'Doing は');
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(4, 'Doing は', 5, undefined);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(4, 'Doing は', 5, undefined, undefined, false);
     });
 
     it('shows no apply buttons on board', () => {
@@ -278,7 +278,7 @@ describe('AiChatFab', () => {
       openPanel(f);
       expect(api.getLatestProjectAIChat).toHaveBeenCalledWith(7);
       ask(f, '要約して');
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(7, '要約して', 5, 3);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(7, '要約して', 5, 3, undefined, false);
     });
 
     it('shows apply buttons only when the open item is editable', () => {
@@ -317,7 +317,7 @@ describe('AiChatFab', () => {
       expect(chat(f)).toBe(first);
       expect(api.getLatestProjectAIChat).toHaveBeenCalledTimes(1);
       ask(f, 'これは');
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'これは', 5, 4);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'これは', 5, 4, undefined, false);
     });
 
     it('keeps the chat and shows the in-flight answer when moving from one item detail to another', () => {

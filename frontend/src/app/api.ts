@@ -346,6 +346,7 @@ export class Api {
    * conversation は続ける会話の ID か、新しい会話を作る 'new'。
    * focusItemNumber はアイテム詳細から送るときだけ付ける。
    * replaceFromMessageId は直前 user メッセージの編集再送信時だけ付ける（conversation は ID 必須）。
+   * crossProjectSearch は常に boolean で送る（サーバがツール範囲の正とする）。
    */
   postProjectAIChat(
     projectId: number,
@@ -353,9 +354,11 @@ export class Api {
     conversation: ConversationRef,
     focusItemNumber?: number,
     replaceFromMessageId?: number,
+    crossProjectSearch = false,
   ) {
     const body = {
       message,
+      crossProjectSearch: !!crossProjectSearch,
       ...(focusItemNumber != null && focusItemNumber > 0 ? { focusItemNumber } : {}),
       ...(conversation === 'new' ? { newConversation: true } : { conversationId: conversation }),
       ...(replaceFromMessageId != null && replaceFromMessageId > 0

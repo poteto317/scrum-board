@@ -21,6 +21,7 @@ import {
 } from './ai-unavailable-copy';
 import { AuthSession } from './auth-session';
 import { ProjectAiChat } from './project-ai-chat';
+import { CROSS_PROJECT_SEARCH_KEY } from './project-ai-chat-cross-project-prefs';
 import type { ConversationRef } from './api';
 
 const c5: ProjectAIConversation = {
@@ -177,6 +178,7 @@ function actionsDisabled(f: Fixture) {
 
 describe('ProjectAiChat', () => {
   afterEach(() => {
+    localStorage.removeItem(CROSS_PROJECT_SEARCH_KEY);
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -277,7 +279,7 @@ describe('ProjectAiChat', () => {
       f.detectChanges();
       expect(input(f)!.disabled).toBe(false);
       c.send();
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'hi', 5, 3);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'hi', 5, 3, undefined, false);
     });
 
     it('cannot send after the first load failed', () => {
@@ -309,7 +311,7 @@ describe('ProjectAiChat', () => {
       expect(input(f)!.disabled).toBe(false);
       c.draft.set('hi');
       c.send();
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'hi', 'new', 3);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'hi', 'new', 3, undefined, false);
     });
 
     it('falls back to the latest conversation when the given one is gone (404)', () => {
@@ -616,7 +618,7 @@ describe('ProjectAiChat', () => {
       c.draft.set('新しい話題');
       c.send();
       f.detectChanges();
-      expect(postProjectAIChat).toHaveBeenCalledWith(1, '新しい話題', 'new', 3);
+      expect(postProjectAIChat).toHaveBeenCalledWith(1, '新しい話題', 'new', 3, undefined, false);
       expect(c.conversationId()).toBe(9);
       expect(c.messages()).toEqual([m9]);
       expect(listProjectAIConversations).toHaveBeenCalledTimes(2);
@@ -626,7 +628,7 @@ describe('ProjectAiChat', () => {
       // 続きは、できた会話に送る。同じ会話なので、一覧は読み直さない
       c.draft.set('続き');
       c.send();
-      expect(postProjectAIChat).toHaveBeenLastCalledWith(1, '続き', 9, 3);
+      expect(postProjectAIChat).toHaveBeenLastCalledWith(1, '続き', 9, 3, undefined, false);
       expect(listProjectAIConversations).toHaveBeenCalledTimes(2);
     });
 
@@ -657,7 +659,7 @@ describe('ProjectAiChat', () => {
       expect(rows(f).map((row) => row.getAttribute('aria-current'))).toEqual([null, 'true']);
       c.draft.set('続き');
       c.send();
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '続き', 4, 3);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '続き', 4, 3, undefined, false);
     });
 
     it('moves focus to the input when the picked row disappears with the list (dock)', async () => {
@@ -700,7 +702,7 @@ describe('ProjectAiChat', () => {
       f.detectChanges();
       expect(input(f)!.disabled).toBe(false);
       c.send();
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'hi', 4, 3);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, 'hi', 4, 3, undefined, false);
     });
 
     it('keeps the previous conversation and shows the error when switching fails (not 404)', () => {
@@ -966,12 +968,60 @@ describe('ProjectAiChat', () => {
     });
   });
 
+  describe('cross-project search', () => {
+    it('defaults off when localStorage throws (L-056)', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('quota');
+      });
+      const { c, f } = setup();
+      expect(c.crossProjectSearch()).toBe(false);
+      expect(f.nativeElement.querySelector('.ai-chat-cross-project')).toBeTruthy();
+    });
+
+    it('restores the checkbox from localStorage and posts the flag', () => {
+      localStorage.setItem(CROSS_PROJECT_SEARCH_KEY, '1');
+      const { f, c, api } = setup();
+      expect(c.crossProjectSearch()).toBe(true);
+      const box = f.nativeElement.querySelector(
+        '.ai-chat-cross-project input[type="checkbox"]',
+      ) as HTMLInputElement;
+      expect(box).toBeTruthy();
+      expect(box.disabled).toBe(false);
+      c.draft.set('横断して');
+      c.send();
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(
+        1,
+        '横断して',
+        5,
+        3,
+        undefined,
+        true,
+      );
+      c.setCrossProjectSearch(false);
+      expect(localStorage.getItem(CROSS_PROJECT_SEARCH_KEY)).toBe('0');
+      expect(box.disabled).toBe(false);
+    });
+
+    it('stays enabled while sending', () => {
+      const pending = new Subject<ProjectAIChatPostResponse>();
+      const { f, c } = setup({ postProjectAIChat: vi.fn(() => pending) });
+      c.draft.set('hi');
+      c.send();
+      f.detectChanges();
+      const box = f.nativeElement.querySelector(
+        '.ai-chat-cross-project input[type="checkbox"]',
+      ) as HTMLInputElement;
+      expect(box.disabled).toBe(false);
+      pending.next(posted);
+    });
+  });
+
   describe('send', () => {
     it('continues the shown conversation without focusItemNumber when no item is open', () => {
       const { c, api } = setup({}, { focusItem: null });
       c.draft.set('期限が近いものは');
       c.send();
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '期限が近いものは', 5, undefined);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '期限が近いものは', 5, undefined, undefined, false);
       expect(c.messages()).toEqual([m1, m2]);
       expect(c.draft()).toBe('');
       expect(c.sending()).toBe(false);
@@ -982,14 +1032,14 @@ describe('ProjectAiChat', () => {
       const { c, api } = setup();
       c.draft.set('要約して');
       c.send();
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '要約して', 5, 3);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '要約して', 5, 3, undefined, false);
     });
 
     it('sends the open item number even when the item is read-only', () => {
       const { c, api } = setup({}, { focusItem: { ...focus, canEdit: false } });
       c.draft.set('要約して');
       c.send();
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '要約して', 5, 3);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '要約して', 5, 3, undefined, false);
     });
 
     it('moves the conversation it sent to to the top of the list', () => {
@@ -1016,7 +1066,7 @@ describe('ProjectAiChat', () => {
       const { c, shown } = setup({ listProjectAIConversations, postProjectAIChat });
       c.draft.set('続き');
       c.send();
-      expect(postProjectAIChat).toHaveBeenCalledWith(1, '続き', 5, 3);
+      expect(postProjectAIChat).toHaveBeenCalledWith(1, '続き', 5, 3, undefined, false);
       expect(listProjectAIConversations).toHaveBeenCalledTimes(2);
       expect(c.conversations()).toEqual([c9, c4]);
       expect(c.conversationId()).toBe(9);
@@ -1113,7 +1163,7 @@ describe('ProjectAiChat', () => {
       const { c, shown } = setup({ listProjectAIConversations, postProjectAIChat });
       c.draft.set('続き');
       c.send();
-      expect(postProjectAIChat).toHaveBeenCalledWith(1, '続き', 5, 3);
+      expect(postProjectAIChat).toHaveBeenCalledWith(1, '続き', 5, 3, undefined, false);
       expect(listProjectAIConversations).toHaveBeenCalledTimes(2);
       expect(c.conversations()).toEqual([c4]);
       expect(c.conversationId()).toBeNull();
@@ -1124,7 +1174,7 @@ describe('ProjectAiChat', () => {
       expect(shown).toEqual([5, 'new']);
       // そのまま送り直すと、新しい会話になる
       c.send();
-      expect(postProjectAIChat).toHaveBeenLastCalledWith(1, '続き', 'new', 3);
+      expect(postProjectAIChat).toHaveBeenLastCalledWith(1, '続き', 'new', 3, undefined, false);
       expect(c.conversationId()).toBe(9);
       expect(c.draft()).toBe('');
       expect(c.conversations()).toEqual([c9, c4]);
@@ -1248,7 +1298,7 @@ describe('ProjectAiChat', () => {
       c.startEdit(m1);
       c.draft.set('直した');
       c.send();
-      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '直した', 5, 3, m1.id);
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '直した', 5, 3, m1.id, false);
     });
 
     it('replaces messages and clears editing when resend succeeds', () => {
@@ -1771,7 +1821,7 @@ describe('ProjectAiChat', () => {
       expect(sendingEvents).toEqual([true, false]);
       c.draft.set('again');
       c.send();
-      expect(postProjectAIChat).toHaveBeenLastCalledWith(2, 'again', 4, 3);
+      expect(postProjectAIChat).toHaveBeenLastCalledWith(2, 'again', 4, 3, undefined, false);
     });
 
     it('drops a stale delete response after projectId change', () => {

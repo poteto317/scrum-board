@@ -284,7 +284,7 @@ func TestUnstoredProjectChatTurnCarriesNoProposals(t *testing.T) {
 func TestProjectChatPromptLeavesProposalsOut(t *testing.T) {
 	history := []ProjectAIMessage{{Role: AIRoleUser, Body: "q"}, {Role: AIRoleAssistant, Body: "a", Proposals: []ProjectAIProposal{{
 		Kind: ProposalKindItemCreate, Title: ptrTo("PROPOSAL-TITLE"), Description: ptrTo("PROPOSAL-BODY")}}}}
-	in := newProjectChatInput("p", time.Now(), []Column{{ID: 1, Name: "Todo"}}, nil, history, "次", 10)
+	in := newProjectChatInput("p", time.Now(), []Column{{ID: 1, Name: "Todo"}}, nil, history, "次", 10, false, nil)
 	all := in.system
 	for _, turn := range in.turns {
 		all += turn.Body

@@ -13,22 +13,26 @@ import (
 // projectToolExecutor runs the tools of one user message for one user in one project.
 // It is used by one request only, one call at a time.
 type projectToolExecutor struct {
-	repo      Repository
-	projectID int64
-	user      *User
-	columns   []Column
-	budget    toolResultBudget
-	failed    error // first failure that must stop the loop
-	// proposals are the proposals accepted so far (at most maxProposalsPerQuestion).
-	proposals []ProjectAIProposalDraft
-	// readDescriptions are the descriptions get_item handed over whole in this question, by
-	// item number. A description edit replaces the whole text, so it is only accepted for an
-	// item whose whole current description the model has read (a clipped one would cut it).
+	repo           Repository
+	projectID      int64
+	user           *User
+	columns        []Column
+	crossProject   bool
+	projectNames   map[int64]string
+	budget         toolResultBudget
+	failed         error // first failure that must stop the loop
+	proposals      []ProjectAIProposalDraft
 	readDescriptions map[int64]string
 }
 
-func newProjectToolExecutor(repo Repository, projectID int64, user *User, columns []Column) *projectToolExecutor {
-	return &projectToolExecutor{repo: repo, projectID: projectID, user: user, columns: columns, budget: newToolResultBudget()}
+func newProjectToolExecutor(repo Repository, projectID int64, user *User, columns []Column, crossProject bool, projectNames map[int64]string) *projectToolExecutor {
+	if projectNames == nil {
+		projectNames = map[int64]string{}
+	}
+	return &projectToolExecutor{
+		repo: repo, projectID: projectID, user: user, columns: columns,
+		crossProject: crossProject, projectNames: projectNames, budget: newToolResultBudget(),
+	}
 }
 
 // Proposals are the proposals the tools accepted, to store with the answer.
@@ -77,7 +81,11 @@ func (e *projectToolExecutor) viewable(ctx context.Context, items []Item) ([]Ite
 			return nil, err
 		}
 	}
-	return viewableProjectItems(items, entries, e.projectID, e.user), nil
+	return viewableProjectItems(items, entries, e.projectID, e.user, e.crossProject), nil
+}
+
+func (e *projectToolExecutor) projectName(id int64) string {
+	return e.projectNames[id]
 }
 
 func (e *projectToolExecutor) searchItems(ctx context.Context, raw json.RawMessage, limit int) (string, error) {
@@ -88,11 +96,16 @@ func (e *projectToolExecutor) searchItems(ctx context.Context, raw json.RawMessa
 	if plan.UnknownStatus {
 		return searchItemsResultText(unknownStatusResult(e.columns), limit), nil
 	}
-	// The search itself only matches what the user may view, so total and truncated say nothing
-	// about hidden items. viewable below is a second check of the same rule (it drops nothing
-	// unless the two disagree).
 	plan.Search.Viewer = itemSearchViewer(e.user)
-	matches, err := e.repo.SearchProjectItems(ctx, e.projectID, plan.Search)
+	var (
+		matches []Item
+		err     error
+	)
+	if e.crossProject {
+		matches, err = e.repo.SearchViewableItems(ctx, plan.Search)
+	} else {
+		matches, err = e.repo.SearchProjectItems(ctx, e.projectID, plan.Search)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -101,15 +114,18 @@ func (e *projectToolExecutor) searchItems(ctx context.Context, raw json.RawMessa
 	if err != nil {
 		return "", err
 	}
-	return searchItemsResultText(searchItemsPage(visible, more, plan, e.columns), limit), nil
+	return searchItemsResultText(searchItemsPage(visible, more, plan, e.columns, e.projectNames), limit), nil
 }
 
 func (e *projectToolExecutor) getItem(ctx context.Context, raw json.RawMessage, limit int) (string, error) {
-	number, ok := parseGetItemInput(raw)
-	if !ok {
-		return toolErrorResult(toolErrInvalidInput), nil
+	number, projectID, problem := parseGetItemInput(raw, e.crossProject)
+	if problem != "" {
+		return toolErrorResult(problem), nil
 	}
-	item, err := e.repo.GetItemByNumber(ctx, number, e.projectID)
+	if !e.crossProject {
+		projectID = e.projectID
+	}
+	item, err := e.repo.GetItemByNumber(ctx, number, projectID)
 	if errors.Is(err, ErrNotFound) {
 		return toolErrorResult(toolErrItemNotFound), nil
 	}
@@ -121,14 +137,13 @@ func (e *projectToolExecutor) getItem(ctx context.Context, raw json.RawMessage, 
 		return "", err
 	}
 	if len(visible) == 0 {
-		// Same answer as "does not exist": whether a hidden item exists must not leak.
 		return toolErrorResult(toolErrItemNotFound), nil
 	}
 	comments, err := e.repo.ListComments(ctx, item.ID)
 	if err != nil {
 		return "", err
 	}
-	text, whole := getItemResultWithDescription(item, comments, e.columns, limit)
+	text, whole := getItemResultWithDescription(item, comments, e.columns, limit, e.projectName(item.ProjectID))
 	if whole {
 		e.rememberReadDescription(item)
 	}
@@ -136,7 +151,11 @@ func (e *projectToolExecutor) getItem(ctx context.Context, raw json.RawMessage, 
 }
 
 // rememberReadDescription notes the item's description as read whole in this question.
+// Only URL-project items are recorded so a cross-project read cannot satisfy a proposal check.
 func (e *projectToolExecutor) rememberReadDescription(item Item) {
+	if item.ProjectID != e.projectID {
+		return
+	}
 	if e.readDescriptions == nil {
 		e.readDescriptions = map[int64]string{}
 	}
