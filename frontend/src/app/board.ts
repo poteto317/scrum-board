@@ -103,6 +103,9 @@ import { itemsForActiveProject } from './project-items';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
+import { AuthSession } from './auth-session';
+import { ItemTemplateCreatePanel } from './item-template-create-panel';
+import { ItemTemplatesCreateSession } from './item-templates-create-session';
 
 @Component({
   selector: 'app-board',
@@ -116,10 +119,12 @@ import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
     CopyFeedbackBanner,
     ListFilterBar,
     ProjectSwitcher,
+    ItemTemplateCreatePanel,
   ],
   templateUrl: './board.html',
   styleUrl: './board.css',
   providers: [
+    ItemTemplatesCreateSession,
     {
       provide: CDK_DRAG_CONFIG,
       useValue: {
@@ -134,8 +139,10 @@ export class Board implements OnInit {
   readonly assigneeKind = assigneeKind;
   readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
+  private readonly auth = inject(AuthSession);
+  readonly itemTemplates = inject(ItemTemplatesCreateSession);
   private readonly aiChat = inject(AiChatContext);
-  private readonly projectSession = inject(ProjectSession);
+  readonly projectSession = inject(ProjectSession);
   private readonly projectBoardCache = inject(ProjectBoardCache);
   /** Template-safe busy flag while active project reload is in flight. */
   readonly projectSwitching = computed(() => this.projectSession.switching());
@@ -796,7 +803,17 @@ export class Board implements OnInit {
     if (this.loading() || this.reordering() || this.projectSession.switching()) return;
     this.itemForm.reset({ title: '', description: '' });
     this.formError.set('');
+    this.itemTemplates.resetSelection();
+    this.itemTemplates.load(this.projectSession.activeId());
     this.modal.set('item');
+  }
+
+  isItemTemplateAdmin(): boolean {
+    return this.auth.isAdmin();
+  }
+
+  onItemTemplateApplied(fields: { title: string; description: string }) {
+    this.itemForm.patchValue(fields);
   }
 
   close() {

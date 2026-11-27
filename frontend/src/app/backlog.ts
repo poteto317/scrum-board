@@ -66,22 +66,37 @@ import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
 import { TODO_COLUMN_MISSING, todoColumnId } from './todo-column';
+import { AuthSession } from './auth-session';
+import { ItemTemplateCreatePanel } from './item-template-create-panel';
+import { ItemTemplatesCreateSession } from './item-templates-create-session';
 
 type RowBounds = { top: number; height: number };
 type RowSnapshot = { elements: HTMLElement[]; bounds: RowBounds[]; scrollOffset: number };
 
 @Component({
   selector: 'app-backlog',
-  imports: [ReactiveFormsModule, RouterLink, Modal, ListFilterBar, CopyFeedbackBanner, NgStyle, ProjectSwitcher],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    Modal,
+    ListFilterBar,
+    CopyFeedbackBanner,
+    NgStyle,
+    ProjectSwitcher,
+    ItemTemplateCreatePanel,
+  ],
   templateUrl: './backlog.html',
   styleUrl: './backlog.css',
+  providers: [ItemTemplatesCreateSession],
 })
 export class Backlog implements OnInit {
   readonly formatItemNumber = formatItemNumber;
   readonly viewAccessLabel = viewAccessLabel;
   private readonly api = inject(Api);
+  private readonly auth = inject(AuthSession);
+  readonly itemTemplates = inject(ItemTemplatesCreateSession);
   private readonly aiChat = inject(AiChatContext);
-  private readonly projectSession = inject(ProjectSession);
+  readonly projectSession = inject(ProjectSession);
   private readonly projectBoardCache = inject(ProjectBoardCache);
   /** Template-safe busy flag while active project reload is in flight. */
   readonly projectSwitching = computed(() => this.projectSession.switching());
@@ -662,7 +677,17 @@ export class Backlog implements OnInit {
     }
     this.itemForm.reset({ title: '', description: '' });
     this.formError.set('');
+    this.itemTemplates.resetSelection();
+    this.itemTemplates.load(this.projectSession.activeId());
     this.modal.set('item');
+  }
+
+  isItemTemplateAdmin(): boolean {
+    return this.auth.isAdmin();
+  }
+
+  onItemTemplateApplied(fields: { title: string; description: string }) {
+    this.itemForm.patchValue(fields);
   }
 
   close() {

@@ -183,7 +183,7 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: makeCards() }),
             board: () => of({ columns: makeColumns(), items: makeCards(), settings: { cardLayout: 'pack' } }),
             reorderBacklog: () => of({ items: makeCards() }),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
           },
@@ -212,7 +212,7 @@ describe('Backlog reordering', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards, settings: { cardLayout: 'pack' } }),
             reorderBacklog: () => of({ items: cards }),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
           },
@@ -1470,7 +1470,7 @@ describe('Backlog AI chat context', () => {
             backlog: () => of({ items: cards }),
             board: () => of({ columns, items: cards, settings: { cardLayout: 'pack' } }),
             reorderBacklog: () => of({ items: cards }),
-            listCommandTemplates: () => of({ templates: [] }),
+            listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: unknown) => of(f),
           },
@@ -1485,5 +1485,73 @@ describe('Backlog AI chat context', () => {
     expect(ctx.focusItem()).toBeNull();
     f.destroy();
     expect(ctx.pageKind()).toBe('other');
+  });
+});
+
+describe('Backlog item templates', () => {
+  it('wires the template select on the create dialog', async () => {
+    const { AuthSession } = await import('./auth-session');
+    const { ProjectSession } = await import('./project-session');
+    const cards: never[] = [];
+    const columns = [
+      { id: 1, name: 'Todo', position: 0 },
+      { id: 2, name: 'Doing', position: 1 },
+    ];
+    TestBed.configureTestingModule({
+      imports: [Backlog],
+      providers: [
+        provideRouter([]),
+        { provide: AuthSession, useValue: { isAdmin: () => true } },
+        {
+          provide: Api,
+          useValue: {
+            backlog: () => of({ items: cards }),
+            board: () => of({ columns, items: cards, settings: { cardLayout: 'pack' } }),
+            boardMeta: () => of({ columns, settings: { cardLayout: 'pack', activeProjectId: 1 } }),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemTemplates: () =>
+              of({
+                templates: [
+                  {
+                    id: 5,
+                    projectId: 1,
+                    name: '調査タスク',
+                    titleTemplate: '[調査] ',
+                    descriptionTemplate: '## 目的\n',
+                    position: 0,
+                  },
+                ],
+              }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: unknown) => of(f),
+          },
+        },
+      ],
+    });
+    TestBed.inject(ProjectSession).activeId.set(1);
+    const f = TestBed.createComponent(Backlog);
+    f.detectChanges();
+    await f.whenStable();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    f.componentInstance.openItem();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('#backlog-item-template')).toBeTruthy();
+    f.componentInstance.itemTemplates.onSelect('5');
+    f.componentInstance.onItemTemplateApplied(f.componentInstance.itemTemplates.appliedFields());
+    expect(f.componentInstance.itemForm.getRawValue()).toEqual({
+      title: '[調査] ',
+      description: '## 目的\n',
+    });
   });
 });
