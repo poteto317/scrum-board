@@ -1,0 +1,53 @@
+<label [attr.for]="selectId()">テンプレート <span class="optional">任意</span></label>
+<select
+  [id]="selectId()"
+  [value]="session.selectedId() ?? ''"
+  (change)="onSelect($any($event.target).value)"
+  [disabled]="busy() || session.listLoading()"
+>
+  <option value="">{{ noneLabel }}</option>
+  @for (t of session.templates(); track t.id) {
+    <option [value]="t.id">{{ t.name }}</option>
+  }
+</select>
+@if (session.listError()) {
+  <p class="form-error" role="alert">{{ session.listError() }}</p>
+}
+@if (session.adminMessage()) {
+  <p class="form-error" role="status">{{ session.adminMessage() }}</p>
+}
+@if (isAdmin()) {
+  <button type="button" class="linkish" (click)="session.toggleManage()" [disabled]="busy()">
+    {{ manageLabel }}
+  </button>
+  @if (session.manageOpen()) {
+    <div class="item-template-manage" [formGroup]="session.createForm">
+      <label [attr.for]="selectId() + '-name'">名前</label>
+      <input [id]="selectId() + '-name'" formControlName="name" />
+      <label [attr.for]="selectId() + '-title'">タイトル雛形</label>
+      <input [id]="selectId() + '-title'" formControlName="titleTemplate" />
+      <label [attr.for]="selectId() + '-desc'">説明雛形</label>
+      <textarea [id]="selectId() + '-desc'" formControlName="descriptionTemplate" rows="3"></textarea>
+      <button type="button" (click)="create()" [disabled]="busy()">追加</button>
+      <ul>
+        @for (t of session.templates(); track t.id) {
+          <li>
+            @if (session.editingId() === t.id) {
+              <div [formGroup]="session.editForm">
+                <input formControlName="name" />
+                <input formControlName="titleTemplate" />
+                <textarea formControlName="descriptionTemplate" rows="2"></textarea>
+                <button type="button" (click)="update(t.id)" [disabled]="busy()">保存</button>
+                <button type="button" (click)="session.cancelEdit()" [disabled]="busy()">取消</button>
+              </div>
+            } @else {
+              <span>{{ t.name }}</span>
+              <button type="button" (click)="session.startEdit(t)" [disabled]="busy()">編集</button>
+              <button type="button" (click)="remove(t.id)" [disabled]="busy()">削除</button>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+  }
+}
