@@ -26,14 +26,6 @@
           履歴
         </button>
       }
-      <button
-        type="button"
-        class="secondary ai-chat-delete-shown"
-        (click)="deleteShownConversation()"
-        [disabled]="!canDeleteShown()"
-      >
-        この会話を削除
-      </button>
     </div>
   </div>
 
@@ -83,7 +75,7 @@
                     <button
                       type="button"
                       class="secondary ai-chat-conversation-delete"
-                      (click)="deleteConversation(conversation.id)"
+                      (click)="deleteConversation(conversation.id, $event)"
                       [disabled]="actionsLocked()"
                       [attr.aria-label]="deleteConversationLabel(conversation)"
                     >

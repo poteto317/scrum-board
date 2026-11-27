@@ -178,14 +178,9 @@ const applyButtons = (f: Fixture) =>
       '.ai-chat-msg[data-role="assistant"] .ai-chat-actions button',
     ),
   ).map((b) => b.textContent?.trim());
-/** 切り替え・新しい会話・削除（見出しと一覧の各行）が、どれも押せないか */
+/** 切り替え・新しい会話・履歴行の削除が、どれも押せないか */
 function actionsDisabled(f: Fixture) {
-  const actions = [
-    button(f, '.ai-chat-new'),
-    button(f, '.ai-chat-delete-shown'),
-    ...rows(f),
-    ...rowDeletes(f),
-  ];
+  const actions = [button(f, '.ai-chat-new'), ...rows(f), ...rowDeletes(f)];
   return actions.every((b) => b.disabled);
 }
 
@@ -245,7 +240,6 @@ describe('ProjectAiChat', () => {
       expect(f.nativeElement.querySelector('.ai-chat-empty')?.textContent).toBe(
         'このプロジェクトについて質問できます。',
       );
-      expect(button(f, '.ai-chat-delete-shown').disabled).toBe(true);
     });
 
     it('shows the load error and reloads on retry (L-001)', () => {
@@ -421,7 +415,7 @@ describe('ProjectAiChat', () => {
       c.startNew();
       c.draft.set('hi');
       c.send();
-      c.deleteShownConversation();
+      c.deleteConversation(9);
       expect(shown).toEqual([5, 4, 'new', 9, 'new']);
     });
 
@@ -585,7 +579,6 @@ describe('ProjectAiChat', () => {
       expect(c.conversationId()).toBeNull();
       expect(c.messages()).toEqual([]);
       expect(document.activeElement).toBe(input(f));
-      expect(button(f, '.ai-chat-delete-shown').disabled).toBe(true);
     });
 
     it('closes the history list in the dock', () => {
@@ -733,10 +726,20 @@ describe('ProjectAiChat', () => {
   });
 
   describe('delete a conversation', () => {
-    it('deletes only the shown conversation after the confirm and becomes a new conversation', () => {
+    it('hides the header delete on the default ask-AI layout (AC2)', () => {
+      const { f } = setup();
+      expect(f.nativeElement.textContent).not.toContain('この会話を削除');
+    });
+
+    it('hides the header delete on the page layout (AC2)', () => {
+      const { f } = setup({}, { layout: 'page' });
+      expect(f.nativeElement.textContent).not.toContain('この会話を削除');
+    });
+
+    it('deletes the shown conversation from the history row and becomes a new conversation', () => {
       const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const { f, c, api } = setup();
-      button(f, '.ai-chat-delete-shown').click();
+      const { f, c, api } = setup({}, { layout: 'page', wide: true });
+      rowDeletes(f)[0].click();
       f.detectChanges();
       expect(confirm).toHaveBeenCalledWith('この会話を削除しますか？');
       expect(api.deleteProjectAIConversation).toHaveBeenCalledWith(1, 5);
@@ -744,7 +747,6 @@ describe('ProjectAiChat', () => {
       expect(c.messages()).toEqual([]);
       expect(c.conversations()).toEqual([c4]);
       expect(c.deleting()).toBe(false);
-      expect(button(f, '.ai-chat-delete-shown').disabled).toBe(true);
     });
 
     it('deletes another conversation from the list and keeps the shown one', () => {
@@ -761,8 +763,8 @@ describe('ProjectAiChat', () => {
 
     it('keeps the conversation when the confirm is cancelled', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(false);
-      const { c, api } = setup();
-      c.deleteShownConversation();
+      const { f, c, api } = setup({}, { layout: 'page', wide: true });
+      rowDeletes(f)[0].click();
       expect(api.deleteProjectAIConversation).not.toHaveBeenCalled();
       expect(c.messages()).toEqual([m1, m2]);
     });
@@ -770,8 +772,8 @@ describe('ProjectAiChat', () => {
     it('keeps the conversation and shows the error when delete fails (L-001)', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       const deleteProjectAIConversation = vi.fn(() => httpError(500, '消せません'));
-      const { c } = setup({ deleteProjectAIConversation });
-      c.deleteShownConversation();
+      const { f, c } = setup({ deleteProjectAIConversation }, { layout: 'page', wide: true });
+      rowDeletes(f)[0].click();
       expect(c.conversationId()).toBe(5);
       expect(c.messages()).toEqual([m1, m2]);
       expect(c.conversations()).toEqual([c5, c4]);
@@ -782,8 +784,8 @@ describe('ProjectAiChat', () => {
     it('treats 404 as deleted: it was already gone elsewhere', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       const deleteProjectAIConversation = vi.fn(() => httpError(404, '会話が見つかりません。'));
-      const { c } = setup({ deleteProjectAIConversation });
-      c.deleteShownConversation();
+      const { f, c } = setup({ deleteProjectAIConversation }, { layout: 'page', wide: true });
+      rowDeletes(f)[0].click();
       expect(c.conversationId()).toBeNull();
       expect(c.messages()).toEqual([]);
       expect(c.conversations()).toEqual([c4]);
@@ -791,12 +793,27 @@ describe('ProjectAiChat', () => {
       expect(c.deleting()).toBe(false);
     });
 
-    it('does nothing for an unsaved new conversation', () => {
+    it('ignores a second click of a double-click on the row button (L-408)', () => {
       const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const { c, api } = setup({ getLatestProjectAIChat: vi.fn(() => of(noChat)) });
-      c.deleteShownConversation();
+      const { f, api } = setup({}, { layout: 'page', wide: true });
+      rowDeletes(f)[0].dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }),
+      );
       expect(confirm).not.toHaveBeenCalled();
       expect(api.deleteProjectAIConversation).not.toHaveBeenCalled();
+    });
+
+    it('deletes from the history list in the dock after opening history (AC1)', () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const { f, c, api } = setup({}, { layout: 'dock' });
+      c.toggleHistory();
+      f.detectChanges();
+      rowDeletes(f)[0].click();
+      f.detectChanges();
+      expect(confirm).toHaveBeenCalled();
+      expect(api.deleteProjectAIConversation).toHaveBeenCalledWith(1, 5);
+      expect(c.conversations()).toEqual([c4]);
+      expect(c.conversationId()).toBeNull();
     });
 
     it('reloads the list instead of patching it when the list was not read yet', () => {
@@ -806,8 +823,8 @@ describe('ProjectAiChat', () => {
         .fn()
         .mockReturnValueOnce(first)
         .mockReturnValueOnce(of([c4]));
-      const { c } = setup({ listProjectAIConversations });
-      c.deleteShownConversation();
+      const { c } = setup({ listProjectAIConversations }, { layout: 'page', wide: true });
+      c.deleteConversation(5);
       expect(listProjectAIConversations).toHaveBeenCalledTimes(2);
       first.next([c5, c4]);
       expect(c.conversations()).toEqual([c4]);
@@ -831,7 +848,6 @@ describe('ProjectAiChat', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       c.selectConversation(4);
       c.startNew();
-      c.deleteShownConversation();
       c.deleteConversation(4);
       expect(api.getProjectAIConversation).not.toHaveBeenCalled();
       expect(api.deleteProjectAIConversation).not.toHaveBeenCalled();
@@ -839,7 +855,7 @@ describe('ProjectAiChat', () => {
       pending.next(posted);
       f.detectChanges();
       expect(button(f, '.ai-chat-new').disabled).toBe(false);
-      expect(button(f, '.ai-chat-delete-shown').disabled).toBe(false);
+      expect(rowDeletes(f).every((b) => !b.disabled)).toBe(true);
       expect(rows(f).every((row) => !row.disabled)).toBe(true);
     });
 
@@ -1238,9 +1254,9 @@ describe('ProjectAiChat', () => {
 
     it('clears editing when the shown conversation is deleted', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const { c } = setup();
+      const { c } = setup({}, { layout: 'page', wide: true });
       c.startEdit(m1);
-      c.deleteShownConversation();
+      c.deleteConversation(5);
       expect(c.editingFromMessageId()).toBeNull();
       expect(c.conversationId()).toBeNull();
     });
@@ -1469,7 +1485,6 @@ describe('ProjectAiChat', () => {
           .disabled,
       ).toBe(true);
       expect(f.nativeElement.querySelector('a')?.getAttribute('href')).toBe('/settings');
-      expect(button(f, '.ai-chat-delete-shown').disabled).toBe(false);
     });
 
     it('blocks compose when exhausted without low-remaining status', () => {
@@ -1738,7 +1753,7 @@ describe('ProjectAiChat', () => {
         getLatestProjectAIChat,
         deleteProjectAIConversation: vi.fn(() => pending),
       });
-      c.deleteShownConversation();
+      c.deleteConversation(5);
       expect(c.deleting()).toBe(true);
       f.componentRef.setInput('projectId', 2);
       f.detectChanges();
@@ -1994,7 +2009,7 @@ describe('ProjectAiChat', () => {
         updateItem: vi.fn(() => apply),
       });
       c.applyToDescription('x');
-      c.deleteShownConversation();
+      c.deleteConversation(5);
       expect(remove.observed).toBe(true);
       expect(apply.observed).toBe(true);
       f.destroy();
