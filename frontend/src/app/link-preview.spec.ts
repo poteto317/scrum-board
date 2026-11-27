@@ -1,5 +1,6 @@
 import { of, throwError } from 'rxjs';
-import { hostnameFallback, loadLinkPreviews } from './link-preview';
+import { hostnameFallback } from './description-link';
+import { loadLinkPreviews } from './link-preview';
 
 describe('link-preview', () => {
   it('uses normalized keys and hostname fallback on failure', () => {

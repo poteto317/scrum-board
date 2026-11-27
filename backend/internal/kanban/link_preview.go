@@ -183,10 +183,12 @@ func (r *LinkPreviewResolver) scheduleRefreshLocked(key string) {
 		delete(r.inflight, key)
 		if ok {
 			r.storeLocked(key, title, true)
-		} else if e, exists := r.cache[key]; exists && e.ok && !e.okAt.IsZero() && r.now().Sub(e.okAt) <= linkPreviewStaleMaxAge {
-			// stale-if-error
 		} else {
-			r.storeLocked(key, "", false)
+			e, exists := r.cache[key]
+			keepSuccess := exists && e.ok && !e.okAt.IsZero() && r.now().Sub(e.okAt) <= linkPreviewStaleMaxAge
+			if !keepSuccess {
+				r.storeLocked(key, "", false)
+			}
 		}
 		r.mu.Unlock()
 	}()

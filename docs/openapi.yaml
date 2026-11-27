@@ -2072,8 +2072,8 @@ paths:
       summary: 説明リンクのプレビュー（タイトル）一括取得
       operationId: post_api_link_previews
       description: |
-        ログイン必須。リクエストの `urls`（最大 20・正規化後ユニーク）について、サーバーが SSRF ガード付きで HTML メタからタイトルを取得する。
-        レスポンス `previews` のキーは正規化後 URL。成功は `{ "ok": true, "title": "..." }`、失敗は `{ "ok": false }`（title なし）。
+        ログイン必須。リクエストの `urls` 配列は最大 20 件（重複・不正は落とし、残った正規化済み URL ごとにプレビューする）。
+        レスポンス `previews` のキーはリクエストの trim 済み URL（フロントの normalize と同形）。成功は `{ "ok": true, "title": "..." }`、失敗は `{ "ok": false }`（title なし）。
         正規化に失敗した URL はキーを作らない。アプリ認証ヘッダは外向き要求に付与しない。
       responses:
         '200':

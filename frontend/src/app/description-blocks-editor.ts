@@ -51,8 +51,6 @@ import {
 import { uploadImagesInOrder } from './upload-images-in-order';
 
 const DEFAULT_LENGTH_ERROR = `説明は${DESCRIPTION_MAX_LEN}文字以内で入力してください。`;
-/** Single switch for bookmark promotion (preview collect + rich-text input). */
-const PROMOTE_BOOKMARKS = true;
 
 @Component({
   selector: 'app-description-blocks-editor',
@@ -98,7 +96,8 @@ export class DescriptionBlocksEditor {
   /** Insertion index for open menu; null when closed. */
   readonly insertMenuIndex = signal<number | null>(null);
   readonly linkTitles = signal<Record<string, string>>({});
-  readonly promoteBookmarks = PROMOTE_BOOKMARKS;
+  /** Description/solution editors promote bookmarks; comments use another component. */
+  readonly promoteBookmarks = true;
   private uploadGuard = false;
   private deleteGuard = false;
   private linkPreviewGeneration = 0;
@@ -176,7 +175,7 @@ export class DescriptionBlocksEditor {
       return;
     }
     const view = buildDescriptionView(text, itemNumber, this.blockSyntax(), {
-      promoteBookmarks: PROMOTE_BOOKMARKS,
+      promoteBookmarks: this.promoteBookmarks,
     });
     const urls = collectBookmarkUrls(view);
     if (urls.length === 0) {

@@ -1,8 +1,6 @@
 import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 import { hostnameFallback, normalizeDescriptionLinkUrl } from './description-link';
 
-export { hostnameFallback };
-
 type LinkPreviewApi = {
   linkPreviews(urls: string[]): Observable<{
     previews: Record<string, { ok: boolean; title?: string }>;
