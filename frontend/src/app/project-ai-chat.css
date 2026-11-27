@@ -142,7 +142,8 @@
   font-size: 0.95rem;
   line-height: 1.45;
 }
-.ai-chat-actions {
+.ai-chat-actions,
+.ai-chat-edit-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -169,6 +170,8 @@
 .ai-chat-compose-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 .ai-chat-send {
   flex-shrink: 0;

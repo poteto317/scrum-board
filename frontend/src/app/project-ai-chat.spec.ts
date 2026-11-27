@@ -173,9 +173,11 @@ const list = (f: Fixture) => f.nativeElement.querySelector<HTMLElement>('.ai-cha
 const bodies = (f: Fixture) =>
   Array.from(f.nativeElement.querySelectorAll('.ai-chat-body')).map((el) => el.textContent);
 const applyButtons = (f: Fixture) =>
-  Array.from(f.nativeElement.querySelectorAll<HTMLButtonElement>('.ai-chat-actions button')).map(
-    (b) => b.textContent?.trim(),
-  );
+  Array.from(
+    f.nativeElement.querySelectorAll<HTMLButtonElement>(
+      '.ai-chat-msg[data-role="assistant"] .ai-chat-actions button',
+    ),
+  ).map((b) => b.textContent?.trim());
 /** 切り替え・新しい会話・削除（見出しと一覧の各行）が、どれも押せないか */
 function actionsDisabled(f: Fixture) {
   const actions = [
@@ -1169,6 +1171,102 @@ describe('ProjectAiChat', () => {
       expect(send!.querySelector('.ai-chat-send-icon')?.getAttribute('aria-hidden')).toBe(
         'true',
       );
+    });
+  });
+
+  describe('edit last user message', () => {
+    it('shows edit only on the last user message when compose is active', () => {
+      const { f } = setup();
+      f.detectChanges();
+      const edits = f.nativeElement.querySelectorAll(
+        '.ai-chat-msg[data-role="user"] button',
+      ) as NodeListOf<HTMLButtonElement>;
+      expect([...edits].some((b) => b.textContent?.includes('編集'))).toBe(true);
+      expect(
+        [...edits].filter((b) => b.textContent?.includes('編集')).length,
+      ).toBe(1);
+    });
+
+    it('loads the message into draft and can cancel', () => {
+      const { f, c } = setup();
+      f.detectChanges();
+      c.startEdit(m1);
+      expect(c.draft()).toBe(m1.body);
+      expect(c.editingFromMessageId()).toBe(m1.id);
+      c.cancelEdit();
+      expect(c.draft()).toBe('');
+      expect(c.editingFromMessageId()).toBeNull();
+    });
+
+    it('resends with replaceFromMessageId and conversation id', () => {
+      const { c, api } = setup();
+      c.startEdit(m1);
+      c.draft.set('直した');
+      c.send();
+      expect(api.postProjectAIChat).toHaveBeenCalledWith(1, '直した', 5, 3, m1.id);
+    });
+
+    it('keeps editing state when resend fails', () => {
+      const pending = new Subject<ProjectAIChatPostResponse>();
+      const { c } = setup({ postProjectAIChat: vi.fn(() => pending) });
+      c.startEdit(m1);
+      c.draft.set('直した');
+      c.send();
+      pending.error({ status: 500, error: { message: '失敗' } });
+      expect(c.editingFromMessageId()).toBe(m1.id);
+      expect(c.draft()).toBe('直した');
+      expect(c.messages()).toEqual(latest.messages);
+    });
+
+    it('clears editing when the shown conversation is deleted', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const { c } = setup();
+      c.startEdit(m1);
+      c.deleteShownConversation();
+      expect(c.editingFromMessageId()).toBeNull();
+      expect(c.conversationId()).toBeNull();
+    });
+
+    it('clears editing when projectId changes', () => {
+      const { f, c } = setup();
+      c.startEdit(m1);
+      expect(c.editingFromMessageId()).toBe(m1.id);
+      f.componentRef.setInput('projectId', 2);
+      f.detectChanges();
+      expect(c.editingFromMessageId()).toBeNull();
+    });
+
+    it('clears editing when the shown conversation is gone on send (404)', () => {
+      const postProjectAIChat = vi.fn(() => httpError(404, '会話が見つかりません。'));
+      const { c } = setup({ postProjectAIChat });
+      c.startEdit(m1);
+      c.draft.set('直した');
+      c.send();
+      expect(c.editingFromMessageId()).toBeNull();
+      expect(c.draft()).toBe('直した');
+      expect(c.conversationId()).toBeNull();
+    });
+
+    it('does not force-scroll when starting edit', () => {
+      const { f, c } = setup();
+      f.detectChanges();
+      TestBed.inject(ApplicationRef).tick();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      let scrollTop = 0;
+      Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => 400 });
+      Object.defineProperty(list, 'clientHeight', { configurable: true, get: () => 100 });
+      Object.defineProperty(list, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (v: number) => {
+          scrollTop = v;
+        },
+      });
+      list.dispatchEvent(new Event('scroll'));
+      c.startEdit(m1);
+      f.detectChanges();
+      TestBed.inject(ApplicationRef).tick();
+      expect(scrollTop).toBe(0);
     });
   });
 

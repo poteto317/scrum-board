@@ -118,6 +118,17 @@
               <li class="ai-chat-msg" [attr.data-role]="msg.role">
                 <span class="ai-chat-role">{{ msg.role === 'user' ? 'あなた' : 'AI' }}</span>
                 <pre class="ai-chat-body">{{ msg.body }}</pre>
+                @if (lastEditableUserMessage()?.id === msg.id) {
+                  <div class="ai-chat-edit-actions">
+                    <button
+                      type="button"
+                      class="secondary"
+                      (click)="startEdit(msg, $event)"
+                    >
+                      編集
+                    </button>
+                  </div>
+                }
                 @for (proposal of msg.proposals ?? []; track proposal.id) {
                   <app-project-ai-proposal-card
                     [proposal]="proposal"
@@ -180,6 +191,16 @@
             (keydown.enter)="onComposeKeydown($event)"
           ></textarea>
           <div class="ai-chat-compose-actions">
+            @if (editing()) {
+              <button
+                type="button"
+                class="secondary"
+                (click)="cancelEdit()"
+                [attr.disabled]="composeInactive() ? true : null"
+              >
+                キャンセル
+              </button>
+            }
             <button
               type="submit"
               class="primary ai-chat-send"
@@ -198,7 +219,7 @@
                   d="M3.4 20.6 21 12 3.4 3.4 3 10.5 14 12 3 13.5z"
                 />
               </svg>
-              送信
+              {{ editing() ? '再送信' : '送信' }}
             </button>
           </div>
         </form>

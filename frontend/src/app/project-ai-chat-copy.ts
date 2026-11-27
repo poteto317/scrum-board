@@ -10,6 +10,8 @@ export const PROJECT_AI_CONVERSATION_GONE_ON_SEND =
 export const PROJECT_AI_CONVERSATIONS_EMPTY_MESSAGE = '会話はまだありません。';
 /** 空の新しい会話を始めるボタン */
 export const PROJECT_AI_NEW_CONVERSATION_LABEL = '新しい会話';
+/** 編集再送信なのに会話 ID が無いとき（通常は起きない） */
+export const PROJECT_AI_EDIT_NEEDS_CONVERSATION = '編集のやり直しには会話が必要です。';
 
 /** 履歴はプロジェクト全体なので、別のアイテムについての回答にも反映のボタンが出る */
 const OTHER_ITEMS_NOTICE = '回答には、ほかのアイテムの内容が含まれていることがあります。';
