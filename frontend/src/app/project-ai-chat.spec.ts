@@ -1155,6 +1155,21 @@ describe('ProjectAiChat', () => {
       } as KeyboardEvent);
       expect(api.postProjectAIChat).not.toHaveBeenCalled();
     });
+
+    it('styles the send button as primary with ai-chat-send', () => {
+      const { f } = setup();
+      f.detectChanges();
+      const send = f.nativeElement.querySelector(
+        'form.ai-chat-compose button[type="submit"]',
+      ) as HTMLButtonElement | null;
+      expect(send).toBeTruthy();
+      expect(send!.classList.contains('primary')).toBe(true);
+      expect(send!.classList.contains('ai-chat-send')).toBe(true);
+      expect(send!.textContent).toContain('送信');
+      expect(send!.querySelector('.ai-chat-send-icon')?.getAttribute('aria-hidden')).toBe(
+        'true',
+      );
+    });
   });
 
   describe('credits', () => {
