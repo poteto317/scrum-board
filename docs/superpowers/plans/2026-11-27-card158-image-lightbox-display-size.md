@@ -49,7 +49,7 @@
 ### Task 3: 親配線
 
 - [ ] blocks-editor: `[canChangeImageSize]="imagesEnabled()"`（`[canDelete]` と同一）。size → `setAttachmentImageDisplaySize` → `textChange`。
-- [ ] comments: 閲覧中 `[canChangeImageSize]="canModifyComment(c)"`。size → rewrite 本文 → **既存コメント更新 API で即保存**。編集モード中なら `editBody` を rewrite（保存ボタンは既存）。
+- [ ] comments: 閲覧中 `[canChangeImageSize]="canModifyComment(c)"`。size → rewrite 本文 → **既存コメント更新 API で即保存**（楽観更新）。編集モード（textarea）中はサイズ UI 無し・変更しない。
 - [ ] **L-060:** blocks-editor と item-comments の両方で、`(imageDisplaySize)` / `[canChangeImageSize]` 配線を外すと落ちるテストを置く（rich-text 単体 emit だけでは不可）。
 - [ ] GREEN: 関連 spec。
 
