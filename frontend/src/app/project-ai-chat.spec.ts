@@ -1215,6 +1215,24 @@ describe('ProjectAiChat', () => {
       expect(readTop()).toBe(0);
     });
 
+    it('scrolls to bottom again when send re-sticks after scrolling up', () => {
+      const pending = new Subject<ProjectAIChatPostResponse>();
+      const { f, c, api } = setup({ postProjectAIChat: vi.fn(() => pending) });
+      f.detectChanges();
+      flushRender();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      const readTop = mockListMetrics(list, 0);
+      list.dispatchEvent(new Event('scroll'));
+      expect(readTop()).toBe(0);
+      c.draft.set('hi');
+      c.send();
+      expect(api.postProjectAIChat).toHaveBeenCalled();
+      flushRender();
+      expect(readTop()).toBe(400);
+      pending.next(posted);
+      pending.complete();
+    });
+
     it('re-sticks on send then stays unstuck if user scrolls up before the reply', () => {
       const pending = new Subject<ProjectAIChatPostResponse>();
       const { f, c, api } = setup({ postProjectAIChat: vi.fn(() => pending) });
@@ -1232,6 +1250,42 @@ describe('ProjectAiChat', () => {
       f.detectChanges();
       flushRender();
       expect(readTop()).toBe(0);
+    });
+
+    it('scrolls to bottom when starting a new conversation', () => {
+      const { f, c } = setup();
+      f.detectChanges();
+      flushRender();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      const readTop = mockListMetrics(list, 0);
+      list.dispatchEvent(new Event('scroll'));
+      c.startNew();
+      f.detectChanges();
+      flushRender();
+      expect(readTop()).toBe(400);
+    });
+
+    it('scrolls to bottom when selecting another conversation', () => {
+      const { f, c } = setup();
+      f.detectChanges();
+      flushRender();
+      const list = f.nativeElement.querySelector('.ai-chat-list') as HTMLElement;
+      const readTop = mockListMetrics(list, 0);
+      list.dispatchEvent(new Event('scroll'));
+      c.selectConversation(4);
+      f.detectChanges();
+      flushRender();
+      expect(readTop()).toBe(400);
+    });
+
+    it('does not scroll while loadError is shown', () => {
+      const { f, c } = setup({
+        getLatestProjectAIChat: vi.fn(() => throwError(() => ({ status: 500, error: { message: 'boom' } }))),
+      });
+      f.detectChanges();
+      flushRender();
+      expect(c.loadError()).toBeTruthy();
+      expect(f.nativeElement.querySelector('.ai-chat-list')).toBeNull();
     });
 
     it('keeps scroll position when a new conversation id is assigned after send', () => {
