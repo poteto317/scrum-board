@@ -142,6 +142,10 @@ describe('parseDescriptionLinks', () => {
     expect(parseDescriptionLinks(`![pic](${src} "nope")`, 7)[0]).toMatchObject({
       displaySize: 'md',
     });
+    // No space before quotes → not a title; path fails attachment match → plain text.
+    expect(parseDescriptionLinks(`![pic](${src}"lg")`, 7)).toEqual([
+      { kind: 'text', text: `![pic](${src}"lg")` },
+    ]);
     expect(normalizeImageDisplaySize('sm')).toBe('sm');
     expect(normalizeImageDisplaySize('x')).toBe('md');
   });
