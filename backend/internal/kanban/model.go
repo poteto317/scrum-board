@@ -259,6 +259,12 @@ type Repository interface {
 	CreateCommandTemplate(context.Context, CommandTemplateInput) (CommandTemplate, error)
 	UpdateCommandTemplate(context.Context, int64, CommandTemplatePatch) (CommandTemplate, error)
 	DeleteCommandTemplate(context.Context, int64) error
+	ListItemTemplates(context.Context, int64) ([]ItemTemplate, error)
+	EnsureItemTemplateSeeds(context.Context, int64) error
+	ListItemTemplatesEnsuringSeeds(context.Context, int64) ([]ItemTemplate, error)
+	CreateItemTemplate(context.Context, int64, ItemTemplateInput) (ItemTemplate, error)
+	UpdateItemTemplate(context.Context, int64, int64, ItemTemplatePatch) (ItemTemplate, error)
+	DeleteItemTemplate(context.Context, int64, int64) error
 	ListItemCommandTemplates(context.Context, int64) ([]CommandTemplate, error)
 	ReplaceItemCommandTemplates(context.Context, int64, []int64) ([]CommandTemplate, error)
 	ListCommandTemplateDefaults(context.Context) ([]int64, error)

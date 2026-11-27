@@ -126,6 +126,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 	if err = repo.InitializeCommandTemplates(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	if err = repo.InitializeItemTemplates(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if err = repo.InitializeItemCommandTemplates(t.Context()); err != nil {
 		t.Fatal(err)
 	}
