@@ -168,6 +168,9 @@ func TestDecodeProjectChatRequest(t *testing.T) {
 	if req, ok, _ = post("application/json", `{"message":"q","crossProjectSearch":true}`); !ok || !req.crossProjectSearchEnabled() {
 		t.Fatalf("cross true: ok=%v req=%+v", ok, req)
 	}
+	if req, ok, _ = post("application/json", `{"message":"q","crossProjectSearch":null}`); !ok || req.CrossProjectSearch != nil || req.crossProjectSearchEnabled() {
+		t.Fatalf("cross null: ok=%v req=%+v", ok, req)
+	}
 	for body, want := range map[string]string{
 		`{"message":"q","conversationId":0}`:                        "会話IDが不正です。",
 		`{"message":"q","conversationId":-3}`:                       "会話IDが不正です。",
