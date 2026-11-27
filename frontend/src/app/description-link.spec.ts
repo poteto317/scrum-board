@@ -6,8 +6,10 @@ import {
   isBookmarkLink,
   normalizeDescriptionLinkLabel,
   normalizeDescriptionLinkUrl,
+  normalizeImageDisplaySize,
   parseDescriptionLinks,
   sanitizeAttachmentAlt,
+  setAttachmentImageDisplaySize,
 } from './description-link';
 
 describe('isBookmarkLink', () => {
@@ -127,9 +129,36 @@ describe('parseDescriptionLinks', () => {
     const src = '/api/items/by-number/7/attachments/3/content';
     expect(parseDescriptionLinks(`see ![pic](${src}) now`, 7)).toEqual([
       { kind: 'text', text: 'see ' },
-      { kind: 'image', alt: 'pic', src, attachmentId: 3 },
+      { kind: 'image', alt: 'pic', src, attachmentId: 3, displaySize: 'md' },
       { kind: 'text', text: ' now' },
     ]);
+  });
+
+  it('parses image display size from markdown title and defaults unknown to md', () => {
+    const src = '/api/items/by-number/7/attachments/3/content';
+    expect(parseDescriptionLinks(`![pic](${src} "lg")`, 7)).toEqual([
+      { kind: 'image', alt: 'pic', src, attachmentId: 3, displaySize: 'lg' },
+    ]);
+    expect(parseDescriptionLinks(`![pic](${src} "nope")`, 7)[0]).toMatchObject({
+      displaySize: 'md',
+    });
+    expect(normalizeImageDisplaySize('sm')).toBe('sm');
+    expect(normalizeImageDisplaySize('x')).toBe('md');
+  });
+
+  it('builds markup with size title only for sm/lg and rewrites all occurrences', () => {
+    expect(buildAttachmentMarkup(2, 9, 'a]b', 'md')).toBe(
+      '![ab](/api/items/by-number/2/attachments/9/content)',
+    );
+    expect(buildAttachmentMarkup(2, 9, 'pic', 'lg')).toBe(
+      '![pic](/api/items/by-number/2/attachments/9/content "lg")',
+    );
+    const src = '/api/items/by-number/7/attachments/3/content';
+    const text = `![a](${src}) and ![b](${src} "sm")`;
+    expect(setAttachmentImageDisplaySize(text, 7, 3, 'lg')).toBe(
+      `![a](${src} "lg") and ![b](${src} "lg")`,
+    );
+    expect(setAttachmentImageDisplaySize(`![a](${src} "lg")`, 7, 3, 'md')).toBe(`![a](${src})`);
   });
 
   it('leaves external image markdown and other-item paths as text', () => {

@@ -1,10 +1,24 @@
+export type ImageDisplaySize = 'sm' | 'md' | 'lg';
+
 export type DescriptionSegment =
   | { kind: 'text'; text: string }
   | { kind: 'link'; label: string; url: string }
   /** Display-only; produced by `buildDescriptionView` promote, never by `parseDescriptionLinks`. */
   | { kind: 'bookmark'; label: string; url: string }
-  | { kind: 'image'; alt: string; src: string; attachmentId: number }
+  | {
+      kind: 'image';
+      alt: string;
+      src: string;
+      attachmentId: number;
+      displaySize: ImageDisplaySize;
+    }
   | { kind: 'file'; label: string; src: string; attachmentId: number };
+
+/** Allowed inline sizes; anything else → md (L-018: same fn for parse and build). */
+export function normalizeImageDisplaySize(value: string | null | undefined): ImageDisplaySize {
+  if (value === 'sm' || value === 'md' || value === 'lg') return value;
+  return 'md';
+}
 
 /** True when markdown label is the raw URL itself (bookmark candidate). */
 export function isBookmarkLink(label: string, url: string): boolean {
@@ -83,8 +97,45 @@ export function buildAttachmentMarkup(
   itemNumber: number,
   attachmentId: number,
   alt: string,
+  displaySize: ImageDisplaySize | string = 'md',
 ): string {
-  return `![${sanitizeAttachmentName(alt, 'image')}](${attachmentContentPath(itemNumber, attachmentId)})`;
+  const path = attachmentContentPath(itemNumber, attachmentId);
+  const size = normalizeImageDisplaySize(displaySize);
+  const title = size === 'md' ? '' : ` "${size}"`;
+  return `![${sanitizeAttachmentName(alt, 'image')}](${path}${title})`;
+}
+
+/**
+ * Rewrite every same-item image markup for `attachmentId` to the given display size.
+ * Uses normalize + buildAttachmentMarkup (L-018); does not hand-concatenate titles.
+ */
+export function setAttachmentImageDisplaySize(
+  text: string,
+  itemNumber: number,
+  attachmentId: number,
+  displaySize: ImageDisplaySize | string,
+): string {
+  if (itemNumber <= 0 || attachmentId <= 0) return text;
+  const size = normalizeImageDisplaySize(displaySize);
+  const path = attachmentContentPath(itemNumber, attachmentId);
+  const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(
+    `!\\[([^\\]\\n\\r]*)]\\(${escaped}(?:\\s+"[^"]*")?\\)`,
+    'g',
+  );
+  return text.replace(re, (_m, alt: string) =>
+    buildAttachmentMarkup(itemNumber, attachmentId, alt || 'image', size),
+  );
+}
+
+/** Split `path` or `path "title"` inside markdown parens (space before quotes required). */
+export function splitMarkdownLinkDestination(inside: string): {
+  path: string;
+  title: string | null;
+} {
+  const m = inside.match(/^(\S+)(?:\s+"([^"]*)")?\s*$/);
+  if (!m) return { path: inside, title: null };
+  return { path: m[1], title: m[2] ?? null };
 }
 
 export function buildFileAttachmentMarkup(
@@ -174,7 +225,8 @@ export function parseDescriptionLinks(
         continue;
       }
       const alt = text.slice(i + 2, labelEnd);
-      const path = text.slice(labelEnd + 2, urlEnd);
+      const inside = text.slice(labelEnd + 2, urlEnd);
+      const { path, title } = splitMarkdownLinkDestination(inside);
       const attachmentId =
         itemNumber != null && itemNumber > 0 ? isAttachmentContentPath(path, itemNumber) : null;
       if (
@@ -189,6 +241,7 @@ export function parseDescriptionLinks(
           alt: alt || 'image',
           src: path,
           attachmentId,
+          displaySize: normalizeImageDisplaySize(title),
         });
         i = urlEnd + 1;
         textStart = i;
