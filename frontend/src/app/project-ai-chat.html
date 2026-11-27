@@ -108,7 +108,12 @@
             <button type="button" class="secondary" (click)="reload()">再読み込み</button>
           </div>
         } @else {
-          <ul class="ai-chat-list" aria-label="やりとり">
+          <ul
+            class="ai-chat-list"
+            #messageList
+            aria-label="やりとり"
+            (scroll)="onMessageListScroll($event)"
+          >
             @for (msg of messages(); track msg.id) {
               <li class="ai-chat-msg" [attr.data-role]="msg.role">
                 <span class="ai-chat-role">{{ msg.role === 'user' ? 'あなた' : 'AI' }}</span>

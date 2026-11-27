@@ -70,6 +70,7 @@ import {
   storedInSentConversation,
   upsertConversationFirst,
 } from './project-ai-conversations';
+import { canScheduleStickScroll, isNearBottom, scrollElementToBottom } from './ai-chat-scroll';
 
 @Component({
   selector: 'app-project-ai-chat',
@@ -97,6 +98,9 @@ export class ProjectAiChat implements OnChanges {
   private readonly injector = inject(Injector);
   private readonly auth = inject(AuthSession);
   private readonly inputRef = viewChild<ElementRef<HTMLTextAreaElement>>('messageInput');
+  private readonly messageList = viewChild<ElementRef<HTMLElement>>('messageList');
+  /** 最下部付近にいるときだけ自動スクロールする */
+  private stickToBottom = true;
   private generation = 0;
   /** 会話の一覧（読み込みと、送信・削除の後の書き換え） */
   private readonly conversationList = new ProjectAiConversationList(this.api);
@@ -189,6 +193,15 @@ export class ProjectAiChat implements OnChanges {
       this.userId = userId;
       this.initialTarget = null;
       untracked(() => this.resetScope());
+    });
+    // 件数・末尾 id・loading 解除のあと、stick 中なら最下部へ（sending はトリガーにしない）
+    effect(() => {
+      const msgs = this.messages();
+      void msgs.length;
+      void msgs[msgs.length - 1]?.id;
+      void this.loading();
+      void this.loadError();
+      untracked(() => this.scheduleScrollToBottomIfStuck());
     });
     const destroyRef = inject(DestroyRef);
     destroyRef.onDestroy(() => {
@@ -303,6 +316,7 @@ export class ProjectAiChat implements OnChanges {
     this.initialTarget = null;
     this.messages.set(messages);
     this.loading.set(false);
+    this.stickAndScrollToBottom();
     this.showConversation(conversationId);
   }
 
@@ -311,7 +325,7 @@ export class ProjectAiChat implements OnChanges {
     this.loading.set(false);
   }
 
-  /** 表示中の会話を切り替え、変わっていれば外へ伝える */
+  /** 表示中の会話を切り替え、変わっていれば外へ伝える（stick/scroll は触らない） */
   private showConversation(conversationId: number | null) {
     this.conversationId.set(conversationId);
     const ref = conversationRef(conversationId);
@@ -364,6 +378,43 @@ export class ProjectAiChat implements OnChanges {
     );
   }
 
+  onMessageListScroll(event: Event) {
+    const el = event.target;
+    if (!(el instanceof HTMLElement)) return;
+    this.stickToBottom = isNearBottom(el);
+  }
+
+  /** 追従を有効にして、可能なら最下部へスクロールを予約する */
+  private stickAndScrollToBottom() {
+    this.stickToBottom = true;
+    this.scheduleScrollToBottomIfStuck();
+  }
+
+  /**
+   * stick 中なら描画後に list を最下部へ。
+   * list ref の有無は afterNextRender 内で見る（成功直後の未 CD でも描画後に拾う）。
+   */
+  private scheduleScrollToBottomIfStuck() {
+    if (
+      !canScheduleStickScroll({
+        loading: this.loading(),
+        loadFailed: this.loadError() !== '',
+        stickToBottom: this.stickToBottom,
+      })
+    ) {
+      return;
+    }
+    afterNextRender(
+      () => {
+        if (!this.stickToBottom) return;
+        const el = this.messageList()?.nativeElement;
+        if (!el) return;
+        scrollElementToBottom(el);
+      },
+      { injector: this.injector },
+    );
+  }
+
   toggleHistory() {
     this.historyOpen.update((open) => !open);
   }
@@ -371,6 +422,7 @@ export class ProjectAiChat implements OnChanges {
   /** 空の新しい会話にする。サーバーには、最初に送ったときに作られる */
   startNew() {
     if (this.actionsLocked()) return;
+    this.stickAndScrollToBottom();
     this.messages.set([]);
     this.error.set('');
     this.historyOpen.set(false);
@@ -394,6 +446,7 @@ export class ProjectAiChat implements OnChanges {
       .subscribe({
         next: (view) => {
           if (!this.stillCurrent(scope)) return;
+          this.stickAndScrollToBottom();
           this.messages.set(view.messages);
           this.switching.set(false);
           this.historyOpen.set(false);
@@ -430,6 +483,7 @@ export class ProjectAiChat implements OnChanges {
       return;
     }
     const text = draft.text;
+    this.stickAndScrollToBottom();
     this.sendRequest?.unsubscribe();
     const scope = this.scope();
     const sentTo = this.conversationId();
@@ -496,6 +550,7 @@ export class ProjectAiChat implements OnChanges {
       this.patchConversations((list) => removeConversation(list, conversationId));
       this.focusInputIfLost();
       if (!sameConversation(conversationId, this.conversationId())) return;
+      this.stickAndScrollToBottom();
       this.messages.set([]);
       this.showConversation(null);
     };
