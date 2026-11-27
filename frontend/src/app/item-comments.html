@@ -59,8 +59,10 @@
               class="comment-body"
               [text]="c.body"
               [itemNumber]="number"
-              [canDelete]="!readOnly"
+              [canDelete]="canModifyComment(c)"
+              [canChangeImageSize]="canModifyComment(c)"
               (deleteImage)="deleteAttachment($event)"
+              (imageDisplaySize)="onCommentImageDisplaySize(c, $event)"
             />
             @if (canModifyComment(c)) {
               <div class="row-actions">
