@@ -35,9 +35,11 @@ import {
   splitDescriptionBlock,
 } from './description-blocks';
 import {
+  ImageDisplaySize,
   buildAttachmentMarkupForKind,
   insertMarkupAt,
   parseDescriptionLinks,
+  setAttachmentImageDisplaySize,
 } from './description-link';
 import { hasDescriptionBlockSyntax } from './description-markdown';
 import { buildDescriptionView, collectBookmarkUrls } from './description-view';
@@ -599,6 +601,20 @@ export class DescriptionBlocksEditor {
       });
     }
     this.focusBlock(index, 0);
+  }
+
+  onImageDisplaySize(ev: { attachmentId: number; size: ImageDisplaySize }): void {
+    if (!this.imagesEnabled() || this.itemNumber() <= 0) return;
+    const next = setAttachmentImageDisplaySize(
+      this.value(),
+      this.itemNumber(),
+      ev.attachmentId,
+      ev.size,
+    );
+    if (next === this.value()) return;
+    this.pendingEcho = next;
+    this.blocks.set(parseDescriptionBlocks(next));
+    this.textChange.emit(next);
   }
 
   private emitText(): void {

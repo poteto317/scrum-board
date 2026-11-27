@@ -100,8 +100,10 @@
         [promoteBookmarks]="promoteBookmarks"
         [linkTitles]="linkTitles()"
         [canDelete]="imagesEnabled()"
+        [canChangeImageSize]="imagesEnabled()"
         [draggableImages]="attachmentField() === 'description'"
         (deleteImage)="requestDeleteImage($event)"
+        (imageDisplaySize)="onImageDisplaySize($event)"
       />
     </div>
   }
