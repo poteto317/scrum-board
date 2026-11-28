@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Scrum Board API
   version: 0.1.0
-  description: 'スクラムかんばん HTTP API の契約正本。アプリ認証は Cookie `sb_session` または HTTP Basic（users テーブルの login_name / password、`Sec-Fetch-Site` ヘッダ無しの非ブラウザ向け）のどちらか。本番
+  description: 'スクラムかんばん HTTP API の契約正本。アプリ認証は Cookie `sb_session` または HTTP Basic（users テーブルの login_name / password。主に非ブラウザ向けだが、ブラウザの Basic も同じく検証する）のどちらか。本番
     nginx の HTTP Basic はゲートウェイ層であり、operation の security には含めない。受け付けない入力は黙って別解釈へ落とさず 4xx 等で拒否する。v0.1.0:
     全 HTTP ルートの paths・認証（exempt/optional/必須）・主要 operation の request/response を載せる。未具体化の応答は JsonValue。当該 API
     を変更するときは update-api-doc スキルに従い JsonValue を具体 schema に置き換える。'
@@ -975,8 +975,8 @@ paths:
         schema:
           type: integer
       security: []
-      description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
-        `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
+      description: セッション Cookie は任意（sessionOptional）。有効な users Basic なら
+        `CurrentUser` を付与。無効な Basic、またはロック中（連続 5 回失敗。`basicAuth` の説明を参照）の場合は匿名続行（middleware は 401 にしない）。
         Cookie が無く非 public のアイテムは 401。`viewAccess=public` なら未ログインでも閲覧可。Cookie がある場合は
         ACL に従い 403 もありうる。ハンドラが強制する。
   /api/items/by-number/{number}/assignee:
@@ -1059,8 +1059,8 @@ paths:
         schema:
           type: integer
       security: []
-      description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
-        `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
+      description: セッション Cookie は任意（sessionOptional）。有効な users Basic なら
+        `CurrentUser` を付与。無効な Basic、またはロック中（連続 5 回失敗。`basicAuth` の説明を参照）の場合は匿名続行（middleware は 401 にしない）。
         Cookie が無く非 public のアイテムは 401。`viewAccess=public` なら未ログインでも閲覧可。Cookie がある場合は
         ACL に従い 403 もありうる。ハンドラが強制する。
     post:
@@ -1259,8 +1259,8 @@ paths:
           type: string
         description: 前回応答の ETag。一致すれば 304
       security: []
-      description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
-        `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
+      description: セッション Cookie は任意（sessionOptional）。有効な users Basic なら
+        `CurrentUser` を付与。無効な Basic、またはロック中（連続 5 回失敗。`basicAuth` の説明を参照）の場合は匿名続行（middleware は 401 にしない）。
         Cookie が無く非 public のアイテムは 401。`viewAccess=public` なら未ログインでも閲覧可。Cookie がある場合は
         ACL に従い 403 もありうる。ハンドラが強制する。
   /api/items/by-number/{number}/command-templates:
@@ -2028,8 +2028,8 @@ paths:
         schema:
           type: integer
       security: []
-      description: セッション Cookie は任意（sessionOptional）。有効な users Basic（`Sec-Fetch-Site` ヘッダ無し）なら
-        `CurrentUser` を付与。無効な Basic または `Sec-Fetch-Site` ありの場合は匿名続行（middleware は 401 にしない）。
+      description: セッション Cookie は任意（sessionOptional）。有効な users Basic なら
+        `CurrentUser` を付与。無効な Basic、またはロック中（連続 5 回失敗。`basicAuth` の説明を参照）の場合は匿名続行（middleware は 401 にしない）。
         Cookie が無く非 public のアイテムは 401。`viewAccess=public` なら未ログインでも閲覧可。Cookie がある場合は
         ACL に従い 403 もありうる。ハンドラが強制する。
     patch:
