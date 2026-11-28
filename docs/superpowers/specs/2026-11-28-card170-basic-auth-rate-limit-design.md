@@ -81,7 +81,7 @@ match := h.checkPassword(loginPasswordHash(user, err), pass)   // 不在・無�
 - テスト: `backend/internal/kanban/auth_handler_test.go`（または新規の `basic_auth_rate_limit_test.go`）。
 - 文書:
   - `SECURITY.md` の App HTTP Basic の行に「Basic も 5 回失敗で 15 分ロック（ログインとは別カウンタ）」を追記し、既知の制限として下記を書く（L-213。実装時にはレビューで判明した共有 IP・照合順序・プロセス内メモリを加え 5 点）。
-    1. エッジ Basic の再送で、同じ接続元 IP の CLI の Basic がロックされうること（回避策は Cookie）。
+    1. エッジ Basic の再送で、同じ接続元 IP の CLI の Basic と、`AUTH_USER` のログイン名の CLI の Basic（このキーは全接続元で共通のため、別の IP からも）がロックされうること（回避策は Cookie、または `AUTH_USER` 以外の利用者を使うこと）。
     2. 許可判定（`Allow`）と失敗の記録（`RecordFailure`）が別のロック区間で、間に DB と bcrypt を挟むため、並行に送られたリクエストは 5 回目の失敗が記録される前に通りうること（L-986）。ログインも同じで、ログインは nginx の `api_login`（1r/s、burst 5）、Basic は `api_general`（10r/s、burst 20）が上限になる。
   - `docs/api.md` の curl 例の節に、Basic のロック（5 回失敗で 15 分、ログインとは別カウンタ）と、ロック時の回避策（`POST /api/auth/login` で得た Cookie を `-b` で送る）を追記。
 
@@ -108,7 +108,7 @@ match := h.checkPassword(loginPasswordHash(user, err), pass)   // 不在・無�
 - フォームのログインとはカウンタを分ける（理由は「方針 1」）。しきい値は同じ。
 - ロック中も失敗時と同じ 401（または `sessionOptional` なら匿名）を返し、429 は返さない。
 - 応答時間の差は、ダミーハッシュでの照合を必ず 1 回行うことで揃える。応答時間の計測テストは行わず、照合回数と渡すハッシュを `withPasswordChecker` で構造的にテストする（L-085）。
-- エッジ Basic の再送による CLI の Basic の IP ロックは許容し、回避策（Cookie）を文書に書く。
+- エッジ Basic の再送による CLI の Basic のロック（接続元 IP と `AUTH_USER` のログイン名。後者は全接続元に及ぶ）は許容し、回避策（Cookie、または `AUTH_USER` 以外の利用者）を文書に書く。
 - 許可判定と記録の TOCTOU（L-986）は、リミッタのインターフェースを変えてログインにも波及する修正になるため本カードの範囲外とし、`SECURITY.md` の既知の制限に書く。
 - カードの「ログインと同じ制限」は、しきい値・キー・実装が同じという意味で満たし、カウンタは意図して分ける（PR の説明に明記する）。
 - 複数インスタンス（Cloud Run の水平スケール）でのカウンタ共有は、フォームのログインと同じくプロセス内メモリのままとし、本カードの範囲外とする。
