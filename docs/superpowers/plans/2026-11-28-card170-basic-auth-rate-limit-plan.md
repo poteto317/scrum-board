@@ -460,7 +460,7 @@ App HTTP Basic の行の説明の末尾に追記:
 
 ---
 
-## 実装後の差分（SRP リファクタリング・ローカルレビュー）
+## 実装後の差分（SRP リファクタリング・ローカルレビュー・PR レビュー）
 
 上の Architecture・Task 1 Step 4・Task 3 のコードは集約前の形。最終形は次のとおり。
 
@@ -468,3 +468,4 @@ App HTTP Basic の行の説明の末尾に追記:
 - `login` は取り出し・401 / 429・セッション発行だけ、`userFromBasicAuth` は Basic の取り出しと `result == credentialAccepted` の変換だけになった。
 - テストを 2 件追加: `TestVerifyCredentialsOutcomes`（共通関数を直接呼び、ロック・不在・無効・DB エラー・誤パスワード・成功の各ケースで照会回数・照合回数・ダミーハッシュ・記録キーを確認）、`TestLoginUsesSharedCredentialCheck`（login のロック中 429 で照会・照合なし、失敗は `loginAttempts` にだけ記録）。
 - `SECURITY.md` の既知の制限は、Cloud Run での共有 IP と、ログイン名キーと照合順序（`utf8mb4_0900_ai_ci`）の不一致を加えて 5 点にした。`docs/openapi.yaml` の `basicAuth` の説明にもロックを書いた。
+- PR レビューでテストを 2 件追加: `TestBasicAuthNotEvaluatedWithValidSession`（有効な Cookie があれば失敗する Basic を評価せず、カウンタも進まない）、`TestBasicAuthLoginKeyLockAppliesAcrossIPs`（ログイン名のロックが接続元をまたぐ）。あわせて `SECURITY.md` と `docs/api.md` の既知の制限 1 に、エッジ Basic の再送で `AUTH_USER` のログイン名のカウンタも全接続元でロックされることと、回避策（Cookie、または `AUTH_USER` 以外の利用者）を書いた。`docs/openapi.yaml` の `sessionOptional` の経路と冒頭の `Sec-Fetch-Site` の記述も実装に合わせた。
