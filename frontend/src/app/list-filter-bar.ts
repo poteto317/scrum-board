@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, inject, input, output, signal } fro
 import { labelBadgeVars } from './label';
 import { LabelManagerDialog } from './label-manager-dialog';
 import { LabelsSession } from './labels-session';
-import { ListFilterView, appliedListFilter, listFilterActive } from './list-filter';
+import { ListFilterView, appliedListFilter } from './list-filter';
 import { ListFilterSession } from './list-filter-session';
 import { Column } from './models';
 
@@ -39,14 +39,6 @@ export class ListFilterBar {
       this.columns().map((c) => c.id),
       this.labelsSession.knownLabelIds(),
     ).labelIds;
-  }
-
-  isActive(): boolean {
-    return listFilterActive(
-      this.session.filter(this.view()),
-      this.columns().map((c) => c.id),
-      this.labelsSession.knownLabelIds(),
-    );
   }
 
   labelVars(color: string): Record<string, string> {
