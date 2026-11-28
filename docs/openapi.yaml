@@ -3899,7 +3899,7 @@ components:
     basicAuth:
       type: http
       scheme: basic
-      description: users テーブルの login_name / password。Cookie が無いときミドルウェアが検証する（セッションは発行しない）。`Sec-Fetch-Site` ヘッダが無い非ブラウザ（curl・エージェント等）向け。ブラウザは Cookie セッションを使う。本番 nginx Basic（AUTH_*）とは別
+      description: users テーブルの login_name / password。Cookie が無いときミドルウェアが検証する（セッションは発行しない）。主に curl・エージェント等の非ブラウザ向けだが、`Sec-Fetch-Site` 付きのブラウザの Basic も同じく検証する。連続 5 回失敗でログイン名・接続元ごとに 15 分ロック（ログインとは別カウンタ）。ロック中は正しい資格情報でも 401（`sessionOptional` の経路は匿名扱い）。本番 nginx Basic（AUTH_*）とは別
     schedulerJobToken:
       type: apiKey
       in: header
