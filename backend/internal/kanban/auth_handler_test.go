@@ -424,27 +424,25 @@ func TestClientIP(t *testing.T) {
 	}
 }
 
+// formLoginReq posts a JSON form login from the given client IP (the form-login counterpart of basicReq).
+func formLoginReq(h http.Handler, loginName, password, ip string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(`{"loginName":"`+loginName+`","password":"`+password+`"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-Real-IP", ip)
+	h.ServeHTTP(w, r)
+	return w
+}
+
 func TestAuthLoginIPRateLimitBlocksOtherLogin(t *testing.T) {
 	h := NewHandler(fresh())
-	body := func(name string) string {
-		return `{"loginName":"` + name + `","password":"wrong-password"}`
-	}
+	const ip = "203.0.113.9"
 	for i := 0; i < loginFailureLimit; i++ {
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(body("admin")))
-		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("X-Real-IP", "203.0.113.9")
-		h.ServeHTTP(w, r)
-		if w.Code != 401 {
+		if w := formLoginReq(h, "admin", "wrong-password", ip); w.Code != 401 {
 			t.Fatalf("fail %d: %d", i+1, w.Code)
 		}
 	}
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(body("other")))
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("X-Real-IP", "203.0.113.9")
-	h.ServeHTTP(w, r)
-	if w.Code != 429 {
+	if w := formLoginReq(h, "other", "wrong-password", ip); w.Code != 429 {
 		t.Fatalf("same IP other login want 429 got %d %s", w.Code, w.Body)
 	}
 }
