@@ -593,23 +593,23 @@ func TestProjectToolsRespectACLOnMySQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, numbers := searchNumbers(t, newProjectToolExecutor(repo, 1, &member, columns, false, nil), `{"query":"zztool"}`)
+	_, numbers := searchNumbers(t, newProjectToolExecutor(repo, 1, &member, columns, nil, false, nil), `{"query":"zztool"}`)
 	if !slices.Equal(numbers, []int64{open.Number}) {
 		t.Fatalf("member sees %v", numbers)
 	}
-	out, numbers := searchNumbers(t, newProjectToolExecutor(repo, 1, &admin, columns, false, nil), `{"query":"zztool","status":"doing"}`)
+	out, numbers := searchNumbers(t, newProjectToolExecutor(repo, 1, &admin, columns, nil, false, nil), `{"query":"zztool","status":"doing"}`)
 	if !slices.Equal(numbers, []int64{hidden.Number}) || out.Items[0].Status != "Doing" || !strings.Contains(out.Items[0].Snippet, "SECRET-BODY") {
 		t.Fatalf("admin sees %v %+v", numbers, out.Items)
 	}
 	notFound := toolErrorResult(toolErrItemNotFound)
-	memberTools := newProjectToolExecutor(repo, 1, &member, columns, false, nil)
+	memberTools := newProjectToolExecutor(repo, 1, &member, columns, nil, false, nil)
 	if got := runTool(t, memberTools, toolGetItem, fmt.Sprintf(`{"number":%d}`, hidden.Number)); got != notFound {
 		t.Fatalf("hidden item: %s", got)
 	}
 	if got := runTool(t, memberTools, toolGetItem, `{"number":987654}`); got != notFound {
 		t.Fatalf("missing item: %s", got)
 	}
-	got := runTool(t, newProjectToolExecutor(repo, 1, &admin, columns, false, nil), toolGetItem, fmt.Sprintf(`{"number":%d}`, hidden.Number))
+	got := runTool(t, newProjectToolExecutor(repo, 1, &admin, columns, nil, false, nil), toolGetItem, fmt.Sprintf(`{"number":%d}`, hidden.Number))
 	if !strings.Contains(got, "SECRET-BODY") || !strings.Contains(got, "ZZTOOL のコメント") || !strings.Contains(got, `"status":"Doing"`) {
 		t.Fatalf("admin get_item: %s", got)
 	}

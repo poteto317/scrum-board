@@ -123,7 +123,7 @@ func TestCrossProjectSearchRepoFailureStops(t *testing.T) {
 	f := newToolFixture(t)
 	boom := errors.New("SELECT failed SENTINEL")
 	repo := &failingToolRepo{memoryRepo: f.repo, searchErr: boom}
-	e := newProjectToolExecutor(repo, 1, &f.admin, f.repo.sortedColumns(), true, nil)
+	e := newProjectToolExecutor(repo, 1, &f.admin, f.repo.sortedColumns(), f.repo.labels, true, nil)
 	out, err := e.Run(context.Background(), ToolCall{Name: toolSearchItems, Input: json.RawMessage(`{"query":"x"}`)})
 	if !errors.Is(err, boom) || out != "" {
 		t.Fatalf("out=%q err=%v", out, err)
@@ -132,8 +132,8 @@ func TestCrossProjectSearchRepoFailureStops(t *testing.T) {
 
 func TestBuildProjectChatSystemCrossSection(t *testing.T) {
 	now := time.Now()
-	off := buildProjectChatSystem("p", now, nil, nil, false)
-	on := buildProjectChatSystem("p", now, nil, nil, true)
+	off := buildProjectChatSystem("p", now, nil, nil, nil, false)
+	on := buildProjectChatSystem("p", now, nil, nil, nil, true)
 	if strings.Contains(off, "横断検索がオン") {
 		t.Fatal("off must not mention cross search")
 	}

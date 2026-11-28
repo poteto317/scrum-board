@@ -15,11 +15,11 @@ import (
 var toolTestColumns = []Column{{ID: 1, Name: "Todo"}, {ID: 2, Name: "Doing"}, {ID: 3, Name: "Done"}}
 
 func TestParseSearchItemsInputDefaultsAndClamps(t *testing.T) {
-	plan, problem := parseSearchItemsInput(nil, toolTestColumns)
+	plan, problem := parseSearchItemsInput(nil, toolTestColumns, nil)
 	if problem != "" || plan.Limit != 10 || plan.Offset != 0 || plan.Search.SortByDue || len(plan.Search.Terms) != 0 || plan.Search.ColumnID != nil {
 		t.Fatalf("defaults: %+v %q", plan, problem)
 	}
-	plan, problem = parseSearchItemsInput(json.RawMessage(`{"query":" 認証  トークン ","status":"doing","assignee":" Sato ","sort":"due","limit":50,"offset":500}`), toolTestColumns)
+	plan, problem = parseSearchItemsInput(json.RawMessage(`{"query":" 認証  トークン ","status":"doing","assignee":" Sato ","sort":"due","limit":50,"offset":500}`), toolTestColumns, nil)
 	if problem != "" {
 		t.Fatal(problem)
 	}
@@ -27,18 +27,18 @@ func TestParseSearchItemsInputDefaultsAndClamps(t *testing.T) {
 		plan.Search.Assignee != "Sato" || !plan.Search.SortByDue || plan.Limit != 20 || plan.Offset != 199 || plan.UnknownStatus {
 		t.Fatalf("plan=%+v", plan)
 	}
-	plan, _ = parseSearchItemsInput(json.RawMessage(`{"limit":0,"offset":-3}`), toolTestColumns)
+	plan, _ = parseSearchItemsInput(json.RawMessage(`{"limit":0,"offset":-3}`), toolTestColumns, nil)
 	if plan.Limit != 1 || plan.Offset != 0 {
 		t.Fatalf("low values are clamped: %+v", plan)
 	}
-	plan, problem = parseSearchItemsInput(json.RawMessage(`{"status":"Review"}`), toolTestColumns)
+	plan, problem = parseSearchItemsInput(json.RawMessage(`{"status":"Review"}`), toolTestColumns, nil)
 	if problem != "" || !plan.UnknownStatus {
 		t.Fatalf("unknown status: %+v %q", plan, problem)
 	}
 }
 
 func TestParseSearchItemsInputDatesAreTokyoDays(t *testing.T) {
-	plan, problem := parseSearchItemsInput(json.RawMessage(`{"dueFrom":"2026-11-26","dueTo":"2026-11-30"}`), toolTestColumns)
+	plan, problem := parseSearchItemsInput(json.RawMessage(`{"dueFrom":"2026-11-26","dueTo":"2026-11-30"}`), toolTestColumns, nil)
 	if problem != "" {
 		t.Fatal(problem)
 	}
@@ -62,7 +62,7 @@ func TestParseSearchItemsInputRejectsBadInput(t *testing.T) {
 		`{"dueFrom":"2026-11-26T0"}`: toolErrDateFormat,
 	}
 	for raw, want := range cases {
-		if _, problem := parseSearchItemsInput(json.RawMessage(raw), toolTestColumns); problem != want {
+		if _, problem := parseSearchItemsInput(json.RawMessage(raw), toolTestColumns, nil); problem != want {
 			t.Fatalf("%s => %q want %q", raw, problem, want)
 		}
 	}
@@ -201,7 +201,7 @@ func (f *toolFixture) execCross(user User, projectID int64, cross bool) *project
 	for _, p := range f.repo.projects {
 		names[p.ID] = p.Name
 	}
-	return newProjectToolExecutor(f.repo, projectID, &user, f.repo.sortedColumns(), cross, names)
+	return newProjectToolExecutor(f.repo, projectID, &user, f.repo.sortedColumns(), f.repo.labels, cross, names)
 }
 
 func runTool(t *testing.T, e *projectToolExecutor, name, input string) string {
@@ -451,7 +451,7 @@ func checkSearchCountsOnlyViewableMatches(t *testing.T, repo Repository, admin, 
 	}
 	search := func(user User, input string) (searchItemsOut, []int64) {
 		t.Helper()
-		return searchNumbers(t, newProjectToolExecutor(repo, 1, &user, columns, false, nil), input)
+		return searchNumbers(t, newProjectToolExecutor(repo, 1, &user, columns, nil, false, nil), input)
 	}
 	// 閲覧できる 200 件と、それより新しい、メンバーには見えない 10 件。
 	hidden := map[int64]bool{}
@@ -517,11 +517,11 @@ func checkHiddenCommentMatchIsNotCounted(t *testing.T, repo Repository, admin, m
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("the search must not return a hidden item for the member: rows=%d err=%v", len(rows), err)
 	}
-	out, numbers := searchNumbers(t, newProjectToolExecutor(repo, 1, &member, columns, false, nil), `{"query":"zzonlycomment"}`)
+	out, numbers := searchNumbers(t, newProjectToolExecutor(repo, 1, &member, columns, nil, false, nil), `{"query":"zzonlycomment"}`)
 	if out.Total != 0 || out.Truncated || len(numbers) != 0 {
 		t.Fatalf("member: total=%d truncated=%v items=%v", out.Total, out.Truncated, numbers)
 	}
-	out, numbers = searchNumbers(t, newProjectToolExecutor(repo, 1, &admin, columns, false, nil), `{"query":"zzonlycomment"}`)
+	out, numbers = searchNumbers(t, newProjectToolExecutor(repo, 1, &admin, columns, nil, false, nil), `{"query":"zzonlycomment"}`)
 	if out.Total != 1 || !slices.Equal(numbers, []int64{card.Number}) {
 		t.Fatalf("admin: total=%d items=%v", out.Total, numbers)
 	}
@@ -650,7 +650,7 @@ func TestToolRepositoryFailuresStopTheLoopInsteadOfAnswering(t *testing.T) {
 			}
 			repo := &failingToolRepo{memoryRepo: f.repo}
 			tc.prepare(repo)
-			e := newProjectToolExecutor(repo, 1, &f.admin, f.repo.sortedColumns(), false, nil)
+			e := newProjectToolExecutor(repo, 1, &f.admin, f.repo.sortedColumns(), f.repo.labels, false, nil)
 			out, err := e.Run(context.Background(), ToolCall{Name: tc.name, Input: json.RawMessage(tc.input)})
 			if !errors.Is(err, boom) || out != "" || !errors.Is(e.failure(), boom) {
 				t.Fatalf("out=%q err=%v failure=%v", out, err, e.failure())
@@ -683,7 +683,7 @@ func TestProjectChatToolDefinitions(t *testing.T) {
 		}
 	}
 	props := tools[0].InputSchema["properties"].(map[string]any)
-	for _, key := range []string{"query", "status", "assignee", "dueFrom", "dueTo", "sort", "limit", "offset"} {
+	for _, key := range []string{"query", "status", "labels", "assignee", "dueFrom", "dueTo", "sort", "limit", "offset"} {
 		if _, ok := props[key]; !ok {
 			t.Fatalf("search_items lacks %q", key)
 		}
@@ -703,7 +703,7 @@ func TestProjectChatToolDefinitions(t *testing.T) {
 func TestToolInputWithUnknownFieldsIsRejected(t *testing.T) {
 	// 項目名の間違い（due_to など）を黙って無視すると、絞り込みなしの検索になる。
 	for _, raw := range []string{`{"due_to":"2026-12-01"}`, `{"query":"a","assignee_name":"x"}`} {
-		if _, problem := parseSearchItemsInput(json.RawMessage(raw), nil); problem == "" {
+		if _, problem := parseSearchItemsInput(json.RawMessage(raw), nil, nil); problem == "" {
 			t.Fatalf("search_items must reject unknown fields: %s", raw)
 		}
 	}
