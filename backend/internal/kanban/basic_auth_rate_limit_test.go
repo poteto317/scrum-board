@@ -189,23 +189,17 @@ func TestBasicAuthLockDoesNotAffectFormLogin(t *testing.T) {
 	}
 }
 
-// テスト 6: 成功で login キーだけ消え、IP キーは残る（L-1028）。
-func TestBasicAuthSuccessClearsLoginKeyNotIP(t *testing.T) {
+// テスト 6: 成功しても IP のカウンタは残る（L-1028）。組のキーの消去は limiter 単体のテストで確かめる。
+// 変更前のキーでも通る回帰テストで、#171 の新しい挙動を検証するものではない。
+func TestBasicAuthSuccessKeepsIPFailures(t *testing.T) {
 	h := NewHandler(fresh())
-	const ipA, ipB = "203.0.113.10", "203.0.113.20"
+	const ipA = "203.0.113.10"
 	for i := 0; i < loginFailureLimit-1; i++ {
 		basicReq(h, "/api/board", "admin", "wrong", ipA)
 	}
 	if w := basicReq(h, "/api/board", "admin", "test-password", ipA); w.Code != 200 {
 		t.Fatalf("A success=%d", w.Code)
 	}
-	for i := 0; i < loginFailureLimit-1; i++ {
-		basicReq(h, "/api/board", "admin", "wrong", ipB)
-	}
-	if w := basicReq(h, "/api/board", "admin", "test-password", ipB); w.Code != 200 {
-		t.Fatalf("login key should be cleared by success: B=%d", w.Code)
-	}
-	// ipA: 4 failures remain; one more (other login name) locks the IP.
 	basicReq(h, "/api/board", "someone-else", "wrong", ipA)
 	if w := basicReq(h, "/api/board", "admin", "test-password", ipA); w.Code != 401 {
 		t.Fatalf("IP key must survive success: A=%d", w.Code)
@@ -367,16 +361,17 @@ func TestBasicAuthNotEvaluatedWithValidSession(t *testing.T) {
 	}
 }
 
-// The login-name key is shared across client IPs: 5 failures from A lock that name from B too.
-func TestBasicAuthLoginKeyLockAppliesAcrossIPs(t *testing.T) {
+// The login-name lock is keyed with the client IP: 5 failures from A do not lock that name from B (#171).
+func TestBasicAuthLoginNameLockDoesNotSpanIPs(t *testing.T) {
 	h := NewHandler(fresh())
+	const ipA, ipB = "203.0.113.30", "203.0.113.40"
 	for i := 0; i < loginFailureLimit; i++ {
-		basicReq(h, "/api/board", "admin", "wrong", "203.0.113.30")
+		basicReq(h, "/api/board", "admin", "wrong", ipA)
 	}
-	if w := basicReq(h, "/api/board", "admin", "test-password", "203.0.113.40"); w.Code != 401 {
-		t.Fatalf("login-name lock must apply from another IP, got %d", w.Code)
+	if w := basicReq(h, "/api/board", "admin", "test-password", ipB); w.Code != 200 {
+		t.Fatalf("another IP must not be locked by A's failures, got %d", w.Code)
 	}
-	if w := basicReq(h, "/api/board", "admin", "test-password", ""); w.Code != 401 {
-		t.Fatalf("login-name lock must apply from default IP, got %d", w.Code)
+	if w := basicReq(h, "/api/board", "admin", "test-password", ipA); w.Code != 401 {
+		t.Fatalf("A itself stays locked, got %d", w.Code)
 	}
 }

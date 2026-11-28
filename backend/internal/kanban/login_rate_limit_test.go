@@ -36,25 +36,24 @@ func TestLoginAttemptLimiterThresholdAndRelock(t *testing.T) {
 	}
 }
 
-func TestLoginAttemptLimiterSuccessClearsLoginNotIP(t *testing.T) {
-	l := NewMemoryLoginAttemptLimiter()
+func TestLoginAttemptLimiterSuccessClearsPairNotIP(t *testing.T) {
+	l := NewMemoryLoginAttemptLimiter().(*memoryLoginAttemptLimiter)
 	now := time.Now().UTC()
-	for i := 0; i < 3; i++ {
-		l.RecordFailure("a", "9.9.9.9", now)
+	const ip = "9.9.9.9"
+	for i := 0; i < loginFailureLimit-1; i++ {
+		l.RecordFailure("a", ip, now)
 	}
-	l.RecordSuccess("a", "9.9.9.9")
-	// login key cleared: can fail again without immediate lock from prior login counts
-	for i := 0; i < 2; i++ {
-		l.RecordFailure("a", "10.0.0.1", now)
+	l.RecordSuccess("a", ip)
+	if _, ok := l.byKey[loginAttemptKey("a", ip)]; ok {
+		t.Fatal("success must clear the login+ip pair key")
 	}
-	if !l.Allow("a", "10.0.0.1", now) {
-		t.Fatal("login key should have been cleared by success")
+	e := l.byKey[ipAttemptKey(ip)]
+	if e == nil || e.failures != loginFailureLimit-1 {
+		t.Fatalf("IP failures must survive success (L-1028): %+v", e)
 	}
-	// IP key retained: 3 prior failures on 9.9.9.9 still count toward lock
-	l.RecordFailure("b", "9.9.9.9", now)
-	l.RecordFailure("b", "9.9.9.9", now)
-	if l.Allow("c", "9.9.9.9", now) {
-		t.Fatal("IP failures should not clear on another user's success")
+	l.RecordFailure("b", ip, now)
+	if l.Allow("c", ip, now) {
+		t.Fatal("IP should lock on the 5th failure counted across logins")
 	}
 }
 
@@ -64,17 +63,34 @@ func TestLoginAttemptLimiterIndependentKeys(t *testing.T) {
 	for i := 0; i < loginFailureLimit; i++ {
 		l.RecordFailure("alice", "10.0.0.1", now)
 	}
-	if l.Allow("alice", "10.0.0.2", now) {
-		t.Fatal("login key lock should block other IPs for same login")
+	if !l.Allow("alice", "10.0.0.2", now) {
+		t.Fatal("login-name lock must not block the same login from another IP")
+	}
+	if l.Allow("alice", "10.0.0.1", now) {
+		t.Fatal("same login+ip should be locked")
+	}
+	if l.Allow("bob", "10.0.0.1", now) {
+		t.Fatal("ip lock should block other logins from same IP")
 	}
 	if !l.Allow("bob", "10.0.0.2", now) {
 		t.Fatal("different login+ip should still allow")
 	}
-	for i := 0; i < loginFailureLimit; i++ {
-		l.RecordFailure("carol", "10.0.0.1", now)
+}
+
+// Success from one IP clears only that login+IP pair; the same login's pair on another IP stays (#171).
+func TestLoginAttemptLimiterSuccessClearsOnlyOwnPair(t *testing.T) {
+	l := NewMemoryLoginAttemptLimiter().(*memoryLoginAttemptLimiter)
+	now := time.Now().UTC()
+	const ipA, ipB = "10.0.0.1", "10.0.0.2"
+	l.RecordFailure("alice", ipA, now)
+	l.RecordFailure("alice", ipB, now)
+	l.RecordSuccess("alice", ipB)
+	if _, ok := l.byKey[loginAttemptKey("alice", ipB)]; ok {
+		t.Fatal("success must clear its own login+ip pair key")
 	}
-	if l.Allow("dave", "10.0.0.1", now) {
-		t.Fatal("ip lock should block other logins from same IP")
+	e := l.byKey[loginAttemptKey("alice", ipA)]
+	if e == nil || e.failures != 1 {
+		t.Fatalf("pair key on another IP must survive: %+v", e)
 	}
 }
 
