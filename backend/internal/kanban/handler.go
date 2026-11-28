@@ -9,18 +9,20 @@ import (
 )
 
 type handler struct {
-	repo              Repository
-	formatter         ItemFormatter
-	chatter           ItemChatter
-	projectChatter    ProjectChatter
-	projectChats      *userInFlight
-	slots             chan struct{}
-	publicOrigin      string
+	repo                Repository
+	formatter           ItemFormatter
+	chatter             ItemChatter
+	projectChatter      ProjectChatter
+	projectChats        *userInFlight
+	slots               chan struct{}
+	publicOrigin        string
 	prTitleResolver     *PRTitleResolver
 	linkPreviewResolver *LinkPreviewResolver
 	blobs               BlobStorage
-	rateLimiter       AIRateLimiter
-	loginAttempts     LoginAttemptLimiter
+	rateLimiter         AIRateLimiter
+	loginAttempts       LoginAttemptLimiter
+	// checkPassword compares a bcrypt hash; injectable so tests can pin "always compare once" (L-085).
+	checkPassword     func(hash, password string) bool
 	messageMax        int
 	historyTurns      int
 	schedulerJobToken string
@@ -103,6 +105,15 @@ func WithLoginAttemptLimiter(l LoginAttemptLimiter) Option {
 	}
 }
 
+// withPasswordChecker replaces the bcrypt comparison (package tests only). Nil keeps the current checker.
+func withPasswordChecker(f func(hash, password string) bool) Option {
+	return func(h *handler) {
+		if f != nil {
+			h.checkPassword = f
+		}
+	}
+}
+
 // WithSchedulerJobToken sets the shared secret for Cloud Scheduler job POSTs (X-Scheduler-Token).
 func WithSchedulerJobToken(token string) Option {
 	return func(h *handler) { h.schedulerJobToken = token }
@@ -126,10 +137,11 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 		blobs:             UnavailableBlobStorage{},
 		rateLimiter:       NewNoopAIRateLimiter(),
 		loginAttempts:     NewMemoryLoginAttemptLimiter(),
+		checkPassword:     CheckPassword,
 		messageMax:        maxAIChatMessageLen,
 		historyTurns:      maxAIChatHistoryTurns,
 		schedulerJobToken: HandlerTestSchedulerToken,
-		attachmentSlots: make(chan struct{}, attachmentMaxConcurrent),
+		attachmentSlots:   make(chan struct{}, attachmentMaxConcurrent),
 		// prTitleResolver / linkPreviewResolver nil by default so unit tests do not hit the network;
 		// wire in production via WithPRTitleResolver / WithLinkPreviewResolver.
 	}

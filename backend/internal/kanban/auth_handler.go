@@ -23,25 +23,18 @@ func (h handler) login(w http.ResponseWriter, r *http.Request) {
 		reply(w, 401, map[string]string{"message": msgLoginFailed})
 		return
 	}
-	loginKey := strings.ToLower(loginName)
-	ip := clientIP(r)
 	now := time.Now().UTC()
-	if !h.loginAttempts.Allow(loginKey, ip, now) {
+	// verifyCredentials clears login-key failures once credentials are accepted (before session I/O),
+	// so a transient CreateSession failure does not push a valid user toward 429.
+	user, result := h.verifyCredentials(r, h.loginAttempts, loginName, in.Password, now)
+	switch result {
+	case credentialLocked:
 		reply(w, 429, map[string]string{"message": msgLoginRateLimited})
 		return
-	}
-	user, err := h.repo.GetUserByLoginName(r.Context(), loginName)
-	okUser := err == nil && !user.Disabled
-	// Always compare (dummy hash when missing/disabled) before branching — do not short-circuit.
-	match := CheckPassword(loginPasswordHash(user, err), in.Password)
-	if !okUser || !match {
-		h.loginAttempts.RecordFailure(loginKey, ip, now)
+	case credentialRejected:
 		reply(w, 401, map[string]string{"message": msgLoginFailed})
 		return
 	}
-	// Clear login-key failures once credentials are accepted (before session I/O),
-	// so a transient CreateSession failure does not push a valid user toward 429.
-	h.loginAttempts.RecordSuccess(loginKey, ip)
 	sess, err := h.repo.CreateSession(r.Context(), user.ID, now)
 	if err != nil {
 		fail(w, err)
@@ -49,6 +42,36 @@ func (h handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	setSessionCookie(w, r, sess.ID, sess.ExpiresAt)
 	reply(w, 200, user.Public())
+}
+
+// credentialResult is the outcome of verifyCredentials.
+type credentialResult int
+
+const (
+	credentialAccepted credentialResult = iota
+	credentialRejected                  // unknown/disabled user, lookup error, or wrong password (failure recorded)
+	credentialLocked                    // limiter refused: no lookup, no compare, nothing recorded
+)
+
+// verifyCredentials is the rate-limited password check shared by POST /api/auth/login and
+// Authorization: Basic. loginName must already be trimmed and non-empty; callers decide how
+// to reply. Order: Allow → lookup → always one compare (dummy hash when missing/disabled/lookup
+// error — do not short-circuit, L-085) → RecordFailure or RecordSuccess on the given limiter.
+func (h handler) verifyCredentials(r *http.Request, limiter LoginAttemptLimiter, loginName, password string, now time.Time) (User, credentialResult) {
+	loginKey := strings.ToLower(loginName)
+	ip := clientIP(r)
+	if !limiter.Allow(loginKey, ip, now) {
+		return User{}, credentialLocked
+	}
+	user, err := h.repo.GetUserByLoginName(r.Context(), loginName)
+	okUser := err == nil && !user.Disabled
+	match := h.checkPassword(loginPasswordHash(user, err), password)
+	if !okUser || !match {
+		limiter.RecordFailure(loginKey, ip, now)
+		return User{}, credentialRejected
+	}
+	limiter.RecordSuccess(loginKey, ip)
+	return user, credentialAccepted
 }
 
 func clientIP(r *http.Request) string {
