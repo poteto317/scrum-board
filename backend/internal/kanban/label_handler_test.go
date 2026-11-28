@@ -66,7 +66,17 @@ func TestLabelCRUDEndpoints(t *testing.T) {
 		}
 	}
 
-	// PATCH validation & 404.
+	// Second label for duplicate-on-PATCH 409 check, then delete it before workspace limit loop.
+	wOther := request(h, "POST", "/api/labels", `{"name":"Other","color":"#22c55e"}`)
+	if wOther.Code != 201 {
+		t.Fatalf("create second label: %d %s", wOther.Code, wOther.Body.String())
+	}
+	var otherLabel Label
+	if err := json.Unmarshal(wOther.Body.Bytes(), &otherLabel); err != nil {
+		t.Fatal(err)
+	}
+
+	// PATCH validation, same-key 200, duplicate-key 409, unknown field 400, and 404.
 	if w := request(h, "PATCH", "/api/labels/0", `{"name":"x"}`); w.Code != 400 {
 		t.Fatalf("invalid path id: expected 400, got %d", w.Code)
 	}
@@ -79,8 +89,24 @@ func TestLabelCRUDEndpoints(t *testing.T) {
 	if w := request(h, "PATCH", fmt.Sprintf("/api/labels/%d", created.ID), `{"name":null}`); w.Code != 400 {
 		t.Fatalf("null name patch: expected 400, got %d", w.Code)
 	}
+	if w := request(h, "PATCH", fmt.Sprintf("/api/labels/%d", created.ID), `{"extra":1}`); w.Code != 400 {
+		t.Fatalf("unknown field patch: expected 400, got %d", w.Code)
+	}
+	if w := request(h, "PATCH", fmt.Sprintf("/api/labels/%d", created.ID), `{"name":"ｏｔｈｅｒ"}`); w.Code != 409 {
+		t.Fatalf("duplicate key patch: expected 409, got %d %s", w.Code, w.Body.String())
+	}
 	if w := requestWithCookie(h, "PATCH", fmt.Sprintf("/api/labels/%d", created.ID), `{"name":"API","color":"#3B82F6"}`, "member-session"); w.Code != 200 {
 		t.Fatalf("patch label: %d %s", w.Code, w.Body.String())
+	}
+	// Updating own name with same LabelNameKey ("API" -> "api") succeeds with 200, then restore "API".
+	if w := requestWithCookie(h, "PATCH", fmt.Sprintf("/api/labels/%d", created.ID), `{"name":"api"}`, "member-session"); w.Code != 200 {
+		t.Fatalf("same-key patch label: expected 200, got %d %s", w.Code, w.Body.String())
+	}
+	if w := requestWithCookie(h, "PATCH", fmt.Sprintf("/api/labels/%d", created.ID), `{"name":"API"}`, "member-session"); w.Code != 200 {
+		t.Fatalf("restore label name: %d %s", w.Code, w.Body.String())
+	}
+	if w := requestWithCookie(h, "DELETE", fmt.Sprintf("/api/labels/%d", otherLabel.ID), "", "member-session"); w.Code != 204 {
+		t.Fatalf("cleanup second label: expected 204, got %d", w.Code)
 	}
 
 	// GET /api/labels -> id ASC.
@@ -108,7 +134,10 @@ func TestLabelCRUDEndpoints(t *testing.T) {
 		t.Fatalf("200 limit: expected 409, got %d %s", w.Code, w.Body.String())
 	}
 
-	// DELETE 204 & 404.
+	// DELETE 400, 204 & 404.
+	if w := request(h, "DELETE", "/api/labels/0", ""); w.Code != 400 {
+		t.Fatalf("delete invalid id: expected 400, got %d", w.Code)
+	}
 	if w := requestWithCookie(h, "DELETE", fmt.Sprintf("/api/labels/%d", created.ID), "", "member-session"); w.Code != 204 {
 		t.Fatalf("delete label: expected 204, got %d", w.Code)
 	}
@@ -239,6 +268,17 @@ func TestItemLabelsCreateUpdateReflectACLAndHistory(t *testing.T) {
 	w = request(h, "GET", fmt.Sprintf("/api/items/by-number/%d?projectId=1", item.Number), "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"Renamed"`) || !strings.Contains(w.Body.String(), `"#10b981"`) {
 		t.Fatalf("item detail did not reflect rename/recolor: %d %s", w.Code, w.Body.String())
+	}
+
+	// Delete one attached label -> disappears immediately from board, backlog, and item detail.
+	if w := request(h, "DELETE", fmt.Sprintf("/api/labels/%d", labels[2].ID), ""); w.Code != 204 {
+		t.Fatalf("delete attached label: expected 204, got %d", w.Code)
+	}
+	for _, path := range []string{"/api/board", "/api/backlog", fmt.Sprintf("/api/items/by-number/%d?projectId=1", item.Number)} {
+		wd := request(h, "GET", path, "")
+		if wd.Code != 200 || strings.Contains(wd.Body.String(), `"L03"`) || !strings.Contains(wd.Body.String(), `"Renamed"`) {
+			t.Fatalf("delete reflection failed on %s: %d %s", path, wd.Code, wd.Body.String())
+		}
 	}
 
 	// Archive item -> GET /api/archive shows labels, PATCH returns 409 Conflict.
