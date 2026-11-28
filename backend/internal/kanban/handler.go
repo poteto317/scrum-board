@@ -21,6 +21,9 @@ type handler struct {
 	blobs               BlobStorage
 	rateLimiter         AIRateLimiter
 	loginAttempts       LoginAttemptLimiter
+	// basicAttempts limits Authorization: Basic failures (same thresholds as login, separate counters
+	// so edge Basic resent by browsers cannot lock the login form — L-1001).
+	basicAttempts LoginAttemptLimiter
 	// checkPassword compares a bcrypt hash; injectable so tests can pin "always compare once" (L-085).
 	checkPassword     func(hash, password string) bool
 	messageMax        int
@@ -105,6 +108,15 @@ func WithLoginAttemptLimiter(l LoginAttemptLimiter) Option {
 	}
 }
 
+// WithBasicAuthAttemptLimiter injects a custom Basic-auth failure limiter (tests). Nil keeps the current limiter.
+func WithBasicAuthAttemptLimiter(l LoginAttemptLimiter) Option {
+	return func(h *handler) {
+		if l != nil {
+			h.basicAttempts = l
+		}
+	}
+}
+
 // withPasswordChecker replaces the bcrypt comparison (package tests only). Nil keeps the current checker.
 func withPasswordChecker(f func(hash, password string) bool) Option {
 	return func(h *handler) {
@@ -137,6 +149,7 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 		blobs:             UnavailableBlobStorage{},
 		rateLimiter:       NewNoopAIRateLimiter(),
 		loginAttempts:     NewMemoryLoginAttemptLimiter(),
+		basicAttempts:     NewMemoryLoginAttemptLimiter(),
 		checkPassword:     CheckPassword,
 		messageMax:        maxAIChatMessageLen,
 		historyTurns:      maxAIChatHistoryTurns,

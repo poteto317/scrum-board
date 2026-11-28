@@ -84,17 +84,18 @@ func sessionOptional(r *http.Request) bool {
 // userFromBasicAuth accepts Authorization Basic when it matches a users row.
 // Browsers (Sec-Fetch-Site) are included: mobile Safari resends nginx Basic on
 // XHR; ignoring it forced a second login form that many clients never POST.
-// Edge Basic that differs from the app password still fails CheckPassword (L-1001).
+// Edge Basic that differs from the app password still fails verifyCredentials (L-1001).
+// Failures are rate limited like POST /api/auth/login but on separate counters
+// (h.basicAttempts) so resent edge Basic cannot lock the login form.
 func (h handler) userFromBasicAuth(r *http.Request) (User, bool) {
 	userName, pass, ok := r.BasicAuth()
-	if !ok || strings.TrimSpace(userName) == "" || pass == "" {
+	loginName := strings.TrimSpace(userName)
+	if !ok || loginName == "" || pass == "" {
 		return User{}, false
 	}
-	user, err := h.repo.GetUserByLoginName(r.Context(), strings.TrimSpace(userName))
-	if err != nil || user.Disabled || !CheckPassword(user.PasswordHash, pass) {
-		return User{}, false
-	}
-	return user, true
+	// Locked and rejected both fall back to anonymous (sessionOptional), never 429.
+	user, result := h.verifyCredentials(r, h.basicAttempts, loginName, pass, time.Now().UTC())
+	return user, result == credentialAccepted
 }
 
 func requireAdmin(w http.ResponseWriter, r *http.Request) (User, bool) {
