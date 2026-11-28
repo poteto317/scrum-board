@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -116,7 +117,7 @@ func TestLoginAttemptLimiterBucketsIPv6By64(t *testing.T) {
 	l := NewMemoryLoginAttemptLimiter()
 	now := time.Now().UTC()
 	for i := 0; i < loginFailureLimit; i++ {
-		l.RecordFailure("u"+string(rune('a'+i)), "2001:db8:1:2::"+string(rune('1'+i)), now)
+		l.RecordFailure("u"+strconv.Itoa(i), "2001:db8:1:2::"+strconv.FormatInt(int64(i+1), 16), now)
 	}
 	if l.Allow("other", "2001:db8:1:2:ffff::9", now) {
 		t.Fatal("another address in the same /64 must share the IP lock")
