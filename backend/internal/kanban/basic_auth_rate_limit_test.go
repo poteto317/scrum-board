@@ -348,3 +348,35 @@ func assertRecorded(t *testing.T, name string, got []string, want bool, key stri
 		t.Fatalf("%s=%v want none", name, got)
 	}
 }
+
+// A valid session cookie wins: a failing Basic header is never evaluated, so counters do not move.
+func TestBasicAuthNotEvaluatedWithValidSession(t *testing.T) {
+	lim := &recordingLimiter{allow: true}
+	chk := &recordingChecker{}
+	h := NewHandler(fresh(), WithBasicAuthAttemptLimiter(lim), withPasswordChecker(chk.check))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/board", nil)
+	r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: HandlerTestSessionID})
+	r.SetBasicAuth("admin", "wrong")
+	h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("cookie+bad basic=%d %s", w.Code, w.Body)
+	}
+	if n := len(lim.allows) + len(lim.failures) + len(lim.successes); n != 0 || len(chk.hashes) != 0 {
+		t.Fatalf("basic evaluated despite valid session: limiter calls=%d compares=%d", n, len(chk.hashes))
+	}
+}
+
+// The login-name key is shared across client IPs: 5 failures from A lock that name from B too.
+func TestBasicAuthLoginKeyLockAppliesAcrossIPs(t *testing.T) {
+	h := NewHandler(fresh())
+	for i := 0; i < loginFailureLimit; i++ {
+		basicReq(h, "/api/board", "admin", "wrong", "203.0.113.30")
+	}
+	if w := basicReq(h, "/api/board", "admin", "test-password", "203.0.113.40"); w.Code != 401 {
+		t.Fatalf("login-name lock must apply from another IP, got %d", w.Code)
+	}
+	if w := basicReq(h, "/api/board", "admin", "test-password", ""); w.Code != 401 {
+		t.Fatalf("login-name lock must apply from default IP, got %d", w.Code)
+	}
+}
