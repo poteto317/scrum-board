@@ -65,15 +65,12 @@ func NormalizeLabelName(raw string) (string, bool) {
 		return "", false
 	}
 	for _, r := range raw {
+		// Allow whitespace control runes (e.g. U+0085); strings.Fields below normalizes them to spaces.
 		if unicode.IsControl(r) && !unicode.IsSpace(r) {
 			return "", false
 		}
 		if unicode.In(r, unicode.Cf) || isVariationSelector(r) {
 			return "", false
-		}
-		if unicode.IsControl(r) && unicode.IsSpace(r) && r != ' ' && r != '\t' && r != '\n' && r != '\r' {
-			// e.g. U+0085: treated like other whitespace below via Fields
-			continue
 		}
 	}
 	value := strings.Join(strings.Fields(raw), " ")
