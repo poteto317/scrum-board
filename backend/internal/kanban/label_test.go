@@ -7,7 +7,9 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -111,7 +113,7 @@ func TestLabelsHistoryJSON(t *testing.T) {
 }
 
 func TestLabelsMySQLRepository(t *testing.T) {
-	db := mysqlTestDB(t, "labels")
+	db := mysqlTestDB(t, "")
 	repo := MySQLRepository{DB: db}
 	ctx := context.Background()
 
@@ -200,6 +202,33 @@ func TestLabelsMySQLRepository(t *testing.T) {
 	if len(matches) != 1 || matches[0].ID != card.ID || len(matches[0].Labels) != 1 || matches[0].Labels[0].ID != l2.ID {
 		t.Fatalf("SearchItems by label in MySQL mismatch: %+v", matches)
 	}
+	// Unknown label in UpdateItem returns ErrUnknownLabel and rolls back (existing labels preserved).
+	if _, err := repo.UpdateItem(ctx, card.ID, ItemPatch{LabelIDs: &[]int64{999999}}); !errors.Is(err, ErrUnknownLabel) {
+		t.Fatalf("UpdateItem unknown label: expected ErrUnknownLabel, got %v", err)
+	}
+	afterBadPatch, err := repo.GetItem(ctx, card.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(afterBadPatch.Labels) != 1 || afterBadPatch.Labels[0].ID != l2.ID {
+		t.Fatalf("UpdateItem rollback did not preserve labels: %+v", afterBadPatch.Labels)
+	}
+	// HTTP GET /api/items/by-number/{number}/history includes labels changes from MySQL.
+	adminUser, err := repo.CreateUser(ctx, UserCreateInput{
+		LoginName: "mysql-hist-admin", DisplayName: "Admin", Password: "admin-pass-123", Role: RoleAdmin,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := repo.CreateSession(ctx, adminUser.ID, time.Now().UTC().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mh := NewHandler(repo)
+	hw := requestWithCookie(mh, "GET", fmt.Sprintf("/api/items/by-number/%d/history?projectId=%d", card.Number, card.ProjectID), "", sess.ID)
+	if hw.Code != 200 || !strings.Contains(hw.Body.String(), `"labels"`) {
+		t.Fatalf("MySQL HTTP history missing labels change: %d %s", hw.Code, hw.Body.String())
+	}
 	if _, err := repo.UpdateItem(ctx, card.ID, ItemPatch{LabelIDs: &[]int64{}}); err != nil {
 		t.Fatal(err)
 	}
@@ -239,5 +268,88 @@ func TestLabelsMySQLRepository(t *testing.T) {
 	}
 	if len(list) != MaxWorkspaceLabels || !slices.IsSortedFunc(list, func(a, b Label) int { return int(a.ID - b.ID) }) {
 		t.Fatalf("unexpected list len=%d", len(list))
+	}
+}
+
+func TestLabelsMySQLConcurrentCreateAndUpdateDeleteNoDeadlock(t *testing.T) {
+	db := mysqlTestDB(t, "")
+	repo := MySQLRepository{DB: db}
+	ctx := context.Background()
+
+	// Empty table concurrent CreateLabel must not hit InnoDB supremum gap-lock deadlock (1213).
+	const workers = 10
+	start := make(chan struct{})
+	createErrs := make(chan error, workers)
+	created := make(chan Label, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			l, err := repo.CreateLabel(ctx, LabelInput{Name: fmt.Sprintf("conc-%02d", i), Color: "#3b82f6"})
+			createErrs <- err
+			if err == nil {
+				created <- l
+			}
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	close(createErrs)
+	close(created)
+	for err := range createErrs {
+		if err != nil {
+			t.Fatalf("concurrent CreateLabel failed: %v", err)
+		}
+	}
+	var pool []Label
+	for l := range created {
+		pool = append(pool, l)
+	}
+	if len(pool) < 2 {
+		t.Fatalf("expected at least 2 created labels, got %d", len(pool))
+	}
+
+	// Concurrent UpdateItem (keeping/updating labels) vs DeleteLabel must not deadlock.
+	keep := pool[0]
+	var items []Item
+	for i := 1; i < len(pool); i++ {
+		it, err := repo.CreateItem(ctx, ItemInput{
+			ColumnID:    1,
+			Title:       fmt.Sprintf("item-%d", i),
+			Description: "d",
+			LabelIDs:    []int64{keep.ID, pool[i].ID},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		items = append(items, it)
+	}
+	var raceWG sync.WaitGroup
+	raceStart := make(chan struct{})
+	raceErrs := make(chan error, len(items)*2)
+	for idx, it := range items {
+		delTarget := pool[idx+1]
+		raceWG.Add(2)
+		go func(itemID int64) {
+			defer raceWG.Done()
+			<-raceStart
+			_, err := repo.UpdateItem(ctx, itemID, ItemPatch{LabelIDs: &[]int64{keep.ID}})
+			raceErrs <- err
+		}(it.ID)
+		go func(labelID int64) {
+			defer raceWG.Done()
+			<-raceStart
+			raceErrs <- repo.DeleteLabel(ctx, labelID)
+		}(delTarget.ID)
+	}
+	close(raceStart)
+	raceWG.Wait()
+	close(raceErrs)
+	for err := range raceErrs {
+		if err != nil && !errors.Is(err, ErrUnknownLabel) {
+			t.Fatalf("unexpected concurrent UpdateItem/DeleteLabel error: %v", err)
+		}
 	}
 }
