@@ -1,0 +1,192 @@
+<dialog
+  appModal
+  class="modal-backdrop"
+  aria-labelledby="label-manager-title"
+  (cancel)="$event.preventDefault(); close()"
+  (click)="onBackdropClick($event)"
+>
+  <section class="modal label-manager-modal" (keydown.escape)="close()" tabindex="-1">
+    <div class="modal-header">
+      <h2 id="label-manager-title">ラベル管理</h2>
+      <button
+        type="button"
+        class="modal-close"
+        aria-label="閉じる"
+        [disabled]="saving()"
+        (click)="close()"
+      >
+        ×
+      </button>
+    </div>
+
+    @if (actionError()) {
+      <p class="mgr-error" role="alert">{{ actionError() }}</p>
+    }
+
+    <form class="mgr-create-form" [formGroup]="createForm" (ngSubmit)="submitCreate()">
+      <label class="mgr-field-label" for="new-label-name">新しいラベル</label>
+      <div class="mgr-input-row">
+        <input
+          id="new-label-name"
+          type="text"
+          class="mgr-name-input"
+          formControlName="name"
+          placeholder="ラベル名（最大 {{ maxNameLength }} 文字）"
+          [readonly]="saving() || !labelsSession.loaded()"
+        />
+        <input
+          type="color"
+          class="mgr-color-input"
+          aria-label="ラベルの色"
+          formControlName="color"
+          [attr.disabled]="saving() || !labelsSession.loaded() ? '' : null"
+        />
+        <button
+          type="submit"
+          class="mgr-submit-btn"
+          [disabled]="saving() || !labelsSession.loaded()"
+        >
+          追加
+        </button>
+      </div>
+      <ng-container
+        *ngTemplateOutlet="
+          swatchGroup;
+          context: {
+            form: createForm,
+            groupLabel: 'プリセット色',
+            ariaPrefix: '色 ',
+            lockDisabled: !labelsSession.loaded()
+          }
+        "
+      />
+    </form>
+
+    <div class="mgr-list-section">
+      @if (!labelsSession.loaded() && labelsSession.loading()) {
+        <p class="mgr-hint">ラベルを読み込み中…</p>
+      } @else if (!labelsSession.loaded() && labelsSession.loadError()) {
+        <div class="mgr-load-error">
+          <p class="mgr-error">{{ labelsSession.loadError() }}</p>
+          <button type="button" class="mgr-btn" (click)="labelsSession.load({ force: true })">
+            再試行
+          </button>
+        </div>
+      } @else {
+        @if (labelsSession.loadError()) {
+          <p class="mgr-error">{{ labelsSession.loadError() }}</p>
+        }
+        @if (labelsSession.labels().length === 0) {
+          <p class="mgr-hint">登録されているラベルはありません。</p>
+        } @else {
+          <ul class="mgr-list">
+            @for (label of labelsSession.labels(); track label.id) {
+              <li class="mgr-row">
+                @if (editingId() === label.id) {
+                  <form class="mgr-edit-form" [formGroup]="editForm" (ngSubmit)="submitEdit(label.id)">
+                    <div class="mgr-input-row">
+                      <input
+                        type="text"
+                        class="mgr-name-input"
+                        aria-label="ラベル名を編集"
+                        formControlName="name"
+                        [readonly]="saving()"
+                      />
+                      <input
+                        type="color"
+                        class="mgr-color-input"
+                        aria-label="編集後の色"
+                        formControlName="color"
+                        [attr.disabled]="saving() ? '' : null"
+                      />
+                      <button type="submit" class="mgr-submit-btn" [disabled]="saving()">保存</button>
+                      <button
+                        type="button"
+                        class="mgr-btn"
+                        [disabled]="saving()"
+                        (click)="cancelEdit()"
+                      >
+                        取消
+                      </button>
+                    </div>
+                    <ng-container
+                      *ngTemplateOutlet="
+                        swatchGroup;
+                        context: { form: editForm, groupLabel: '編集プリセット色', ariaPrefix: '編集色 ' }
+                      "
+                    />
+                  </form>
+                } @else {
+                  <div class="mgr-view-row">
+                    <span class="mgr-dot" [style.background]="label.color" aria-hidden="true"></span>
+                    <span class="mgr-name">{{ label.name }}</span>
+                    <div class="mgr-actions">
+                      @if (deletingId() === label.id) {
+                        <span class="mgr-confirm-text">削除しますか？</span>
+                        <button
+                          type="button"
+                          class="mgr-danger-btn"
+                          [disabled]="saving()"
+                          (click)="confirmDelete(label.id)"
+                        >
+                          削除確定
+                        </button>
+                        <button
+                          type="button"
+                          class="mgr-btn"
+                          [disabled]="saving()"
+                          (click)="cancelDelete()"
+                        >
+                          やめる
+                        </button>
+                      } @else {
+                        <button
+                          type="button"
+                          class="mgr-btn"
+                          [disabled]="saving()"
+                          (click)="startEdit(label)"
+                        >
+                          編集
+                        </button>
+                        <button
+                          type="button"
+                          class="mgr-danger-outline-btn"
+                          [disabled]="saving()"
+                          (click)="requestDelete(label.id)"
+                        >
+                          削除
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
+      }
+    </div>
+  </section>
+
+  <ng-template
+    #swatchGroup
+    let-form="form"
+    let-groupLabel="groupLabel"
+    let-ariaPrefix="ariaPrefix"
+    let-lockDisabled="lockDisabled"
+  >
+    <div class="mgr-swatches" role="group" [attr.aria-label]="groupLabel">
+      @for (c of presets; track c) {
+        <button
+          type="button"
+          class="mgr-swatch"
+          [class.active]="form.controls.color.value.toLowerCase() === c"
+          [style.background]="c"
+          [attr.aria-label]="ariaPrefix + c"
+          [disabled]="saving() || lockDisabled"
+          (click)="selectFormColor(form, c)"
+        ></button>
+      }
+    </div>
+  </ng-template>
+</dialog>

@@ -36,6 +36,9 @@ export class ListFilterSession {
   /** True after at least one successful GET so PUT never ships empty sibling views. */
   private hydrated = false;
 
+  /** Deleted label ids observed in this session so in-flight GET/PUT never resurrects them. */
+  private readonly deletedLabelIds = new Set<number>();
+
   constructor() {
     this.destroyRef.onDestroy(() => {
       this.clearTimer();
@@ -63,7 +66,7 @@ export class ListFilterSession {
     this.api.listFilter().subscribe({
       next: (res) => {
         if (generation !== this.loadGeneration) return;
-        const incoming = cloneWorkspaceListFilters(res);
+        const incoming = this.stripDeletedLabels(cloneWorkspaceListFilters(res));
         const boardDirty = !force && this.isDirty('board');
         const backlogDirty = !force && this.isDirty('backlog');
         const next = cloneWorkspaceListFilters(incoming);
@@ -118,6 +121,50 @@ export class ListFilterSession {
     this.afterLocalEdit(view);
   }
 
+  toggleLabel(view: ListFilterView, labelId: number) {
+    this.filters.update((f) => {
+      const cur = f[view];
+      const has = cur.labelIds.includes(labelId);
+      return {
+        ...f,
+        [view]: {
+          ...cur,
+          labelIds: has ? cur.labelIds.filter((id) => id !== labelId) : [...cur.labelIds, labelId],
+        },
+      };
+    });
+    this.afterLocalEdit(view);
+  }
+
+  /** Remove deleted label from both draft and confirmed filters without marking dirty. */
+  pruneDeletedLabel(labelId: number) {
+    this.deletedLabelIds.add(labelId);
+    const strip = (f: ListFilter): ListFilter => ({
+      ...f,
+      labelIds: f.labelIds.filter((id) => id !== labelId),
+    });
+    this.confirmed = {
+      board: strip(this.confirmed.board),
+      backlog: strip(this.confirmed.backlog),
+    };
+    this.filters.update((cur) => ({
+      board: strip(cur.board),
+      backlog: strip(cur.backlog),
+    }));
+  }
+
+  private stripDeletedLabels(wf: WorkspaceListFilters): WorkspaceListFilters {
+    if (this.deletedLabelIds.size === 0) return wf;
+    const strip = (f: ListFilter): ListFilter => ({
+      ...f,
+      labelIds: f.labelIds.filter((id) => !this.deletedLabelIds.has(id)),
+    });
+    return {
+      board: strip(wf.board),
+      backlog: strip(wf.backlog),
+    };
+  }
+
   clear(view: ListFilterView) {
     this.filters.update((f) => ({
       ...f,
@@ -163,7 +210,7 @@ export class ListFilterSession {
         if (generation !== this.saveGeneration) return;
         this.saveInFlight = false;
         this.saveQueued = false;
-        const next = cloneWorkspaceListFilters(res);
+        const next = this.stripDeletedLabels(cloneWorkspaceListFilters(res));
         this.confirmed = next;
         this.filters.set(cloneWorkspaceListFilters(next));
         this.saveError.set('');

@@ -3,6 +3,7 @@ import { Observable, catchError, finalize, map, share, tap, throwError } from 'r
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { UserPublic, isUnauthorized } from './auth';
+import { LabelsSession } from './labels-session';
 import { ProjectBoardCache } from './project-board-cache';
 import { ProjectSession } from './project-session';
 import { UsersSession } from './users-session';
@@ -15,6 +16,7 @@ export class AuthSession {
   private readonly usersSession = inject(UsersSession);
   private readonly projectBoardCache = inject(ProjectBoardCache);
   private readonly projectSession = inject(ProjectSession);
+  private readonly labelsSession = inject(LabelsSession);
 
   readonly user = signal<UserPublic | null>(null);
   readonly status = signal<AuthStatus>('unknown');
@@ -33,6 +35,7 @@ export class AuthSession {
     this.usersSession.clear();
     this.projectBoardCache.clear();
     this.projectSession.clearSubjectState();
+    this.labelsSession.clear();
   }
 
   ensureMe(options?: { force?: boolean }): Observable<UserPublic | null> {

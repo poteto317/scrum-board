@@ -41,6 +41,7 @@ const columns: Column[] = [
 ];
 
 const filterApi = {
+  listLabels: () => of({ labels: [] }),
   listFilter: () =>
     of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
   putListFilter: (f: unknown) => of(f),

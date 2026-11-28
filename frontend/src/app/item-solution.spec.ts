@@ -39,6 +39,7 @@ describe('ItemSolution', () => {
     uploadAttachment: ReturnType<typeof vi.fn>;
     deleteAttachment: ReturnType<typeof vi.fn>;
     listAttachments: ReturnType<typeof vi.fn>;
+    listLabels?: ReturnType<typeof vi.fn>;
   };
   let restoreDialog: (() => void) | undefined;
 

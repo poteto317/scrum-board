@@ -50,6 +50,7 @@ async function setup() {
           board: () => of(board()),
           reorderItems,
           listCommandTemplates: () => of({ templates: [] }),
+          listLabels: () => of({ labels: [] }),
           listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
           putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },

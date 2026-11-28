@@ -36,6 +36,7 @@ describe('mobile board overflow CSS', () => {
               }),
             reorderItems: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () =>
               of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: {

@@ -8,8 +8,8 @@ import {
 } from './list-filter-session';
 
 const emptyWs = {
-  board: { query: '', statusIds: [] as number[] },
-  backlog: { query: '', statusIds: [] as number[] },
+  board: { query: '', statusIds: [] as number[], labelIds: [] as number[] },
+  backlog: { query: '', statusIds: [] as number[], labelIds: [] as number[] },
 };
 
 describe('ListFilterSession', () => {
@@ -33,11 +33,11 @@ describe('ListFilterSession', () => {
   it('loads both views into drafts', () => {
     session.load();
     http.expectOne('/api/list-filter').flush({
-      board: { query: 'hi', statusIds: [1] },
+      board: { query: 'hi', statusIds: [1], labelIds: [3] },
       backlog: { query: '', statusIds: [2] },
     });
-    expect(session.filter('board')).toEqual({ query: 'hi', statusIds: [1] });
-    expect(session.filter('backlog')).toEqual({ query: '', statusIds: [2] });
+    expect(session.filter('board')).toEqual({ query: 'hi', statusIds: [1], labelIds: [3] });
+    expect(session.filter('backlog')).toEqual({ query: '', statusIds: [2], labelIds: [] });
     expect(session.loadError()).toBe('');
   });
 
@@ -45,7 +45,7 @@ describe('ListFilterSession', () => {
     session.load();
     http.expectOne('/api/list-filter').flush({ message: 'x' }, { status: 500, statusText: 'err' });
     expect(session.loadError()).toBe(LIST_FILTER_LOAD_FAILURE);
-    expect(session.filter('board')).toEqual({ query: '', statusIds: [] });
+    expect(session.filter('board')).toEqual({ query: '', statusIds: [], labelIds: [] });
   });
 
   it('board edits do not change backlog draft', async () => {
@@ -56,12 +56,12 @@ describe('ListFilterSession', () => {
       backlog: { query: '', statusIds: [1] },
     });
     session.setQuery('board', 'only-board');
-    expect(session.filter('backlog')).toEqual({ query: '', statusIds: [1] });
+    expect(session.filter('backlog')).toEqual({ query: '', statusIds: [1], labelIds: [] });
     await vi.advanceTimersByTimeAsync(300);
     const req = http.expectOne('/api/list-filter');
     expect(req.request.body).toEqual({
-      board: { query: 'only-board', statusIds: [] },
-      backlog: { query: '', statusIds: [1] },
+      board: { query: 'only-board', statusIds: [], labelIds: [] },
+      backlog: { query: '', statusIds: [1], labelIds: [] },
     });
     req.flush(req.request.body);
   });
@@ -70,14 +70,14 @@ describe('ListFilterSession', () => {
     vi.useFakeTimers();
     session.load();
     http.expectOne('/api/list-filter').flush({
-      board: { query: 'b', statusIds: [2] },
+      board: { query: 'b', statusIds: [2], labelIds: [10] },
       backlog: { query: 'k', statusIds: [1] },
     });
     session.clear('board');
     await vi.advanceTimersByTimeAsync(300);
     const req = http.expectOne('/api/list-filter');
-    expect(req.request.body.board).toEqual({ query: '', statusIds: [] });
-    expect(req.request.body.backlog).toEqual({ query: 'k', statusIds: [1] });
+    expect(req.request.body.board).toEqual({ query: '', statusIds: [], labelIds: [] });
+    expect(req.request.body.backlog).toEqual({ query: 'k', statusIds: [1], labelIds: [] });
     req.flush(req.request.body);
   });
 
@@ -130,8 +130,8 @@ describe('ListFilterSession', () => {
     http
       .expectOne('/api/list-filter')
       .flush({ message: 'x' }, { status: 500, statusText: 'err' });
-    expect(session.filter('board')).toEqual({ query: 'ok', statusIds: [1] });
-    expect(session.filter('backlog')).toEqual({ query: '', statusIds: [1] });
+    expect(session.filter('board')).toEqual({ query: 'ok', statusIds: [1], labelIds: [] });
+    expect(session.filter('backlog')).toEqual({ query: '', statusIds: [1], labelIds: [] });
     expect(session.saveError()).not.toBe('');
   });
 
@@ -155,8 +155,8 @@ describe('ListFilterSession', () => {
     const req = http.expectOne('/api/list-filter');
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({
-      board: { query: 'ab', statusIds: [] },
-      backlog: { query: '', statusIds: [] },
+      board: { query: 'ab', statusIds: [], labelIds: [] },
+      backlog: { query: '', statusIds: [], labelIds: [] },
     });
     req.flush(req.request.body);
   });
@@ -174,8 +174,8 @@ describe('ListFilterSession', () => {
     await vi.advanceTimersByTimeAsync(300);
     const req = http.expectOne('/api/list-filter');
     expect(req.request.body).toEqual({
-      board: { query: 'early', statusIds: [] },
-      backlog: { query: 'kept', statusIds: [1] },
+      board: { query: 'early', statusIds: [], labelIds: [] },
+      backlog: { query: 'kept', statusIds: [1], labelIds: [] },
     });
     req.flush(req.request.body);
   });
@@ -214,5 +214,52 @@ describe('ListFilterSession', () => {
       backlog: emptyWs.backlog,
     });
     expect(session.filter('board').query).toBe('server');
+  });
+
+  it('toggles labelIds and prunes deleted label from drafts without extra PUT', async () => {
+    vi.useFakeTimers();
+    session.load();
+    http.expectOne('/api/list-filter').flush({
+      board: { query: '', statusIds: [], labelIds: [5] },
+      backlog: { query: '', statusIds: [], labelIds: [5, 7] },
+    });
+    session.toggleLabel('board', 7);
+    expect(session.filter('board').labelIds).toEqual([5, 7]);
+    await vi.advanceTimersByTimeAsync(300);
+    const req = http.expectOne('/api/list-filter');
+    expect(req.request.body.board.labelIds).toEqual([5, 7]);
+    req.flush(req.request.body);
+
+    session.pruneDeletedLabel(5);
+    await vi.advanceTimersByTimeAsync(300);
+    http.expectNone('/api/list-filter');
+    expect(session.filter('board').labelIds).toEqual([7]);
+    expect(session.filter('backlog').labelIds).toEqual([7]);
+  });
+
+  it('does not resurrect pruned label when an in-flight GET or PUT completes later', async () => {
+    vi.useFakeTimers();
+    session.load();
+    const inFlightGet = http.expectOne('/api/list-filter');
+
+    // Label 5 was deleted while GET is in flight.
+    session.pruneDeletedLabel(5);
+    inFlightGet.flush({
+      board: { query: '', statusIds: [], labelIds: [5, 7] },
+      backlog: { query: '', statusIds: [], labelIds: [5] },
+    });
+    expect(session.filter('board').labelIds).toEqual([7]);
+    expect(session.filter('backlog').labelIds).toEqual([]);
+
+    // In-flight PUT containing label 7 finishes after label 7 is also deleted -> 7 must not return.
+    session.toggleLabel('board', 8);
+    await vi.advanceTimersByTimeAsync(300);
+    const inFlightPut = http.expectOne('/api/list-filter');
+    session.pruneDeletedLabel(7);
+    inFlightPut.flush({
+      board: { query: '', statusIds: [], labelIds: [7, 8] },
+      backlog: { query: '', statusIds: [], labelIds: [] },
+    });
+    expect(session.filter('board').labelIds).toEqual([8]);
   });
 });

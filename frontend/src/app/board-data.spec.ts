@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBoardData, normalizeBoardMeta } from './board-data';
+import { normalizeBoardData, normalizeBoardMeta, normalizeItem } from './board-data';
 
 describe('normalizeBoardData settings (characterization)', () => {
   it('fills cardLayout with pack when settings are missing', () => {
@@ -59,5 +59,20 @@ describe('normalizeBoardMeta', () => {
   it('copies the columns array', () => {
     const columns = [{ id: 1, name: 'Todo', position: 0 }];
     expect(normalizeBoardMeta({ columns }).columns).not.toBe(columns);
+  });
+
+  it('normalizes item labels sorted by id ASC and fills empty array when omitted', () => {
+    expect(normalizeItem({ id: 9 } as never).labels).toEqual([]);
+    const normalized = normalizeItem({
+      id: 1,
+      labels: [
+        { id: 4, name: 'API', color: '#3B82F6' },
+        { id: 2, name: 'Bug', color: '#ef4444' },
+      ],
+    });
+    expect(normalized.labels).toEqual([
+      { id: 2, name: 'Bug', color: '#ef4444' },
+      { id: 4, name: 'API', color: '#3b82f6' },
+    ]);
   });
 });

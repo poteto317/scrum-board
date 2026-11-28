@@ -72,6 +72,7 @@ describe('ItemDetail project move', () => {
     uploadAttachment: ReturnType<typeof vi.fn>;
     deleteAttachment: ReturnType<typeof vi.fn>;
     listAttachments: ReturnType<typeof vi.fn>;
+    listLabels?: ReturnType<typeof vi.fn>;
     listUsers: ReturnType<typeof vi.fn>;
   };
 
@@ -87,6 +88,7 @@ describe('ItemDetail project move', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
       board: vi.fn(() =>
         of({
           columns: [

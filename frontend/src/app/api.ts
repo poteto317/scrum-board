@@ -4,7 +4,8 @@ import { CommandTemplate } from './command-template';
 import { ItemTemplate } from './item-template';
 import { ConditionalGetResult, getJSONConditional } from './conditional-get';
 import { ItemOrderColumn } from './item-order';
-import { WorkspaceListFilters } from './list-filter';
+import { WorkspaceListFiltersInput } from './list-filter';
+import { Label, LabelInput, LabelPatch } from './label';
 import { WorkspaceHeaderMenu } from './header-menu';
 import { UserPublic } from './auth';
 import {
@@ -653,10 +654,22 @@ export class Api {
     return this.http.post<void>('/api/command-templates/apply-to-all-items', { templateIds });
   }
   listFilter() {
-    return this.http.get<WorkspaceListFilters>('/api/list-filter');
+    return this.http.get<WorkspaceListFiltersInput>('/api/list-filter');
   }
-  putListFilter(filter: WorkspaceListFilters) {
-    return this.http.put<WorkspaceListFilters>('/api/list-filter', filter);
+  putListFilter(filter: WorkspaceListFiltersInput) {
+    return this.http.put<WorkspaceListFiltersInput>('/api/list-filter', filter);
+  }
+  listLabels() {
+    return this.http.get<{ labels: Label[] }>('/api/labels');
+  }
+  createLabel(input: LabelInput) {
+    return this.http.post<Label>('/api/labels', input);
+  }
+  updateLabel(id: number, patch: LabelPatch) {
+    return this.http.patch<Label>(`/api/labels/${id}`, patch);
+  }
+  deleteLabel(id: number) {
+    return this.http.delete<void>(`/api/labels/${id}`);
   }
   headerMenu() {
     return this.http.get<WorkspaceHeaderMenu>('/api/header-menu');

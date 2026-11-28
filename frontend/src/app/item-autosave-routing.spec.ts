@@ -57,6 +57,7 @@ it('guards real router reuse: rejecting discard retains the old card, then flush
     uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
     deleteAttachment: vi.fn(() => of(undefined)),
     listAttachments: vi.fn(() => of([])),
+    listLabels: vi.fn(() => of({ labels: [] })),
     board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
     itemByNumber: vi.fn((number: number) =>
       of({

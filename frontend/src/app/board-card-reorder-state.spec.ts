@@ -67,6 +67,8 @@ async function setup(reorderItems: ReturnType<typeof vi.fn>) {
           reorderItems,
           reorderColumns: vi.fn(),
           listCommandTemplates: () => of({ templates: [] }),
+          listItemTemplates: () => of({ templates: [] }),
+          listLabels: () => of({ labels: [] }),
           listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
           putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },

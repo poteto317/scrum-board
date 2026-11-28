@@ -353,4 +353,28 @@ describe('ProjectBoardCache', () => {
     held.complete();
     expect(cache.getBoard(2)).toBeUndefined();
   });
+
+  it('deep-clones labels and syncs/prunes labels across cached boards and backlogs', () => {
+    const cache = new ProjectBoardCache();
+    const orig = {
+      ...item(1, 2),
+      labels: [
+        { id: 10, name: 'Bug', color: '#ef4444' },
+        { id: 20, name: 'API', color: '#3b82f6' },
+      ],
+    };
+    cache.putBoard(2, [orig], cols);
+    cache.putBacklog(2, [orig], cols);
+
+    orig.labels[0].name = 'MutatedOutside';
+    expect(cache.getBoard(2)?.[0].labels?.[0].name).toBe('Bug');
+
+    cache.syncUpdatedLabel({ id: 10, name: 'Defect', color: '#22c55e' });
+    expect(cache.getBoard(2)?.[0].labels?.[0]).toEqual({ id: 10, name: 'Defect', color: '#22c55e' });
+    expect(cache.getBacklog(2)?.[0].labels?.[0]).toEqual({ id: 10, name: 'Defect', color: '#22c55e' });
+
+    cache.pruneDeletedLabel(10);
+    expect(cache.getBoard(2)?.[0].labels).toEqual([{ id: 20, name: 'API', color: '#3b82f6' }]);
+    expect(cache.getBacklog(2)?.[0].labels).toEqual([{ id: 20, name: 'API', color: '#3b82f6' }]);
+  });
 });
