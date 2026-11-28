@@ -12,8 +12,10 @@ const workspaceListFilterDDL = `CREATE TABLE IF NOT EXISTS workspace_list_filter
   id TINYINT NOT NULL PRIMARY KEY,
   board_query_text VARCHAR(200) NOT NULL DEFAULT '',
   board_status_ids JSON NOT NULL,
+  board_label_ids JSON NOT NULL,
   backlog_query_text VARCHAR(200) NOT NULL DEFAULT '',
   backlog_status_ids JSON NOT NULL,
+  backlog_label_ids JSON NOT NULL,
   CONSTRAINT chk_workspace_list_filter_singleton CHECK (id = 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`
 
@@ -48,8 +50,48 @@ func (r MySQLRepository) InitializeListFilter(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := r.migrateListFilterLabelColumns(ctx); err != nil {
+		return err
+	}
 
 	return r.ensureListFilterRow(ctx)
+}
+
+func (r MySQLRepository) migrateListFilterLabelColumns(ctx context.Context) error {
+	boardReady, err := r.listFilterHasNonNullColumn(ctx, "board_label_ids")
+	if err != nil {
+		return err
+	}
+	backlogReady, err := r.listFilterHasNonNullColumn(ctx, "backlog_label_ids")
+	if err != nil {
+		return err
+	}
+	if boardReady && backlogReady {
+		return nil
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE workspace_list_filter ADD COLUMN board_label_ids JSON NULL`,
+		`ALTER TABLE workspace_list_filter ADD COLUMN backlog_label_ids JSON NULL`,
+	} {
+		if _, err := r.DB.ExecContext(ctx, stmt); err != nil && !isDupColumnErr(err) {
+			return fmt.Errorf("add list-filter label columns: %w", err)
+		}
+	}
+	if _, err := r.DB.ExecContext(ctx, `
+UPDATE workspace_list_filter SET
+  board_label_ids = COALESCE(board_label_ids, CAST('[]' AS JSON)),
+  backlog_label_ids = COALESCE(backlog_label_ids, CAST('[]' AS JSON))`); err != nil {
+		return fmt.Errorf("backfill list-filter label columns: %w", err)
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE workspace_list_filter MODIFY board_label_ids JSON NOT NULL`,
+		`ALTER TABLE workspace_list_filter MODIFY backlog_label_ids JSON NOT NULL`,
+	} {
+		if _, err := r.DB.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("finalize list-filter label columns: %w", err)
+		}
+	}
+	return nil
 }
 
 func (r MySQLRepository) listFilterHasColumn(ctx context.Context, column string) (bool, error) {
@@ -57,6 +99,17 @@ func (r MySQLRepository) listFilterHasColumn(ctx context.Context, column string)
 	err := r.DB.QueryRowContext(ctx, `
 SELECT COUNT(*) FROM information_schema.COLUMNS
 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'workspace_list_filter' AND COLUMN_NAME = ?`, column).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func (r MySQLRepository) listFilterHasNonNullColumn(ctx context.Context, column string) (bool, error) {
+	var n int
+	err := r.DB.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'workspace_list_filter' AND COLUMN_NAME = ? AND IS_NULLABLE = 'NO'`, column).Scan(&n)
 	if err != nil {
 		return false, err
 	}
@@ -146,8 +199,8 @@ func (r MySQLRepository) ensureListFilterRow(ctx context.Context) error {
 		return err
 	}
 	_, err = r.DB.ExecContext(ctx, `
-INSERT INTO workspace_list_filter (id, board_query_text, board_status_ids, backlog_query_text, backlog_status_ids)
-VALUES (1, '', CAST(? AS JSON), '', CAST(? AS JSON))`, string(emptyRaw), string(backlogRaw))
+INSERT INTO workspace_list_filter (id, board_query_text, board_status_ids, board_label_ids, backlog_query_text, backlog_status_ids, backlog_label_ids)
+VALUES (1, '', CAST(? AS JSON), CAST(? AS JSON), '', CAST(? AS JSON), CAST(? AS JSON))`, string(emptyRaw), string(emptyRaw), string(backlogRaw), string(emptyRaw))
 	if err != nil {
 		return fmt.Errorf("seed workspace_list_filter: %w", err)
 	}

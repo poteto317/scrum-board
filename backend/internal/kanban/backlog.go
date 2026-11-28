@@ -218,6 +218,9 @@ func listBacklogCards(ctx context.Context, tx *sql.Tx, projectID int64) ([]Item,
 	if err = attachRelatedItems(ctx, tx, cards); err != nil {
 		return nil, err
 	}
+	if err = attachLabels(ctx, tx, cards); err != nil {
+		return nil, err
+	}
 	return cards, nil
 }
 

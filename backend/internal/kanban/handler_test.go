@@ -23,6 +23,8 @@ type memoryRepo struct {
 	itemTemplates      []ItemTemplate
 	nextItemTemplateID int64
 	itemTemplateSeedFail error
+	labels             []Label
+	nextLabelID        int64
 	cardTemplateIDs    map[int64][]int64
 	defaultTemplateIDs []int64
 	settings           BoardSettings
@@ -360,6 +362,10 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 	if urls == nil {
 		urls = []string{}
 	}
+	labels, err := m.resolveLabels(in.LabelIDs)
+	if err != nil {
+		return Item{}, err
+	}
 	related := append([]RelatedItem(nil), in.RelatedItems...)
 	if related == nil {
 		related = []RelatedItem{}
@@ -376,6 +382,7 @@ func (m *memoryRepo) CreateItem(_ context.Context, in ItemInput) (Item, error) {
 		Position: m.nextPosition(in.ColumnID, projectID), OffsetY: offsetY, Assignee: in.Assignee,
 		CloseReason: in.CloseReason, Favorite: in.Favorite, BacklogPosition: m.nextBacklog(projectID),
 		ViewAccess: ViewAccessOpen, EditAccess: EditAccessOpen, CreatedByUserID: in.CreatedByUserID,
+		Labels: labels,
 	}
 	m.cards[c.ID] = c
 	m.cardTemplateIDs[c.ID] = append([]int64(nil), m.defaultTemplateIDs...)
@@ -403,6 +410,12 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 	}
 	if p.ProjectID != nil && (*p.ProjectID <= 0 || !m.validProject(*p.ProjectID)) {
 		return c, ErrProject
+	}
+	var newLabels []Label
+	if p.LabelIDs != nil {
+		if newLabels, err = m.resolveLabels(*p.LabelIDs); err != nil {
+			return c, err
+		}
 	}
 	sourceColumn := c.ColumnID
 	sourceProject := m.cardProjectID(c)
@@ -461,6 +474,9 @@ func (m *memoryRepo) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Ite
 	}
 	if p.Assignee != nil {
 		c.Assignee = *p.Assignee
+	}
+	if p.LabelIDs != nil {
+		c.Labels = newLabels
 	}
 	if p.CloseReason != nil {
 		c.CloseReason = *p.CloseReason
@@ -1352,9 +1368,17 @@ func (m *memoryRepo) GetListFilter(context.Context) (WorkspaceListFilters, error
 	if m.listFilter == nil {
 		return defaultWorkspaceListFilters(m.columns), nil
 	}
+	knownCols := make(map[int64]struct{}, len(m.columns))
+	for _, c := range m.columns {
+		knownCols[c.ID] = struct{}{}
+	}
+	knownLabels := make(map[int64]struct{}, len(m.labels))
+	for _, l := range m.labels {
+		knownLabels[l.ID] = struct{}{}
+	}
 	return WorkspaceListFilters{
-		Board:   cloneListFilter(m.listFilter.Board),
-		Backlog: cloneListFilter(m.listFilter.Backlog),
+		Board:   normalizeListFilter(cloneListFilter(m.listFilter.Board), knownCols, knownLabels),
+		Backlog: normalizeListFilter(cloneListFilter(m.listFilter.Backlog), knownCols, knownLabels),
 	}, nil
 }
 
@@ -1363,9 +1387,13 @@ func (m *memoryRepo) PutListFilter(_ context.Context, in WorkspaceListFilters) (
 	for _, c := range m.columns {
 		known[c.ID] = struct{}{}
 	}
+	knownLabels := make(map[int64]struct{}, len(m.labels))
+	for _, l := range m.labels {
+		knownLabels[l.ID] = struct{}{}
+	}
 	out := WorkspaceListFilters{
-		Board:   normalizeListFilter(in.Board, known),
-		Backlog: normalizeListFilter(in.Backlog, known),
+		Board:   normalizeListFilter(in.Board, known, knownLabels),
+		Backlog: normalizeListFilter(in.Backlog, known, knownLabels),
 	}
 	cp := WorkspaceListFilters{
 		Board:   cloneListFilter(out.Board),

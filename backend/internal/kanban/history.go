@@ -69,6 +69,7 @@ func historyValues(ctx context.Context, tx *sql.Tx, c Item) (map[string]string, 
 		"prUrls": prURLsJSON(c.PRURLs), "relatedItems": relatedItemsJSON(c.RelatedItems), "assignee": c.Assignee,
 		"closeReason": c.CloseReason, "favorite": strconv.FormatBool(c.Favorite), "dueAt": dueAtHistoryValue(c.DueAt),
 		"archivedAt": historyTimeValue(c.ArchivedAt),
+		"labels":     labelsHistoryJSON(c.Labels),
 	}, nil
 }
 func appendHistory(ctx context.Context, tx *sql.Tx, before *Item, after Item, kind string) error {
@@ -84,7 +85,11 @@ func appendHistory(ctx context.Context, tx *sql.Tx, before *Item, after Item, ki
 		}
 	}
 	changes := []HistoryChange{}
-	for _, field := range []string{"title", "description", "solution", "status", "prUrls", "relatedItems", "assignee", "closeReason", "favorite", "dueAt", "archivedAt"} {
+	for _, field := range []string{"title", "description", "solution", "status", "prUrls", "relatedItems", "assignee", "closeReason", "favorite", "dueAt", "archivedAt", "labels"} {
+		// A new item without labels has nothing to record for them.
+		if field == "labels" && before == nil && values[field] == "[]" {
+			continue
+		}
 		if before == nil || old[field] != values[field] {
 			changes = append(changes, HistoryChange{field, old[field], values[field]})
 		}

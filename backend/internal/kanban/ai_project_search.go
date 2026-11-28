@@ -26,6 +26,8 @@ type ItemSearch struct {
 	DueFrom, DueTo *time.Time
 	// SortByDue orders by due date (soonest first, items without one last) instead of by update time.
 	SortByDue bool
+	// LabelIDs keeps only items that carry every one of these labels (AND).
+	LabelIDs []int64
 	// Viewer is who the search is for: only items this user may view are matched.
 	Viewer ItemSearchViewer
 }
@@ -97,6 +99,10 @@ func projectItemSearchSQL(projectID int64, s ItemSearch) (string, []any) {
 		b.WriteString(" AND c.due_at<?")
 		args = append(args, s.DueTo.UTC())
 	}
+	for _, labelID := range s.LabelIDs {
+		b.WriteString(" AND EXISTS (SELECT 1 FROM item_labels il WHERE il.item_id=c.id AND il.label_id=?)")
+		args = append(args, labelID)
+	}
 	for _, term := range s.Terms {
 		pattern := "%" + escapeLike(term) + "%"
 		b.WriteString(" AND (c.title LIKE ? OR c.description LIKE ? OR c.solution LIKE ?" +
@@ -145,6 +151,10 @@ func (r MySQLRepository) searchItems(ctx context.Context, projectID int64, s Ite
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("search project items: %w", err)
+	}
+	rows.Close()
+	if err := attachLabels(ctx, r.DB, out); err != nil {
+		return nil, fmt.Errorf("attach labels of searched items: %w", err)
 	}
 	return out, nil
 }

@@ -80,6 +80,9 @@ func run() error {
 		err = repo.InitializeRelatedItems(migrationCtx)
 	}
 	if err == nil {
+		err = repo.InitializeLabels(migrationCtx)
+	}
+	if err == nil {
 		err = repo.InitializeNumbers(migrationCtx)
 	}
 	if err == nil {

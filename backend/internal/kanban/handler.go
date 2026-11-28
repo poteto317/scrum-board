@@ -214,6 +214,10 @@ func NewHandler(repo Repository, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/command-templates", h.createCommandTemplate)
 	mux.HandleFunc("PATCH /api/command-templates/{id}", h.updateCommandTemplate)
 	mux.HandleFunc("DELETE /api/command-templates/{id}", h.deleteCommandTemplate)
+	mux.HandleFunc("GET /api/labels", h.listLabels)
+	mux.HandleFunc("POST /api/labels", h.createLabel)
+	mux.HandleFunc("PATCH /api/labels/{id}", h.updateLabel)
+	mux.HandleFunc("DELETE /api/labels/{id}", h.deleteLabel)
 	mux.HandleFunc("GET /api/item-templates", h.listItemTemplates)
 	mux.HandleFunc("POST /api/item-templates", h.createItemTemplate)
 	mux.HandleFunc("PATCH /api/item-templates/{id}", h.updateItemTemplate)
@@ -618,6 +622,12 @@ func (h handler) createItem(w http.ResponseWriter, r *http.Request) {
 	if !h.requireEditOnRelatedPeerDiff(w, r, nil, in.RelatedItems) {
 		return
 	}
+	labelIDs, _, labelErr := parseItemLabelIDs(in.LabelIDsRaw)
+	if labelErr != "" {
+		invalid(w, labelErr)
+		return
+	}
+	in.LabelIDs = labelIDs
 	if u, ok := CurrentUser(r.Context()); ok {
 		id := u.ID
 		in.CreatedByUserID = &id
@@ -656,6 +666,7 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 		EditUserIDs     json.RawMessage `json:"editUserIds"`
 		ACL             json.RawMessage `json:"acl"`
 		CreatedByUserID json.RawMessage `json:"createdByUserId"`
+		LabelIDs        json.RawMessage `json:"labelIds"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -757,7 +768,13 @@ func (h handler) updateItem(w http.ResponseWriter, r *http.Request) {
 			p.DueAt = &value
 		}
 	}
-	if p.Title == nil && p.Description == nil && p.Solution == nil && p.ColumnID == nil && p.ProjectID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.Favorite == nil && p.DueAt == nil && !p.ClearDueAt {
+	if labelIDs, present, labelErr := parseItemLabelIDs(body.LabelIDs); labelErr != "" {
+		invalid(w, labelErr)
+		return
+	} else if present {
+		p.LabelIDs = &labelIDs
+	}
+	if p.Title == nil && p.Description == nil && p.Solution == nil && p.ColumnID == nil && p.ProjectID == nil && p.PRURLs == nil && p.RelatedItems == nil && p.Assignee == nil && p.CloseReason == nil && p.Favorite == nil && p.DueAt == nil && !p.ClearDueAt && p.LabelIDs == nil {
 		invalid(w, "変更するプロパティが必要です。")
 		return
 	}
