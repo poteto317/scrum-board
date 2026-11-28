@@ -2,6 +2,7 @@ package kanban
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"time"
@@ -64,6 +65,7 @@ type Item struct {
 	PRURLs          []string      `json:"prUrls"`
 	PRTitles        []string      `json:"prTitles"`
 	RelatedItems    []RelatedItem `json:"relatedItems"`
+	Labels          []Label       `json:"labels"`
 	Assignee        string        `json:"assignee"`
 	CloseReason     string        `json:"closeReason"`
 	Favorite        bool          `json:"favorite"`
@@ -131,6 +133,9 @@ type ItemInput struct {
 	Assignee     string        `json:"assignee"`
 	CloseReason  string        `json:"closeReason"`
 	Favorite     bool          `json:"favorite"`
+	// LabelIDsRaw is the labelIds key as sent; the handler validates it into LabelIDs.
+	LabelIDsRaw json.RawMessage `json:"labelIds"`
+	LabelIDs    []int64         `json:"-"`
 	// CreatedByUserID is set by the handler from the session; never from JSON.
 	CreatedByUserID *int64 `json:"-"`
 }
@@ -147,6 +152,8 @@ type ItemPatch struct {
 	Favorite     *bool          `json:"favorite"`
 	DueAt        *time.Time     `json:"dueAt"`
 	ClearDueAt   bool           `json:"-"`
+	// LabelIDs nil = unchanged; empty = remove every label (validated by the handler).
+	LabelIDs *[]int64 `json:"-"`
 	// ACL fields on general PATCH are rejected by the handler (dedicated /acl API).
 	ViewAccess      *string  `json:"viewAccess"`
 	EditAccess      *string  `json:"editAccess"`
@@ -265,6 +272,10 @@ type Repository interface {
 	CreateItemTemplate(context.Context, int64, ItemTemplateInput) (ItemTemplate, error)
 	UpdateItemTemplate(context.Context, int64, int64, ItemTemplatePatch) (ItemTemplate, error)
 	DeleteItemTemplate(context.Context, int64, int64) error
+	ListLabels(context.Context) ([]Label, error)
+	CreateLabel(context.Context, LabelInput) (Label, error)
+	UpdateLabel(context.Context, int64, LabelPatch) (Label, error)
+	DeleteLabel(context.Context, int64) error
 	ListItemCommandTemplates(context.Context, int64) ([]CommandTemplate, error)
 	ReplaceItemCommandTemplates(context.Context, int64, []int64) ([]CommandTemplate, error)
 	ListCommandTemplateDefaults(context.Context) ([]int64, error)

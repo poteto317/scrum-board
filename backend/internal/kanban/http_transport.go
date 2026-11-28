@@ -5,8 +5,15 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
+)
+
+const (
+	msgLabelDuplicate = "同じ名前のラベルがすでにあります。"
+	msgLabelLimit     = "ラベルは200件までです。"
+	msgLabelUnknown   = "ラベルを確認してください。"
 )
 
 // HTTP transport helpers keep parsing and response policy out of endpoint handlers.
@@ -43,6 +50,12 @@ func fail(w http.ResponseWriter, err error) {
 		reply(w, 400, map[string]string{"message": "関連の内容を確認してください（アイテム番号・URL・重複・自分自身は不可）。"})
 	case errors.Is(err, ErrDuplicate):
 		reply(w, 409, map[string]string{"message": "同じ名前の列がすでにあります。"})
+	case errors.Is(err, ErrUnknownLabel):
+		reply(w, 400, map[string]string{"message": msgLabelUnknown})
+	case errors.Is(err, ErrLabelDuplicate):
+		reply(w, 409, map[string]string{"message": msgLabelDuplicate})
+	case errors.Is(err, ErrLabelLimit):
+		reply(w, 409, map[string]string{"message": msgLabelLimit})
 	case errors.Is(err, ErrColumnMismatch):
 		reply(w, 409, map[string]string{"message": "列の構成が変更されています。最新のボードを読み込んでからやり直してください。"})
 	case errors.Is(err, ErrItemOrderMismatch):
@@ -88,6 +101,43 @@ func id(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+type idListIssue uint8
+
+const (
+	idListOK idListIssue = iota
+	idListNull
+	idListBadFormat
+	idListTooMany
+	idListBadElement
+)
+
+// parsePositiveIDList decodes a JSON array of positive whole numbers up to maxRaw elements.
+// When dedupe is true, duplicate ids are dropped while keeping first occurrence order.
+func parsePositiveIDList(raw json.RawMessage, maxRaw int, dedupe bool) ([]int64, idListIssue) {
+	if string(raw) == "null" {
+		return nil, idListNull
+	}
+	var list []any
+	if err := json.Unmarshal(raw, &list); err != nil || list == nil {
+		return nil, idListBadFormat
+	}
+	if len(list) > maxRaw {
+		return nil, idListTooMany
+	}
+	ids := make([]int64, 0, len(list))
+	for _, v := range list {
+		n, ok := v.(float64)
+		if !ok || math.IsNaN(n) || math.IsInf(n, 0) || n != math.Trunc(n) || n <= 0 || n > 1e15 {
+			return nil, idListBadElement
+		}
+		ids = append(ids, int64(n))
+	}
+	if dedupe {
+		return dedupeInt64s(ids), idListOK
+	}
+	return ids, idListOK
 }
 
 func taskNumber(w http.ResponseWriter, r *http.Request) (int64, bool) {

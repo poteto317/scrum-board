@@ -404,6 +404,10 @@ func (r *projectChatRepo) Columns(context.Context) ([]kanban.Column, error) {
 	return []kanban.Column{{ID: 1, Name: "Todo"}}, nil
 }
 
+func (r *projectChatRepo) ListLabels(context.Context) ([]kanban.Label, error) {
+	return []kanban.Label{}, nil
+}
+
 func (r *projectChatRepo) AppendProjectAITurn(_ context.Context, projectID, _ int64, _ *int64, turn kanban.ProjectAITurn) (kanban.ProjectAIConversation, error) {
 	r.appended.Add(1)
 	return kanban.ProjectAIConversation{ID: 1, ProjectID: projectID, Title: turn.Title}, nil

@@ -20,6 +20,9 @@ func dbError(err error) error {
 	if errors.As(err, &m) {
 		switch m.Number {
 		case 1062:
+			if strings.Contains(m.Message, "uq_labels_name_key") {
+				return ErrLabelDuplicate
+			}
 			if strings.Contains(m.Message, "item_related_items") ||
 				strings.Contains(m.Message, "uq_item_related_") ||
 				strings.Contains(m.Message, "uq_card_related_") {
@@ -29,6 +32,9 @@ func dbError(err error) error {
 		case 1451:
 			return ErrProjectConflict
 		case 1452:
+			if strings.Contains(m.Message, "fk_item_labels_label") {
+				return ErrUnknownLabel
+			}
 			if strings.Contains(m.Message, "fk_item_project") || strings.Contains(m.Message, "project_id") {
 				return ErrProject
 			}
@@ -70,6 +76,7 @@ func scanCard(s scanner) (Item, error) {
 	}
 	c.PRURLs = []string{}
 	c.RelatedItems = []RelatedItem{}
+	c.Labels = []Label{}
 	return c, nil
 }
 
@@ -104,6 +111,9 @@ func loadCard(ctx context.Context, q interface {
 		return c, err
 	}
 	if err = attachRelatedItem(ctx, q, &c); err != nil {
+		return c, err
+	}
+	if err = attachLabel(ctx, q, &c); err != nil {
 		return c, err
 	}
 	return c, nil
@@ -240,6 +250,9 @@ func (r MySQLRepository) loadBoard(ctx context.Context, itemProjectID int64) (Bo
 	if err = attachRelatedItems(ctx, tx, b.Items); err != nil {
 		return b, err
 	}
+	if err = attachLabels(ctx, tx, b.Items); err != nil {
+		return b, err
+	}
 	return b, tx.Commit()
 }
 func (r MySQLRepository) GetItem(ctx context.Context, id int64) (Item, error) {
@@ -267,7 +280,14 @@ func (r MySQLRepository) ListLivingItems(ctx context.Context) ([]Item, error) {
 		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if err = attachLabels(ctx, r.DB, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 func (r MySQLRepository) CreateItem(ctx context.Context, in ItemInput) (Item, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
@@ -348,6 +368,11 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, in.ColumnID, projectID, in.Title, in.Des
 	if err = applyRelatedItemsPatch(ctx, tx, id, related, time.Now().UTC()); err != nil {
 		return Item{}, err
 	}
+	if len(in.LabelIDs) > 0 {
+		if err = insertItemLabelsTx(ctx, tx, id, in.LabelIDs); err != nil {
+			return Item{}, err
+		}
+	}
 	if err = copyCommandTemplateDefaultsToCard(ctx, tx, id); err != nil {
 		return Item{}, err
 	}
@@ -380,7 +405,7 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 		if _, err = lockColumnRows(ctx, tx); err != nil {
 			return Item{}, err
 		}
-	case p.PRURLs != nil, p.RelatedItems != nil:
+	case p.PRURLs != nil, p.RelatedItems != nil, p.LabelIDs != nil:
 		if _, err = lockColumnRows(ctx, tx); err != nil {
 			return Item{}, err
 		}
@@ -504,6 +529,11 @@ func (r MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch) 
 	}
 	if p.RelatedItems != nil {
 		if err = applyRelatedItemsPatch(ctx, tx, id, *p.RelatedItems, now); err != nil {
+			return Item{}, err
+		}
+	}
+	if p.LabelIDs != nil {
+		if err = replaceItemLabelsTx(ctx, tx, id, *p.LabelIDs); err != nil {
 			return Item{}, err
 		}
 	}

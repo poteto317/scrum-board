@@ -931,6 +931,13 @@ paths:
                   type: string
                 dueAt:
                   type: string
+                labelIds:
+                  type: array
+                  maxItems: 64
+                  items:
+                    type: integer
+                    minimum: 1
+                  description: 付与するラベル ID の配列（生配列は最大 64 件、重複除去後最大 20 件）
               additionalProperties: false
   /api/items/by-number/{number}:
     get:
@@ -2053,6 +2060,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '404':
+          description: アイテムが存在しない場合
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: アーカイブ済みアイテムなど状態上編集できない場合
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       parameters:
       - name: id
         in: path
@@ -2090,6 +2109,13 @@ paths:
                   type: string
                 closeReason:
                   type: string
+                labelIds:
+                  type: array
+                  maxItems: 64
+                  items:
+                    type: integer
+                    minimum: 1
+                  description: 更新後のラベル ID の配列（生配列は最大 64 件、重複除去後最大 20 件、空配列で全解除）
               additionalProperties: false
               description: ACL キーは不可（専用 /acl）。空オブジェクトは 400。
     delete:
@@ -2232,6 +2258,176 @@ paths:
       security:
       - cookieAuth: []
       - basicAuth: []
+  /api/labels:
+    get:
+      summary: ラベル一覧取得
+      operationId: get_api_labels
+      description: ワークスペース全体で共有されるラベル定義を ID 昇順で返す（最大 200 件）。
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - labels
+                properties:
+                  labels:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Label'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+    post:
+      summary: ラベル作成
+      operationId: post_api_labels
+      description: 新しいラベルを作成する。空白圧縮・制御文字拒否のうえ最大 40 スカラー、色は `#rrggbb`（小文字正規化）。同名（正規化キー一致）は 409、上限 200 件超過も 409。
+      responses:
+        '201':
+          description: 作成されたラベル
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Label'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 同名ラベル重複または 200 件上限超過
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - name
+              - color
+              properties:
+                name:
+                  type: string
+                color:
+                  type: string
+                  pattern: '^#[0-9a-fA-F]{6}$'
+              additionalProperties: false
+  /api/labels/{id}:
+    patch:
+      summary: ラベル更新
+      operationId: patch_api_labels_id
+      description: ラベルの名前・色を部分更新する。空オブジェクトや null は 400。
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: 更新後のラベル
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Label'
+        '400':
+          description: 不正な入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: ラベルが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 同名ラベル重複
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                color:
+                  type: string
+                  pattern: '^#[0-9a-fA-F]{6}$'
+              additionalProperties: false
+    delete:
+      summary: ラベル削除
+      operationId: delete_api_labels_id
+      description: ラベルを削除する（アイテムへの付与もカスケード削除される）。
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '204':
+          description: 削除成功（本文なし）
+        '400':
+          description: ラベル ID 不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: ラベルが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
   /api/list-filter:
     get:
       summary: 一覧フィルタ取得
@@ -2242,7 +2438,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JsonValue'
+                $ref: '#/components/schemas/WorkspaceListFilters'
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       security:
       - cookieAuth: []
       - basicAuth: []
@@ -2255,7 +2457,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JsonValue'
+                $ref: '#/components/schemas/WorkspaceListFilters'
         '400':
           description: 不正な入力
           content:
@@ -2272,11 +2474,11 @@ paths:
       - cookieAuth: []
       - basicAuth: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JsonValue'
-      description: ' requestBody は暫定 JsonValue。変更時に具体化する。'
+              $ref: '#/components/schemas/WorkspaceListFilters'
   /api/pr-titles:
     post:
       summary: PR タイトル一括取得
@@ -4183,3 +4385,55 @@ components:
           type: array
           items:
             type: string
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/Label'
+    Label:
+      type: object
+      required:
+      - id
+      - name
+      - color
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+          pattern: '^#[0-9a-f]{6}$'
+    ListFilter:
+      type: object
+      required:
+      - query
+      - statusIds
+      properties:
+        query:
+          type: string
+          maxLength: 200
+        statusIds:
+          type: array
+          maxItems: 64
+          items:
+            type: integer
+            minimum: 1
+        labelIds:
+          type: array
+          maxItems: 64
+          items:
+            type: integer
+            minimum: 1
+          description: 省略時は空配列扱い（複数指定時は AND 絞り込み）
+      additionalProperties: false
+    WorkspaceListFilters:
+      type: object
+      required:
+      - board
+      - backlog
+      properties:
+        board:
+          $ref: '#/components/schemas/ListFilter'
+        backlog:
+          $ref: '#/components/schemas/ListFilter'
+      additionalProperties: false

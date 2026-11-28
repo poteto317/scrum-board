@@ -59,6 +59,7 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		"sprint_items",
 		"sprints",
 		"recurring_rules",
+		"item_labels", "labels",
 		"item_numbers", "card_numbers",
 		"item_number_sequence", "card_number_sequence",
 		"items", "cards",
@@ -103,6 +104,9 @@ func mysqlTestDB(t *testing.T, suffix string) *sql.DB {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeRelatedItems(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = (MySQLRepository{DB: db}).InitializeLabels(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if err = (MySQLRepository{DB: db}).InitializeDueAt(t.Context()); err != nil {

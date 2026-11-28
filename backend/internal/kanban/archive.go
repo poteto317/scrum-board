@@ -62,6 +62,9 @@ func (r MySQLRepository) ListArchivedItems(ctx context.Context, projectID int64)
 	if err = attachRelatedItems(ctx, r.DB, items); err != nil {
 		return nil, err
 	}
+	if err = attachLabels(ctx, r.DB, items); err != nil {
+		return nil, err
+	}
 	return items, nil
 }
 
