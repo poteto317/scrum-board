@@ -11,12 +11,14 @@ const (
 	loginFailureTTL   = 15 * time.Minute
 )
 
-// LoginAttemptLimiter tracks consecutive failed password attempts per login key and client IP
-// (form login and Basic auth use separate instances).
+// LoginAttemptLimiter tracks consecutive failed password attempts per client IP and per
+// login-name + client-IP pair (form login and Basic auth use separate instances).
+// Keying the login name with the IP means a third party cannot lock someone else's
+// login from another address (#171).
 type LoginAttemptLimiter interface {
 	Allow(loginKey, ip string, now time.Time) bool
 	RecordFailure(loginKey, ip string, now time.Time)
-	// RecordSuccess clears the login-key counter only (IP counters stay for NAT shared exits).
+	// RecordSuccess clears the login+IP pair counter only (IP counters stay for NAT shared exits).
 	RecordSuccess(loginKey, ip string)
 }
 
@@ -36,29 +38,28 @@ func NewMemoryLoginAttemptLimiter() LoginAttemptLimiter {
 	return &memoryLoginAttemptLimiter{byKey: make(map[string]*loginAttemptEntry)}
 }
 
-func loginAttemptKey(loginKey string) string { return "login:" + loginKey }
-func ipAttemptKey(ip string) string          { return "ip:" + ip }
+func loginAttemptKey(loginKey, ip string) string { return "login:" + loginKey + "|" + ip }
+func ipAttemptKey(ip string) string              { return "ip:" + ip }
 
 func (l *memoryLoginAttemptLimiter) Allow(loginKey, ip string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.pruneLocked(now)
-	return !l.isLocked(loginAttemptKey(loginKey), now) && !l.isLocked(ipAttemptKey(ip), now)
+	return !l.isLocked(loginAttemptKey(loginKey, ip), now) && !l.isLocked(ipAttemptKey(ip), now)
 }
 
 func (l *memoryLoginAttemptLimiter) RecordFailure(loginKey, ip string, now time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.pruneLocked(now)
-	l.bump(loginAttemptKey(loginKey), now)
+	l.bump(loginAttemptKey(loginKey, ip), now)
 	l.bump(ipAttemptKey(ip), now)
 }
 
 func (l *memoryLoginAttemptLimiter) RecordSuccess(loginKey, ip string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	delete(l.byKey, loginAttemptKey(loginKey))
-	_ = ip // IP failure counters are not cleared on success (shared NAT).
+	delete(l.byKey, loginAttemptKey(loginKey, ip))
 }
 
 func (l *memoryLoginAttemptLimiter) isLocked(key string, now time.Time) bool {

@@ -447,6 +447,23 @@ func TestAuthLoginIPRateLimitBlocksOtherLogin(t *testing.T) {
 	}
 }
 
+// 他人（別の IP）の失敗で自分のログインが止まらない（#171）。Basic の TestBasicAuthLoginNameLockDoesNotSpanIPs と対（L-095）。
+func TestAuthLoginLockDoesNotSpanIPs(t *testing.T) {
+	h := NewHandler(fresh())
+	const ipA, ipB = "203.0.113.50", "203.0.113.60"
+	for i := 0; i < loginFailureLimit; i++ {
+		if w := formLoginReq(h, "admin", "wrong-password", ipA); w.Code != 401 {
+			t.Fatalf("fail %d: %d", i+1, w.Code)
+		}
+	}
+	if w := formLoginReq(h, "admin", "test-password", ipB); w.Code != 200 {
+		t.Fatalf("another IP must log in, got %d", w.Code)
+	}
+	if w := formLoginReq(h, "admin", "test-password", ipA); w.Code != 429 {
+		t.Fatalf("the failing IP stays locked, got %d", w.Code)
+	}
+}
+
 func TestLoginPasswordHash(t *testing.T) {
 	u := User{PasswordHash: "real-hash", Disabled: false}
 	if got := loginPasswordHash(u, nil); got != "real-hash" {
