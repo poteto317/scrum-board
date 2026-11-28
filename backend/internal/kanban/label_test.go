@@ -31,6 +31,9 @@ func TestNormalizeLabelNameAndKey(t *testing.T) {
 	if got, ok := NormalizeLabelName("  bug   fix  "); !ok || got != "bug fix" {
 		t.Fatalf("got %q ok=%v", got, ok)
 	}
+	if got, ok := NormalizeLabelName("bug\u0085fix"); !ok || got != "bug fix" {
+		t.Fatalf("NEL space normalization: got %q ok=%v", got, ok)
+	}
 	if _, ok := NormalizeLabelName("   \t\n "); ok {
 		t.Fatal("blank name must fail")
 	}
