@@ -271,6 +271,7 @@ type projectChatInput struct {
 	system         string
 	turns          []ChatTurn         // the history for the model, ending with the new message
 	columns        []Column           // read once: used by the prompt and by the tools' status filter
+	labels         []Label            // read once: used by the prompt and by search_items labels filter
 	history        []ProjectAIMessage // the conversation's stored messages as they were before this message
 	crossProject   bool
 	projectNames   map[int64]string
@@ -281,6 +282,10 @@ type projectChatInput struct {
 // When replaceListed is true, replaceHistory (possibly empty) is used as-is; otherwise List.
 func (h handler) loadProjectChatInput(ctx context.Context, project Project, user *User, conversation *ProjectAIConversation, req projectAIChatRequest, replaceHistory []ProjectAIMessage, replaceListed bool) (projectChatInput, error) {
 	columns, err := h.repo.Columns(ctx)
+	if err != nil {
+		return projectChatInput{}, err
+	}
+	labels, err := h.repo.ListLabels(ctx)
 	if err != nil {
 		return projectChatInput{}, err
 	}
@@ -304,7 +309,7 @@ func (h handler) loadProjectChatInput(ctx context.Context, project Project, user
 	if err != nil {
 		return projectChatInput{}, err
 	}
-	return newProjectChatInput(project.Name, time.Now(), columns, focus, history, req.Message, h.historyTurns, cross, names), nil
+	return newProjectChatInput(project.Name, time.Now(), columns, labels, focus, history, req.Message, h.historyTurns, cross, names), nil
 }
 
 // projectChatNameMap returns project id→name for tool results. Cross-project loads all
@@ -326,16 +331,17 @@ func (h handler) projectChatNameMap(ctx context.Context, project Project, cross 
 
 // newProjectChatInput builds the prompt and the turns from what was read. No I/O: now is
 // only used for today's date in the prompt.
-func newProjectChatInput(projectName string, now time.Time, columns []Column, focus *projectChatFocus, history []ProjectAIMessage, message string, historyTurns int, crossProject bool, projectNames map[int64]string) projectChatInput {
+func newProjectChatInput(projectName string, now time.Time, columns []Column, labels []Label, focus *projectChatFocus, history []ProjectAIMessage, message string, historyTurns int, crossProject bool, projectNames map[int64]string) projectChatInput {
 	turns := selectProjectChatHistoryForModel(history, historyTurns)
 	turns = append(turns, ChatTurn{Role: AIRoleUser, Body: message})
 	if projectNames == nil {
 		projectNames = map[int64]string{}
 	}
 	return projectChatInput{
-		system:       buildProjectChatSystem(projectName, now, columns, focus, crossProject),
+		system:       buildProjectChatSystem(projectName, now, columns, labels, focus, crossProject),
 		turns:        turns,
 		columns:      columns,
+		labels:       labels,
 		history:      history,
 		crossProject: crossProject,
 		projectNames: projectNames,
@@ -404,7 +410,7 @@ type projectChatAnswer struct {
 // askProjectChat runs the model with the tools and records the usage. On a failure it
 // answers the request itself (ok is false) and nothing may be stored.
 func (h handler) askProjectChat(chatCtx context.Context, w http.ResponseWriter, r *http.Request, projectID int64, user *User, in projectChatInput) (projectChatAnswer, bool) {
-	tools := newProjectToolExecutor(h.repo, projectID, user, in.columns, in.crossProject, in.projectNames)
+	tools := newProjectToolExecutor(h.repo, projectID, user, in.columns, in.labels, in.crossProject, in.projectNames)
 	text, inTok, outTok, err := h.projectChatter.ChatWithTools(chatCtx, in.system, in.turns, projectChatTools(in.crossProject), tools.Run, maxProjectChatModelCalls)
 	h.recordProjectChatUsage(r.Context(), err, inTok, outTok, AIChatEstimateInput(in.system, in.turns))
 	if failure := classifyProjectChatFailure(chatCtx.Err() != nil, tools.failure(), err); failure != projectChatSucceeded {

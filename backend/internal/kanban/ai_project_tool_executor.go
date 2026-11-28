@@ -13,24 +13,25 @@ import (
 // projectToolExecutor runs the tools of one user message for one user in one project.
 // It is used by one request only, one call at a time.
 type projectToolExecutor struct {
-	repo           Repository
-	projectID      int64
-	user           *User
-	columns        []Column
-	crossProject   bool
-	projectNames   map[int64]string
-	budget         toolResultBudget
-	failed         error // first failure that must stop the loop
-	proposals      []ProjectAIProposalDraft
+	repo             Repository
+	projectID        int64
+	user             *User
+	columns          []Column
+	labels           []Label
+	crossProject     bool
+	projectNames     map[int64]string
+	budget           toolResultBudget
+	failed           error // first failure that must stop the loop
+	proposals        []ProjectAIProposalDraft
 	readDescriptions map[int64]string
 }
 
-func newProjectToolExecutor(repo Repository, projectID int64, user *User, columns []Column, crossProject bool, projectNames map[int64]string) *projectToolExecutor {
+func newProjectToolExecutor(repo Repository, projectID int64, user *User, columns []Column, labels []Label, crossProject bool, projectNames map[int64]string) *projectToolExecutor {
 	if projectNames == nil {
 		projectNames = map[int64]string{}
 	}
 	return &projectToolExecutor{
-		repo: repo, projectID: projectID, user: user, columns: columns,
+		repo: repo, projectID: projectID, user: user, columns: columns, labels: labels,
 		crossProject: crossProject, projectNames: projectNames, budget: newToolResultBudget(),
 	}
 }
@@ -89,12 +90,15 @@ func (e *projectToolExecutor) projectName(id int64) string {
 }
 
 func (e *projectToolExecutor) searchItems(ctx context.Context, raw json.RawMessage, limit int) (string, error) {
-	plan, problem := parseSearchItemsInput(raw, e.columns)
+	plan, problem := parseSearchItemsInput(raw, e.columns, e.labels)
 	if problem != "" {
 		return toolErrorResult(problem), nil
 	}
 	if plan.UnknownStatus {
 		return searchItemsResultText(unknownStatusResult(e.columns), limit), nil
+	}
+	if plan.UnknownLabel {
+		return searchItemsResultText(unknownLabelResult(e.labels), limit), nil
 	}
 	plan.Search.Viewer = itemSearchViewer(e.user)
 	var (

@@ -25,17 +25,17 @@ const (
 // projectChatTools is the tool list given to the model.
 func projectChatTools(crossProject bool) []ChatTool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
-	searchDesc := "このプロジェクトのアイテムを検索する。結果は {total, truncated, items} で、items は {number, projectId, projectName, title, status, assignee, dueAt, archived, updatedAt, snippet}。" +
+	searchDesc := "このプロジェクトのアイテムを検索する。結果は {total, truncated, items} で、items は {number, projectId, projectName, title, status, labels, assignee, dueAt, archived, updatedAt, snippet}。" +
 		"total が items の件数より多いときは offset で続きを取れる。truncated が true のときは、全件は見ていない。本文やコメントを読むには get_item を使う。"
-	getDesc := "このプロジェクトのアイテム 1 件を番号で開き、タイトル・説明・ソリューション・状態・担当・期限・コメント（新しい 30 件）を返す。"
+	getDesc := "このプロジェクトのアイテム 1 件を番号で開き、タイトル・説明・ソリューション・状態・ラベル・担当・期限・コメント（新しい 30 件）を返す。"
 	getProps := map[string]any{
 		"number": map[string]any{"type": "integer", "description": "アイテムの番号（#12 なら 12）。"},
 	}
 	getRequired := []string{"number"}
 	if crossProject {
-		searchDesc = "閲覧できる全プロジェクトのアイテムを検索する。結果は {total, truncated, items} で、items は {number, projectId, projectName, title, status, assignee, dueAt, archived, updatedAt, snippet}。" +
+		searchDesc = "閲覧できる全プロジェクトのアイテムを検索する。結果は {total, truncated, items} で、items は {number, projectId, projectName, title, status, labels, assignee, dueAt, archived, updatedAt, snippet}。" +
 			"total が items の件数より多いときは offset で続きを取れる。truncated が true のときは、全件は見ていない。本文やコメントを読むには get_item（projectId 必須）を使う。"
-		getDesc = "閲覧できるプロジェクトのアイテム 1 件を projectId と番号で開き、タイトル・説明・ソリューション・状態・担当・期限・コメント（新しい 30 件）を返す。projectId は必須。"
+		getDesc = "閲覧できるプロジェクトのアイテム 1 件を projectId と番号で開き、タイトル・説明・ソリューション・状態・ラベル・担当・期限・コメント（新しい 30 件）を返す。projectId は必須。"
 		getProps["projectId"] = map[string]any{"type": "integer", "description": "アイテムが属するプロジェクトの ID。"}
 		getRequired = []string{"number", "projectId"}
 	}
@@ -53,6 +53,11 @@ func projectChatTools(crossProject bool) []ChatTool {
 				"properties": map[string]any{
 					"query":    str("検索語。空白区切りはすべて含むもの（AND）。タイトル・説明・ソリューション・コメントの部分一致。#12 のような語は番号にも一致する。省略すると絞り込まない。"),
 					"status":   str("列の名前（例: Todo、Doing、Done）で絞り込む。"),
+					"labels": map[string]any{
+						"type":        "array",
+						"items":       map[string]any{"type": "string"},
+						"description": "ラベルの名前（配列。複数指定時はすべて付いているもの＝AND で絞り込む。省略または空配列なら絞り込まない）。",
+					},
 					"assignee": str("担当の名前（完全一致）で絞り込む。"),
 					"dueFrom":  str("期限がこの日以降のものに絞る。YYYY-MM-DD（日本時間）。"),
 					"dueTo":    str("期限がこの日以前のものに絞る。YYYY-MM-DD（日本時間）。"),

@@ -55,6 +55,15 @@ func writeItemPromptContext(b *strings.Builder, item Item, comments []Comment, c
 	b.WriteString("\n説明:\n")
 	b.WriteString(fencedBlock(clipAIChatField(item.Description, maxAIChatContextFieldLen)))
 	b.WriteString("\n")
+	if len(item.Labels) > 0 {
+		names := make([]string, 0, len(item.Labels))
+		for _, l := range item.Labels {
+			names = append(names, promptLabel(l.Name))
+		}
+		b.WriteString("ラベル:\n")
+		b.WriteString(fencedBlock(strings.Join(names, "\n")))
+		b.WriteString("\n")
+	}
 	if len(comments) == 0 {
 		return
 	}

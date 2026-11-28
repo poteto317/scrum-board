@@ -287,6 +287,9 @@ func (m *memoryRepo) searchItems(projectID int64, s ItemSearch) ([]Item, error) 
 		if !m.matchesAllTerms(card, s.Terms) {
 			continue
 		}
+		if !itemHasAllLabels(card, s.LabelIDs) {
+			continue
+		}
 		out = append(out, card)
 	}
 	slices.SortFunc(out, func(a, b Item) int {

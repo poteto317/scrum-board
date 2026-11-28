@@ -54,6 +54,7 @@ type getItemOut struct {
 	Description string              `json:"description"`
 	Solution    string              `json:"solution"`
 	Status      string              `json:"status"`
+	Labels      []string            `json:"labels"`
 	Assignee    string              `json:"assignee"`
 	DueAt       *string             `json:"dueAt"`
 	CloseReason string              `json:"closeReason"`
@@ -71,7 +72,8 @@ func getItemResult(item Item, comments []Comment, columns []Column, clip int, pr
 	out := getItemOut{
 		Number: item.Number, ProjectID: item.ProjectID, ProjectName: projectName, Title: item.Title,
 		Description: clipAIChatField(item.Description, clip), Solution: clipAIChatField(item.Solution, clip),
-		Status: columnNameByID(columns)[item.ColumnID], Assignee: item.Assignee, DueAt: tokyoTimePtr(item.DueAt),
+		Status: columnNameByID(columns)[item.ColumnID], Labels: labelNameList(item.Labels),
+		Assignee: item.Assignee, DueAt: tokyoTimePtr(item.DueAt),
 		CloseReason: clipAIChatField(item.CloseReason, clip), PRURLs: append([]string{}, item.PRURLs...),
 		Archived: item.ArchivedAt != nil, CreatedAt: tokyoTime(item.CreatedAt), UpdatedAt: tokyoTime(item.UpdatedAt),
 		Comments: []getItemCommentOut{},
@@ -109,6 +111,7 @@ func fitGetItemOut(item Item, comments []Comment, columns []Column, limit int, p
 		out.Truncated = true
 		if clip == 0 {
 			out.PRURLs = []string{}
+			out.Labels = []string{}
 		}
 		if text := toolJSON(out); utf8.RuneCountInString(text) <= limit {
 			return out, true

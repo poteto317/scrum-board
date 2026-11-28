@@ -3,6 +3,7 @@ package kanban
 import (
 	"encoding/json"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -20,14 +21,15 @@ const (
 )
 
 type searchItemsInput struct {
-	Query    string   `json:"query"`
-	Status   string   `json:"status"`
-	Assignee string   `json:"assignee"`
-	DueFrom  string   `json:"dueFrom"`
-	DueTo    string   `json:"dueTo"`
-	Sort     string   `json:"sort"`
-	Limit    *float64 `json:"limit"`
-	Offset   *float64 `json:"offset"`
+	Query    string          `json:"query"`
+	Status   string          `json:"status"`
+	Labels   json.RawMessage `json:"labels"`
+	Assignee string          `json:"assignee"`
+	DueFrom  string          `json:"dueFrom"`
+	DueTo    string          `json:"dueTo"`
+	Sort     string          `json:"sort"`
+	Limit    *float64        `json:"limit"`
+	Offset   *float64        `json:"offset"`
 }
 
 // searchItemsPlan is a validated search_items input.
@@ -37,11 +39,13 @@ type searchItemsPlan struct {
 	Offset int
 	// UnknownStatus is set when status names no column: nothing is searched.
 	UnknownStatus bool
+	// UnknownLabel is set when labels names an unknown label: nothing is searched.
+	UnknownLabel bool
 }
 
 // parseSearchItemsInput validates a search_items input. A non-empty problem is the fixed
 // error text for the model.
-func parseSearchItemsInput(raw json.RawMessage, columns []Column) (plan searchItemsPlan, problem string) {
+func parseSearchItemsInput(raw json.RawMessage, columns []Column, labels []Label) (plan searchItemsPlan, problem string) {
 	var in searchItemsInput
 	if !decodeToolInput(raw, &in) {
 		return plan, toolErrInvalidInput
@@ -60,49 +64,108 @@ func parseSearchItemsInput(raw json.RawMessage, columns []Column) (plan searchIt
 	default:
 		return plan, toolErrInvalidInput
 	}
-	if from := strings.TrimSpace(in.DueFrom); from != "" {
-		day, ok := parseTokyoDate(from)
-		if !ok {
-			return plan, toolErrDateFormat
-		}
-		plan.Search.DueFrom = &day
-	}
-	if to := strings.TrimSpace(in.DueTo); to != "" {
-		day, ok := parseTokyoDate(to)
-		if !ok {
-			return plan, toolErrDateFormat
-		}
-		// The day itself is included: everything before the next day starts.
-		next := day.AddDate(0, 0, 1)
-		plan.Search.DueTo = &next
+	plan.Search.DueFrom, plan.Search.DueTo, problem = parseSearchDueRange(in.DueFrom, in.DueTo)
+	if problem != "" {
+		return plan, problem
 	}
 	plan.Search.Terms = splitSearchTerms(in.Query)
 	plan.Search.Assignee = strings.TrimSpace(in.Assignee)
-	if status := strings.TrimSpace(in.Status); status != "" {
-		plan.UnknownStatus = true
-		for _, c := range columns {
-			if strings.EqualFold(c.Name, status) {
-				id := c.ID
-				plan.Search.ColumnID = &id
-				plan.UnknownStatus = false
-				break
-			}
-		}
+	plan.Search.ColumnID, plan.UnknownStatus = resolveSearchStatus(in.Status, columns)
+	plan.Search.LabelIDs, plan.UnknownLabel, problem = parseSearchLabels(in.Labels, labels)
+	if problem != "" {
+		return plan, problem
 	}
 	return plan, ""
 }
 
+func parseSearchDueRange(dueFromRaw, dueToRaw string) (fromPtr, toPtr *time.Time, problem string) {
+	if from := strings.TrimSpace(dueFromRaw); from != "" {
+		day, ok := parseTokyoDate(from)
+		if !ok {
+			return nil, nil, toolErrDateFormat
+		}
+		fromPtr = &day
+	}
+	if to := strings.TrimSpace(dueToRaw); to != "" {
+		day, ok := parseTokyoDate(to)
+		if !ok {
+			return nil, nil, toolErrDateFormat
+		}
+		// The day itself is included: everything before the next day starts.
+		next := day.AddDate(0, 0, 1)
+		toPtr = &next
+	}
+	return fromPtr, toPtr, ""
+}
+
+func resolveSearchStatus(rawStatus string, columns []Column) (columnID *int64, unknown bool) {
+	status := strings.TrimSpace(rawStatus)
+	if status == "" {
+		return nil, false
+	}
+	for _, c := range columns {
+		if strings.EqualFold(c.Name, status) {
+			id := c.ID
+			return &id, false
+		}
+	}
+	return nil, true
+}
+
+func parseSearchLabels(raw json.RawMessage, labels []Label) (labelIDs []int64, unknown bool, problem string) {
+	if len(raw) == 0 {
+		return nil, false, ""
+	}
+	if string(raw) == "null" {
+		return nil, false, toolErrInvalidInput
+	}
+	var names []any
+	if err := json.Unmarshal(raw, &names); err != nil || names == nil || len(names) > MaxSearchLabelNames {
+		return nil, false, toolErrInvalidInput
+	}
+	labelIDByKey := make(map[string]int64, len(labels))
+	for _, l := range labels {
+		labelIDByKey[LabelNameKey(l.Name)] = l.ID
+	}
+	seenIDs := make(map[int64]struct{}, len(names))
+	for _, rawName := range names {
+		s, ok := rawName.(string)
+		if !ok {
+			return nil, false, toolErrInvalidInput
+		}
+		key := LabelNameKey(s)
+		if key == "" {
+			return nil, false, toolErrInvalidInput
+		}
+		id, found := labelIDByKey[key]
+		if !found {
+			unknown = true
+			continue
+		}
+		if _, dup := seenIDs[id]; dup {
+			continue
+		}
+		seenIDs[id] = struct{}{}
+		labelIDs = append(labelIDs, id)
+	}
+	if unknown {
+		return nil, true, ""
+	}
+	return labelIDs, false, ""
+}
+
 type searchItemOut struct {
-	Number      int64   `json:"number"`
-	ProjectID   int64   `json:"projectId"`
-	ProjectName string  `json:"projectName"`
-	Title       string  `json:"title"`
-	Status      string  `json:"status"`
-	Assignee    string  `json:"assignee"`
-	DueAt       *string `json:"dueAt"`
-	Archived    bool    `json:"archived"`
-	UpdatedAt   string  `json:"updatedAt"`
-	Snippet     string  `json:"snippet"`
+	Number      int64    `json:"number"`
+	ProjectID   int64    `json:"projectId"`
+	ProjectName string   `json:"projectName"`
+	Title       string   `json:"title"`
+	Status      string   `json:"status"`
+	Labels      []string `json:"labels"`
+	Assignee    string   `json:"assignee"`
+	DueAt       *string  `json:"dueAt"`
+	Archived    bool     `json:"archived"`
+	UpdatedAt   string   `json:"updatedAt"`
+	Snippet     string   `json:"snippet"`
 }
 
 type searchItemsOut struct {
@@ -110,6 +173,15 @@ type searchItemsOut struct {
 	Truncated         bool            `json:"truncated"`
 	Items             []searchItemOut `json:"items"`
 	AvailableStatuses []string        `json:"availableStatuses,omitempty"`
+	AvailableLabels   *[]string       `json:"availableLabels,omitempty"`
+}
+
+func labelNameList(labels []Label) []string {
+	out := make([]string, 0, len(labels))
+	for _, l := range labels {
+		out = append(out, l.Name)
+	}
+	return out
 }
 
 // searchItemsPage builds the result from the viewable matches (already cut to maxItemSearchMatches).
@@ -121,7 +193,7 @@ func searchItemsPage(viewable []Item, more bool, plan searchItemsPlan, columns [
 		it := viewable[i]
 		out.Items = append(out.Items, searchItemOut{
 			Number: it.Number, ProjectID: it.ProjectID, ProjectName: projectNames[it.ProjectID],
-			Title: it.Title, Status: names[it.ColumnID], Assignee: it.Assignee,
+			Title: it.Title, Status: names[it.ColumnID], Labels: labelNameList(it.Labels), Assignee: it.Assignee,
 			DueAt: tokyoTimePtr(it.DueAt), Archived: it.ArchivedAt != nil, UpdatedAt: tokyoTime(it.UpdatedAt),
 			Snippet: searchSnippet(it.Description, it.Solution, plan.Search.Terms),
 		})
@@ -129,19 +201,36 @@ func searchItemsPage(viewable []Item, more bool, plan searchItemsPlan, columns [
 	return out
 }
 
-// fitSearchItems drops items from the end until the JSON fits limit characters.
+// fitSearchItems drops items (or trailing available names) from the end until the JSON fits limit characters.
 // ok is false when even an empty list does not fit.
 func fitSearchItems(out searchItemsOut, limit int) (string, bool) {
+	if out.AvailableLabels != nil {
+		copied := make([]string, len(*out.AvailableLabels))
+		copy(copied, *out.AvailableLabels)
+		out.AvailableLabels = &copied
+	}
 	for {
 		text := toolJSON(out)
 		if utf8.RuneCountInString(text) <= limit {
 			return text, true
 		}
-		if len(out.Items) == 0 {
-			return "", false
+		if len(out.Items) > 0 {
+			out.Items = out.Items[:len(out.Items)-1]
+			out.Truncated = true
+			continue
 		}
-		out.Items = out.Items[:len(out.Items)-1]
-		out.Truncated = true
+		if out.AvailableLabels != nil && len(*out.AvailableLabels) > 0 {
+			trimmed := (*out.AvailableLabels)[:len(*out.AvailableLabels)-1]
+			out.AvailableLabels = &trimmed
+			out.Truncated = true
+			continue
+		}
+		if len(out.AvailableStatuses) > 0 {
+			out.AvailableStatuses = out.AvailableStatuses[:len(out.AvailableStatuses)-1]
+			out.Truncated = true
+			continue
+		}
+		return "", false
 	}
 }
 
@@ -161,6 +250,12 @@ func unknownStatusResult(columns []Column) searchItemsOut {
 		names = append(names, c.Name)
 	}
 	return searchItemsOut{Items: []searchItemOut{}, AvailableStatuses: names}
+}
+
+// unknownLabelResult answers a label that names no workspace label: nothing found, and the names that exist.
+func unknownLabelResult(labels []Label) searchItemsOut {
+	names := labelNameList(labels)
+	return searchItemsOut{Items: []searchItemOut{}, AvailableLabels: &names}
 }
 
 // lookedAtMatches cuts what the query returned to the maxItemSearchMatches that are looked at.

@@ -348,7 +348,7 @@ func TestNewProjectChatInput(t *testing.T) {
 		{Role: AIRoleUser, Body: "q2"}, {Role: AIRoleAssistant, Body: "a2"},
 	}
 	focus := &projectChatFocus{Item: Item{Number: 12, Title: "開いているもの"}}
-	in := newProjectChatInput("Alpha", now, columns, focus, history, "new q", 1, false, nil)
+	in := newProjectChatInput("Alpha", now, columns, nil, focus, history, "new q", 1, false, nil)
 	for _, want := range []string{"Alpha", "2026-11-27", "Todo", "Doing", "いま開いているアイテム（#12）", "開いているもの"} {
 		if !strings.Contains(in.system, want) {
 			t.Fatalf("system lacks %q:\n%s", want, in.system)
@@ -366,7 +366,7 @@ func TestNewProjectChatInput(t *testing.T) {
 	if len(in.history) != 4 || len(in.columns) != 2 {
 		t.Fatalf("history and columns are passed on whole: %d %d", len(in.history), len(in.columns))
 	}
-	if none := newProjectChatInput("Alpha", now, columns, nil, nil, "q", 20, false, nil); strings.Contains(none.system, "いま開いているアイテム（") || len(none.turns) != 1 {
+	if none := newProjectChatInput("Alpha", now, columns, nil, nil, nil, "q", 20, false, nil); strings.Contains(none.system, "いま開いているアイテム（") || len(none.turns) != 1 {
 		t.Fatalf("no focus, no history: %+v", none.turns)
 	}
 }
