@@ -11,7 +11,8 @@ const (
 	loginFailureTTL   = 15 * time.Minute
 )
 
-// LoginAttemptLimiter tracks consecutive failed logins per login key and client IP.
+// LoginAttemptLimiter tracks consecutive failed password attempts per login key and client IP
+// (form login and Basic auth use separate instances).
 type LoginAttemptLimiter interface {
 	Allow(loginKey, ip string, now time.Time) bool
 	RecordFailure(loginKey, ip string, now time.Time)
@@ -36,7 +37,7 @@ func NewMemoryLoginAttemptLimiter() LoginAttemptLimiter {
 }
 
 func loginAttemptKey(loginKey string) string { return "login:" + loginKey }
-func ipAttemptKey(ip string) string           { return "ip:" + ip }
+func ipAttemptKey(ip string) string          { return "ip:" + ip }
 
 func (l *memoryLoginAttemptLimiter) Allow(loginKey, ip string, now time.Time) bool {
 	l.mu.Lock()
