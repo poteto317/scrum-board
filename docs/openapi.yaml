@@ -240,6 +240,34 @@ paths:
       security:
       - cookieAuth: []
       - basicAuth: []
+  /api/board/meta:
+    get:
+      summary: ボード列・設定のメタ取得
+      operationId: get_api_board_meta
+      description: アイテム本体を除いた列一覧とボード設定のみを返す（ETag 対応）。
+      responses:
+        '200':
+          description: 成功
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: メタボディの強い ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonValue'
+        '304':
+          description: 未変更（本文なし）
+        '401':
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
   /api/board/settings:
     patch:
       summary: ボード設定の部分更新
