@@ -1,48 +1,64 @@
-import { Component, inject, input } from '@angular/core';
-import { Column } from './models';
-import { ListFilterView, appliedListFilter } from './list-filter';
+import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { labelBadgeVars } from './label';
+import { LabelManagerDialog } from './label-manager-dialog';
+import { LabelsSession } from './labels-session';
+import { ListFilterView, appliedListFilter, listFilterActive } from './list-filter';
 import { ListFilterSession } from './list-filter-session';
+import { Column } from './models';
 
 @Component({
   selector: 'app-list-filter-bar',
+  standalone: true,
+  imports: [CommonModule, LabelManagerDialog],
   templateUrl: './list-filter-bar.html',
   styleUrl: './list-filter-bar.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ListFilterBar {
   readonly view = input.required<ListFilterView>();
   readonly columns = input<Column[]>([]);
-  /** Optional trailing count label (e.g. backlog "3 / 10 件"). */
   readonly countLabel = input('');
+  readonly managingLabelsChange = output<boolean>();
+
   readonly session = inject(ListFilterSession);
+  readonly labelsSession = inject(LabelsSession);
+  readonly managingLabels = signal(false);
 
   selectedStatusIds(): number[] {
     return appliedListFilter(
       this.session.filter(this.view()),
       this.columns().map((c) => c.id),
+      this.labelsSession.knownLabelIds(),
     ).statusIds;
   }
 
-  statusChecked(columnId: number): boolean {
-    return this.selectedStatusIds().includes(columnId);
+  selectedLabelIds(): number[] {
+    return appliedListFilter(
+      this.session.filter(this.view()),
+      this.columns().map((c) => c.id),
+      this.labelsSession.knownLabelIds(),
+    ).labelIds;
   }
 
-  onQueryInput(event: Event) {
-    this.session.setQuery(this.view(), (event.target as HTMLInputElement).value);
+  isActive(): boolean {
+    return listFilterActive(
+      this.session.filter(this.view()),
+      this.columns().map((c) => c.id),
+      this.labelsSession.knownLabelIds(),
+    );
   }
 
-  onStatusToggle(columnId: number) {
-    this.session.toggleStatus(this.view(), columnId);
+  labelVars(color: string): Record<string, string> {
+    return labelBadgeVars(color);
   }
 
-  clear() {
+  clear(): void {
     this.session.clear(this.view());
   }
 
-  retryLoad() {
-    this.session.retryLoad();
-  }
-
-  queryValue(): string {
-    return this.session.filter(this.view()).query;
+  setManagingLabels(open: boolean): void {
+    this.managingLabels.set(open);
+    this.managingLabelsChange.emit(open);
   }
 }

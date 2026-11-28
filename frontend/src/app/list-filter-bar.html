@@ -4,26 +4,56 @@
     <input
       type="search"
       name="list-filter-query"
-      placeholder="タイトル・説明で検索"
+      aria-label="タイトル・説明で絞り込み"
+      placeholder="タイトル・説明で絞り込み…"
       maxlength="200"
-      [value]="queryValue()"
-      (input)="onQueryInput($event)"
       autocomplete="off"
+      [value]="session.filter(view()).query"
+      (input)="session.setQuery(view(), $any($event.target).value)"
     />
   </label>
-  <fieldset class="list-filter-statuses">
-    <legend class="sr-only">ステータスで絞り込み</legend>
-    @for (column of columns(); track column.id) {
-      <label class="list-filter-status">
-        <input
-          type="checkbox"
-          [checked]="statusChecked(column.id)"
-          (change)="onStatusToggle(column.id)"
-        />
-        {{ column.name }}
-      </label>
+  @if (columns().length > 0) {
+    <fieldset class="list-filter-statuses">
+      <legend class="sr-only">ステータスで絞り込み</legend>
+      @for (column of columns(); track column.id) {
+        <label class="list-filter-status">
+          <input
+            type="checkbox"
+            [checked]="selectedStatusIds().includes(column.id)"
+            (change)="session.toggleStatus(view(), column.id)"
+          />
+          <span>{{ column.name }}</span>
+        </label>
+      }
+    </fieldset>
+  }
+  <div class="list-filter-labels-bar">
+    @if (labelsSession.labels().length > 0) {
+      <fieldset class="list-filter-labels">
+        <legend class="sr-only">ラベルで絞り込み（すべて一致）</legend>
+        @for (label of labelsSession.labels(); track label.id) {
+          <button
+            type="button"
+            class="list-filter-label-pill"
+            [class.active]="selectedLabelIds().includes(label.id)"
+            [style]="labelVars(label.color)"
+            [attr.aria-pressed]="selectedLabelIds().includes(label.id)"
+            (click)="session.toggleLabel(view(), label.id)"
+          >
+            <span class="list-filter-label-dot" aria-hidden="true"></span>
+            <span class="list-filter-label-name">{{ label.name }}</span>
+          </button>
+        }
+      </fieldset>
     }
-  </fieldset>
+    <button
+      type="button"
+      class="list-filter-manage-btn"
+      (click)="setManagingLabels(true)"
+    >
+      ラベル管理
+    </button>
+  </div>
   <button type="button" class="secondary" (click)="clear()">クリア</button>
   @if (countLabel()) {
     <span class="list-filter-count">{{ countLabel() }}</span>
@@ -31,10 +61,14 @@
   @if (session.loadError()) {
     <p class="list-filter-error" role="alert">
       {{ session.loadError() }}
-      <button type="button" class="secondary" (click)="retryLoad()">再試行</button>
+      <button type="button" class="secondary" (click)="session.retryLoad()">再試行</button>
     </p>
   }
   @if (session.saveError()) {
     <p class="list-filter-error" role="alert">{{ session.saveError() }}</p>
   }
 </section>
+
+@if (managingLabels()) {
+  <app-label-manager-dialog (closed)="setManagingLabels(false)" />
+}

@@ -48,6 +48,7 @@ export class ItemHistory implements OnChanges {
     prUrl: 'GitHub PR',
     prUrls: 'GitHub PR',
     relatedItems: '関連',
+    labels: 'ラベル',
     assignee: '対応',
     closeReason: 'Close理由',
     favorite: 'お気に入り',

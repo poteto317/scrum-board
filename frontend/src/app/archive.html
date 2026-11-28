@@ -39,6 +39,7 @@
               {{ item.title }}
             </a>
           </div>
+          <app-label-badges [labels]="item.labels" [compact]="true" />
           <div class="archive-meta">
             <span>アーカイブ: {{ item.archivedAt | date: 'yyyy/MM/dd HH:mm' }}</span>
           </div>

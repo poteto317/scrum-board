@@ -35,6 +35,7 @@ function archivedItem(partial: Partial<Item> & Pick<Item, 'id' | 'title'>): Item
 describe('Archive page', () => {
   function setup(apiOverrides: Record<string, unknown> = {}) {
     const api = {
+      listLabels: vi.fn(() => of({ labels: [] })),
       listArchivedItems: vi.fn(() => of({ items: [archivedItem({ id: 7, title: 'Archived task' })] })),
       restoreArchivedItem: vi.fn(() => of(archivedItem({ id: 7, title: 'Archived task', archivedAt: null }))),
       ...apiOverrides,
@@ -117,5 +118,47 @@ describe('Archive route', () => {
   it('registers /archive', async () => {
     const { routes } = await import('./app.routes');
     expect(routes.some((route) => route.path === 'archive')).toBe(true);
+  });
+});
+
+describe('Archive label badges', () => {
+  it('displays label badges and updates when LabelsSession broadcasts changes', async () => {
+    const { LabelsSession } = await import('./labels-session');
+    const api = {
+      listArchivedItems: vi.fn(() =>
+        of({
+          items: [
+            archivedItem({
+              id: 7,
+              title: 'Archived task',
+              labels: [{ id: 10, name: 'Bug', color: '#ef4444' }],
+            }),
+          ],
+        }),
+      ),
+      restoreArchivedItem: vi.fn(),
+      updateLabel: vi.fn(() => of({ id: 10, name: 'Defect', color: '#22c55e' })),
+      deleteLabel: vi.fn(() => of(undefined)),
+    };
+    TestBed.configureTestingModule({
+      imports: [Archive],
+      providers: [provideRouter([]), { provide: Api, useValue: api }],
+    });
+    const labelsSession = TestBed.inject(LabelsSession);
+    const f = TestBed.createComponent(Archive);
+    TestBed.inject(ProjectSession).activeId.set(1);
+    f.detectChanges();
+
+    expect(f.nativeElement.textContent).toContain('Bug');
+
+    labelsSession.update(10, { name: 'Defect', color: '#22c55e' }).subscribe();
+    f.detectChanges();
+    expect(f.nativeElement.textContent).toContain('Defect');
+    expect(f.nativeElement.textContent).not.toContain('Bug');
+
+    labelsSession.remove(10).subscribe();
+    f.detectChanges();
+    expect(f.nativeElement.textContent).not.toContain('Defect');
+    f.destroy();
   });
 });

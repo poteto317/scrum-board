@@ -83,6 +83,7 @@ describe('ItemDetail autosave', () => {
     uploadAttachment: ReturnType<typeof vi.fn>;
     deleteAttachment: ReturnType<typeof vi.fn>;
     listAttachments: ReturnType<typeof vi.fn>;
+    listLabels?: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> };
   let restoreDialog: () => void;
@@ -132,6 +133,7 @@ describe('ItemDetail autosave', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
@@ -1008,6 +1010,7 @@ describe('ItemDetail copy card link', () => {
     uploadAttachment: ReturnType<typeof vi.fn>;
     deleteAttachment: ReturnType<typeof vi.fn>;
     listAttachments: ReturnType<typeof vi.fn>;
+    listLabels?: ReturnType<typeof vi.fn>;
   };
   beforeEach(() => {
     params = new BehaviorSubject(new Map([['number', '3']]));
@@ -1028,6 +1031,7 @@ describe('ItemDetail copy card link', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
@@ -1193,6 +1197,7 @@ describe('ItemDetail copy command menu and management', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
     };
     const router = { navigate: vi.fn() };
     TestBed.configureTestingModule({
@@ -1610,6 +1615,7 @@ describe('ItemDetail IME response handling', () => {
               history: () => of({ events: [], nextBefore: 0 }),
               listComments: () => of([]),
               listAttachments: () => of([]),
+              listLabels: () => of({ labels: [] }),
               uploadAttachment: () => of({ id: 1, originalName: 'x.png' }),
               deleteAttachment: () => of(undefined),
               board: () => of({ columns: [], items: [] }),
@@ -1668,6 +1674,7 @@ describe('ItemDetail live refresh', () => {
     uploadAttachment: ReturnType<typeof vi.fn>;
     deleteAttachment: ReturnType<typeof vi.fn>;
     listAttachments: ReturnType<typeof vi.fn>;
+    listLabels?: ReturnType<typeof vi.fn>;
   };
   let router: { navigate: ReturnType<typeof vi.fn> };
   beforeEach(() => {
@@ -1695,6 +1702,7 @@ describe('ItemDetail live refresh', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
@@ -1800,6 +1808,7 @@ describe('ItemDetail board meta wiring (#118)', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
@@ -1861,6 +1870,7 @@ describe('ItemDetail Close reason', () => {
     uploadAttachment: ReturnType<typeof vi.fn>;
     deleteAttachment: ReturnType<typeof vi.fn>;
     listAttachments: ReturnType<typeof vi.fn>;
+    listLabels?: ReturnType<typeof vi.fn>;
   };
   let restoreDialog: () => void;
   beforeEach(() => {
@@ -1905,6 +1915,7 @@ describe('ItemDetail Close reason', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
@@ -2063,6 +2074,7 @@ describe('ItemDetail description text links', () => {
     uploadAttachment: ReturnType<typeof vi.fn>;
     deleteAttachment: ReturnType<typeof vi.fn>;
     listAttachments: ReturnType<typeof vi.fn>;
+    listLabels?: ReturnType<typeof vi.fn>;
   };
   const buttonByText = (root: ParentNode, text: string) =>
     Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text) as
@@ -2118,6 +2130,7 @@ describe('ItemDetail description text links', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
@@ -2331,6 +2344,7 @@ describe('ItemDetail dueAt picker', () => {
     uploadAttachment: ReturnType<typeof vi.fn>;
     deleteAttachment: ReturnType<typeof vi.fn>;
     listAttachments: ReturnType<typeof vi.fn>;
+    listLabels?: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -2358,6 +2372,7 @@ describe('ItemDetail dueAt picker', () => {
       uploadAttachment: vi.fn(() => of({ id: 1, originalName: 'x.png' })),
       deleteAttachment: vi.fn(() => of(undefined)),
       listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: [] })),
     };
     TestBed.configureTestingModule({
       imports: [ItemDetail],
@@ -2687,5 +2702,213 @@ describe('ItemDetail dueAt picker', () => {
     const f2 = create();
     expect(f2.componentInstance.dueAt.open()).toBe(false);
     f2.destroy();
+  });
+});
+
+describe('ItemDetail labels integration', () => {
+  it('attaches/detaches multiple labels via PATCH, blocks readonly/archived, preserves state on failure, and resets on route switch', async () => {
+    const { LabelsSession } = await import('./labels-session');
+    const catalog = [
+      { id: 10, name: 'Bug', color: '#ef4444' },
+      { id: 20, name: 'API', color: '#3b82f6' },
+    ];
+    const params = new BehaviorSubject(new Map([['number', '3']]));
+    const item3: Item = {
+      id: 18,
+      number: 3,
+      projectId: 1,
+      columnId: 1,
+      title: 'テストカード',
+      description: '説明',
+      solution: '',
+      position: 0,
+      backlogPosition: 0,
+      offsetY: 0,
+      prUrls: [],
+      relatedItems: [],
+      assignee: '',
+      closeReason: '',
+      favorite: false,
+      dueAt: null,
+      archivedAt: null,
+      createdAt: '',
+      updatedAt: '',
+      canEdit: true,
+      canManage: true,
+      labels: [catalog[0]],
+    };
+    const updateItem = vi
+      .fn()
+      .mockReturnValueOnce(of({ ...item3, labels: [catalog[0], catalog[1]] }))
+      .mockReturnValueOnce(throwError(() => ({ status: 400, error: { message: 'ラベル保存失敗' } })));
+    const api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
+      boardMeta: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], settings: { cardLayout: 'pack' } })),
+      itemByNumber: vi.fn(() => of(item3)),
+      updateItem,
+      deleteItem: vi.fn(),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      listUsers: vi.fn(() => of([])),
+      uploadAttachment: vi.fn(),
+      deleteAttachment: vi.fn(),
+      listAttachments: vi.fn(() => of([])),
+      listLabels: vi.fn(() => of({ labels: catalog })),
+    };
+    TestBed.configureTestingModule({
+      imports: [ItemDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: authStub },
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: params.asObservable(), queryParamMap: of(new Map()) },
+        },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+        {
+          provide: AiChatContext,
+          useValue: { setDetail: vi.fn(), setItem: vi.fn(), clear: vi.fn(), pageKind: signal('other'), open: signal(false) },
+        },
+      ],
+    });
+    const labelsSession = TestBed.inject(LabelsSession);
+    labelsSession.load();
+    const f = TestBed.createComponent(ItemDetail);
+    f.detectChanges();
+
+    expect(f.componentInstance.selectedLabelIds()).toEqual([10]);
+    const optionButtons = Array.from<HTMLButtonElement>(
+      f.nativeElement.querySelectorAll('.labels-field .picker-option'),
+    );
+    expect(optionButtons).toHaveLength(2);
+
+    // Attach second label -> PATCH { labelIds: [10, 20] }.
+    optionButtons[1].click();
+    f.detectChanges();
+    expect(updateItem).toHaveBeenCalledWith(item3.id, { labelIds: [10, 20] });
+    expect(f.componentInstance.selectedLabelIds()).toEqual([10, 20]);
+
+    // PATCH error keeps selectedLabelIds unchanged and shows error (L-001).
+    optionButtons[0].click();
+    f.detectChanges();
+    expect(f.componentInstance.selectedLabelIds()).toEqual([10, 20]);
+    expect(f.componentInstance.itemLabels.error()).toBe('ラベル保存失敗');
+
+    // Open label manager dialog then switch route -> error & dialog reset cleanly (L-542).
+    f.componentInstance.managingLabels.set(true);
+    api.itemByNumber.mockReturnValueOnce(of({ ...item3, id: 99, number: 9, canEdit: false, labels: [] }));
+    params.next(new Map([['number', '9']]));
+    f.detectChanges();
+    expect(f.componentInstance.managingLabels()).toBe(false);
+    expect(f.componentInstance.itemLabels.error()).toBe('');
+    const roButtons = Array.from<HTMLButtonElement>(
+      f.nativeElement.querySelectorAll('.labels-field .picker-option'),
+    );
+    expect(roButtons.every((b) => b.disabled)).toBe(true);
+    expect(f.nativeElement.querySelector('.labels-field .picker-manage')).toBeNull();
+
+    // Archived item also locks label picker and hides manage button.
+    api.itemByNumber.mockReturnValueOnce(
+      of({ ...item3, id: 100, number: 10, canEdit: true, archivedAt: '2026-01-01T00:00:00Z', labels: [] }),
+    );
+    params.next(new Map([['number', '10']]));
+    f.detectChanges();
+    const archButtons = Array.from<HTMLButtonElement>(
+      f.nativeElement.querySelectorAll('.labels-field .picker-option'),
+    );
+    expect(archButtons.every((b) => b.disabled)).toBe(true);
+    expect(f.nativeElement.querySelector('.labels-field .picker-manage')).toBeNull();
+    f.destroy();
+  });
+
+  it('skips loading label catalog and renders read-only badges for anonymous public viewers', () => {
+    const anonAuth = {
+      user: signal(null),
+      status: signal<'anonymous'>('anonymous'),
+      loadError: signal(''),
+      ensureMe: () => of(null),
+      isAdmin: () => false,
+      clearSubject: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+    };
+    const publicCard: Item = {
+      id: 77,
+      number: 7,
+      projectId: 1,
+      columnId: 1,
+      title: 'Public Card',
+      description: 'Desc',
+      solution: '',
+      position: 0,
+      backlogPosition: 0,
+      offsetY: 0,
+      prUrls: [],
+      relatedItems: [],
+      assignee: '',
+      closeReason: '',
+      favorite: false,
+      dueAt: null,
+      archivedAt: null,
+      createdAt: '',
+      updatedAt: '',
+      viewAccess: 'public',
+      canEdit: false,
+      canManage: false,
+      labels: [{ id: 10, name: 'Bug', color: '#ef4444' }],
+    };
+    const listLabels = vi.fn(() => of({ labels: [] }));
+    const api = {
+      history: vi.fn(() => of({ events: [], nextBefore: 0 })),
+      listComments: vi.fn(() => of([])),
+      board: vi.fn(() => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] })),
+      boardMeta: vi.fn(() =>
+        of({ columns: [{ id: 1, name: 'Todo', position: 0 }], settings: { cardLayout: 'pack' } }),
+      ),
+      itemByNumber: vi.fn(() => of(publicCard)),
+      updateItem: vi.fn(),
+      deleteItem: vi.fn(),
+      listCommandTemplates: vi.fn(() => of({ templates: [] })),
+      listItemCommandTemplatesByNumber: vi.fn(() => of({ templates: [] })),
+      listUsers: vi.fn(() => of([])),
+      uploadAttachment: vi.fn(),
+      deleteAttachment: vi.fn(),
+      listAttachments: vi.fn(() => of([])),
+      listLabels,
+    };
+    TestBed.configureTestingModule({
+      imports: [ItemDetail],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: AuthSession, useValue: anonAuth },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: new BehaviorSubject(new Map([['number', '7']])).asObservable(),
+            queryParamMap: of(new Map()),
+          },
+        },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+        {
+          provide: AiChatContext,
+          useValue: {
+            setDetail: vi.fn(),
+            setItem: vi.fn(),
+            clear: vi.fn(),
+            pageKind: signal('other'),
+            open: signal(false),
+          },
+        },
+      ],
+    });
+    const f = TestBed.createComponent(ItemDetail);
+    f.detectChanges();
+
+    expect(listLabels).not.toHaveBeenCalled();
+    expect(f.nativeElement.querySelector('.labels-field app-label-picker')).toBeNull();
+    expect(f.nativeElement.querySelector('.labels-field app-label-badges')?.textContent).toContain('Bug');
+    f.destroy();
   });
 });

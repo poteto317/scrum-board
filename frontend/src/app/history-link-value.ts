@@ -4,7 +4,7 @@ import { formatItemNumber } from './item-number';
 import { fallbackPrLabel } from './pr-display';
 import { validPrUrl } from './pr-url';
 import { displayLabel, relatedItemKey } from './related-item';
-import { renderLinkChange } from './history-link-change';
+import { parseHistoryLabelNames, renderLinkChange } from './history-link-change';
 
 @Component({
   selector: 'app-history-link-value',
@@ -61,6 +61,20 @@ import { renderLinkChange } from './history-link-change';
           <pre>（空欄）</pre>
         }
       }
+    } @else if (field === 'labels') {
+      @if (parseLabelNames(value); as names) {
+        @if (names.length) {
+          <ul class="pr-history">
+            @for (name of names; track $index) {
+              <li><pre>{{ name }}</pre></li>
+            }
+          </ul>
+        } @else {
+          <pre>（空欄）</pre>
+        }
+      } @else {
+        <pre>{{ value || '（空欄）' }}</pre>
+      }
     } @else if (field === 'favorite') {
       <pre>{{ favoriteLabel(value) }}</pre>
     } @else {
@@ -76,6 +90,7 @@ export class HistoryLinkValue {
   readonly formatItemNumber = formatItemNumber;
   readonly relatedDisplayLabel = displayLabel;
   readonly relatedKey = relatedItemKey;
+  readonly parseLabelNames = parseHistoryLabelNames;
   safePr(value: string) {
     return !!value && validPrUrl(value) && value === value.trim();
   }

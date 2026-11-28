@@ -1,5 +1,6 @@
 import { ProjectSwitcher } from './project-switcher';
 import { Modal } from './modal';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   afterNextRender,
   Component,
@@ -31,6 +32,7 @@ import { Api } from './api';
 import { errorMessage } from './api-error';
 import { assigneeKind } from './assignee';
 import { itemAppPath, itemDetailUrl } from './item-link';
+import { LabelCatalogChange, applyLabelCatalogChangeToItems } from './label';
 import { normalizeBoardData, NormalizedBoardData, normalizeItem } from './board-data';
 import {
   applyBoardMobileSettings,
@@ -96,6 +98,9 @@ import {
 import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-filter';
 import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
+import { LabelBadges } from './label-badges';
+import { LabelPicker } from './label-picker';
+import { LabelsSession } from './labels-session';
 import { autoScrollPageVertically, pageScrollElement } from './page-scroll';
 import { applyBoardDataWithActiveSync } from './board-active-sync';
 import { ProjectBoardCache } from './project-board-cache';
@@ -118,6 +123,8 @@ import { ItemTemplatesCreateSession } from './item-templates-create-session';
     NgStyle,
     CopyFeedbackBanner,
     ListFilterBar,
+    LabelBadges,
+    LabelPicker,
     ProjectSwitcher,
     ItemTemplateCreatePanel,
   ],
@@ -157,6 +164,9 @@ export class Board implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly zone = inject(NgZone);
   readonly listFilter = inject(ListFilterSession);
+  readonly labelsSession = inject(LabelsSession);
+  readonly managingLabels = signal(false);
+  readonly newItemLabelIds = signal<number[]>([]);
   private readonly boardScroll = viewChild<ElementRef<HTMLElement>>('boardScroll');
   private readonly columnsContainer = viewChild<ElementRef<HTMLElement>>('columnsContainer');
   private scrollRestoreGeneration = 0;
@@ -228,6 +238,7 @@ export class Board implements OnInit {
     listFilterActive(
       this.appliedFilter(),
       this.data().columns.map((c) => c.id),
+      this.labelsSession.knownLabelIds(),
     ),
   );
   readonly canReorderItems = computed(
@@ -239,6 +250,7 @@ export class Board implements OnInit {
       !this.settingsSaving() &&
       !this.projectSession.switching() &&
       this.modal() === null &&
+      !this.managingLabels() &&
       !this.filterActive(),
   );
   readonly cardLayout = computed(() =>
@@ -285,6 +297,7 @@ export class Board implements OnInit {
     appliedListFilter(
       this.listFilter.filter('board'),
       this.data().columns.map((c) => c.id),
+      this.labelsSession.knownLabelIds(),
     ),
   );
   readonly grouped = computed(() => {
@@ -328,6 +341,10 @@ export class Board implements OnInit {
     this.bindBoardMobileMedia();
     this.load({ useCache: true });
     this.listFilter.load();
+    this.labelsSession.load();
+    this.labelsSession.changes$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((change) => this.applyCatalogLabelChange(change));
     bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadAfterProjectSwitch());
     this.destroyRef.onDestroy(() => {
       this.scrollRestoreGeneration++;
@@ -346,11 +363,13 @@ export class Board implements OnInit {
         !this.layoutSwitching() &&
         !this.projectSession.switching() &&
         this.modal() === null &&
+        !this.managingLabels() &&
         this.draggingColumnId() === null &&
         this.draggingItemId() === null,
       fetch: () => this.pollBoard(),
       apply: (d) => {
         this.error.set('');
+        this.labelsSession.syncWithObservedItems(d.items);
         // Always refresh cache: local mutations may match poll JSON while cache is stale.
         this.rememberBoardCache(d);
         if (sameJson(this.data(), d)) return;
@@ -655,6 +674,7 @@ export class Board implements OnInit {
             this.projectSession,
             applyBoardMobileSettings(r.body),
             (board) => {
+              this.labelsSession.syncWithObservedItems(board.items);
               this.rememberBoardCache(board);
               // Unchanged since the cached view: skip rebuilding every card.
               if (!sameJson(this.data(), board)) this.data.set(board);
@@ -732,6 +752,7 @@ export class Board implements OnInit {
             this.projectSession,
             applyBoardMobileSettings(r.body),
             (board) => {
+              this.labelsSession.syncWithObservedItems(board.items);
               this.rememberBoardCache(board);
               this.data.set(board);
               this.scheduleCardHeightMeasure();
@@ -803,6 +824,7 @@ export class Board implements OnInit {
     if (this.loading() || this.reordering() || this.projectSession.switching()) return;
     this.itemForm.reset({ title: '', description: '' });
     this.formError.set('');
+    this.newItemLabelIds.set([]);
     this.itemTemplates.resetSelection();
     this.itemTemplates.load(this.projectSession.activeId());
     this.modal.set('item');
@@ -817,7 +839,10 @@ export class Board implements OnInit {
   }
 
   close() {
-    if (!this.saving()) this.modal.set(null);
+    if (!this.saving()) {
+      this.newItemLabelIds.set([]);
+      this.modal.set(null);
+    }
   }
 
   dismissReorderError() {
@@ -870,9 +895,15 @@ export class Board implements OnInit {
     this.saving.set(true);
     this.formError.set('');
     const value = this.itemForm.getRawValue();
+    const labelIds = this.newItemLabelIds();
     this.itemForm.disable({ emitEvent: false });
     this.api
-      .createItem({ ...value, title: value.title.trim(), columnId: todoId })
+      .createItem({
+        ...value,
+        title: value.title.trim(),
+        columnId: todoId,
+        ...(labelIds.length > 0 ? { labelIds } : {}),
+      })
       .pipe(
         finalize(() => {
           this.saving.set(false);
@@ -883,11 +914,21 @@ export class Board implements OnInit {
         next: (card) => {
           this.data.update((d) => ({ ...d, items: [...d.items, normalizeItem(card)] }));
           this.rememberBoardCache(this.data());
+          this.newItemLabelIds.set([]);
           this.modal.set(null);
           this.scheduleCardHeightMeasure();
         },
         error: (e) => this.formError.set(errorMessage(e)),
       });
+  }
+
+  private applyCatalogLabelChange(change: LabelCatalogChange) {
+    const res = applyLabelCatalogChangeToItems(this.data().items, change);
+    if (res.changed) {
+      this.data.update((d) => ({ ...d, items: res.items }));
+      this.scheduleCardHeightMeasure();
+    }
+    this.boardEtags.clear();
   }
 
   /**

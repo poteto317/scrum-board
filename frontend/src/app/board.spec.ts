@@ -32,7 +32,7 @@ describe('Board create requests', () => {
     const pending = new Subject<never>();
     const api = {
       createItem: vi.fn(() => pending),
-      listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listLabels: () => of({ labels: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       providers: [CommandTemplatesSession, ItemTemplatesCreateSession, { provide: Api, useValue: api }],
@@ -89,7 +89,7 @@ describe('Board create requests', () => {
         CommandTemplatesSession, ItemTemplatesCreateSession,
         {
           provide: Api,
-          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listLabels: () => of({ labels: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -139,7 +139,7 @@ describe('Board create requests', () => {
         CommandTemplatesSession, ItemTemplatesCreateSession,
         {
           provide: Api,
-          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listLabels: () => of({ labels: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -156,7 +156,7 @@ describe('Board create requests', () => {
         CommandTemplatesSession, ItemTemplatesCreateSession,
         {
           provide: Api,
-          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
+          useValue: { createItem, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listLabels: () => of({ labels: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }) },
         },
       ],
     });
@@ -178,6 +178,7 @@ describe('Board create requests', () => {
             board: () =>
               of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [] }),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
           },
@@ -210,6 +211,7 @@ describe('Board create requests', () => {
                 items: [],
               }),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -246,7 +248,7 @@ describe('Board create requests', () => {
     const pending = new Subject<never>();
     const api = {
       createColumn: vi.fn(() => pending),
-      listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listLabels: () => of({ labels: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
     };
     TestBed.configureTestingModule({
       providers: [CommandTemplatesSession, ItemTemplatesCreateSession, { provide: Api, useValue: api }],
@@ -352,6 +354,7 @@ describe('Board status column classes', () => {
               }),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () =>
               of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: {
@@ -400,6 +403,7 @@ describe('Board assignee chip', () => {
           useValue: {
             board: () => singleCardBoard('Cursor'),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -422,6 +426,7 @@ describe('Board assignee chip', () => {
         {
           provide: Api,
           useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listLabels: () => of({ labels: [] }),
  listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
  putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -445,6 +450,7 @@ describe('Board task numbers', () => {
         {
           provide: Api,
           useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listLabels: () => of({ labels: [] }),
  listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
  putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -490,6 +496,7 @@ describe('Board copy card link', () => {
         {
           provide: Api,
           useValue: { board: singleCardBoard, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listLabels: () => of({ labels: [] }),
  listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
  putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -586,6 +593,7 @@ describe('Board copy command menu', () => {
         {
           provide: Api,
           useValue: { board: singleCardBoard, listItemCommandTemplatesByNumber,
+ listLabels: () => of({ labels: [] }),
  listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
  putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -924,6 +932,7 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1011,6 +1020,7 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1068,6 +1078,7 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1133,6 +1144,7 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1194,6 +1206,7 @@ describe('Board column reordering', () => {
         {
           provide: Api,
           useValue: { board, reorderColumns, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listLabels: () => of({ labels: [] }),
  listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
  putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1274,6 +1287,7 @@ describe('Board column reordering', () => {
             board: () => of(sampleBoard(cols)),
             reorderColumns,
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1424,6 +1438,7 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1461,6 +1476,7 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1512,6 +1528,7 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1570,6 +1587,7 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1608,6 +1626,7 @@ describe('Board card reordering', () => {
             reorderItems: vi.fn(),
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1651,6 +1670,7 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1690,6 +1710,7 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1728,6 +1749,7 @@ describe('Board card reordering', () => {
             reorderItems: vi.fn(),
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1782,6 +1804,7 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1831,6 +1854,7 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1866,6 +1890,7 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1915,6 +1940,7 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1965,6 +1991,7 @@ describe('Board card reordering', () => {
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -1993,6 +2020,7 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -2033,6 +2061,7 @@ describe('Board card reordering', () => {
             reorderItems,
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -2079,6 +2108,7 @@ describe('Board card reordering', () => {
             reorderItems: () => new Subject(),
             reorderColumns: vi.fn(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -2145,6 +2175,7 @@ describe('Board card identity', () => {
             board: () => of(crossed()),
             reorderItems,
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -2225,6 +2256,7 @@ describe('Board live refresh', () => {
       board: vi.fn(() => of(initial)),
       listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
       listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listLabels: () => of({ labels: [] }),
       listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
       putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
     };
@@ -2278,6 +2310,7 @@ describe('Board live refresh', () => {
       board: vi.fn(() => of(initial)),
       listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
       listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listLabels: () => of({ labels: [] }),
       listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
       putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
     };
@@ -2306,6 +2339,7 @@ describe('Board live refresh', () => {
       providers: [
         provideRouter([]),
         { provide: Api, useValue: { board, listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }), listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+ listLabels: () => of({ labels: [] }),
  listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
  putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         } },
@@ -2328,6 +2362,7 @@ describe('Board live refresh', () => {
       board: vi.fn(() => of(initial)),
       listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
       listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listLabels: () => of({ labels: [] }),
       listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
       putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
     };
@@ -2353,6 +2388,7 @@ describe('Board live refresh', () => {
       board: vi.fn(() => of(initial)),
       listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
       listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+      listLabels: () => of({ labels: [] }),
       listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
       putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
     };
@@ -2415,6 +2451,7 @@ describe('Board add dialog accidental close', () => {
               }),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -2428,7 +2465,18 @@ describe('Board add dialog accidental close', () => {
   }
 
   it('keeps the card add dialog open on backdrop click, omits cancel, and closes via ×', async () => {
-    const restore = stubDialog();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShow = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
     try {
       const f = await mountBoard();
       f.componentInstance.openItem(1);
@@ -2457,12 +2505,24 @@ describe('Board add dialog accidental close', () => {
       f.detectChanges();
       expect(f.componentInstance.modal()).toBeNull();
     } finally {
-      restore();
+      proto.showModal = origShow;
+      proto.close = origClose;
     }
   });
 
   it('keeps the column add dialog open on backdrop click and omits cancel', async () => {
-    const restore = stubDialog();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShow = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
     try {
       const f = await mountBoard();
       f.componentInstance.openColumn();
@@ -2480,7 +2540,8 @@ describe('Board add dialog accidental close', () => {
       f.detectChanges();
       f.destroy();
     } finally {
-      restore();
+      proto.showModal = origShow;
+      proto.close = origClose;
     }
   });
 });
@@ -2552,6 +2613,7 @@ describe('Board list filter', () => {
             board: () => of(boardData),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: { board: { query: string; statusIds: number[] }; backlog: { query: string; statusIds: number[] } }) => of(f),
         },
@@ -2627,6 +2689,7 @@ describe('Board layout styles', () => {
             board: singleCardBoard,
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: {
               board: { query: string; statusIds: number[] };
@@ -2673,6 +2736,7 @@ describe('Board layout styles', () => {
                 }),
               listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
               listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+              listLabels: () => of({ labels: [] }),
               listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
               putListFilter: (f: {
                 board: { query: string; statusIds: number[] };
@@ -2712,6 +2776,7 @@ describe('Board layout styles', () => {
             board: singleCardBoard,
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: {
               board: { query: string; statusIds: number[] };
@@ -2821,6 +2886,7 @@ describe('Board AI chat context', () => {
             board: () => singleCardBoard(),
             listCommandTemplates: () => of({ templates: [] }), listItemTemplates: () => of({ templates: [] }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: unknown) => of(f),
           },
@@ -2892,6 +2958,7 @@ describe('Board item templates', () => {
                 ],
               }),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: unknown) => of(f),
           },
@@ -2902,7 +2969,18 @@ describe('Board item templates', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    const restore = stubDialog();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShow = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
     try {
       f.componentInstance.openItem(1);
       f.detectChanges();
@@ -2923,7 +3001,8 @@ describe('Board item templates', () => {
       f.detectChanges();
     } finally {
       f.destroy();
-      restore();
+      proto.showModal = origShow;
+      proto.close = origClose;
     }
   });
 
@@ -2946,6 +3025,7 @@ describe('Board item templates', () => {
             listCommandTemplates: () => of({ templates: [] }),
             listItemTemplates: () => throwError(() => ({ status: 500 })),
             listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listLabels: () => of({ labels: [] }),
             listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
             putListFilter: (f: unknown) => of(f),
           },
@@ -2956,7 +3036,18 @@ describe('Board item templates', () => {
     const f = TestBed.createComponent(Board);
     f.detectChanges();
     await f.whenStable();
-    const restore = stubDialog();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShow = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
     try {
       f.componentInstance.openItem(1);
       f.detectChanges();
@@ -2968,7 +3059,8 @@ describe('Board item templates', () => {
       f.detectChanges();
     } finally {
       f.destroy();
-      restore();
+      proto.showModal = origShow;
+      proto.close = origClose;
     }
   });
 
@@ -3002,5 +3094,216 @@ describe('Board item templates', () => {
     });
     board.itemTemplates.create(1, board.saving);
     expect(createItemTemplate).not.toHaveBeenCalled();
+  });
+});
+
+describe('Board labels integration', () => {
+  it('displays labels on cards, supports multi-label AND filter + DnD pause, and syncs catalog changes/ETag', async () => {
+    const { LabelsSession } = await import('./labels-session');
+    const { ListFilterSession } = await import('./list-filter-session');
+    const { ProjectSession } = await import('./project-session');
+    const labels = [
+      { id: 10, name: 'Bug', color: '#ef4444' },
+      { id: 20, name: 'API', color: '#3b82f6' },
+    ];
+    const cols = [
+      { id: 1, name: 'Todo', position: 0 },
+      { id: 2, name: 'Doing', position: 1 },
+    ];
+    const items = [
+      {
+        id: 1,
+        number: 1,
+        projectId: 1,
+        columnId: 1,
+        title: 'Both labels',
+        description: '',
+        solution: '',
+        position: 0,
+        backlogPosition: 0,
+        offsetY: 0,
+        prUrls: [],
+        relatedItems: [],
+        labels: [labels[0], labels[1]],
+        assignee: '',
+        closeReason: '',
+        favorite: false,
+        dueAt: null,
+        createdAt: '',
+        updatedAt: '',
+      },
+      {
+        id: 2,
+        number: 2,
+        projectId: 1,
+        columnId: 1,
+        title: 'Bug only',
+        description: '',
+        solution: '',
+        position: 1,
+        backlogPosition: 1,
+        offsetY: 0,
+        prUrls: [],
+        relatedItems: [],
+        labels: [labels[0]],
+        assignee: '',
+        closeReason: '',
+        favorite: false,
+        dueAt: null,
+        createdAt: '',
+        updatedAt: '',
+      },
+    ];
+    const boardSpy = vi.fn(() => of({ columns: cols, items, settings: { cardLayout: 'pack' } }));
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: boardSpy,
+            listLabels: () => of({ labels }),
+            updateLabel: () => of({ id: 10, name: 'Defect', color: '#22c55e' }),
+            deleteLabel: () => of(undefined),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [], labelIds: [] }, backlog: { query: '', statusIds: [], labelIds: [] } }),
+            putListFilter: (f: unknown) => of(f),
+          },
+        },
+      ],
+    });
+    TestBed.inject(ProjectSession).activeId.set(1);
+    const labelsSession = TestBed.inject(LabelsSession);
+    const filterSession = TestBed.inject(ListFilterSession);
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+
+    expect(f.nativeElement.textContent).toContain('Bug');
+    expect(f.nativeElement.textContent).toContain('API');
+    expect(f.componentInstance.canReorderItems()).toBe(true);
+
+    // Multi-label AND filtering in ListFilterBar + DnD pause.
+    filterSession.toggleLabel('board', 10);
+    filterSession.toggleLabel('board', 20);
+    f.detectChanges();
+    expect(f.componentInstance.grouped().get(1)?.map((c) => c.title)).toEqual(['Both labels']);
+    expect(f.componentInstance.canReorderItems()).toBe(false);
+
+    // Renaming label updates card badges immediately.
+    labelsSession.update(10, { name: 'Defect', color: '#22c55e' }).subscribe();
+    f.detectChanges();
+    expect(f.nativeElement.textContent).toContain('Defect');
+    expect(f.nativeElement.textContent).not.toContain('Bug only'); // wait: title contains 'Bug only', check badge text
+    expect(Array.from<HTMLElement>(f.nativeElement.querySelectorAll('.label-badge')).some((el) => el.textContent?.trim() === 'Bug')).toBe(false);
+
+    // Deleting label clears active label filter and removes badge.
+    labelsSession.remove(10).subscribe();
+    f.detectChanges();
+    expect(filterSession.filter('board').labelIds).toEqual([20]);
+    expect(Array.from<HTMLElement>(f.nativeElement.querySelectorAll('.label-badge')).some((el) => el.textContent?.trim() === 'Defect')).toBe(false);
+    f.destroy();
+  });
+
+  it('sends selected labelIds from create modal, locks picker while saving, resets on reopen, and handles failure (L-001 / L-542 / L-653)', async () => {
+    const { ProjectSession } = await import('./project-session');
+    const pendingCreate = new Subject<unknown>();
+    const createItem = vi.fn().mockReturnValueOnce(pendingCreate).mockReturnValueOnce(throwError(() => ({ status: 400, error: { message: '失敗' } })));
+    const labels = [
+      { id: 10, name: 'Bug', color: '#ef4444' },
+      { id: 20, name: 'API', color: '#3b82f6' },
+    ];
+    TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [
+        provideRouter([]),
+        {
+          provide: Api,
+          useValue: {
+            board: () => of({ columns: [{ id: 1, name: 'Todo', position: 0 }], items: [], settings: { cardLayout: 'pack' } }),
+            createItem,
+            listLabels: () => of({ labels }),
+            listCommandTemplates: () => of({ templates: [] }),
+            listItemTemplates: () => of({ templates: [] }),
+            listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+            listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
+            putListFilter: (f: unknown) => of(f),
+          },
+        },
+      ],
+    });
+    TestBed.inject(ProjectSession).activeId.set(1);
+    const f = TestBed.createComponent(Board);
+    f.detectChanges();
+    await f.whenStable();
+    const proto = HTMLDialogElement.prototype as HTMLDialogElement & {
+      showModal?: () => void;
+      close?: () => void;
+    };
+    const origShow = proto.showModal;
+    const origClose = proto.close;
+    proto.showModal = function () {
+      this.open = true;
+    };
+    proto.close = function () {
+      this.open = false;
+    };
+    try {
+      f.componentInstance.openItem(1);
+      f.componentInstance.newItemLabelIds.set([10, 20]);
+      f.componentInstance.itemForm.setValue({ title: 'Card', description: 'D' });
+      f.componentInstance.addItem();
+      f.detectChanges();
+      expect(createItem).toHaveBeenCalledWith({
+        title: 'Card',
+        description: 'D',
+        columnId: 1,
+        labelIds: [10, 20],
+      });
+      const pickerButtons = Array.from<HTMLButtonElement>(f.nativeElement.querySelectorAll('.picker-option'));
+      expect(pickerButtons.every((b) => b.disabled)).toBe(true);
+      pendingCreate.next({
+        id: 50,
+        number: 5,
+        projectId: 1,
+        columnId: 1,
+        title: 'Card',
+        description: 'D',
+        position: 0,
+        backlogPosition: 0,
+        offsetY: 0,
+        prUrls: [],
+        relatedItems: [],
+        labels,
+        assignee: '',
+        closeReason: '',
+        solution: '',
+        favorite: false,
+        dueAt: null,
+        createdAt: '',
+        updatedAt: '',
+      });
+      pendingCreate.complete();
+      f.detectChanges();
+      expect(f.componentInstance.modal()).toBeNull();
+
+      // Reopen starts with clean labels & test error path keeps modal open and items untouched.
+      f.componentInstance.openItem(1);
+      expect(f.componentInstance.newItemLabelIds()).toEqual([]);
+      f.componentInstance.newItemLabelIds.set([10]);
+      f.componentInstance.itemForm.setValue({ title: 'Fail', description: '' });
+      f.componentInstance.addItem();
+      f.detectChanges();
+      expect(f.componentInstance.formError()).toBe('失敗');
+      expect(f.componentInstance.modal()).toBe('item');
+      expect(f.componentInstance.data().items).toHaveLength(1);
+    } finally {
+      f.destroy();
+      proto.showModal = origShow;
+      proto.close = origClose;
+    }
   });
 });
