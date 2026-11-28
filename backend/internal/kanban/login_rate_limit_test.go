@@ -110,3 +110,34 @@ func TestLoginAttemptLimiterPrunesStaleFailures(t *testing.T) {
 		t.Fatal("single failure after prune should still allow")
 	}
 }
+
+// IPv6 clients usually own a whole /64, so rotating addresses inside it must not reset the IP lock.
+func TestLoginAttemptLimiterBucketsIPv6By64(t *testing.T) {
+	l := NewMemoryLoginAttemptLimiter()
+	now := time.Now().UTC()
+	for i := 0; i < loginFailureLimit; i++ {
+		l.RecordFailure("u"+string(rune('a'+i)), "2001:db8:1:2::"+string(rune('1'+i)), now)
+	}
+	if l.Allow("other", "2001:db8:1:2:ffff::9", now) {
+		t.Fatal("another address in the same /64 must share the IP lock")
+	}
+	if !l.Allow("other", "2001:db8:1:3::1", now) {
+		t.Fatal("a different /64 must not be locked")
+	}
+}
+
+func TestRateLimitIPBucket(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"203.0.113.9", "203.0.113.9"},
+		{"::ffff:203.0.113.9", "203.0.113.9"},
+		{"2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64"},
+		{"2001:DB8:1:2::7", "2001:db8:1:2::/64"},
+		{"not-an-ip", "not-an-ip"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := rateLimitIPBucket(tc.in); got != tc.want {
+			t.Errorf("rateLimitIPBucket(%q)=%q want %q", tc.in, got, tc.want)
+		}
+	}
+}

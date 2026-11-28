@@ -1,6 +1,7 @@
 package kanban
 
 import (
+	"net"
 	"sync"
 	"time"
 )
@@ -38,8 +39,24 @@ func NewMemoryLoginAttemptLimiter() LoginAttemptLimiter {
 	return &memoryLoginAttemptLimiter{byKey: make(map[string]*loginAttemptEntry)}
 }
 
-func loginAttemptKey(loginKey, ip string) string { return "login:" + loginKey + "|" + ip }
-func ipAttemptKey(ip string) string              { return "ip:" + ip }
+func loginAttemptKey(loginKey, ip string) string {
+	return "login:" + loginKey + "|" + rateLimitIPBucket(ip)
+}
+func ipAttemptKey(ip string) string { return "ip:" + rateLimitIPBucket(ip) }
+
+// rateLimitIPBucket maps a client IP to its rate-limit bucket: IPv4 as is, IPv6 as its /64
+// (one client usually owns a whole /64, so per-address keys would let it rotate past the lock).
+// Unparseable values are returned unchanged.
+func rateLimitIPBucket(ip string) string {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ip
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return v4.String()
+	}
+	return parsed.Mask(net.CIDRMask(64, 128)).String() + "/64"
+}
 
 func (l *memoryLoginAttemptLimiter) Allow(loginKey, ip string, now time.Time) bool {
 	l.mu.Lock()
