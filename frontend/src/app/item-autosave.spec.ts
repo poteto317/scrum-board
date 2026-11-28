@@ -559,4 +559,36 @@ describe('server changes to untouched fields', () => {
     expect(api.updateItem).toHaveBeenLastCalledWith(27, { columnId: 1 });
     TestBed.resetTestingModule();
   });
+
+  it('shields labels with sideDirty only while saving() is true and reflects catalog changes (L-790)', () => {
+    const response = new Subject<Item>();
+    const api = { updateItem: vi.fn(() => response) };
+    TestBed.configureTestingModule({ providers: [ItemAutosave, { provide: Api, useValue: api }] });
+    const edit = TestBed.inject(ItemAutosave);
+    edit.reset(initial);
+
+    // Non-saving label update does not stick as sideDirty against future remote updates.
+    edit.applyLabelsSave({ labels: [{ id: 1, name: 'Bug', color: '#ef4444' }], updatedAt: 't1' });
+    edit.form.controls.title.setValue('編集中');
+    edit.flush(); // starts saving()
+    // While saving() is true, concurrent label save marks sideDirty.
+    edit.applyLabelsSave({
+      labels: [
+        { id: 1, name: 'Bug', color: '#ef4444' },
+        { id: 2, name: 'API', color: '#3b82f6' },
+      ],
+      updatedAt: 't2',
+    });
+    // Server flush response carries stale labels -> sideDirty keeps local labels [1, 2].
+    response.next({ ...initial, title: '編集中', labels: [{ id: 1, name: 'Bug', color: '#ef4444' }] });
+    response.complete();
+    expect(edit.item()?.labels?.map((l) => l.id)).toEqual([1, 2]);
+
+    // Catalog update & delete immediately sync item labels.
+    edit.applyCatalogLabelUpdate({ id: 2, name: 'Backend', color: '#22c55e' });
+    expect(edit.item()?.labels?.[1]).toEqual({ id: 2, name: 'Backend', color: '#22c55e' });
+    edit.applyCatalogLabelDelete(1);
+    expect(edit.item()?.labels?.map((l) => l.id)).toEqual([2]);
+    TestBed.resetTestingModule();
+  });
 });

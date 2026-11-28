@@ -1,5 +1,6 @@
 import { ProjectSwitcher } from './project-switcher';
 import { Modal } from './modal';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   afterNextRender,
   Component,
@@ -59,6 +60,10 @@ import {
 import { appliedListFilter, itemMatchesFilter, listFilterActive } from './list-filter';
 import { ListFilterBar } from './list-filter-bar';
 import { ListFilterSession } from './list-filter-session';
+import { LabelCatalogChange, applyLabelCatalogChangeToItems } from './label';
+import { LabelBadges } from './label-badges';
+import { LabelPicker } from './label-picker';
+import { LabelsSession } from './labels-session';
 import { BoardMeta, Item, Column } from './models';
 import { sameJson, startLiveRefresh, zoneAwareTimers } from './live-refresh';
 import { itemsForActiveProject } from './project-items';
@@ -80,6 +85,8 @@ type RowSnapshot = { elements: HTMLElement[]; bounds: RowBounds[]; scrollOffset:
     RouterLink,
     Modal,
     ListFilterBar,
+    LabelBadges,
+    LabelPicker,
     CopyFeedbackBanner,
     NgStyle,
     ProjectSwitcher,
@@ -126,6 +133,9 @@ export class Backlog implements OnInit {
   private commandMenuLoadGeneration = 0;
   readonly commandMenuStyle = signal<Record<string, string>>({});
   readonly listFilter = inject(ListFilterSession);
+  readonly labelsSession = inject(LabelsSession);
+  readonly managingLabels = signal(false);
+  readonly newItemLabelIds = signal<number[]>([]);
   private readonly backlogScroll = viewChild<ElementRef<HTMLElement>>('backlogScroll');
   private readonly listContainer = viewChild<ElementRef<HTMLElement>>('listContainer');
   private scrollRestoreGeneration = 0;
@@ -156,6 +166,7 @@ export class Backlog implements OnInit {
     appliedListFilter(
       this.listFilter.filter('backlog'),
       this.columns().map((c) => c.id),
+      this.labelsSession.knownLabelIds(),
     ),
   );
   readonly activeItems = computed(() =>
@@ -184,6 +195,7 @@ export class Backlog implements OnInit {
     listFilterActive(
       this.appliedFilter(),
       this.columns().map((c) => c.id),
+      this.labelsSession.knownLabelIds(),
     ),
   );
   readonly canReorder = computed(
@@ -193,6 +205,7 @@ export class Backlog implements OnInit {
       !this.reordering() &&
       !this.projectSession.switching() &&
       this.modal() === null &&
+      !this.managingLabels() &&
       this.filteredItems().length > 1 &&
       !this.filterActive(),
   );
@@ -210,6 +223,10 @@ export class Backlog implements OnInit {
     this.aiChat.setBacklog();
     this.load({ useCache: true });
     this.listFilter.load();
+    this.labelsSession.load();
+    this.labelsSession.changes$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((change) => this.applyCatalogLabelChange(change));
     bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadAfterProjectSwitch());
     this.destroyRef.onDestroy(() => {
       this.endDragTracking();
@@ -228,10 +245,12 @@ export class Backlog implements OnInit {
         !this.saving() &&
         !this.projectSession.switching() &&
         this.modal() === null &&
+        !this.managingLabels() &&
         this.draggingItemId() === null,
       fetch: () => this.pollBacklogBoard(),
       apply: ({ items, columns }) => {
         this.error.set('');
+        this.labelsSession.syncWithObservedItems(items);
         const itemsChanged = !sameJson(this.items(), items);
         const columnsChanged = !sameJson(this.columns(), columns);
         if (itemsChanged || columnsChanged) this.rememberBacklogCache(items, columns);
@@ -305,6 +324,7 @@ export class Backlog implements OnInit {
           this.rememberEtagsFromOk(backlog, board);
           const normalized = normalizeBoardMeta(board.body);
           applyBoardDataWithActiveSync(this.projectSession, normalized, (meta) => {
+            this.labelsSession.syncWithObservedItems(backlog.body.items);
             this.rememberBacklogCache(backlog.body.items, meta.columns);
             // Unchanged since the cached view: skip rebuilding every card.
             if (!sameJson(this.items(), backlog.body.items)) this.items.set(backlog.body.items);
@@ -417,6 +437,7 @@ export class Backlog implements OnInit {
           this.error.set('');
           const normalized = normalizeBoardMeta(board.body);
           applyBoardDataWithActiveSync(this.projectSession, normalized, (meta) => {
+            this.labelsSession.syncWithObservedItems(backlog.body.items);
             this.rememberBacklogCache(backlog.body.items, meta.columns);
             this.items.set(backlog.body.items);
             this.columns.set(meta.columns);
@@ -677,6 +698,7 @@ export class Backlog implements OnInit {
     }
     this.itemForm.reset({ title: '', description: '' });
     this.formError.set('');
+    this.newItemLabelIds.set([]);
     this.itemTemplates.resetSelection();
     this.itemTemplates.load(this.projectSession.activeId());
     this.modal.set('item');
@@ -691,7 +713,10 @@ export class Backlog implements OnInit {
   }
 
   close() {
-    if (!this.saving()) this.modal.set(null);
+    if (!this.saving()) {
+      this.newItemLabelIds.set([]);
+      this.modal.set(null);
+    }
   }
 
   dismissReorderError() {
@@ -712,9 +737,15 @@ export class Backlog implements OnInit {
     this.saving.set(true);
     this.formError.set('');
     const value = this.itemForm.getRawValue();
+    const labelIds = this.newItemLabelIds();
     this.itemForm.disable({ emitEvent: false });
     this.api
-      .createItem({ ...value, title: value.title.trim(), columnId: todoId })
+      .createItem({
+        ...value,
+        title: value.title.trim(),
+        columnId: todoId,
+        ...(labelIds.length > 0 ? { labelIds } : {}),
+      })
       .pipe(
         finalize(() => {
           this.saving.set(false);
@@ -725,10 +756,19 @@ export class Backlog implements OnInit {
         next: (card) => {
           this.items.update((list) => [...list, card]);
           this.rememberBacklogCache(this.items(), this.columns());
+          this.newItemLabelIds.set([]);
           this.modal.set(null);
         },
         error: (e) => this.formError.set(errorMessage(e)),
       });
+  }
+
+  private applyCatalogLabelChange(change: LabelCatalogChange) {
+    this.items.update((list) => {
+      const res = applyLabelCatalogChangeToItems(list, change);
+      return res.changed ? res.items : list;
+    });
+    this.backlogEtag = '';
   }
 
   onItemDragStart(event: DragEvent, card: Item, rowEl: HTMLElement) {

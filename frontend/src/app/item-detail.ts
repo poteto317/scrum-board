@@ -14,6 +14,7 @@ import {
   NgZone,
   OnInit,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { DatePipe, Location } from '@angular/common';
@@ -36,7 +37,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { fetchBoardMeta } from './conditional-get';
-import { Column, RelatedItem } from './models';
+import { Column, Item, RelatedItem } from './models';
 import { ASSIGNEE_PRESETS, assigneeKind } from './assignee';
 import { UsersSession } from './users-session';
 import { AuthSession } from './auth-session';
@@ -73,6 +74,12 @@ import { DescriptionEditor } from './description-editor';
 import { DescriptionBlocksEditor } from './description-blocks-editor';
 import { ProjectSession } from './project-session';
 import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
+import { normalizeLabels } from './label';
+import { LabelBadges } from './label-badges';
+import { LabelPicker } from './label-picker';
+import { LabelManagerDialog } from './label-manager-dialog';
+import { LabelsSession } from './labels-session';
+import { ItemLabels } from './item-labels';
 
 @Component({
   selector: 'app-item-detail',
@@ -89,6 +96,9 @@ import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
     CopyFeedbackBanner,
     DueAtPicker,
     DescriptionBlocksEditor,
+    LabelBadges,
+    LabelPicker,
+    LabelManagerDialog,
   ],
   providers: [
     ItemAutosave,
@@ -99,6 +109,7 @@ import { favoriteMenuLabel, ItemMenuActions } from './item-menu-actions';
     ItemAclPanel,
     ItemDueAt,
     ItemCloseTransition,
+    ItemLabels,
     DescriptionEditor,
     CommandTemplatesSession,
     ItemCommandsSession,
@@ -130,6 +141,10 @@ export class ItemDetail implements OnInit {
   private readonly itemMenuActions = inject(ItemMenuActions);
   readonly dueAt = inject(ItemDueAt);
   readonly closeTransition = inject(ItemCloseTransition);
+  readonly itemLabels = inject(ItemLabels);
+  readonly labelsSession = inject(LabelsSession);
+  readonly managingLabels = signal(false);
+  readonly selectedLabelIds = computed(() => (this.item()?.labels ?? []).map((l) => l.id));
   readonly descriptionEditor = inject(DescriptionEditor);
   private readonly blocksEditor = viewChild(DescriptionBlocksEditor);
   readonly commentsPanel = viewChild(ItemComments);
@@ -166,8 +181,12 @@ export class ItemDetail implements OnInit {
     return !!card?.archivedAt && canEditItem(card, this.auth.user());
   });
   readonly authReady = computed(() => this.auth.status() !== 'unknown');
+  readonly isAuthenticated = computed(
+    () => this.auth.status() === 'authenticated' && !!this.auth.user(),
+  );
   /** L-463: /me 未確定 or 編集不可ならサイド操作も止める。 */
   readonly editLocked = computed(() => !this.authReady() || !this.canEdit());
+  private labelsLoadTriggered = false;
   /** Admin-only: catalog CRUD, defaults, and apply-all. */
   readonly canAdministerCommandTemplates = computed(
     () => this.authReady() && this.auth.isAdmin(),
@@ -266,6 +285,21 @@ export class ItemDetail implements OnInit {
       markDueSideDirty: () => this.autosave.markDueSideDirty(),
       onError: (message) => this.error.set(message),
       cancel$: this.changed$,
+    });
+    this.itemLabels.bind({
+      item: () => this.item(),
+      applyLabelsSave: (updated) => this.autosave.applyLabelsSave(updated),
+      cancel$: this.changed$,
+    });
+    effect(() => {
+      if (!this.isAuthenticated()) {
+        this.labelsLoadTriggered = false;
+        return;
+      }
+      if (!this.labelsLoadTriggered) {
+        this.labelsLoadTriggered = true;
+        untracked(() => this.labelsSession.load());
+      }
     });
     this.closeTransition.bind({
       item: () => this.item(),
@@ -366,6 +400,12 @@ export class ItemDetail implements OnInit {
   }
 
   ngOnInit() {
+    this.labelsSession.changes$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((change) => {
+        if (change.kind === 'updated') this.autosave.applyCatalogLabelUpdate(change.label);
+        else this.autosave.applyCatalogLabelDelete(change.id);
+      });
     this.itemMenuActions.register({
       scrollToHistory: () => this.scrollToHistorySection(),
       goToSolution: () => this.navigateToSolution(),
@@ -394,6 +434,8 @@ export class ItemDetail implements OnInit {
           this.favorite.reset();
           this.dueAt.reset();
           this.closeTransition.reset();
+          this.itemLabels.reset();
+          this.managingLabels.set(false);
           this.descriptionEditor.reset();
           this.listDragging.set(false);
           this.deleted = false;
@@ -411,19 +453,11 @@ export class ItemDetail implements OnInit {
       )
       .subscribe(({ meta, card, query }) => {
         this.columns.set(meta.columns);
-        const projectId = card.projectId ?? 0;
-        this.autosave.reset({
-          ...card,
-          projectId,
-          prUrls: card.prUrls ?? [],
-          relatedItems: card.relatedItems ?? [],
-          assignee: card.assignee ?? '',
-          closeReason: card.closeReason ?? '',
-          solution: card.solution ?? '',
-          favorite: card.favorite === true,
-          dueAt: card.dueAt ?? null,
-        });
-        this.acl.syncFrom(card);
+        const normalized = this.normalizeDetailItem(card);
+        const projectId = normalized.projectId;
+        this.autosave.reset(normalized);
+        this.labelsSession.syncWithObservedItems([normalized]);
+        this.acl.syncFrom(normalized);
         this.itemCommands.load(card.number, projectId > 0 ? projectId : undefined);
         if (query.get('scrollHistory') === '1') {
           // finalize() clears loading after this next; wait a macrotask so history is rendered.
@@ -456,17 +490,8 @@ export class ItemDetail implements OnInit {
         if (this.autosave.hasChanges() || this.listDragging() || this.busy()) return;
         this.error.set('');
         this.columns.set(meta.columns);
-        const next = {
-          ...card,
-          projectId: card.projectId ?? 0,
-          prUrls: card.prUrls ?? [],
-          relatedItems: card.relatedItems ?? [],
-          assignee: card.assignee ?? '',
-          closeReason: card.closeReason ?? '',
-          solution: card.solution ?? '',
-          favorite: card.favorite === true,
-          dueAt: card.dueAt ?? null,
-        };
+        const next = this.normalizeDetailItem(card);
+        this.labelsSession.syncWithObservedItems([next]);
         if (this.item() && sameJson(this.item(), next)) return;
         this.autosave.reset(next);
         this.acl.syncFrom(next);
@@ -474,6 +499,21 @@ export class ItemDetail implements OnInit {
       ...zoneAwareTimers(this.zone),
     });
     this.destroyRef.onDestroy(stop);
+  }
+
+  private normalizeDetailItem(card: Item): Item {
+    return {
+      ...card,
+      projectId: card.projectId ?? 0,
+      prUrls: card.prUrls ?? [],
+      relatedItems: card.relatedItems ?? [],
+      labels: normalizeLabels(card.labels),
+      assignee: card.assignee ?? '',
+      closeReason: card.closeReason ?? '',
+      solution: card.solution ?? '',
+      favorite: card.favorite === true,
+      dueAt: card.dueAt ?? null,
+    };
   }
   load() {
     this.reload$.next();
@@ -625,6 +665,8 @@ export class ItemDetail implements OnInit {
       this.acl.saving() ||
       this.dueAt.open() ||
       this.dueAt.saving() ||
+      this.itemLabels.saving() ||
+      this.managingLabels() ||
       this.itemCommands.saving() ||
       this.confirmDelete() ||
       this.closeTransition.open() ||
@@ -645,6 +687,7 @@ export class ItemDetail implements OnInit {
       this.favorite.saving() ||
       this.acl.saving() ||
       this.dueAt.saving() ||
+      this.itemLabels.saving() ||
       this.itemCommands.saving() ||
       this.closeTransition.saving() ||
       this.projectSaving() ||
@@ -659,6 +702,7 @@ export class ItemDetail implements OnInit {
       this.assignee.saving() ||
       this.acl.saving() ||
       this.dueAt.saving() ||
+      this.itemLabels.saving() ||
       this.closeTransition.saving() ||
       this.itemCommands.saving() ||
       this.projectSaving()
@@ -685,6 +729,7 @@ export class ItemDetail implements OnInit {
         this.assignee.saving() ||
         this.acl.saving() ||
         this.dueAt.saving() ||
+        this.itemLabels.saving() ||
         this.closeTransition.saving() ||
         this.itemCommands.saving() ||
         this.projectSaving())
@@ -701,6 +746,7 @@ export class ItemDetail implements OnInit {
       this.relatedItems.saving() ||
       this.assignee.saving() ||
       this.dueAt.saving() ||
+      this.itemLabels.saving() ||
       !this.item()
     )
       return;

@@ -280,6 +280,33 @@
               <p class="field-note">未設定。プリセットか自由テキストで設定できます。</p>
             }
           </div>
+          <div class="labels-field">
+            @if (isAuthenticated()) {
+              <app-label-picker
+                [availableLabels]="labelsSession.labels()"
+                [selectedIds]="selectedLabelIds()"
+                [loaded]="labelsSession.loaded()"
+                [catalogLoaded]="labelsSession.loaded() && !labelsSession.loadError()"
+                [loading]="labelsSession.loading()"
+                [loadError]="labelsSession.loadError()"
+                [disabled]="itemLabels.saving() || editLocked()"
+                [canManageCatalog]="!editLocked()"
+                (selectedIdsChange)="itemLabels.updateLabels($event)"
+                (retryLoad)="labelsSession.load({ force: true })"
+                (manageClick)="managingLabels.set(true)"
+              />
+              @if (itemLabels.error()) {
+                <p class="form-error" role="alert">{{ itemLabels.error() }}</p>
+              }
+            } @else {
+              <span class="assignee-label">ラベル</span>
+              @if ((item()?.labels ?? []).length > 0) {
+                <app-label-badges [labels]="item()!.labels!" />
+              } @else {
+                <p class="field-note">なし</p>
+              }
+            }
+          </div>
           <div class="due-at-field">
             <span class="due-at-label" id="detail-due-at-label">期限</span>
             @if (!dueAt.open()) {
@@ -987,4 +1014,7 @@
       }
     </section>
   </dialog>
+}
+@if (managingLabels()) {
+  <app-label-manager-dialog (closed)="managingLabels.set(false)" />
 }

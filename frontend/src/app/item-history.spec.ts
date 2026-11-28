@@ -403,3 +403,30 @@ it('keeps fallback when prTitles batch fails and ignores stale titles after card
   f.detectChanges();
   expect(f.componentInstance.prTitleMap()[url]).toBeUndefined();
 });
+
+it('renders labels history entries as ラベル list and （空欄） when empty', () => {
+  const f = setup({
+    history: vi.fn(() =>
+      of({
+        events: [
+          {
+            ...event,
+            evidenceUrl: '',
+            changes: [{ field: 'labels', before: '["Bug"]', after: '["Bug","API"]' }],
+          },
+          {
+            ...event,
+            id: 99,
+            evidenceUrl: '',
+            changes: [{ field: 'labels', before: '["Bug","API"]', after: '[]' }],
+          },
+        ],
+        nextBefore: 0,
+      }),
+    ),
+  });
+  expect(f.nativeElement.textContent).toContain('ラベル');
+  expect(f.nativeElement.textContent).toContain('Bug');
+  expect(f.nativeElement.textContent).toContain('API');
+  expect(f.nativeElement.textContent).toContain('（空欄）');
+});

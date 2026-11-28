@@ -79,6 +79,20 @@ export function missingPrTitleUrls(
   return collectPrUrlsFromEvents(events).filter((u) => !known[u]);
 }
 
+/** Parse a history labels JSON string array, returning null for legacy non-array values. */
+export function parseHistoryLabelNames(value: string): string[] | null {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'string')) {
+      return parsed;
+    }
+  } catch {
+    // fall through to raw string rendering
+  }
+  return null;
+}
+
 /** Merge batch API titles into the existing map (pure). */
 export function mergePrTitleMap(
   prev: Record<string, string>,

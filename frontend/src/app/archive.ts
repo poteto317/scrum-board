@@ -1,18 +1,22 @@
 import { ActiveProjectContext } from './active-project-context';
 import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { Subscription, finalize } from 'rxjs';
 import { Api } from './api';
 import { errorMessage } from './api-error';
 import { formatItemNumber } from './item-number';
 import { normalizeItem } from './board-data';
+import { applyLabelCatalogChangeToItems } from './label';
+import { LabelBadges } from './label-badges';
+import { LabelsSession } from './labels-session';
 import { ProjectSession } from './project-session';
 import { bindProjectSwitchReload } from './project-switch-reload';
 
 @Component({
   selector: 'app-archive',
-  imports: [RouterLink, DatePipe, ActiveProjectContext],
+  imports: [RouterLink, DatePipe, ActiveProjectContext, LabelBadges],
   templateUrl: './archive.html',
   styleUrl: './archive.css',
 })
@@ -21,6 +25,7 @@ export class Archive implements OnInit {
 
   private readonly api = inject(Api);
   private readonly projectSession = inject(ProjectSession);
+  private readonly labelsSession = inject(LabelsSession);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly projectSwitching = computed(() => this.projectSession.switching());
@@ -36,6 +41,14 @@ export class Archive implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.labelsSession.changes$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((change) => {
+        this.items.update((rows) => {
+          const res = applyLabelCatalogChangeToItems(rows, change);
+          return res.changed ? res.items : rows;
+        });
+      });
     bindProjectSwitchReload(this.projectSession, this.destroyRef, () => this.reloadForProjectSwitch());
     this.destroyRef.onDestroy(() => {
       this.projectSwitchSub?.unsubscribe();

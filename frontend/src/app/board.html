@@ -46,7 +46,12 @@
       >{{ done() }} 完了 <span>／</span> {{ data().columns.length }} ステータス</span
     >
   </section>
-  <app-list-filter-bar class="board-list-filter" view="board" [columns]="data().columns" />
+  <app-list-filter-bar
+    class="board-list-filter"
+    view="board"
+    [columns]="data().columns"
+    (managingLabelsChange)="managingLabels.set($event)"
+  />
   @if (loading() && !showingCached()) {
     <div class="state-panel" role="status">
       <span class="spinner"></span>ボードを読み込んでいます…
@@ -294,6 +299,7 @@
                     @if (card.description) {
                       <p class="card-description">{{ card.description }}</p>
                     }
+                    <app-label-badges [labels]="card.labels" [compact]="true" />
                     <span class="card-footer"
                       ><span class="card-footer-meta"
                         ><span class="card-status">{{ column.name }}</span>
@@ -412,6 +418,17 @@
           @if (itemForm.controls.description.invalid) {
             <p class="form-error">説明は10000文字以内で入力してください。</p>
           }
+          <app-label-picker
+            [availableLabels]="labelsSession.labels()"
+            [selectedIds]="newItemLabelIds()"
+            [loaded]="labelsSession.loaded()"
+            [catalogLoaded]="labelsSession.loaded() && !labelsSession.loadError()"
+            [loading]="labelsSession.loading()"
+            [loadError]="labelsSession.loadError()"
+            [disabled]="saving()"
+            (selectedIdsChange)="newItemLabelIds.set($event)"
+            (retryLoad)="labelsSession.load({ force: true })"
+          />
           @if (formError()) {
             <p class="form-error" role="alert">{{ formError() }}</p>
           }

@@ -8,11 +8,12 @@ import { textLimit, trimmedTextLimit } from './form-validation';
 import { errorMessage } from './api-error';
 import { alignPrTitles } from './pr-display';
 import { mergeCloseTransitionItem } from './close-reason';
+import { Label, normalizeLabels } from './label';
 
 const fields = ['title', 'description', 'columnId', 'closeReason'] as const;
 type Field = (typeof fields)[number];
 /** Item fields updated outside the autosave form; prefer local on form flush. */
-const sideFields = ['prUrls', 'relatedItems', 'assignee', 'dueAt'] as const;
+const sideFields = ['prUrls', 'relatedItems', 'labels', 'assignee', 'dueAt'] as const;
 type SideField = (typeof sideFields)[number];
 
 // Provided by ItemDetail: drafts and timers never survive a detail screen.
@@ -137,6 +138,7 @@ export class ItemAutosave {
       if (key === 'dueAt') continue; // null-safe merge lives in applyDueSave only
       if (key === 'prUrls') next.prUrls = [...(updated.prUrls ?? [])];
       else if (key === 'relatedItems') next.relatedItems = [...(updated.relatedItems ?? [])];
+      else if (key === 'labels') next.labels = normalizeLabels(updated.labels);
       else next[key] = (updated[key] as string) ?? '';
     }
     if (updated.prTitles !== undefined) {
@@ -201,6 +203,27 @@ export class ItemAutosave {
       ...card,
       dueAt: updated.dueAt ?? null,
       updatedAt: updated.updatedAt || card.updatedAt,
+    });
+  }
+  applyLabelsSave(updated: Pick<Item, 'labels' | 'updatedAt'>) {
+    this.applySideSave(updated);
+  }
+  applyCatalogLabelUpdate(updated: Label) {
+    const card = this.item();
+    if (!card?.labels?.some((l) => l.id === updated.id)) return;
+    if (this.saving()) this.sideDirty.add('labels');
+    this.item.set({
+      ...card,
+      labels: card.labels.map((l) => (l.id === updated.id ? { ...updated } : l)),
+    });
+  }
+  applyCatalogLabelDelete(labelId: number) {
+    const card = this.item();
+    if (!card?.labels?.some((l) => l.id === labelId)) return;
+    if (this.saving()) this.sideDirty.add('labels');
+    this.item.set({
+      ...card,
+      labels: card.labels.filter((l) => l.id !== labelId),
     });
   }
   private value(field: Field) {
@@ -285,12 +308,14 @@ export class ItemAutosave {
           ...card,
           prUrls: [...(card.prUrls ?? [])],
           relatedItems: [...(card.relatedItems ?? [])],
+          labels: normalizeLabels(card.labels),
         };
         if (local) {
           for (const key of sideFields) {
             if (!this.sideDirty.has(key)) continue;
             if (key === 'prUrls') merged.prUrls = [...(local.prUrls ?? [])];
             else if (key === 'relatedItems') merged.relatedItems = [...(local.relatedItems ?? [])];
+            else if (key === 'labels') merged.labels = normalizeLabels(local.labels);
             else if (key === 'dueAt') merged.dueAt = local.dueAt ?? null;
             else merged[key] = local[key];
             this.sideDirty.delete(key);

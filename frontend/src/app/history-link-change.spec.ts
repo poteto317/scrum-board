@@ -3,6 +3,7 @@ import {
   collectPrUrlsFromEvents,
   mergePrTitleMap,
   missingPrTitleUrls,
+  parseHistoryLabelNames,
   renderLinkChange,
 } from './history-link-change';
 
@@ -51,5 +52,14 @@ describe('missingPrTitleUrls / mergePrTitleMap', () => {
     const next = mergePrTitleMap(prev, { [url]: 'Cool' });
     expect(next).toEqual({ a: '1', [url]: 'Cool' });
     expect(prev).toEqual({ a: '1' });
+  });
+});
+
+describe('parseHistoryLabelNames', () => {
+  it('parses label name arrays and returns null for malformed values', () => {
+    expect(parseHistoryLabelNames('')).toEqual([]);
+    expect(parseHistoryLabelNames('["Bug","UI"]')).toEqual(['Bug', 'UI']);
+    expect(parseHistoryLabelNames('not-json')).toBeNull();
+    expect(parseHistoryLabelNames('[1,2]')).toBeNull();
   });
 });
