@@ -76,14 +76,18 @@ func (r MySQLRepository) ListLabels(ctx context.Context) ([]Label, error) {
 	return out, rows.Err()
 }
 
-// CreateLabel locks every label row so the count check and the INSERT are one step; the
-// unique name_key (not a SELECT first) decides duplicates (L-862).
+// CreateLabel serializes on board_columns before reading labels so concurrent inserts into an
+// empty labels table do not take compatible supremum gap locks and deadlock; the unique
+// name_key decides duplicates (L-862).
 func (r MySQLRepository) CreateLabel(ctx context.Context, in LabelInput) (Label, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return Label{}, err
 	}
 	defer tx.Rollback()
+	if _, err = lockColumnRows(ctx, tx); err != nil {
+		return Label{}, err
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT id FROM labels ORDER BY id FOR UPDATE`)
 	if err != nil {
 		return Label{}, err
@@ -172,10 +176,9 @@ func knownLabelIDs(ctx context.Context, q queryable) (map[int64]struct{}, error)
 	return out, rows.Err()
 }
 
-// insertItemLabelsTx verifies every label exists (FOR SHARE) and inserts rows for a newly created item.
-// Separating insert from replace avoids an unnecessary DELETE gap lock on concurrent POST /api/items.
-func insertItemLabelsTx(ctx context.Context, tx *sql.Tx, itemID int64, labelIDs []int64) error {
-	ids := dedupeInt64s(labelIDs)
+// verifyLabelsExistForShareTx checks every id in labels with FOR SHARE before mutating item_labels
+// so all item-label writes acquire locks in labels -> item_labels order (matching DeleteLabel).
+func verifyLabelsExistForShareTx(ctx context.Context, tx *sql.Tx, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -201,6 +204,10 @@ func insertItemLabelsTx(ctx context.Context, tx *sql.Tx, itemID int64, labelIDs 
 	if found != len(ids) {
 		return ErrUnknownLabel
 	}
+	return nil
+}
+
+func insertItemLabelsRowsTx(ctx context.Context, tx *sql.Tx, itemID int64, ids []int64) error {
 	for _, id := range ids {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO item_labels(item_id, label_id) VALUES(?,?)`, itemID, id); err != nil {
 			return dbError(err)
@@ -209,10 +216,29 @@ func insertItemLabelsTx(ctx context.Context, tx *sql.Tx, itemID int64, labelIDs 
 	return nil
 }
 
+// insertItemLabelsTx verifies every label exists (FOR SHARE) and inserts rows for a newly created item.
+// Separating insert from replace avoids an unnecessary DELETE gap lock on concurrent POST /api/items.
+func insertItemLabelsTx(ctx context.Context, tx *sql.Tx, itemID int64, labelIDs []int64) error {
+	ids := dedupeInt64s(labelIDs)
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := verifyLabelsExistForShareTx(ctx, tx, ids); err != nil {
+		return err
+	}
+	return insertItemLabelsRowsTx(ctx, tx, itemID, ids)
+}
+
 // replaceItemLabelsTx replaces the item's labels inside tx. The caller has locked the item row.
+// Verify label existence (labels FOR SHARE) before DELETE FROM item_labels so lock order stays
+// board_columns -> items -> labels -> item_labels and never deadlocks with DeleteLabel.
 func replaceItemLabelsTx(ctx context.Context, tx *sql.Tx, itemID int64, labelIDs []int64) error {
+	ids := dedupeInt64s(labelIDs)
+	if err := verifyLabelsExistForShareTx(ctx, tx, ids); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM item_labels WHERE item_id=?`, itemID); err != nil {
 		return err
 	}
-	return insertItemLabelsTx(ctx, tx, itemID, labelIDs)
+	return insertItemLabelsRowsTx(ctx, tx, itemID, ids)
 }
