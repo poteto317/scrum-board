@@ -550,22 +550,43 @@ describe('Api', () => {
   it('gets and puts list filter', () => {
     api.listFilter().subscribe();
     http.expectOne('/api/list-filter').flush({
-      board: { query: '', statusIds: [] },
-      backlog: { query: '', statusIds: [] },
+      board: { query: '', statusIds: [], labelIds: [] },
+      backlog: { query: '', statusIds: [], labelIds: [] },
     });
     api
       .putListFilter({
-        board: { query: 'x', statusIds: [1] },
-        backlog: { query: '', statusIds: [] },
+        board: { query: 'x', statusIds: [1], labelIds: [3] },
+        backlog: { query: '', statusIds: [], labelIds: [] },
       })
       .subscribe();
     const req = http.expectOne('/api/list-filter');
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({
-      board: { query: 'x', statusIds: [1] },
-      backlog: { query: '', statusIds: [] },
+      board: { query: 'x', statusIds: [1], labelIds: [3] },
+      backlog: { query: '', statusIds: [], labelIds: [] },
     });
     req.flush(req.request.body);
+  });
+
+  it('lists, creates, updates, and deletes labels', () => {
+    api.listLabels().subscribe();
+    http.expectOne('/api/labels').flush({ labels: [] });
+
+    api.createLabel({ name: 'Bug', color: '#ef4444' }).subscribe();
+    const postReq = http.expectOne('/api/labels');
+    expect(postReq.request.method).toBe('POST');
+    expect(postReq.request.body).toEqual({ name: 'Bug', color: '#ef4444' });
+    postReq.flush({ id: 1, name: 'Bug', color: '#ef4444' });
+
+    api.updateLabel(1, { name: 'Bug 2', color: '#3b82f6' }).subscribe();
+    const patchReq = http.expectOne('/api/labels/1');
+    expect(patchReq.request.method).toBe('PATCH');
+    patchReq.flush({ id: 1, name: 'Bug 2', color: '#3b82f6' });
+
+    api.deleteLabel(1).subscribe();
+    const delReq = http.expectOne('/api/labels/1');
+    expect(delReq.request.method).toBe('DELETE');
+    delReq.flush(null);
   });
 
   it('PUTs AI credits with explicit limitTokens null for unlimited', () => {

@@ -66,7 +66,9 @@ function mountBoard(options: {
           reorderItems: vi.fn(),
           reorderColumns: vi.fn(),
           listCommandTemplates: () => of({ templates: [] }),
+          listItemTemplates: () => of({ templates: [] }),
           listItemCommandTemplatesByNumber: () => of({ templates: [] }),
+          listLabels: () => of({ labels: [] }),
           listFilter: () =>
             of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
           putListFilter: (f: unknown) => of(f),

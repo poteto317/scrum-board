@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { finalize } from 'rxjs';
 import { Api } from './api';
+import { Label, LabelCatalogChange, applyLabelCatalogChangeToItems } from './label';
 import { BoardSettings, Column, Item } from './models';
 
 type PrefetchKind = 'board' | 'backlog';
@@ -46,6 +47,35 @@ export class ProjectBoardCache {
     this.queue.length = 0;
     this.running = 0;
     this.bumpRevision();
+  }
+
+  /** Reflect a renamed/recolored label across every cached board/backlog snapshot. */
+  syncUpdatedLabel(label: Label): void {
+    this.applyCatalogLabelChange({ kind: 'updated', label });
+  }
+
+  /** Remove a deleted label across every cached board/backlog snapshot. */
+  pruneDeletedLabel(labelId: number): void {
+    this.applyCatalogLabelChange({ kind: 'deleted', id: labelId });
+  }
+
+  private applyCatalogLabelChange(change: LabelCatalogChange): void {
+    let changed = false;
+    for (const snap of this.boardSnapshots.values()) {
+      const res = applyLabelCatalogChangeToItems(snap.items, change);
+      if (res.changed) {
+        snap.items = res.items;
+        changed = true;
+      }
+    }
+    for (const [projectId, items] of this.backlogItems.entries()) {
+      const res = applyLabelCatalogChangeToItems(items, change);
+      if (res.changed) {
+        this.backlogItems.set(projectId, res.items);
+        changed = true;
+      }
+    }
+    if (changed) this.bumpRevision();
   }
 
   getBoard(projectId: number): Item[] | undefined {
@@ -283,13 +313,20 @@ function extractBoard(res: unknown): {
   return { items, columns, settings };
 }
 
+function cloneItem(i: Item): Item {
+  return {
+    ...i,
+    ...(i.labels ? { labels: i.labels.map((l) => ({ ...l })) } : {}),
+  };
+}
+
 function cloneList(list: Item[] | undefined): Item[] | undefined {
-  return list ? list.map((i) => ({ ...i })) : undefined;
+  return list ? list.map(cloneItem) : undefined;
 }
 
 function cloneSnapshot(items: Item[], columns: Column[], settings?: BoardSettings): BoardSnapshot {
   return {
-    items: items.map((i) => ({ ...i })),
+    items: items.map(cloneItem),
     columns: columns.map((c) => ({ ...c })),
     ...(settings ? { settings: { ...settings } } : {}),
   };
@@ -298,10 +335,10 @@ function cloneSnapshot(items: Item[], columns: Column[], settings?: BoardSetting
 function putIfAbsent(map: Map<number, Item[]>, projectId: number, next: Item[]): void {
   if (!Number.isFinite(projectId) || projectId <= 0) return;
   if (map.has(projectId)) return;
-  map.set(projectId, next.map((i) => ({ ...i })));
+  map.set(projectId, next.map(cloneItem));
 }
 
 function put(map: Map<number, Item[]>, projectId: number, next: Item[]): void {
   if (!Number.isFinite(projectId) || projectId <= 0) return;
-  map.set(projectId, next.map((i) => ({ ...i })));
+  map.set(projectId, next.map(cloneItem));
 }

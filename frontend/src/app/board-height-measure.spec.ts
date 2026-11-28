@@ -29,6 +29,7 @@ describe('Board card height measurement', () => {
     TestBed.configureTestingModule({ imports: [Board], providers: [provideRouter([]), {
       provide: Api, useValue: {
         board: () => of(data), listCommandTemplates: () => of({ templates: [] }),
+        listLabels: () => of({ labels: [] }),
         listFilter: () => of({ board: { query: '', statusIds: [] }, backlog: { query: '', statusIds: [] } }),
       },
     }] });

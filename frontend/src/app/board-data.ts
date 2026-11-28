@@ -1,3 +1,4 @@
+import { normalizeLabels } from './label';
 import {
   BoardData,
   BoardMeta,
@@ -44,6 +45,7 @@ export function normalizeItem(raw: Partial<Item> & Pick<Item, 'id'>): Item {
     offsetY: normalizeOffsetY(raw.offsetY),
     prUrls: raw.prUrls ?? [],
     relatedItems: raw.relatedItems ?? [],
+    labels: normalizeLabels(raw.labels),
     assignee: raw.assignee ?? '',
     closeReason: raw.closeReason ?? '',
     favorite: raw.favorite === true,

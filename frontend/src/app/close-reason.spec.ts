@@ -47,10 +47,14 @@ describe('mergeCloseTransitionItem', () => {
       prUrls: undefined as unknown as string[],
       assignee: undefined as unknown as string,
     };
-    const merged = mergeCloseTransitionItem(base, updated as Item);
+    const merged = mergeCloseTransitionItem(
+      { ...base, labels: [{ id: 1, name: 'Bug', color: '#ef4444' }] },
+      updated as Item,
+    );
     expect(merged.columnId).toBe(3);
     expect(merged.closeReason).toBe('done');
     expect(merged.prUrls).toEqual(base.prUrls);
     expect(merged.assignee).toBe('Cursor');
+    expect(merged.labels).toEqual([{ id: 1, name: 'Bug', color: '#ef4444' }]);
   });
 });

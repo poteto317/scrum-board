@@ -1,0 +1,48 @@
+<div class="picker-head">
+  <span class="picker-title">ラベル</span>
+  <span class="picker-count">{{ selectedSet().size }} / {{ maxLabels }}</span>
+  @if (canManageCatalog()) {
+    <button
+      type="button"
+      class="picker-manage"
+      [disabled]="disabled()"
+      (click)="manageClick.emit()"
+    >
+      ラベル管理
+    </button>
+  }
+</div>
+
+@if (!loaded() && loading()) {
+  <p class="picker-hint">ラベルを読み込み中…</p>
+} @else if (!loaded() && loadError()) {
+  <div class="picker-error-box">
+    <p class="picker-error">{{ loadError() }}</p>
+    <button type="button" class="picker-retry" (click)="retryLoad.emit()">再試行</button>
+  </div>
+} @else if (availableLabels().length === 0) {
+  <p class="picker-hint">ラベルはまだありません。</p>
+} @else {
+  @if (loadError()) {
+    <p class="picker-error">{{ loadError() }}</p>
+  }
+  <div class="picker-options" role="group" aria-label="ラベルを選択">
+    @for (label of availableLabels(); track label.id) {
+      <button
+        type="button"
+        class="picker-option"
+        [class.selected]="isSelected(label.id)"
+        [style]="vars(label.color)"
+        [attr.aria-pressed]="isSelected(label.id)"
+        [disabled]="isOptionDisabled(label.id)"
+        (click)="toggle(label.id)"
+      >
+        <span class="picker-dot" aria-hidden="true"></span>
+        <span class="picker-name">{{ label.name }}</span>
+      </button>
+    }
+  </div>
+  @if (atLimit()) {
+    <p class="picker-hint">1アイテムに付けられるラベルは最大 {{ maxLabels }} 件です。</p>
+  }
+}

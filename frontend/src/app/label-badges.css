@@ -1,0 +1,43 @@
+.label-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.label-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--label-border, #cbd5e1);
+  background: var(--label-bg, #f1f5f9);
+  color: var(--label-ink, #334155);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.label-badges.compact .label-badge {
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.label-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--label-color, #64748b);
+}
+
+.label-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}

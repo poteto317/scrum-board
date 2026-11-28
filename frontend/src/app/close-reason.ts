@@ -1,3 +1,4 @@
+import { normalizeLabels } from './label';
 import type { Item } from './models';
 
 /** Match backend NormalizeCloseReason / maxCloseReasonLen. */
@@ -17,6 +18,7 @@ export function mergeCloseTransitionItem(local: Item | null, updated: Item): Ite
     ...updated,
     prUrls: updated.prUrls ?? local?.prUrls ?? [],
     relatedItems: updated.relatedItems ?? local?.relatedItems ?? [],
+    labels: normalizeLabels(updated.labels ?? local?.labels),
     assignee: updated.assignee ?? local?.assignee ?? '',
     closeReason: updated.closeReason ?? '',
     solution: updated.solution ?? local?.solution ?? '',

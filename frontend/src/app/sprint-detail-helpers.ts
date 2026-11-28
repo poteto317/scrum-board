@@ -94,6 +94,7 @@ function memberAsCandidateItem(member: SprintItemRef, projectId: number): Item {
     offsetY: 0,
     prUrls: [],
     relatedItems: [],
+    labels: [],
     assignee: '',
     closeReason: '',
     favorite: false,
